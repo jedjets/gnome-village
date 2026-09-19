@@ -1,5 +1,6 @@
 import type { Heightfield } from '../world/isleGrid'
 import {
+  boxBlurInPlace,
   gridToIso,
   lerp3,
   rgba,
@@ -9,7 +10,6 @@ import {
   COL_SHORE,
   COL_DAMP,
   COL_MOSS,
-  COL_DEEP,
 } from './renderIsleCore'
 import type { Pt } from './renderIsleDraw'
 import { chaikinClosed, pathFromPts } from './renderIsleDraw'
@@ -17,16 +17,20 @@ import { chaikinClosed, pathFromPts } from './renderIsleDraw'
 const WET_THRESH = 0.48
 const WATER_SURF = 0.12
 /** Max segment length (world px) before densify — keeps Chaikin from stair-stepping. */
-const DENSIFY_STEP = 2.4
-const CHAIKIN_PASSES = 6
-/** Outward bank expand (world px) — soft underlap over land, hides residual MS faceting. */
-const BANK_EXPAND = 2.8
-/** Water body sits slightly inside bank so land-coloured feather owns the outer AA. */
-const WATER_INSET = 1.1
+const DENSIFY_STEP = 1.4
+const CHAIKIN_PASSES = 8
+/** Outward bank expand (world px) — soft underlap over land. */
+const BANK_EXPAND = 5.5
+/** Water body sits slightly inside bank so soft feather owns the outer AA. */
+const WATER_INSET = 0.4
+/** Upsample factor for wet field before marching squares. */
+const WET_UPSAMPLE = 2
+/** Extra box-blur passes on upsampled wet (smoother iso-line; keep ribbon continuous). */
+const WET_BLUR_PASSES = 3
 
 /**
- * Continuous shoreline from wetness corner field (marching squares + densify + Chaikin).
- * Soft feathered banks over land — no bright/white shore stroke, no saw-tooth comb.
+ * Continuous shoreline from wetness corner field (blur+upsample → MS → densify → Chaikin).
+ * Soft feathered banks over land — no dark teal outline stroke, no saw-tooth comb.
  */
 export function drawStreamWater(
   ctx: CanvasRenderingContext2D,
@@ -39,33 +43,56 @@ export function drawStreamWater(
   nowMs?: number,
 ): void {
   const size = hf.size
+  const { field: softWet, n: sn } = upsampleBlurWet(wet, nv, WET_UPSAMPLE, WET_BLUR_PASSES)
+  const scale = (nv - 1) / (sn - 1)
+
   type Seg = { ax: number; ay: number; bx: number; by: number }
   const segs: Seg[] = []
 
+  const sampleH = (gx: number, gy: number) => {
+    const x = Math.max(0, Math.min(nv - 1, gx))
+    const y = Math.max(0, Math.min(nv - 1, gy))
+    const x0 = Math.floor(x)
+    const y0 = Math.floor(y)
+    const x1 = Math.min(nv - 1, x0 + 1)
+    const y1 = Math.min(nv - 1, y0 + 1)
+    const tx = x - x0
+    const ty = y - y0
+    const h00 = vertH[y0 * nv + x0]!
+    const h10 = vertH[y0 * nv + x1]!
+    const h01 = vertH[y1 * nv + x0]!
+    const h11 = vertH[y1 * nv + x1]!
+    return (
+      h00 * (1 - tx) * (1 - ty) +
+      h10 * tx * (1 - ty) +
+      h01 * (1 - tx) * ty +
+      h11 * tx * ty
+    )
+  }
+
   const interp = (
-    x0: number,
-    y0: number,
+    ix0: number,
+    iy0: number,
     w0: number,
-    x1: number,
-    y1: number,
+    ix1: number,
+    iy1: number,
     w1: number,
   ) => {
     const t = (WET_THRESH - w0) / Math.max(1e-6, w1 - w0)
     const u = Math.max(0, Math.min(1, t))
-    const vx = x0 + (x1 - x0) * u
-    const vy = y0 + (y1 - y0) * u
-    const hA = vertH[y0 * nv + x0]!
-    const hB = vertH[y1 * nv + x1]!
-    const h = Math.max(WATER_SURF, hA + (hB - hA) * u)
-    return gridToIso(vx - 0.5 - cx, vy - 0.5 - cy, h)
+    const gx = (ix0 + (ix1 - ix0) * u) * scale
+    const gy = (iy0 + (iy1 - iy0) * u) * scale
+    const h = Math.max(WATER_SURF, sampleH(gx, gy))
+    return gridToIso(gx - 0.5 - cx, gy - 0.5 - cy, h)
   }
 
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const w00 = wet[y * nv + x]!
-      const w10 = wet[y * nv + (x + 1)]!
-      const w11 = wet[(y + 1) * nv + (x + 1)]!
-      const w01 = wet[(y + 1) * nv + x]!
+  const cells = sn - 1
+  for (let y = 0; y < cells; y++) {
+    for (let x = 0; x < cells; x++) {
+      const w00 = softWet[y * sn + x]!
+      const w10 = softWet[y * sn + (x + 1)]!
+      const w11 = softWet[(y + 1) * sn + (x + 1)]!
+      const w01 = softWet[(y + 1) * sn + x]!
       const code =
         (w00 >= WET_THRESH ? 1 : 0) |
         (w10 >= WET_THRESH ? 2 : 0) |
@@ -138,6 +165,9 @@ export function drawStreamWater(
   ctx.lineJoin = 'round'
   ctx.lineCap = 'round'
 
+  // Soft distance-falloff shore wash (shore tones only — never dark teal contour)
+  paintSoftShoreFalloff(ctx, softWet, sn, scale, vertH, nv, cx, cy, size)
+
   // Interior depth sheet — well inside ribbon so jagged quads never define the shore
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
@@ -147,8 +177,7 @@ export function drawStreamWater(
       const w01 = wet[(y + 1) * nv + x]!
       const wMin = Math.min(w00, w10, w11, w01)
       const wAvg = (w00 + w10 + w11 + w01) * 0.25
-      // Require all corners wet enough — keeps sheet away from shoreline
-      if (wMin < WET_THRESH * 1.12 || wAvg < WET_THRESH * 1.2) continue
+      if (wMin < WET_THRESH * 1.32 || wAvg < WET_THRESH * 1.4) continue
       const h00 = Math.max(WATER_SURF, vertH[y * nv + x]!)
       const h10 = Math.max(WATER_SURF, vertH[y * nv + (x + 1)]!)
       const h11 = Math.max(WATER_SURF, vertH[(y + 1) * nv + (x + 1)]!)
@@ -159,7 +188,7 @@ export function drawStreamWater(
       const p01 = gridToIso(x - cx, y + 1 - cy, h01)
       const mx = (p00.x + p10.x + p11.x + p01.x) * 0.25
       const my = (p00.y + p10.y + p11.y + p01.y) * 0.25
-      const fat = 0.92
+      const fat = 0.78
       const F = (p: { x: number; y: number }) => ({
         x: mx + (p.x - mx) * fat,
         y: my + (p.y - my) * fat,
@@ -180,7 +209,7 @@ export function drawStreamWater(
       ctx.lineTo(c.x, c.y)
       ctx.lineTo(d.x, d.y)
       ctx.closePath()
-      ctx.fillStyle = rgba(fill, 0.9)
+      ctx.fillStyle = rgba(fill, 0.85)
       ctx.fill()
     }
   }
@@ -237,44 +266,58 @@ export function drawStreamWater(
       smoothLoops.push(loop)
     }
 
-    // Soft feathered bank underlap — land / damp / shore tones only (never bright white)
+    // Soft feathered bank underlap — shore cushion kills dark-grass AA → teal fringe.
+    // Multi-ring low-alpha fills (+ optional blur). NEVER a dark contour stroke.
     for (const loop of smoothLoops) {
-      const bank = expandClosed(loop, BANK_EXPAND)
-      ctx.beginPath()
-      pathFromPts(ctx, bank, 0)
-      // Outer moss tuck — opaque enough that AA can't flash sky
-      ctx.strokeStyle = rgba(lerp3(COL_MOSS, COL_DEEP, 0.4), 0.72)
-      ctx.lineWidth = 14
-      ctx.stroke()
-      ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_MOSS, 0.35), 0.65)
-      ctx.lineWidth = 9
-      ctx.stroke()
-      ctx.strokeStyle = rgba(lerp3(COL_SHORE, COL_DAMP, 0.5), 0.55)
-      ctx.lineWidth = 5
-      ctx.stroke()
-      // Soft bank fill ring: expanded bank minus inset water silhouette
-      ctx.beginPath()
-      pathFromPts(ctx, bank, 0)
-      ctx.fillStyle = rgba(lerp3(COL_DAMP, COL_SHORE, 0.4), 0.28)
-      ctx.fill()
+      const rings: { amt: number; col: [number, number, number]; a: number; blur: number }[] = [
+        { amt: BANK_EXPAND * 1.15, col: lerp3(COL_SHORE, COL_MOSS, 0.12), a: 0.22, blur: 14 },
+        { amt: BANK_EXPAND * 0.85, col: lerp3(COL_SHORE, COL_MOSS, 0.18), a: 0.28, blur: 10 },
+        { amt: BANK_EXPAND * 0.5, col: lerp3(COL_SHORE, COL_DAMP, 0.15), a: 0.32, blur: 6 },
+        // Opaque-enough shore cushion right under the water edge (AA samples this, not dark turf)
+        { amt: BANK_EXPAND * 0.22, col: lerp3(COL_SHORE, COL_MOSS, 0.08), a: 0.55, blur: 0 },
+        { amt: 0.5, col: lerp3(COL_SHORE, COL_MOSS, 0.05), a: 0.7, blur: 0 },
+      ]
+      for (const ring of rings) {
+        const path = expandClosed(loop, ring.amt)
+        ctx.save()
+        if (ring.blur > 0) {
+          ctx.shadowColor = rgba(ring.col, ring.a * 0.7)
+          ctx.shadowBlur = ring.blur
+        }
+        ctx.beginPath()
+        pathFromPts(ctx, path, 0)
+        ctx.fillStyle = rgba(ring.col, ring.a)
+        ctx.fill()
+        ctx.restore()
+      }
     }
 
-    // Smooth water body — inset so bank feather owns the outer AA fringe
+    // Smooth water body — filled Chaikin path; seal matches water fill (not dark damp)
     for (const loop of smoothLoops) {
       const water = expandClosed(loop, -WATER_INSET)
-      const fill = lerp3(WATER_SHALLOW, WATER_MID, 0.55)
+      const fill = lerp3(WATER_SHALLOW, WATER_MID, 0.5)
+
+      // Soft water-coloured underlap rings (no GPU-blur dependency for stair kill)
+      for (const [amt, a] of [
+        [2.8, 0.18],
+        [1.6, 0.28],
+        [0.6, 0.4],
+      ] as const) {
+        ctx.beginPath()
+        pathFromPts(ctx, expandClosed(water, amt), 0)
+        ctx.fillStyle = rgba(fill, a)
+        ctx.fill()
+      }
+
       ctx.beginPath()
       pathFromPts(ctx, water, 0)
-      ctx.fillStyle = rgba(fill, 0.97)
+      ctx.fillStyle = rgba(fill, 0.98)
       ctx.fill()
-      // Seal AA with water-coloured stroke (same as fill — never sky/white)
+      // Seal AA with water-coloured stroke (same as fill)
       ctx.strokeStyle = rgba(fill, 1)
-      ctx.lineWidth = 2.8
+      ctx.lineWidth = 2.6
       ctx.stroke()
-      // Soft inner depth lip — mid water, not foam
-      ctx.strokeStyle = rgba(lerp3(WATER_MID, WATER_DEEP, 0.4), 0.28)
-      ctx.lineWidth = 4.2
-      ctx.stroke()
+      // No dark inner lip — it read as teal teeth at zoom
     }
 
     if (nowMs != null && Number.isFinite(nowMs) && smoothLoops.length) {
@@ -300,6 +343,91 @@ export function drawStreamWater(
   }
 
   ctx.restore()
+}
+
+/** Upsample wet field (bilinear) then box-blur — smoother iso-line before MS. */
+function upsampleBlurWet(
+  wet: Float32Array,
+  nv: number,
+  factor: number,
+  blurPasses: number,
+): { field: Float32Array; n: number } {
+  const n = (nv - 1) * factor + 1
+  const field = new Float32Array(n * n)
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const fx = x / factor
+      const fy = y / factor
+      const x0 = Math.floor(fx)
+      const y0 = Math.floor(fy)
+      const x1 = Math.min(nv - 1, x0 + 1)
+      const y1 = Math.min(nv - 1, y0 + 1)
+      const tx = fx - x0
+      const ty = fy - y0
+      const v00 = wet[y0 * nv + x0]!
+      const v10 = wet[y0 * nv + x1]!
+      const v01 = wet[y1 * nv + x0]!
+      const v11 = wet[y1 * nv + x1]!
+      field[y * n + x] =
+        v00 * (1 - tx) * (1 - ty) +
+        v10 * tx * (1 - ty) +
+        v01 * (1 - tx) * ty +
+        v11 * tx * ty
+    }
+  }
+  boxBlurInPlace(field, n, blurPasses)
+  return { field, n }
+}
+
+/**
+ * Soft shore wash near wetness threshold — shore/sand tones only.
+ * Distance falloff in wetness space; hides residual MS faceting without a hard contour.
+ */
+function paintSoftShoreFalloff(
+  ctx: CanvasRenderingContext2D,
+  softWet: Float32Array,
+  sn: number,
+  scale: number,
+  vertH: Float32Array,
+  nv: number,
+  cx: number,
+  cy: number,
+  size: number,
+): void {
+  const lo = WET_THRESH * 0.5
+  const hi = WET_THRESH * 1.02
+  const step = 1
+  for (let iy = 0; iy < sn; iy += step) {
+    for (let ix = 0; ix < sn; ix += step) {
+      const w = softWet[iy * sn + ix]!
+      if (w < lo || w > hi) continue
+      const t = 1 - Math.abs(w - WET_THRESH) / (WET_THRESH - lo)
+      const a = Math.max(0, Math.min(1, t)) * 0.1
+      if (a < 0.02) continue
+      const gx = ix * scale
+      const gy = iy * scale
+      if (gx < 0 || gy < 0 || gx > size || gy > size) continue
+      const x0 = Math.max(0, Math.min(nv - 1, Math.floor(gx)))
+      const y0 = Math.max(0, Math.min(nv - 1, Math.floor(gy)))
+      const x1 = Math.min(nv - 1, x0 + 1)
+      const y1 = Math.min(nv - 1, y0 + 1)
+      const tx = gx - x0
+      const ty = gy - y0
+      const h =
+        vertH[y0 * nv + x0]! * (1 - tx) * (1 - ty) +
+        vertH[y0 * nv + x1]! * tx * (1 - ty) +
+        vertH[y1 * nv + x0]! * (1 - tx) * ty +
+        vertH[y1 * nv + x1]! * tx * ty
+      if (h < 0.02) continue
+      const p = gridToIso(gx - 0.5 - cx, gy - 0.5 - cy, Math.max(WATER_SURF, h))
+      const r = 8 + a * 7
+      ctx.beginPath()
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2)
+      // Shore / warm sand — never dark damp/teal
+      ctx.fillStyle = rgba(lerp3(COL_SHORE, COL_MOSS, 0.15), a)
+      ctx.fill()
+    }
+  }
 }
 
 /** Insert points along closed loop so consecutive segments stay short for Chaikin. */
@@ -337,7 +465,6 @@ function densifyClosed(pts: Pt[], maxStep: number): Pt[] {
 function expandClosed(pts: Pt[], amount: number): Pt[] {
   if (pts.length < 3 || Math.abs(amount) < 1e-6) return pts
   const m = pts.length
-  // signed area — ensure outward is away from centroid for CCW
   let area = 0
   for (let i = 0; i < m; i++) {
     const a = pts[i]!
@@ -356,7 +483,6 @@ function expandClosed(pts: Pt[], amount: number): Pt[] {
     const e2y = next.y - cur.y
     const l1 = Math.hypot(e1x, e1y) || 1
     const l2 = Math.hypot(e2x, e2y) || 1
-    // outward normals (perpendicular, flipped by winding)
     let nx = sign * (e1y / l1 + e2y / l2)
     let ny = sign * -(e1x / l1 + e2x / l2)
     const nl = Math.hypot(nx, ny) || 1

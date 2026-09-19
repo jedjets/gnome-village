@@ -93,9 +93,10 @@ export function drawSoftIsoMesh(
     let rgb = lerp3(lerp3(c00, c10, 0.5), lerp3(c01, c11, 0.5), 0.5)
 
     const wAvg = (wet[i00]! + wet[i10]! + wet[i11]! + wet[i01]!) * 0.25
+    // Soft shore tint only — avoid dark damp that reads as teal stair teeth at iso edges
     if (wAvg > 0.12) {
-      rgb = lerp3(rgb, COL_SHORE, Math.min(0.35, wAvg * 0.4))
-      rgb = lerp3(rgb, COL_DAMP, Math.min(0.2, wAvg * 0.25))
+      rgb = lerp3(rgb, COL_SHORE, Math.min(0.4, wAvg * 0.45))
+      rgb = lerp3(rgb, COL_DAMP, Math.min(0.08, wAvg * 0.08))
     }
 
     const shade = (c: [number, number, number], L: number): [number, number, number] => [
