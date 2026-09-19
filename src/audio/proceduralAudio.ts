@@ -34,16 +34,8 @@ export async function unlockAudio(): Promise<void> {
   }
 }
 
-export function isAudioUnlocked(): boolean {
-  return unlocked
-}
-
 export function setMuted(next: boolean): void {
   muted = next
-}
-
-export function isMuted(): boolean {
-  return muted
 }
 
 /** Soft blip for UI confirmations. No-op if muted or locked. */

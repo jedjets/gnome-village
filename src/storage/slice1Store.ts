@@ -5,7 +5,6 @@
 
 import { GRID_SIZE } from '../world/isleGrid'
 import type { CameraState } from '../world/fit'
-import { defaultCamera } from '../world/fit'
 
 const SLICE1_KEY = 'gnome-village:slice1-v1'
 const LEGACY_SAVE_KEY = 'gnome-village:save'
@@ -19,17 +18,6 @@ export type Slice1Save = {
   muted: boolean
   /** True once the player has begun / continued into the isle */
   hasPlayed: boolean
-}
-
-export function defaultSlice1Save(seed = 0x6e0f1e): Slice1Save {
-  return {
-    version: 1,
-    seed,
-    heights: [],
-    camera: defaultCamera(),
-    muted: false,
-    hasPlayed: false,
-  }
 }
 
 function readLegacyMute(): boolean | null {

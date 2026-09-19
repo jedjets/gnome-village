@@ -11,7 +11,6 @@ export function Hud({ muted, onToggleMute, onFit, onLeave }: HudProps) {
     <header className="hud" role="banner">
       <div className="hud-left">
         <span className="hud-title">Gnome Village</span>
-        <span className="hud-chip">Slice 1</span>
       </div>
       <div className="hud-right">
         <button

@@ -135,8 +135,6 @@ function App() {
     persistSilent()
   }, [muted, phase, persistSilent])
 
-  const noop = useCallback(() => {}, [])
-
   if (phase === 'intro' || !world) {
     return (
       <Intro
@@ -157,8 +155,6 @@ function App() {
       onLeave={leave}
       heightfield={world.hf}
       camera={world.camera}
-      onCameraMutated={noop}
-      onTerrainMutated={noop}
       autoFitOnEnter={autoFitOnEnter}
     />
   )

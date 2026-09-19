@@ -13,8 +13,6 @@ type MainShellProps = {
   onLeave: () => void
   heightfield: Heightfield
   camera: CameraState
-  onCameraMutated: () => void
-  onTerrainMutated: () => void
   /** Auto-fit once on mount (Begin). Continue restores camera — skip. */
   autoFitOnEnter?: boolean
 }
@@ -25,8 +23,6 @@ export function MainShell({
   onLeave,
   heightfield,
   camera,
-  onCameraMutated,
-  onTerrainMutated,
   autoFitOnEnter = true,
 }: MainShellProps) {
   const [tool, setTool] = useState<ToolMode>('look')
@@ -44,9 +40,8 @@ export function MainShell({
     camera.panY = fitted.panY
     camera.zoom = fitted.zoom
     camera.rotation = fitted.rotation
-    onCameraMutated()
     setFitNonce((n) => n + 1)
-  }, [camera, heightfield.size, onCameraMutated])
+  }, [camera, heightfield.size])
 
   useEffect(() => {
     if (!autoFitOnEnter || didAutoFit.current) return
@@ -68,8 +63,6 @@ export function MainShell({
           heightfield={heightfield}
           camera={camera}
           tool={tool}
-          onCameraChange={onCameraMutated}
-          onTerrainChange={onTerrainMutated}
           fitNonce={fitNonce}
         />
       </div>

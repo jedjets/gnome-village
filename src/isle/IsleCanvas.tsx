@@ -11,8 +11,6 @@ export type IsleCanvasProps = {
   heightfield: Heightfield
   camera: CameraState
   tool: ToolMode
-  onCameraChange: () => void
-  onTerrainChange: () => void
   fitNonce?: number
 }
 
@@ -24,16 +22,12 @@ export function IsleCanvas({
   heightfield,
   camera,
   tool,
-  onCameraChange,
-  onTerrainChange,
   fitNonce = 0,
 }: IsleCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const hfRef = useRef(heightfield)
   const camRef = useRef(camera)
   const toolRef = useRef(tool)
-  const onCamRef = useRef(onCameraChange)
-  const onTerRef = useRef(onTerrainChange)
   const paintingRef = useRef(false)
   const lastPaintRef = useRef(0)
 
@@ -46,12 +40,6 @@ export function IsleCanvas({
   useEffect(() => {
     toolRef.current = tool
   }, [tool])
-  useEffect(() => {
-    onCamRef.current = onCameraChange
-  }, [onCameraChange])
-  useEffect(() => {
-    onTerRef.current = onTerrainChange
-  }, [onTerrainChange])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -92,9 +80,7 @@ export function IsleCanvas({
       if (now - lastPaintRef.current < 16) return
       lastPaintRef.current = now
       const dir: 1 | -1 = mode === 'raise' ? 1 : -1
-      if (paintTerrain(hfRef.current, hit.gx, hit.gy, dir)) {
-        onTerRef.current()
-      }
+      paintTerrain(hfRef.current, hit.gx, hit.gy, dir)
     }
 
     const detach = attachPointerBridge(canvas, {
@@ -104,7 +90,6 @@ export function IsleCanvas({
         if (mode === 'look') {
           paintingRef.current = false
           gestures.onPointers(pointers, camRef.current)
-          onCamRef.current()
           return
         }
         if (pointers.size === 1) {
@@ -118,7 +103,6 @@ export function IsleCanvas({
         const mode = toolRef.current
         if (mode === 'look') {
           gestures.onPointers(pointers, camRef.current)
-          onCamRef.current()
           return
         }
         if (!paintingRef.current || pointers.size !== 1) return
@@ -131,7 +115,6 @@ export function IsleCanvas({
           gestures.reset()
         } else if (toolRef.current === 'look') {
           gestures.onPointers(pointers, camRef.current)
-          onCamRef.current()
         }
       },
     })
