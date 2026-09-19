@@ -28,7 +28,8 @@ Then open the URL Vite prints (usually `http://localhost:5173`). On a phone, use
 - Camera: drag pan, pinch zoom, twist rotate, Fit
 - Tools: Look · Raise · Lower (bottom rail, one scrolling row)
 - Silent save on tab hide (`gnome-village:slice1-v1`)
-- Begin unlocks audio stub; mute remembered
+- Begin unlocks audio stub (+ soft blip); Continue restores silently; mute remembered
+- Paper HUD identity: Fraunces + Figtree, ink on pastel paper, Wren/Bram hats
 
 ## Layout
 
@@ -43,6 +44,11 @@ src/
   storage/   Slice 1 localStorage
 docs/        Product brief
 ```
+
+## Deploy
+
+GitHub Pages (Actions): push to `main` runs `.github/workflows/pages.yml`.
+Live URL: `https://jedjets.github.io/gnome-village/` (`vite` `base: '/gnome-village/'`).
 
 ## Notes
 

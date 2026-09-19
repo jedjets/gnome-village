@@ -1,6 +1,6 @@
 /**
  * Procedural Web Audio stub.
- * Unlock on Begin (user gesture); mute remembered. Silent OK.
+ * Unlock on Begin / Continue (user gesture); blip only on Begin. Mute remembered. Silent OK.
  */
 
 let ctx: AudioContext | null = null
@@ -20,7 +20,7 @@ function getCtx(): AudioContext | null {
   return ctx
 }
 
-/** Call from Begin / Continue (user gesture) to unlock the audio graph. */
+/** Call from Begin / Continue (user gesture) to unlock the audio graph. Continue stays silent (no blip). */
 export async function unlockAudio(): Promise<void> {
   const audio = getCtx()
   if (!audio) return

@@ -91,9 +91,9 @@ function App() {
 
   const enterPlay = useCallback(async (mode: 'begin' | 'continue') => {
     await unlockAudio()
-    playBlip()
 
     if (mode === 'begin') {
+      playBlip()
       const built = buildWorldFromSave(null, true)
       worldRef.current = built
       setWorld(built)
