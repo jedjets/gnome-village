@@ -3,48 +3,66 @@ import { getHeight } from '../world/isleGrid'
 import type { CameraState } from '../world/fit'
 import type { RenderIsleOpts } from './renderIsleCore'
 import {
-  CELL, HEIGHT_SCALE, MOSS_VIS_BOOST, LOAF_DEPTH, gridToIso, ensureFields,
-  lerp3, rgba,
-  COL_DEEP, COL_MOSS, COL_LIT, EARTH_TOP,
+  CELL,
+  HEIGHT_SCALE,
+  LOAF_DEPTH,
+  ensureFields,
+  lerp3,
+  rgba,
+  COL_DEEP,
+  COL_MOSS,
+  EARTH_TOP,
 } from './renderIsleCore'
-import { buildSilhouette, buildMossOutline, drawSoftWetShore, pathFromPts } from './renderIsleDraw'
-import { sealLoafToMoss, drawLoafFromSilhouette } from './renderIsleForms'
-import { drawMossMound } from './renderIsleMoss'
+import { buildSilhouette, pathFromPts } from './renderIsleDraw'
+import { drawLoafFromSilhouette } from './renderIsleForms'
+import { drawSoftIsoMesh } from './renderIsleMesh'
+import { drawStreamWater } from './renderIsleWater'
+
 export type { RenderIsleOpts } from './renderIsleCore'
 export { CELL, HEIGHT_SCALE, isleWorldSize } from './renderIsleCore'
+
+/**
+ * Soft-iso village land + water — prototype language, prettier craft.
+ * No moss dome, no radial fans, no crater wet bowl.
+ */
 export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts): void {
-  const { width: w, height: h, camera, hf } = opts
+  const { width: w, height: h, camera, hf, nowMs } = opts
   if (w <= 0 || h <= 0) return
   const size = hf.size
   const cx = (size - 1) * 0.5
   const cy = (size - 1) * 0.5
-  const { light, wet, col, nv } = ensureFields(hf)
-  const mossSil = buildMossOutline(hf, cx, cy, 64)
-  const loafSil = sealLoafToMoss(buildSilhouette(hf, cx, cy, 96), mossSil)
+  const { light, wet, col, vertH, nv } = ensureFields(hf)
+  const loafSil = buildSilhouette(hf, cx, cy, 96)
+
+  // Calmer parchment sky
   const sky = ctx.createLinearGradient(0, 0, 0, h)
-  sky.addColorStop(0, '#E6DCCE')
-  sky.addColorStop(0.4, '#EFE8DC')
-  sky.addColorStop(0.75, '#E8EDF2')
-  sky.addColorStop(1, '#F2EDF5')
+  sky.addColorStop(0, '#E8DFD2')
+  sky.addColorStop(0.45, '#F0EAE0')
+  sky.addColorStop(0.78, '#E6ECF0')
+  sky.addColorStop(1, '#EFE8F2')
   ctx.fillStyle = sky
   ctx.fillRect(0, 0, w, h)
-  const sunX = w * 0.74
-  const sunY = h * 0.1
-  const sunR = Math.min(w, h) * 0.1
-  const sunGrad = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR * 2.3)
-  sunGrad.addColorStop(0, 'rgba(255, 242, 200, 0.5)')
-  sunGrad.addColorStop(0.5, 'rgba(255, 218, 160, 0.1)')
-  sunGrad.addColorStop(1, 'rgba(255, 218, 160, 0)')
+
+  const sunX = w * 0.72
+  const sunY = h * 0.11
+  const sunR = Math.min(w, h) * 0.09
+  const sunGrad = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR * 2.2)
+  sunGrad.addColorStop(0, 'rgba(255, 244, 210, 0.42)')
+  sunGrad.addColorStop(0.55, 'rgba(255, 220, 170, 0.08)')
+  sunGrad.addColorStop(1, 'rgba(255, 220, 170, 0)')
   ctx.fillStyle = sunGrad
   ctx.beginPath()
-  ctx.arc(sunX, sunY, sunR * 2.3, 0, Math.PI * 2)
+  ctx.arc(sunX, sunY, sunR * 2.2, 0, Math.PI * 2)
   ctx.fill()
+
   ctx.save()
   ctx.translate(w * 0.5 + camera.panX, h * 0.5 + camera.panY)
   ctx.rotate(camera.rotation)
   ctx.scale(camera.zoom, camera.zoom)
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
+
+  // Soft ground shadow
   {
     let minX = Infinity
     let maxX = -Infinity
@@ -54,98 +72,64 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
       maxX = Math.max(maxX, p.x)
       maxY = Math.max(maxY, p.y)
     }
-    const footR = (maxX - minX) * 0.52
-    const footY = maxY + LOAF_DEPTH * 0.62
+    const footR = (maxX - minX) * 0.5
+    const footY = maxY + LOAF_DEPTH * 0.55
     const shadow = ctx.createRadialGradient(0, footY, footR * 0.1, 0, footY, footR)
-    shadow.addColorStop(0, 'rgba(48, 34, 26, 0.34)')
-    shadow.addColorStop(0.55, 'rgba(48, 34, 26, 0.1)')
+    shadow.addColorStop(0, 'rgba(48, 34, 26, 0.28)')
+    shadow.addColorStop(0.55, 'rgba(48, 34, 26, 0.08)')
     shadow.addColorStop(1, 'rgba(48, 34, 26, 0)')
     ctx.fillStyle = shadow
     ctx.beginPath()
-    ctx.ellipse(0, footY, footR, footR * 0.34, 0, 0, Math.PI * 2)
+    ctx.ellipse(0, footY, footR, footR * 0.32, 0, 0, Math.PI * 2)
     ctx.fill()
   }
+
   drawLoafFromSilhouette(ctx, loafSil)
-  let peakH = 0
-  let peakIsoY = 0
-  let rimHSum = 0
-  let rimN = 0
-  for (let y = 0; y < size; y += 2) {
-    for (let x = 0; x < size; x += 2) {
-      const ht = getHeight(hf, x, y)
-      if (ht > 0.05) {
-        if (ht > peakH) {
-          peakH = ht
-          peakIsoY = gridToIso(x - cx, y - cy, ht).y
-        }
-        const dx = (x - cx) / cx
-        const dy = (y - cy) / cy
-        const r = Math.hypot(dx, dy)
-        if (r > 0.72 && r < 0.95) {
-          rimHSum += ht
-          rimN++
-        }
-      }
-    }
-  }
-  const rimH = rimN ? rimHSum / rimN : 0.15
+
+  // Clip land top to silhouette, paint continuous soft-iso mesh + stream
   ctx.save()
   ctx.beginPath()
-  pathFromPts(ctx, mossSil, 0)
+  pathFromPts(ctx, loafSil, 0)
   ctx.clip()
-  ctx.beginPath()
-  pathFromPts(ctx, mossSil, 0)
-  const under = ctx.createRadialGradient(0, peakIsoY * 0.45, 0, 0, 0, size * CELL * 0.46)
-  under.addColorStop(0, rgba(COL_LIT, 1))
-  under.addColorStop(0.4, rgba(COL_MOSS, 1))
-  under.addColorStop(0.82, rgba(COL_DEEP, 1))
-  under.addColorStop(1, rgba(COL_DEEP, 1))
-  ctx.fillStyle = under
-  ctx.fill()
-  drawMossMound(ctx, hf, light, col, wet, nv, cx, cy, mossSil)
+
+  drawSoftIsoMesh(ctx, hf, light, col, wet, vertH, nv, cx, cy)
+  drawStreamWater(ctx, hf, wet, vertH, nv, cx, cy, nowMs)
+
+  // Soft aerial wash
   {
     let minY = Infinity
     let maxY = -Infinity
-    for (const p of mossSil) {
+    for (const p of loafSil) {
       minY = Math.min(minY, p.y)
       maxY = Math.max(maxY, p.y)
     }
-    const wash = ctx.createRadialGradient(
-      0,
-      peakIsoY,
-      0,
-      0,
-      (minY + maxY) * 0.55,
-      size * CELL * 0.44,
-    )
-    wash.addColorStop(0, 'rgba(255, 248, 220, 0.26)')
-    wash.addColorStop(0.3, 'rgba(255, 248, 220, 0.08)')
-    wash.addColorStop(0.65, 'rgba(40, 60, 40, 0.05)')
-    wash.addColorStop(1, 'rgba(28, 44, 30, 0.2)')
+    const wash = ctx.createLinearGradient(0, minY, 0, maxY)
+    wash.addColorStop(0, 'rgba(255, 248, 230, 0.14)')
+    wash.addColorStop(0.45, 'rgba(255, 248, 230, 0.02)')
+    wash.addColorStop(1, 'rgba(30, 50, 36, 0.1)')
     ctx.fillStyle = wash
     ctx.beginPath()
-    pathFromPts(ctx, mossSil, 0)
+    pathFromPts(ctx, loafSil, 0)
     ctx.fill()
   }
-  if (peakH > 0.35) {
-    const crest = ctx.createRadialGradient(0, peakIsoY, 0, 0, peakIsoY, size * CELL * 0.2)
-    const a = Math.min(0.36, (peakH - rimH) * 0.45)
-    crest.addColorStop(0, `rgba(255,248,210,${a})`)
-    crest.addColorStop(0.55, `rgba(255,248,210,${a * 0.22})`)
-    crest.addColorStop(1, 'rgba(255,248,210,0)')
-    ctx.fillStyle = crest
-    ctx.beginPath()
-    pathFromPts(ctx, mossSil, 0)
-    ctx.fill()
-  }
-  drawSoftWetShore(ctx, hf, wet, nv, cx, cy)
+
   ctx.restore()
+
+  // Soft turf rim
+  ctx.beginPath()
+  pathFromPts(ctx, loafSil, 0)
+  ctx.strokeStyle = rgba(lerp3(COL_DEEP, COL_MOSS, 0.35), 0.35)
+  ctx.lineWidth = 2.2
+  ctx.lineJoin = 'round'
+  ctx.stroke()
+
+  // South loaf lip tuck
   {
     const mcy = loafSil.reduce((s, p) => s + p.y, 0) / loafSil.length
     ctx.beginPath()
     let started = false
     for (const p of loafSil) {
-      if (p.y < mcy - 6) {
+      if (p.y < mcy - 4) {
         started = false
         continue
       }
@@ -156,20 +140,16 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
         ctx.lineTo(p.x, p.y)
       }
     }
-    ctx.strokeStyle = rgba(lerp3(COL_DEEP, EARTH_TOP, 0.35), 0.75)
-    ctx.lineWidth = 10
+    ctx.strokeStyle = rgba(lerp3(COL_DEEP, EARTH_TOP, 0.4), 0.55)
+    ctx.lineWidth = 7
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
     ctx.stroke()
   }
-  ctx.beginPath()
-  pathFromPts(ctx, mossSil, 0)
-  ctx.strokeStyle = 'rgba(48, 78, 52, 0.28)'
-  ctx.lineWidth = 2.5
-  ctx.lineJoin = 'round'
-  ctx.stroke()
+
   ctx.restore()
 }
+
 export function screenToGrid(
   screenX: number,
   screenY: number,
@@ -196,13 +176,7 @@ export function screenToGrid(
     const xi = Math.max(0, Math.min(hf.size - 1, Math.round(gx)))
     const yi = Math.max(0, Math.min(hf.size - 1, Math.round(gy)))
     const ht = getHeight(hf, xi, yi)
-    const dx = (gx - cx) / Math.max(1, cx)
-    const dy = (gy - cy) / Math.max(1, cy)
-    const facing = Math.max(0, -(dx + dy) / Math.SQRT2)
-    const relief = Math.max(0, ht - 0.12)
-    const vis = ht * (1 + (MOSS_VIS_BOOST - 1) * Math.min(1, ht))
-    const yLift = facing * facing * (36 + relief * 160)
-    const adjY = ry + vis * HEIGHT_SCALE + yLift
+    const adjY = ry + ht * HEIGHT_SCALE
     gx = cx + (rx / CELL + (adjY * 2) / CELL) * 0.5
     gy = cy + ((adjY * 2) / CELL - rx / CELL) * 0.5
   }

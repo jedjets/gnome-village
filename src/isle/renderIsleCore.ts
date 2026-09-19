@@ -1,22 +1,19 @@
 import type { Heightfield } from '../world/isleGrid'
 import { sampleHeight, streamDist, WATER_LEVEL } from '../world/isleGrid'
 import type { CameraState } from '../world/fit'
+
 export const CELL = 18
-/** Gate: keep in 48–70. */
-export const HEIGHT_SCALE = 70
-/** Visible earth loaf depth (world px before zoom). Single ribbon thickness. */
-export const LOAF_DEPTH = 136
-export const STREAM_HALF = 3.2
-/** Radial fan wedges for moss mound (shared center + rim verts). */
-export const MOSS_FANS = 40
-/** Visual-only height boost for moss mesh/outline (HEIGHT_SCALE stays ≤70). */
-export const MOSS_VIS_BOOST = 2.15
+/** Gate: keep in 48–70. Soft loaf relief — not skyscraper. */
+export const HEIGHT_SCALE = 56
+/** Visible earth loaf depth (world px before zoom). Soft ribbon. */
+export const LOAF_DEPTH = 92
+export const STREAM_HALF = 3.4
 
 export function isleWorldSize(gridSize: number): { w: number; h: number } {
   const foot = gridSize * CELL * Math.SQRT2 * 0.88
   return {
     w: foot,
-    h: foot * 0.52 + HEIGHT_SCALE + LOAF_DEPTH,
+    h: foot * 0.42 + HEIGHT_SCALE * 0.85 + LOAF_DEPTH * 0.75,
   }
 }
 
@@ -46,17 +43,19 @@ export function hash2(ix: number, iy: number, seed: number): number {
   return ((n ^ (n >>> 16)) >>> 0) / 4294967296
 }
 
-export const COL_DEEP: [number, number, number] = [0x3a, 0x6e, 0x44]
-export const COL_MOSS: [number, number, number] = [0x58, 0x92, 0x58]
-export const COL_LIT: [number, number, number] = [0x86, 0xb4, 0x6c]
-export const COL_WARM: [number, number, number] = [0x94, 0xac, 0x66]
-export const COL_DAMP: [number, number, number] = [0x4a, 0x72, 0x52]
-export const COL_SHORE: [number, number, number] = [0xc4, 0xb8, 0x94]
-export const WATER_SOFT: [number, number, number] = [0x5a, 0x90, 0x94]
-export const WATER_CORE: [number, number, number] = [0x3e, 0x72, 0x7a]
-export const EARTH_TOP: [number, number, number] = [0x9a, 0x72, 0x52]
-export const EARTH_MID: [number, number, number] = [0x7a, 0x56, 0x3c]
-export const EARTH_BOT: [number, number, number] = [0x5c, 0x40, 0x2e]
+export const COL_DEEP: [number, number, number] = [0x3e, 0x72, 0x48]
+export const COL_MOSS: [number, number, number] = [0x5c, 0x96, 0x58]
+export const COL_LIT: [number, number, number] = [0x8a, 0xb8, 0x6e]
+export const COL_WARM: [number, number, number] = [0x9a, 0xb0, 0x68]
+export const COL_DAMP: [number, number, number] = [0x4a, 0x78, 0x54]
+export const COL_SHORE: [number, number, number] = [0xd0, 0xc2, 0x98]
+export const COL_SAND: [number, number, number] = [0xc8, 0xb8, 0x88]
+export const WATER_SHALLOW: [number, number, number] = [0x6a, 0xb0, 0xb8]
+export const WATER_MID: [number, number, number] = [0x4a, 0x8e, 0x9a]
+export const WATER_DEEP: [number, number, number] = [0x36, 0x72, 0x82]
+export const EARTH_TOP: [number, number, number] = [0xa8, 0x7c, 0x58]
+export const EARTH_MID: [number, number, number] = [0x82, 0x5c, 0x40]
+export const EARTH_BOT: [number, number, number] = [0x5e, 0x42, 0x30]
 
 export type RenderIsleOpts = {
   width: number
@@ -71,6 +70,7 @@ let _cacheSize = 0
 let _light: Float32Array | null = null
 let _wet: Float32Array | null = null
 let _col: Float32Array | null = null
+let _vertH: Float32Array | null = null
 
 export function heightsSig(hf: Heightfield): number {
   let s = hf.seed | 0
@@ -104,22 +104,25 @@ export function boxBlurInPlace(buf: Float32Array, nv: number, passes: number): v
   }
 }
 
+/** Soft-iso fields on shared vertices (continuous ground + shoreline). */
 export function ensureFields(hf: Heightfield): {
   light: Float32Array
   wet: Float32Array
   col: Float32Array
+  vertH: Float32Array
   nv: number
 } {
   const size = hf.size
   const nv = size + 1
   const sig = heightsSig(hf)
-  if (_light && _wet && _col && _cacheSig === sig && _cacheSize === size) {
-    return { light: _light, wet: _wet, col: _col, nv }
+  if (_light && _wet && _col && _vertH && _cacheSig === sig && _cacheSize === size) {
+    return { light: _light, wet: _wet, col: _col, vertH: _vertH, nv }
   }
 
   const light = new Float32Array(nv * nv)
   const wet = new Float32Array(nv * nv)
   const col = new Float32Array(nv * nv * 3)
+  const vertH = new Float32Array(nv * nv)
   const seed = hf.seed
 
   for (let y = 0; y < nv; y++) {
@@ -127,14 +130,17 @@ export function ensureFields(hf: Heightfield): {
       const gx = x - 0.5
       const gy = y - 0.5
       const hC = sampleHeight(hf, gx, gy)
+      vertH[y * nv + x] = hC
+
       const hN = sampleHeight(hf, gx, gy - 1)
       const hS = sampleHeight(hf, gx, gy + 1)
       const hE = sampleHeight(hf, gx + 1, gy)
       const hW = sampleHeight(hf, gx - 1, gy)
-      // Dome lighting: crown lit, sides darker, soft valley AO
-      let L = 0.7 + hC * 0.48 + (hN - hS) * 0.1 + (hW - hE) * 0.07
-      L += Math.max(0, hC - (hN + hS + hE + hW) * 0.25) * 0.28
-      L -= Math.max(0, (hN + hS + hE + hW) * 0.25 - hC) * 0.32
+
+      let L = 0.78 + (hW - hE) * 0.22 + (hN - hS) * 0.16 + hC * 0.12
+      const meanN = (hN + hS + hE + hW) * 0.25
+      L += Math.max(0, hC - meanN) * 0.18
+      L -= Math.max(0, meanN - hC) * 0.28
       light[y * nv + x] = L
 
       if (hC <= 0.001) {
@@ -142,13 +148,19 @@ export function ensureFields(hf: Heightfield): {
       } else {
         const sd = streamDist(gx, gy, size, seed)
         const stream = Math.max(0, 1 - sd / STREAM_HALF)
-        const bowl = hC <= WATER_LEVEL ? Math.max(0, 1 - hC / WATER_LEVEL) * 0.85 : 0
-        // Soft crown suppress — keep continuous ribbon, leave moss shoulders green
-        const crownFade = hC > 0.55 ? Math.max(0.25, 1 - (hC - 0.55) / 0.45) : 1
-        wet[y * nv + x] = Math.min(1, Math.max(stream * 0.95, bowl) * crownFade)
+        const low =
+          hC <= WATER_LEVEL + 0.04 ? Math.max(0, 1 - hC / (WATER_LEVEL + 0.04)) : 0
+        const depthNudge =
+          hC < WATER_LEVEL + 0.08 ? (WATER_LEVEL + 0.08 - hC) * 1.4 : 0
+        wet[y * nv + x] = Math.min(
+          1.15,
+          Math.max(stream * 0.92, low * 0.75) + depthNudge * 0.35,
+        )
       }
 
-      let acc: [number, number, number] = [0, 0, 0]
+      let acc0 = 0
+      let acc1 = 0
+      let acc2 = 0
       let wsum = 0
       for (let dy = -2; dy <= 2; dy++) {
         for (let dx = -2; dx <= 2; dx++) {
@@ -157,16 +169,24 @@ export function ensureFields(hf: Heightfield): {
           const w = dist < 0.1 ? 4 : 1 / (1 + dist)
           const h = sampleHeight(hf, gx + dx, gy + dy)
           if (h <= 0.001) continue
+          const sdN = streamDist(gx + dx, gy + dy, size, seed)
+          const nearBank = sdN < STREAM_HALF * 1.6 && h < 0.32
           let c: [number, number, number]
-          if (h < 0.28) c = lerp3(COL_DEEP, COL_MOSS, h / 0.28)
-          else if (h < 0.55) c = lerp3(COL_MOSS, COL_LIT, (h - 0.28) / 0.27)
-          else c = lerp3(COL_LIT, COL_WARM, (h - 0.55) / 0.45)
+          if (nearBank && h < 0.22) {
+            c = lerp3(COL_SHORE, COL_SAND, Math.min(1, (0.22 - h) / 0.12))
+          } else if (h < 0.22) {
+            c = lerp3(COL_DEEP, COL_MOSS, h / 0.22)
+          } else if (h < 0.42) {
+            c = lerp3(COL_MOSS, COL_LIT, (h - 0.22) / 0.2)
+          } else {
+            c = lerp3(COL_LIT, COL_WARM, Math.min(1, (h - 0.42) / 0.3))
+          }
           const g = hash2((x + dx) >> 2, (y + dy) >> 2, seed + 17)
-          if (g > 0.65) c = lerp3(c, COL_LIT, 0.12)
-          if (g < 0.28) c = lerp3(c, COL_DEEP, 0.14)
-          acc[0] += c[0] * w
-          acc[1] += c[1] * w
-          acc[2] += c[2] * w
+          if (g > 0.62) c = lerp3(c, COL_LIT, 0.1)
+          if (g < 0.28) c = lerp3(c, COL_DEEP, 0.12)
+          acc0 += c[0] * w
+          acc1 += c[1] * w
+          acc2 += c[2] * w
           wsum += w
         }
       }
@@ -176,26 +196,27 @@ export function ensureFields(hf: Heightfield): {
         col[i + 1] = COL_MOSS[1]
         col[i + 2] = COL_MOSS[2]
       } else {
-        col[i] = acc[0] / wsum
-        col[i + 1] = acc[1] / wsum
-        col[i + 2] = acc[2] / wsum
+        col[i] = acc0 / wsum
+        col[i + 1] = acc1 / wsum
+        col[i + 2] = acc2 / wsum
       }
     }
   }
 
-  boxBlurInPlace(light, nv, 6)
-  boxBlurInPlace(wet, nv, 4)
+  boxBlurInPlace(light, nv, 3)
+  boxBlurInPlace(wet, nv, 2)
   const ch = new Float32Array(nv * nv)
   for (let c = 0; c < 3; c++) {
     for (let i = 0; i < nv * nv; i++) ch[i] = col[i * 3 + c]!
-    boxBlurInPlace(ch, nv, 4)
+    boxBlurInPlace(ch, nv, 2)
     for (let i = 0; i < nv * nv; i++) col[i * 3 + c] = ch[i]!
   }
 
   _light = light
   _wet = wet
   _col = col
+  _vertH = vertH
   _cacheSig = sig
   _cacheSize = size
-  return { light, wet, col, nv }
+  return { light, wet, col, vertH, nv }
 }

@@ -1,8 +1,6 @@
 /**
- * Seeded continuous heightfield — soft loaf mound + gentle stream bowl.
- * Soft rim feather + slope clamp so cliffs read as loaf, not saw-teeth.
- * Amplitude tuned so mound volume reads at Fit with HEIGHT_SCALE 48–70
- * (≥25 CSS px peak-vs-rim relief at phone Fit when mesh is height-displaced).
+ * Seeded soft-iso heightfield — rolling village land + winding stream valley.
+ * NOT a moss dome / crater bowl. Shared vertex heights drive the renderer.
  */
 
 export const GRID_SIZE = 48
@@ -71,6 +69,11 @@ export function streamDist(gx: number, gy: number, size: number, seed: number): 
   return Math.abs(cross) * cx
 }
 
+/**
+ * Soft-iso village land: low rolling plateau with hills + stream valley.
+ * Peak ~0.55 — loaf-readable, not a skyscraper dome. Stream carves a ribbon,
+ * not a central crater wet bowl.
+ */
 export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
   const size = GRID_SIZE
   const heights = new Float32Array(size * size)
@@ -78,7 +81,7 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
 
   const cx = (size - 1) * 0.5
   const cy = (size - 1) * 0.5
-  const maxR = Math.min(cx, cy) * 0.88
+  const maxR = Math.min(cx, cy) * 0.9
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
@@ -86,45 +89,40 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
       const dy = (y - cy) / maxR
       const r = Math.sqrt(dx * dx + dy * dy)
 
-      // Tall soft dome — crown high, rim low so height-displaced moss reads as mound
-      // pow(island, 0.48) keeps body plump; outer falloff steepens rim vs peak
-      const island = Math.max(0, 1 - Math.pow(Math.min(1, r), 1.35))
-      const mound = Math.pow(island, 0.48)
+      // Soft island mask — plump body, feathered rim (loaf footprint)
+      const island = Math.max(0, 1 - Math.pow(Math.min(1, r), 1.55))
+      const base = Math.pow(island, 0.72)
 
+      // Rolling hills — continuous soft-iso language, not a radial dome
       const macro =
-        fbm(x * 0.04, y * 0.04, noiseSeed) * 0.45 +
-        fbm(x * 0.085 + 4, y * 0.085, noiseSeed + 3) * 0.25
-      const meso = fbm(x * 0.13, y * 0.13, noiseSeed + 11) * 0.1
+        fbm(x * 0.055, y * 0.055, noiseSeed) * 0.38 +
+        fbm(x * 0.11 + 3.1, y * 0.11, noiseSeed + 5) * 0.22
+      const meso = fbm(x * 0.2, y * 0.2, noiseSeed + 17) * 0.08
+      // Mild NE bias so silhouette isn't a flat pancake
+      const tilt = Math.max(0, -(dx * 0.08 + dy * 0.12))
 
-      // Peak ~0.95 — clear dome relief; Raise still has headroom to 1.0
-      let h = mound * (0.82 + macro * 0.38 + meso * 0.22)
+      let h = base * (0.42 + macro * 0.55 + meso + tilt)
 
-      // Drop shoulders toward rim (amplify peak-vs-rim without cliffs)
-      if (r > 0.42) {
-        const shoulder = smoothstep((r - 0.42) / 0.5)
-        h *= 1 - shoulder * 0.38
-      }
-
-      // Soft stream bowl — continuous valley for wetness field
+      // Winding stream valley — living bank, not a wet crater bowl
       const sd = streamDist(x, y, size, noiseSeed)
-      const bank = 4.2
-      if (sd < bank && r < 0.82) {
-        const carve = Math.pow(1 - sd / bank, 1.2) * (1 - smoothstep(r / 0.82))
-        h -= carve * 0.38
+      const bank = 3.6
+      if (sd < bank && r < 0.88) {
+        const carve =
+          Math.pow(1 - sd / bank, 1.35) * (0.55 + 0.45 * (1 - smoothstep(r / 0.88)))
+        h -= carve * 0.28
       }
 
-      h = Math.max(0, Math.min(0.97, h))
-      // Soft feather at outer ring — kill cliff-wall silhouette, keep loaf body
+      h = Math.max(0, Math.min(0.72, h))
       if (r > 1.0) h = 0
-      else if (r > 0.82) h *= smoothstep((1.0 - r) / 0.18)
+      else if (r > 0.84) h *= smoothstep((1.0 - r) / 0.16)
 
       heights[y * size + x] = h
     }
   }
 
-  // Light rim blur + gentle slope clamp — preserve mound peak volume
+  // Gentle blur + slope clamp — continuous loft, no needle cliffs
   const tmp = new Float32Array(heights)
-  const maxSlope = 0.16
+  const maxSlope = 0.12
   for (let pass = 0; pass < 2; pass++) {
     for (let y = 1; y < size - 1; y++) {
       for (let x = 1; x < size - 1; x++) {
@@ -137,22 +135,21 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
           heights[i] = 0
           continue
         }
-        // Blur mostly at rim; keep crown coherent
-        const rim = r > 0.65 ? smoothstep((r - 0.65) / 0.3) : 0
+        const rim = r > 0.7 ? smoothstep((r - 0.7) / 0.28) : 0
         const s =
-          tmp[i]! * (5 - rim * 1.2) +
+          tmp[i]! * (4 - rim) +
           tmp[i - 1]! +
           tmp[i + 1]! +
           tmp[i - size]! +
           tmp[i + size]!
-        const w = 9 - rim * 1.2
+        const w = 8 - rim
         let h = s / w
         for (const n of [tmp[i - 1]!, tmp[i + 1]!, tmp[i - size]!, tmp[i + size]!]) {
           if (n <= 0.001) continue
           if (h - n > maxSlope) h = n + maxSlope
           if (n - h > maxSlope) h = n - maxSlope
         }
-        heights[i] = Math.max(0, Math.min(0.97, h))
+        heights[i] = Math.max(0, Math.min(0.72, h))
       }
     }
     tmp.set(heights)
@@ -198,7 +195,8 @@ export function applyHeights(hf: Heightfield, data: ArrayLike<number>): void {
   }
 }
 
-export const WATER_LEVEL = 0.18
+/** Soft waterline — stream beds sit under this; land above stays turf. */
+export const WATER_LEVEL = 0.14
 
 export function isWaterHeight(h: number): boolean {
   return h > 0.001 && h <= WATER_LEVEL

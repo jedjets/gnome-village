@@ -111,7 +111,8 @@ function App() {
       const built = buildWorldFromSave(loadSlice1Save(), false)
       worldRef.current = built
       setWorld(built)
-      setAutoFitOnEnter(false)
+      // PM: Auto-Fit on Begin AND Continue (fresh framing each enter)
+      setAutoFitOnEnter(true)
     }
     setPhase('play')
     setPlayGen((g) => g + 1)

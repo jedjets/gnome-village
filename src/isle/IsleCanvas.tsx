@@ -78,16 +78,13 @@ export function IsleCanvas({
       const hit = screenToGrid(sx, sy, cssW, cssH, camRef.current, hf)
       if (!hit) return
       const size = hf.size
-      const cx = (size - 1) * 0.5
-      const cy = (size - 1) * 0.5
-      // Iso unproject biases toward the far (north) rim under a tall dome. Blend toward
-      // isle center, then snap to the local height maximum so Raise lifts the green crest.
-      const tx = hit.gx * 0.12 + cx * 0.88
-      const ty = hit.gy * 0.12 + cy * 0.88
+      // Soft-iso pick: stay near the click, mild snap to local land (no dome-crown bias).
+      const tx = hit.gx
+      const ty = hit.gy
       let bestH = -1
       let bx = tx
       let by = ty
-      const R = 8
+      const R = 3.5
       const x0 = Math.max(0, Math.floor(tx - R))
       const y0 = Math.max(0, Math.floor(ty - R))
       const x1 = Math.min(size - 1, Math.ceil(tx + R))
@@ -98,8 +95,8 @@ export function IsleCanvas({
           if (h <= 0.001) continue
           const d = Math.hypot(x - tx, y - ty)
           if (d > R) continue
-          // Prefer taller + slightly closer to center
-          const score = h - d * 0.008 - Math.hypot(x - cx, y - cy) * 0.018
+          // Prefer nearer click; slight height preference for readable Raise
+          const score = h * 0.15 - d
           if (score > bestH) {
             bestH = score
             bx = x
