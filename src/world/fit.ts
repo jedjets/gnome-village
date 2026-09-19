@@ -12,8 +12,11 @@ export type CameraState = {
   rotation: number
 }
 
-/** Kept low so Fit isn't stuck at CELL*zoom banding (art-lock). */
-export const ZOOM_MIN = 0.28
+/**
+ * Must stay ≤ Fit raw (~0.18–0.22) so Fit is never clamped UP into a
+ * tiny thumbnail / wrong framing (Stylist 1d/1e).
+ */
+export const ZOOM_MIN = 0.15
 export const ZOOM_MAX = 2.8
 
 /** Soft clamp on twist so accidental pinch-rotate stays gentle. */
@@ -34,7 +37,8 @@ export function defaultCamera(): CameraState {
 
 /**
  * Compute Fit camera for a viewport. Stable: same inputs → same camera.
- * Targets the isle footprint so the full island is visible with padding.
+ * Height-primary: aim for ~68% of portrait stage height; allow mild
+ * horizontal overflow so the isle isn't a thumbnail in a beige void.
  */
 export function computeFit(
   viewW: number,
@@ -42,14 +46,15 @@ export function computeFit(
   isleWorldW: number,
   isleWorldH: number,
 ): CameraState {
-  const pad = 0.94 // fill phone frame (Ref1/3 readable mound)
   const safeW = Math.max(1, viewW)
   const safeH = Math.max(1, viewH)
-  const zoom = clampZoom(
-    Math.min((safeW * pad) / isleWorldW, (safeH * pad) / isleWorldH),
-  )
+  const targetFill = 0.72 // ~65–75% portrait height
+  const zoomH = (safeH * targetFill) / Math.max(1, isleWorldH)
+  // Allow slight side overflow so height target can win on phones
+  const zoomW = (safeW * 1.75) / Math.max(1, isleWorldW)
+  const zoom = clampZoom(Math.min(zoomH, zoomW))
   // Slight upward bias so the island sits a bit above visual center (HUD/rail)
-  const panY = safeH * 0.02
+  const panY = safeH * 0.015
   return {
     panX: 0,
     panY,
