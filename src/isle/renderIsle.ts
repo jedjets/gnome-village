@@ -1,43 +1,43 @@
 /**
  * Soft isometric render — Canvas 2D only.
- * Slice 1e: asset-backed soft-iso mesh (moss atlas, rock strata cliffs,
- * living stream, story props). No ImageData pancake.
- *
- * Lessons folded (ideas only): shared vertex heights, neighbourhood materials,
- * vertex light blur, continuous shore field, prop depth re-bucket, LOD.
+ * Slice 1e.1: height-true soft-iso mesh (atlas decorates; no ImageData pancake,
+ * no stacked painted ellipse loaf). Living stream, moss blend, story props.
  */
 
 import type { Heightfield } from '../world/isleGrid'
 import {
   getHeight,
   sampleHeight,
+  streamCenterline,
   streamDist,
   WATER_LEVEL,
 } from '../world/isleGrid'
 import type { CameraState } from '../world/fit'
 import { ensureArt } from './artAtlas'
 
-/** Tuned for relief + Fit (~65–75% stage when height-primary). */
-export const CELL = 20
-export const HEIGHT_SCALE = 58
-const LOAF_DEPTH = 72
-const TOP_INFLATE = 0.55
-const MIN_CLIFF_DROP = 2.2
-const STREAM_HALF = 2.15
+/** Tuned so relief + Raise hill poke read at Fit (~65–75% stage). */
+export const CELL = 16
+export const HEIGHT_SCALE = 138
+/** Portrait squash — narrows iso X so Fit can hit 65–75% height. */
+const ISO_X = CELL * 0.7
+const ISO_Y = CELL * 0.5
+const TOP_INFLATE = 0.65
+const MIN_CLIFF_DROP = 5.5
+const STREAM_HALF = 2.35
 
 export function isleWorldSize(gridSize: number): { w: number; h: number } {
-  // Visual circular footprint (not full grid diamond) so Fit isn't starved
-  const foot = gridSize * CELL * 0.84
+  const footX = gridSize * ISO_X * 0.8
+  const footY = gridSize * ISO_Y * 0.8
   return {
-    w: foot,
-    h: foot * 0.52 + HEIGHT_SCALE + LOAF_DEPTH,
+    w: footX,
+    h: footY + HEIGHT_SCALE * 0.9 + CELL * 2.5,
   }
 }
 
 function gridToIso(gx: number, gy: number, h: number): { x: number; y: number } {
   return {
-    x: (gx - gy) * CELL,
-    y: (gx + gy) * (CELL * 0.5) - h * HEIGHT_SCALE,
+    x: (gx - gy) * ISO_X,
+    y: (gx + gy) * ISO_Y - h * HEIGHT_SCALE,
   }
 }
 
@@ -55,7 +55,7 @@ function rgba(c: [number, number, number], a = 1): string {
 }
 
 function shadeRgb(col: [number, number, number], shade: number): string {
-  const s = Math.max(0.72, Math.min(1.12, shade))
+  const s = Math.max(0.7, Math.min(1.14, shade))
   return rgba([
     Math.min(255, col[0] * s),
     Math.min(255, col[1] * s),
@@ -72,6 +72,7 @@ function hash2(ix: number, iy: number, seed: number): number {
 const COL_DEEP: [number, number, number] = [0x3a, 0x6e, 0x44]
 const COL_MOSS: [number, number, number] = [0x58, 0x92, 0x58]
 const COL_LIT: [number, number, number] = [0x86, 0xb4, 0x6c]
+const COL_WARM: [number, number, number] = [0x94, 0xac, 0x66]
 const COL_DAMP: [number, number, number] = [0x4a, 0x72, 0x52]
 const COL_SHORE: [number, number, number] = [0xd8, 0xcc, 0xaa]
 const WATER_DEEP: [number, number, number] = [0x2a, 0x68, 0x78]
@@ -99,16 +100,8 @@ type Prop = {
   gy: number
   kind: PropKind
   scale: number
-  /** Painter depth — re-bucketed so ground behind doesn't clip feet */
   depth: number
 }
-
-/** Moss-only stamp cache (no water / sparkles). */
-let _mossStamp: {
-  sig: number
-  seed: number
-  canvas: HTMLCanvasElement
-} | null = null
 
 let _vertLight: Float32Array | null = null
 let _vertLightSig = 0
@@ -141,16 +134,14 @@ function ensureVertexLight(hf: Heightfield): Float32Array {
       const hS = sampleHeight(hf, gx, gy + 1)
       const hE = sampleHeight(hf, gx + 1, gy)
       const hW = sampleHeight(hf, gx - 1, gy)
-      // Soft SE key + valley AO
-      let L = 0.86 + hC * 0.14 + (hN - hS) * 0.1 + (hW - hE) * 0.07
+      let L = 0.86 + hC * 0.16 + (hN - hS) * 0.11 + (hW - hE) * 0.08
       const crest = Math.max(0, hC - (hN + hS + hE + hW) * 0.25)
-      L += crest * 0.12
+      L += crest * 0.14
       const valley = Math.max(0, (hN + hS + hE + hW) * 0.25 - hC)
-      L -= valley * 0.18
+      L -= valley * 0.22
       raw[y * nv + x] = L
     }
   }
-  // Box blur twice
   const tmp = new Float32Array(nv * nv)
   const blur = (src: Float32Array, dst: Float32Array) => {
     for (let y = 0; y < nv; y++) {
@@ -195,19 +186,20 @@ function mossMaterial(
   let wsum = 0
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
-      const w = dx === 0 && dy === 0 ? 2.2 : 1
+      const w = dx === 0 && dy === 0 ? 2.4 : 1
       const ht = getHeight(hf, x + dx, y + dy)
       if (ht <= 0.001) continue
       const n = hash2(x + dx, y + dy, seed)
       let col: [number, number, number]
       if (ht < 0.28) col = lerp3(COL_DEEP, COL_MOSS, ht / 0.28)
-      else if (ht < 0.6) col = lerp3(COL_MOSS, COL_LIT, (ht - 0.28) / 0.32)
-      else col = lerp3(COL_LIT, COL_MOSS, (ht - 0.6) / 0.4)
-      if (n > 0.62) col = lerp3(col, COL_LIT, 0.35)
-      if (n < 0.32) col = lerp3(col, COL_DEEP, 0.4)
+      else if (ht < 0.58) col = lerp3(COL_MOSS, COL_LIT, (ht - 0.28) / 0.3)
+      else col = lerp3(COL_LIT, COL_WARM, (ht - 0.58) / 0.42)
+      if (n > 0.62) col = lerp3(col, COL_LIT, 0.38)
+      if (n < 0.3) col = lerp3(col, COL_DEEP, 0.42)
+      if (n > 0.78) col = lerp3(col, COL_WARM, 0.28)
       const sd = streamDist(x + dx, y + dy, hf.size, seed)
-      if (sd < STREAM_HALF + 1.4) {
-        col = lerp3(col, COL_DAMP, Math.max(0, 1 - sd / (STREAM_HALF + 1.4)) * 0.55)
+      if (sd < STREAM_HALF + 1.6) {
+        col = lerp3(col, COL_DAMP, Math.max(0, 1 - sd / (STREAM_HALF + 1.6)) * 0.55)
       }
       acc[0] += col[0] * w
       acc[1] += col[1] * w
@@ -225,157 +217,13 @@ function wetnessAt(hf: Heightfield, gx: number, gy: number, seed: number): numbe
   const sd = streamDist(gx, gy, hf.size, seed)
   const stream = Math.max(0, 1 - sd / STREAM_HALF)
   const bowl = ht <= WATER_LEVEL ? Math.max(0, 1 - ht / WATER_LEVEL) * 0.85 : 0
-  // Continuous field (not binary wet tile)
   return Math.max(stream, bowl)
 }
 
-/** Build moss stamp atlas strip (moss-only — water never baked in). */
-function ensureMossStamp(
-  artReady: boolean,
-  mossTile: HTMLImageElement | null,
-  mossAtlas: HTMLImageElement | null,
-  sig: number,
-  seed: number,
-): HTMLCanvasElement {
-  if (_mossStamp && _mossStamp.sig === sig && _mossStamp.seed === seed) {
-    return _mossStamp.canvas
-  }
-  const c = document.createElement('canvas')
-  c.width = 256
-  c.height = 64
-  const g = c.getContext('2d')!
-  g.clearRect(0, 0, 256, 64)
-  if (artReady && mossTile && mossTile.complete && mossTile.naturalWidth > 0) {
-    // 4 variants from moss-tile
-    for (let i = 0; i < 4; i++) {
-      const sx = (i % 2) * (mossTile.naturalWidth * 0.4)
-      const sy = Math.floor(i / 2) * (mossTile.naturalHeight * 0.4)
-      g.drawImage(
-        mossTile,
-        sx,
-        sy,
-        mossTile.naturalWidth * 0.55,
-        mossTile.naturalHeight * 0.55,
-        i * 64,
-        0,
-        64,
-        64,
-      )
-    }
-  } else if (artReady && mossAtlas && mossAtlas.complete && mossAtlas.naturalWidth > 0) {
-    g.drawImage(mossAtlas, 0, 0)
-  } else {
-    // Procedural fallback stamps
-    for (let i = 0; i < 4; i++) {
-      const img = g.createImageData(64, 64)
-      for (let y = 0; y < 64; y++) {
-        for (let x = 0; x < 64; x++) {
-          const dx = (x - 32) / 30
-          const dy = (y - 32) / 30
-          const r2 = dx * dx + dy * dy
-          const a = r2 > 1 ? 0 : Math.round(255 * Math.pow(1 - r2, 0.5))
-          const n = hash2(x + i * 17, y + i * 9, seed)
-          const col = n > 0.55 ? COL_LIT : n < 0.35 ? COL_DEEP : COL_MOSS
-          const o = (y * 64 + x) * 4
-          img.data[o] = col[0]
-          img.data[o + 1] = col[1]
-          img.data[o + 2] = col[2]
-          img.data[o + 3] = a
-        }
-      }
-      g.putImageData(img, i * 64, 0)
-    }
-  }
-  _mossStamp = { sig, seed, canvas: c }
-  return c
-}
-
-function storyProps(hf: Heightfield): Prop[] {
-  const seed = hf.seed
-  const size = hf.size
-  const cx = (size - 1) * 0.5
-  const cy = (size - 1) * 0.5
-  const candidates: { gx: number; gy: number; kind: PropKind; scale: number }[] = [
-    { gx: cx - 8, gy: cy - 6, kind: 'pine', scale: 1.05 },
-    { gx: cx + 9, gy: cy - 7, kind: 'pine', scale: 0.92 },
-    { gx: cx - 10, gy: cy + 5, kind: 'pine', scale: 0.88 },
-    { gx: cx + 6, gy: cy + 8, kind: 'pine', scale: 1.0 },
-    { gx: cx - 2, gy: cy + 4, kind: 'cabin', scale: 1.0 },
-    { gx: cx + 3.5, gy: cy + 6.5, kind: 'gnomeR', scale: 0.95 },
-    { gx: cx + 5.2, gy: cy + 7.2, kind: 'gnomeB', scale: 0.95 },
-  ]
-  const out: Prop[] = []
-  for (const c of candidates) {
-    // Jitter by seed but keep on land / off deep water
-    const jx = (hash2(Math.floor(c.gx), Math.floor(c.gy), seed + 3) - 0.5) * 1.2
-    const jy = (hash2(Math.floor(c.gx), Math.floor(c.gy), seed + 9) - 0.5) * 1.2
-    const gx = c.gx + jx
-    const gy = c.gy + jy
-    const ht = sampleHeight(hf, gx, gy)
-    if (ht < 0.22) continue
-    if (wetnessAt(hf, gx, gy, seed) > 0.55 && c.kind !== 'gnomeR' && c.kind !== 'gnomeB') {
-      continue
-    }
-    // Re-bucket toward front of footprint so later ground won't clip feet/eaves
-    const depth = gx + gy + ht * 2.5 + (c.kind === 'cabin' ? 1.2 : 0.4)
-    out.push({ gx, gy, kind: c.kind, scale: c.scale, depth })
-  }
-  return out
-}
-
-function drawLoafShelves(
-  ctx: CanvasRenderingContext2D,
-  size: number,
-  topY: number,
-  artReady: boolean,
-  rock: HTMLImageElement | null,
-): void {
-  const rx = size * CELL * 0.42
-  const shelves = 3
-  for (let i = 0; i < shelves; i++) {
-    const t = (i + 0.5) / shelves
-    const y = topY + LOAF_DEPTH * (0.12 + t * 0.72)
-    const bandH = LOAF_DEPTH * (0.22 - t * 0.03)
-    const bulge = 0.92 + Math.sin(Math.PI * t) * 0.08
-    ctx.save()
-    ctx.beginPath()
-    ctx.ellipse(0, y, rx * bulge, bandH, 0, 0, Math.PI * 2)
-    ctx.clip()
-    if (artReady && rock && rock.complete && rock.naturalWidth > 0) {
-      const sy = (i / shelves) * Math.max(0, rock.naturalHeight - bandH * 2)
-      ctx.globalAlpha = 0.92
-      ctx.drawImage(
-        rock,
-        0,
-        sy,
-        rock.naturalWidth,
-        Math.min(rock.naturalHeight - sy, bandH * 3),
-        -rx * bulge,
-        y - bandH,
-        rx * bulge * 2,
-        bandH * 2,
-      )
-      ctx.globalAlpha = 1
-    } else {
-      const col = EARTH[i % EARTH.length]!
-      const g = ctx.createLinearGradient(0, y - bandH, 0, y + bandH)
-      g.addColorStop(0, rgba(col, 0.15))
-      g.addColorStop(0.35, rgba(col, 0.85))
-      g.addColorStop(0.7, rgba(EARTH[(i + 1) % EARTH.length]!, 0.75))
-      g.addColorStop(1, rgba(col, 0.2))
-      ctx.fillStyle = g
-      ctx.fillRect(-rx * bulge, y - bandH, rx * bulge * 2, bandH * 2)
-    }
-    // Soft bevel edge (no stair albedo stripes)
-    const edge = ctx.createLinearGradient(0, y - bandH, 0, y - bandH * 0.2)
-    edge.addColorStop(0, 'rgba(255,240,210,0.18)')
-    edge.addColorStop(1, 'rgba(255,240,210,0)')
-    ctx.fillStyle = edge
-    ctx.fillRect(-rx * bulge, y - bandH, rx * bulge * 2, bandH * 0.45)
-    ctx.restore()
-  }
-}
-
+/**
+ * Rounded beveled cliff face from height-true mesh drops.
+ * Rock-strata decorates the face — not a painted ellipse stack.
+ */
 function drawCliffFace(
   ctx: CanvasRenderingContext2D,
   ptsTop: { x: number; y: number }[],
@@ -385,84 +233,49 @@ function drawCliffFace(
   shade: number,
 ): void {
   if (ptsTop.length < 2 || drop < MIN_CLIFF_DROP) return
-  const shelves = drop > HEIGHT_SCALE * 0.35 ? 3 : drop > HEIGHT_SCALE * 0.18 ? 2 : 1
-  for (let s = 0; s < shelves; s++) {
-    const t0 = s / shelves
-    const t1 = (s + 1) / shelves
-    const y0 = drop * t0
-    const y1 = drop * t1
-    // Slight outward bevel rounding
-    const out = Math.sin(Math.PI * (t0 + t1) * 0.5) * 1.2
-    ctx.beginPath()
-    ctx.moveTo(ptsTop[0]!.x - out, ptsTop[0]!.y + y0)
-    for (let i = 1; i < ptsTop.length; i++) {
-      ctx.lineTo(ptsTop[i]!.x + out, ptsTop[i]!.y + y0)
-    }
-    for (let i = ptsTop.length - 1; i >= 0; i--) {
-      ctx.lineTo(ptsTop[i]!.x + out, ptsTop[i]!.y + y1)
-    }
-    ctx.closePath()
-    if (artReady && rock && rock.complete && rock.naturalWidth > 0) {
-      ctx.save()
-      ctx.clip()
-      const minX = Math.min(...ptsTop.map((p) => p.x)) - 4
-      const maxX = Math.max(...ptsTop.map((p) => p.x)) + 4
-      const minY = Math.min(...ptsTop.map((p) => p.y)) + y0
-      const srcY = (s / Math.max(1, shelves)) * (rock.naturalHeight * 0.7)
-      ctx.globalAlpha = 0.88
-      ctx.drawImage(
-        rock,
-        0,
-        srcY,
-        rock.naturalWidth,
-        rock.naturalHeight * 0.35,
-        minX,
-        minY,
-        maxX - minX,
-        y1 - y0 + 2,
-      )
-      ctx.globalAlpha = 1
-      // Wrap lighting multiply
-      ctx.fillStyle = `rgba(40,28,18,${0.12 + (1 - shade) * 0.2})`
-      ctx.fill()
-      ctx.restore()
-    } else {
-      const col = EARTH[s % EARTH.length]!
-      ctx.fillStyle = shadeRgb(col, shade * 0.9)
-      ctx.fill()
-    }
+  // Soft single bevel face (rounded lip) — not multi-shelf stair stripes
+  const out = Math.min(2.2, drop * 0.035)
+  ctx.beginPath()
+  ctx.moveTo(ptsTop[0]!.x, ptsTop[0]!.y)
+  for (let i = 1; i < ptsTop.length; i++) ctx.lineTo(ptsTop[i]!.x, ptsTop[i]!.y)
+  for (let i = ptsTop.length - 1; i >= 0; i--) {
+    ctx.lineTo(ptsTop[i]!.x + out, ptsTop[i]!.y + drop)
+  }
+  ctx.closePath()
+  if (artReady && rock && rock.complete && rock.naturalWidth > 0) {
+    ctx.save()
+    ctx.clip()
+    const minX = Math.min(...ptsTop.map((p) => p.x)) - 4
+    const maxX = Math.max(...ptsTop.map((p) => p.x)) + 4
+    const minY = Math.min(...ptsTop.map((p) => p.y))
+    ctx.globalAlpha = 0.88
+    ctx.drawImage(
+      rock,
+      0,
+      rock.naturalHeight * 0.15,
+      rock.naturalWidth,
+      rock.naturalHeight * 0.5,
+      minX,
+      minY,
+      maxX - minX,
+      drop + 4,
+    )
+    ctx.globalAlpha = 1
+    ctx.fillStyle = `rgba(40,28,18,${0.12 + (1 - shade) * 0.2})`
+    ctx.fill()
+    const hi = ctx.createLinearGradient(0, minY, 0, minY + drop * 0.4)
+    hi.addColorStop(0, 'rgba(255,236,200,0.18)')
+    hi.addColorStop(1, 'rgba(255,236,200,0)')
+    ctx.fillStyle = hi
+    ctx.fill()
+    ctx.restore()
+  } else {
+    ctx.fillStyle = shadeRgb(EARTH[1]!, shade * 0.92)
+    ctx.fill()
   }
 }
 
-function streamPolyline(
-  size: number,
-  seed: number,
-  steps = 56,
-): { gx: number; gy: number }[] {
-  const cx = (size - 1) * 0.5
-  const cy = (size - 1) * 0.5
-  const pts: { gx: number; gy: number }[] = []
-  for (let i = 0; i <= steps; i++) {
-    const u = i / steps
-    // Along diagonal with wobble matching streamDist centerline
-    const along = (u - 0.5) * 1.7
-    const nx = along
-    const ny = along
-    // Invert streamDist wobble approximately
-    const wobble =
-      (hash2(Math.floor(along * 40), 2, seed + 91) - 0.5) * 0.55 +
-      (hash2(Math.floor(along * 80), 5, seed + 203) - 0.5) * 0.22
-    const cross = wobble
-    const gx = cx + (nx + cross) * cx * 0.9
-    const gy = cy + (ny - cross) * cy * 0.9
-    const r =
-      Math.hypot(gx - cx, gy - cy) / (Math.min(cx, cy) * 0.9)
-    if (r > 0.92) continue
-    pts.push({ gx, gy })
-  }
-  return pts
-}
-
+/** Soft meandering channel from smoothed centerline — never zigzag cyan knife. */
 function drawLivingStream(
   ctx: CanvasRenderingContext2D,
   hf: Heightfield,
@@ -472,58 +285,72 @@ function drawLivingStream(
   art: ReturnType<typeof ensureArt>,
 ): void {
   const seed = hf.seed
-  const size = hf.size
-  const poly = streamPolyline(size, seed)
-  if (poly.length < 3) return
+  const poly = streamCenterline(hf.size, seed, 80)
+  if (poly.length < 4) return
 
-  // Soft channel ribbon (continuous — not blue diamonds)
-  ctx.lineJoin = 'round'
-  ctx.lineCap = 'round'
-
-  // Wet lip / shore foam band under water
-  ctx.beginPath()
+  const isoPts: { x: number; y: number; nx: number; ny: number; half: number }[] = []
   for (let i = 0; i < poly.length; i++) {
     const p = poly[i]!
     const ht = sampleHeight(hf, p.gx, p.gy)
-    const iso = gridToIso(p.gx - cx, p.gy - cy, Math.max(ht, WATER_LEVEL * 0.7))
-    if (i === 0) ctx.moveTo(iso.x, iso.y)
-    else ctx.lineTo(iso.x, iso.y)
+    if (ht <= 0.001) continue
+    const u = i / Math.max(1, poly.length - 1)
+    const half = CELL * (0.42 + Math.sin(u * Math.PI) * 0.38)
+    const iso = gridToIso(
+      p.gx - cx,
+      p.gy - cy,
+      Math.max(ht * 0.94, WATER_LEVEL * 0.55),
+    )
+    // Screen-space tangent → normal for soft ribbon
+    const prev = poly[Math.max(0, i - 1)]!
+    const next = poly[Math.min(poly.length - 1, i + 1)]!
+    const i0 = gridToIso(prev.gx - cx, prev.gy - cy, sampleHeight(hf, prev.gx, prev.gy))
+    const i1 = gridToIso(next.gx - cx, next.gy - cy, sampleHeight(hf, next.gx, next.gy))
+    let tx = i1.x - i0.x
+    let ty = i1.y - i0.y
+    const len = Math.hypot(tx, ty) || 1
+    tx /= len
+    ty /= len
+    isoPts.push({ x: iso.x, y: iso.y, nx: -ty, ny: tx, half })
   }
-  ctx.strokeStyle = rgba(COL_SHORE, 0.55)
-  ctx.lineWidth = CELL * 1.55
-  ctx.stroke()
+  if (isoPts.length < 4) return
 
-  // Mid + deep water as layered strokes
-  ctx.beginPath()
-  for (let i = 0; i < poly.length; i++) {
-    const p = poly[i]!
-    const ht = sampleHeight(hf, p.gx, p.gy)
-    const iso = gridToIso(p.gx - cx, p.gy - cy, Math.max(ht * 0.92, WATER_LEVEL * 0.5))
-    if (i === 0) ctx.moveTo(iso.x, iso.y)
-    else ctx.lineTo(iso.x, iso.y)
+  const fillRibbon = (scale: number, color: string) => {
+    ctx.beginPath()
+    const first = isoPts[0]!
+    ctx.moveTo(first.x + first.nx * first.half * scale, first.y + first.ny * first.half * scale)
+    for (let i = 1; i < isoPts.length; i++) {
+      const p = isoPts[i]!
+      ctx.lineTo(p.x + p.nx * p.half * scale, p.y + p.ny * p.half * scale)
+    }
+    for (let i = isoPts.length - 1; i >= 0; i--) {
+      const p = isoPts[i]!
+      ctx.lineTo(p.x - p.nx * p.half * scale, p.y - p.ny * p.half * scale)
+    }
+    ctx.closePath()
+    ctx.fillStyle = color
+    ctx.fill()
   }
-  ctx.strokeStyle = rgba(WATER_SHALLOW, 0.75)
-  ctx.lineWidth = CELL * 1.15
-  ctx.stroke()
-  ctx.strokeStyle = rgba(WATER_MID, 0.9)
-  ctx.lineWidth = CELL * 0.72
-  ctx.stroke()
-  ctx.strokeStyle = rgba(WATER_DEEP, 0.95)
-  ctx.lineWidth = CELL * 0.38
-  ctx.stroke()
+
+  // Wet shore lip → shallow → mid → dark core (soft channel, not stacked strokes)
+  fillRibbon(1.55, rgba(COL_SHORE, 0.42))
+  fillRibbon(1.15, rgba(WATER_SHALLOW, 0.7))
+  fillRibbon(0.78, rgba(WATER_MID, 0.88))
+  fillRibbon(0.38, rgba(WATER_DEEP, 0.92))
 
   // Shore stones along banks
   if (art.ready && art.shoreStones.complete && art.shoreStones.naturalWidth > 0) {
     const sw = art.shoreStones.naturalWidth / 6
     const sh = art.shoreStones.naturalHeight
-    for (let i = 2; i < poly.length - 2; i += 2) {
+    for (let i = 3; i < poly.length - 3; i += 3) {
       const p = poly[i]!
       const ht = sampleHeight(hf, p.gx, p.gy)
+      if (ht < 0.05) continue
       const iso = gridToIso(p.gx - cx, p.gy - cy, ht)
-      const side = i % 4 === 0 ? 1 : -1
+      const side = i % 6 < 3 ? 1 : -1
       const ox = side * CELL * 0.55
       const tile = Math.floor(hash2(i, 3, seed) * 6) % 6
-      const sc = 0.7 + hash2(i, 7, seed) * 0.45
+      const sc = 0.85 + hash2(i, 7, seed) * 0.4
+      ctx.globalAlpha = 0.8
       ctx.drawImage(
         art.shoreStones,
         tile * sw,
@@ -535,10 +362,11 @@ function drawLivingStream(
         sw * sc,
         sh * sc,
       )
+      ctx.globalAlpha = 1
     }
   }
 
-  // Sparkle frames — redrawn every frame (never in moss cache)
+  // Soft sparkles
   const sparkSrc =
     art.ready && art.streamSparkles.complete && art.streamSparkles.naturalWidth > 0
       ? art.streamSparkles
@@ -546,48 +374,64 @@ function drawLivingStream(
         ? art.waterSparkle
         : null
   if (sparkSrc) {
-    const frame = Math.floor(now / 180) % 3
-    const fw = sparkSrc === art.waterSparkle ? sparkSrc.naturalWidth / 3 : 48
-    const fh = sparkSrc === art.waterSparkle ? sparkSrc.naturalHeight : 40
+    const frame = Math.floor(now / 200) % 3
+    const fw = sparkSrc === art.waterSparkle ? sparkSrc.naturalWidth / 3 : 40
+    const fh = sparkSrc === art.waterSparkle ? sparkSrc.naturalHeight : 32
     const cols = sparkSrc === art.waterSparkle ? 3 : 8
-    for (let i = 1; i < poly.length - 1; i += 3) {
+    for (let i = 2; i < isoPts.length - 2; i += 5) {
       const phase = (now * 0.001 + i * 0.37) % 1
-      if (phase > 0.55) continue
-      const p = poly[i]!
-      const ht = sampleHeight(hf, p.gx, p.gy)
-      const iso = gridToIso(p.gx - cx, p.gy - cy, Math.max(ht * 0.9, WATER_LEVEL * 0.4))
+      if (phase > 0.48) continue
+      const p = isoPts[i]!
       const col = (frame + i) % cols
       const sx = sparkSrc === art.waterSparkle ? col * fw : (col % 8) * fw + 8
       const sy = sparkSrc === art.waterSparkle ? 0 : 20 + ((i + frame) % 4) * 50
-      ctx.globalAlpha = 0.55 + phase * 0.4
+      ctx.globalAlpha = 0.35 + phase * 0.3
       ctx.drawImage(
         sparkSrc,
         sx,
         sy,
         fw,
         fh,
-        iso.x - fw * 0.35,
-        iso.y - fh * 0.35,
-        fw * 0.7,
-        fh * 0.55,
+        p.x - fw * 0.22,
+        p.y - fh * 0.22,
+        fw * 0.45,
+        fh * 0.35,
       )
       ctx.globalAlpha = 1
     }
-  } else {
-    // Soft glints without sprites
-    for (let i = 1; i < poly.length - 1; i += 4) {
-      const phase = (now * 0.002 + i * 0.4) % (Math.PI * 2)
-      const spark = 0.5 + Math.sin(phase) * 0.5
-      if (spark < 0.65) continue
-      const p = poly[i]!
-      const ht = sampleHeight(hf, p.gx, p.gy)
-      const iso = gridToIso(p.gx - cx, p.gy - cy, ht * 0.9)
-      ctx.fillStyle = `rgba(255,255,248,${0.25 + spark * 0.35})`
-      ctx.beginPath()
-      ctx.ellipse(iso.x, iso.y, 3.5, 1.6, 0, 0, Math.PI * 2)
-      ctx.fill()
-    }
   }
+}
+
+function storyProps(hf: Heightfield): Prop[] {
+  const seed = hf.seed
+  const size = hf.size
+  const cx = (size - 1) * 0.5
+  const cy = (size - 1) * 0.5
+  const candidates: { gx: number; gy: number; kind: PropKind; scale: number }[] = [
+    { gx: cx - 7, gy: cy - 5, kind: 'pine', scale: 1.15 },
+    { gx: cx + 8, gy: cy - 6, kind: 'pine', scale: 1.0 },
+    { gx: cx - 9, gy: cy + 4, kind: 'pine', scale: 0.95 },
+    { gx: cx + 5, gy: cy + 7, kind: 'pine', scale: 1.08 },
+    { gx: cx + 10, gy: cy + 2, kind: 'pine', scale: 0.88 },
+    { gx: cx - 3, gy: cy + 3, kind: 'cabin', scale: 1.15 },
+    { gx: cx + 2.5, gy: cy + 5.5, kind: 'gnomeR', scale: 1.2 },
+    { gx: cx + 4.2, gy: cy + 6.4, kind: 'gnomeB', scale: 1.15 },
+  ]
+  const out: Prop[] = []
+  for (const c of candidates) {
+    const jx = (hash2(Math.floor(c.gx), Math.floor(c.gy), seed + 3) - 0.5) * 0.9
+    const jy = (hash2(Math.floor(c.gx), Math.floor(c.gy), seed + 9) - 0.5) * 0.9
+    const gx = c.gx + jx
+    const gy = c.gy + jy
+    const ht = sampleHeight(hf, gx, gy)
+    if (ht < 0.2) continue
+    if (wetnessAt(hf, gx, gy, seed) > 0.5 && c.kind !== 'gnomeR' && c.kind !== 'gnomeB') {
+      continue
+    }
+    const depth = gx + gy + ht * 2.8 + (c.kind === 'cabin' ? 1.4 : 0.5)
+    out.push({ gx, gy, kind: c.kind, scale: c.scale, depth })
+  }
+  return out
 }
 
 function drawProp(
@@ -600,10 +444,17 @@ function drawProp(
 ): void {
   const ht = sampleHeight(hf, p.gx, p.gy)
   const iso = gridToIso(p.gx - cx, p.gy - cy, ht)
-  // Contact shadow
-  ctx.fillStyle = 'rgba(40,28,20,0.22)'
+  ctx.fillStyle = 'rgba(40,28,20,0.25)'
   ctx.beginPath()
-  ctx.ellipse(iso.x, iso.y + 2, CELL * 0.55 * p.scale, CELL * 0.22 * p.scale, 0, 0, Math.PI * 2)
+  ctx.ellipse(
+    iso.x,
+    iso.y + 3,
+    CELL * 0.7 * p.scale,
+    CELL * 0.28 * p.scale,
+    0,
+    0,
+    Math.PI * 2,
+  )
   ctx.fill()
 
   const drawImg = (
@@ -617,21 +468,24 @@ function drawProp(
     return true
   }
 
+  // Ref1-scale recognition — props must read at Fit glance
   if (p.kind === 'pine') {
-    const h = CELL * 3.4 * p.scale
-    const w = h * 0.55
+    const h = CELL * 7.2 * p.scale
+    const w = h * 0.58
     if (!art.ready || !drawImg(art.pine, w, h)) {
       ctx.fillStyle = '#3a6a3e'
       ctx.beginPath()
       ctx.moveTo(iso.x, iso.y - h)
-      ctx.lineTo(iso.x + w * 0.5, iso.y - h * 0.15)
-      ctx.lineTo(iso.x - w * 0.5, iso.y - h * 0.15)
+      ctx.lineTo(iso.x + w * 0.5, iso.y - h * 0.12)
+      ctx.lineTo(iso.x - w * 0.5, iso.y - h * 0.12)
       ctx.closePath()
       ctx.fill()
+      ctx.fillStyle = '#2a4a2e'
+      ctx.fillRect(iso.x - w * 0.06, iso.y - h * 0.15, w * 0.12, h * 0.18)
     }
   } else if (p.kind === 'cabin') {
-    const h = CELL * 2.8 * p.scale
-    const w = h * 1.15
+    const h = CELL * 5.8 * p.scale
+    const w = h * 1.2
     if (!art.ready || !drawImg(art.cabin, w, h, 0.88)) {
       ctx.fillStyle = '#6a4a32'
       ctx.fillRect(iso.x - w * 0.4, iso.y - h * 0.55, w * 0.8, h * 0.5)
@@ -644,8 +498,8 @@ function drawProp(
       ctx.fill()
     }
   } else {
-    const h = CELL * 1.55 * p.scale
-    const w = h * 0.7
+    const h = CELL * 3.4 * p.scale
+    const w = h * 0.72
     const body =
       p.kind === 'gnomeR'
         ? art.ready && art.gnomeRed.complete
@@ -663,28 +517,77 @@ function drawProp(
           ? art.hatBram
           : null
     if (body && drawImg(body, w, h, 0.95)) {
-      // optional hat overlay for Ref1 recognition
       if (hat) {
-        const hh = h * 0.55
+        const hh = h * 0.6
         const hw = hh * 0.95
-        ctx.drawImage(hat, iso.x - hw / 2, iso.y - h * 0.98 - hh * 0.15, hw, hh)
+        ctx.drawImage(hat, iso.x - hw / 2, iso.y - h * 0.98 - hh * 0.12, hw, hh)
       }
-    } else if (hat && drawImg(hat, w * 1.1, h * 0.85, 0.9)) {
-      // hat alone as recognition stand-in
+    } else if (hat && drawImg(hat, w * 1.15, h * 0.9, 0.9)) {
+      // hat alone
     } else {
       ctx.fillStyle = p.kind === 'gnomeR' ? '#c05050' : '#5080c8'
       ctx.beginPath()
       ctx.moveTo(iso.x, iso.y - h)
-      ctx.lineTo(iso.x + w * 0.35, iso.y - h * 0.45)
-      ctx.lineTo(iso.x - w * 0.35, iso.y - h * 0.45)
+      ctx.lineTo(iso.x + w * 0.38, iso.y - h * 0.4)
+      ctx.lineTo(iso.x - w * 0.38, iso.y - h * 0.4)
       ctx.closePath()
       ctx.fill()
       ctx.fillStyle = '#f0e8e0'
       ctx.beginPath()
-      ctx.ellipse(iso.x, iso.y - h * 0.28, w * 0.28, h * 0.22, 0, 0, Math.PI * 2)
+      ctx.ellipse(iso.x, iso.y - h * 0.28, w * 0.3, h * 0.22, 0, 0, Math.PI * 2)
       ctx.fill()
     }
   }
+}
+
+/**
+ * Decorate a mesh quad with continuous moss-tile UVs (not circular stamps).
+ */
+function paintMossDecor(
+  ctx: CanvasRenderingContext2D,
+  mossTile: HTMLImageElement | null,
+  mossAtlas: HTMLImageElement | null,
+  midX: number,
+  midY: number,
+  cellSpan: number,
+  x: number,
+  y: number,
+  seed: number,
+  L: number,
+): void {
+  const src =
+    mossTile && mossTile.complete && mossTile.naturalWidth > 0
+      ? mossTile
+      : mossAtlas && mossAtlas.complete && mossAtlas.naturalWidth > 0
+        ? mossAtlas
+        : null
+  if (!src) return
+
+  // Continuous UV from grid — overlapping soft patches, not one stamp/cell
+  const tw = src === mossAtlas ? 64 : src.naturalWidth
+  const th = src === mossAtlas ? 64 : src.naturalHeight
+  const tileIdx = Math.floor(hash2(x >> 1, y >> 1, seed) * 4) % 4
+  const sx = src === mossAtlas ? tileIdx * 64 : ((x * 37 + seed) % Math.max(1, tw - 48))
+  const sy = src === mossAtlas ? 0 : ((y * 29 + seed * 3) % Math.max(1, th - 48))
+  const sw = src === mossAtlas ? 64 : Math.min(64, tw - sx)
+  const sh = src === mossAtlas ? 64 : Math.min(64, th - sy)
+
+  // Subtle continuous grain only — moss-tile has circular stamps; keep alpha low
+  // and crop inset so stamp silhouettes don't pegboard the mesh.
+  const inset = src === mossAtlas ? 0 : 18
+  const csx = Math.min(sx + inset, Math.max(0, tw - sw))
+  const csy = Math.min(sy + inset, Math.max(0, th - sh))
+  const csw = Math.max(8, sw - inset * 2)
+  const csh = Math.max(8, sh - inset * 2)
+  ctx.save()
+  ctx.globalAlpha = 0.1 + L * 0.08
+  ctx.globalCompositeOperation = 'soft-light'
+  const dw = cellSpan * 2.2
+  const dh = cellSpan * 1.35
+  ctx.drawImage(src, csx, csy, csw, csh, midX - dw * 0.5, midY - dh * 0.4, dw, dh)
+  ctx.globalCompositeOperation = 'source-over'
+  ctx.globalAlpha = 1
+  ctx.restore()
 }
 
 export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts): void {
@@ -697,11 +600,10 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
   const seed = hf.seed
   const cx = (size - 1) * 0.5
   const cy = (size - 1) * 0.5
-  const sig = heightsSig(hf)
   const light = ensureVertexLight(hf)
   const nv = size + 1
 
-  // Sky
+  // Soft paper sky
   const sky = ctx.createLinearGradient(0, 0, 0, h)
   sky.addColorStop(0, '#E6DCCE')
   sky.addColorStop(0.4, '#EFE8DC')
@@ -729,60 +631,35 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
 
-  // Soft footprint falloff (not hard disc)
+  // Soft footprint shadow (floating isle — not a painted loaf stack)
   {
-    const footR = size * CELL * 0.48
-    const footY = size * CELL * 0.18
-    const shadow = ctx.createRadialGradient(0, footY, footR * 0.15, 0, footY, footR)
-    shadow.addColorStop(0, 'rgba(48, 34, 26, 0.28)')
+    const footR = size * CELL * 0.46
+    const footY = size * CELL * 0.2
+    const shadow = ctx.createRadialGradient(0, footY, footR * 0.12, 0, footY, footR)
+    shadow.addColorStop(0, 'rgba(48, 34, 26, 0.3)')
     shadow.addColorStop(0.55, 'rgba(48, 34, 26, 0.1)')
     shadow.addColorStop(1, 'rgba(48, 34, 26, 0)')
     ctx.fillStyle = shadow
     ctx.beginPath()
-    ctx.ellipse(0, footY, footR, footR * 0.32, 0, 0, Math.PI * 2)
+    ctx.ellipse(0, footY, footR, footR * 0.3, 0, 0, Math.PI * 2)
+    ctx.fill()
+
+    // Single soft rocky undercap (floating isle) — NOT stacked shelf ellipses
+    const loafY = footY - CELL * 0.8
+    const loaf = ctx.createLinearGradient(-footR, loafY, footR, loafY)
+    loaf.addColorStop(0, 'rgba(110, 76, 54, 0.55)')
+    loaf.addColorStop(0.45, 'rgba(138, 100, 72, 0.7)')
+    loaf.addColorStop(1, 'rgba(90, 62, 44, 0.5)')
+    ctx.fillStyle = loaf
+    ctx.beginPath()
+    ctx.ellipse(0, loafY, footR * 0.92, footR * 0.22, 0, 0, Math.PI * 2)
     ctx.fill()
   }
 
-  // Avg height for loaf placement
-  let avgH = 0
-  let nLand = 0
-  for (let y = 0; y < size; y += 2) {
-    for (let x = 0; x < size; x += 2) {
-      const ht = getHeight(hf, x, y)
-      if (ht > 0.05) {
-        avgH += ht
-        nLand++
-      }
-    }
-  }
-  avgH = nLand ? avgH / nLand : 0.45
-  const topY = gridToIso(0, 0, avgH * 0.5).y + size * CELL * 0.22
-
-  // Cliff loaf — 2–4 rounded beveled shelves (before tops)
-  drawLoafShelves(
-    ctx,
-    size,
-    topY,
-    art.ready,
-    art.ready ? art.rockStrata : null,
-  )
-
-  const mossStamp = ensureMossStamp(
-    art.ready,
-    art.ready ? art.mossTile : null,
-    art.ready ? art.mossAtlas : null,
-    sig,
-    seed,
-  )
-
-  // LOD: coarse step when zoomed out
-  const lod = camera.zoom < 0.35 ? 2 : 1
+  const lod = camera.zoom < 0.32 ? 2 : 1
   const inflate = TOP_INFLATE / CELL
 
-  // Collect land cells + props for depth sort
-  type DrawItem =
-    | { kind: 'cell'; x: number; y: number; depth: number }
-    | { kind: 'prop'; prop: Prop; depth: number }
+  type DrawItem = { kind: 'cell'; x: number; y: number; depth: number }
 
   const items: DrawItem[] = []
   for (let y = 0; y < size; y += lod) {
@@ -790,7 +667,6 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
       let ht = 0
       if (lod === 1) ht = getHeight(hf, x, y)
       else {
-        // Max of 2×2
         ht = Math.max(
           getHeight(hf, x, y),
           getHeight(hf, Math.min(size - 1, x + 1), y),
@@ -799,20 +675,14 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
         )
       }
       if (ht <= 0.001) continue
-      items.push({ kind: 'cell', x, y, depth: x + y })
+      items.push({ kind: 'cell', x, y, depth: x + y + ht * 0.5 })
     }
   }
-  for (const prop of storyProps(hf)) {
-    items.push({ kind: 'prop', prop, depth: prop.depth })
-  }
+  const props = storyProps(hf)
   items.sort((a, b) => a.depth - b.depth)
 
-  // Materials + mesh FIRST pass (props interleaved by re-bucketed depth)
   for (const item of items) {
-    if (item.kind === 'prop') {
-      drawProp(ctx, item.prop, hf, cx, cy, art)
-      continue
-    }
+    if (item.kind !== 'cell') continue
     const x = item.x
     const y = item.y
     const step = lod
@@ -837,28 +707,31 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
       0.25
 
     const wet =
-      (wetnessAt(hf, x, y, seed) +
-        wetnessAt(hf, x + 0.5, y + 0.5, seed)) *
-      0.5
+      (wetnessAt(hf, x, y, seed) + wetnessAt(hf, x + 0.5, y + 0.5, seed)) * 0.5
 
-    // Cliff faces on height breaks
-    const dropS = Math.max(0, ht - hS) * HEIGHT_SCALE
-    const dropE = Math.max(0, ht - hE) * HEIGHT_SCALE
+    // Height-true cliff faces — capped so rim never becomes needle spikes
+    const rawS = Math.max(0, ht - hS) * HEIGHT_SCALE
+    const rawE = Math.max(0, ht - hE) * HEIGHT_SCALE
+    const MAX_FACE = HEIGHT_SCALE * 0.22
+    const dropS = Math.min(rawS, MAX_FACE)
+    const dropE = Math.min(rawE, MAX_FACE)
+
     const blC = gridToIso(gx0, gy1, hBL)
     const brC = gridToIso(gx1, gy1, hBR)
     const trC = gridToIso(gx1, gy0, hTR)
 
-    if (dropS > MIN_CLIFF_DROP && wet < 0.7) {
+    // Interior / Raise hills only — void rim uses soft undercap (no needle spikes)
+    if (hS > 0.001 && dropS > MIN_CLIFF_DROP && wet < 0.75) {
       drawCliffFace(
         ctx,
         [blC, brC],
         dropS,
         art.ready,
         art.ready ? art.rockStrata : null,
-        L * 0.92,
+        L * 0.9,
       )
     }
-    if (dropE > MIN_CLIFF_DROP && wet < 0.7) {
+    if (hE > 0.001 && dropE > MIN_CLIFF_DROP && wet < 0.75) {
       drawCliffFace(
         ctx,
         [brC, trC],
@@ -869,8 +742,8 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
       )
     }
 
-    // Skip top fill for deep stream center — ribbon draws water
-    if (wet > 0.72) continue
+    // Leave deep stream channel for the living ribbon
+    if (wet > 0.78) continue
 
     const tl = gridToIso(gx0 - inflate, gy0 - inflate, hTL)
     const tr = gridToIso(gx1 + inflate, gy0 - inflate, hTR)
@@ -879,61 +752,92 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
 
     const baseCol = mossMaterial(hf, x, y, seed)
     const col =
-      wet > 0.25 ? lerp3(baseCol, COL_DAMP, (wet - 0.25) * 1.1) : baseCol
+      wet > 0.22 ? lerp3(baseCol, COL_DAMP, (wet - 0.22) * 1.15) : baseCol
 
-    // Soft top — fill then moss stamp
+    // Soft-iso top — height-true quad (mesh first; atlas decorates)
     ctx.beginPath()
     ctx.moveTo(tl.x, tl.y)
     ctx.lineTo(tr.x, tr.y)
     ctx.lineTo(br.x, br.y)
     ctx.lineTo(bl.x, bl.y)
     ctx.closePath()
-    ctx.fillStyle = shadeRgb(col, L)
+
+    // Corner-lit gradient when slopes differ (reads as sculpted volume)
+    const Ltl = vertL(light, nv, x, y)
+    const Lbr = vertL(light, nv, x + step, y + step)
+    if (Math.abs(Ltl - Lbr) > 0.04) {
+      const g = ctx.createLinearGradient(tl.x, tl.y, br.x, br.y)
+      g.addColorStop(0, shadeRgb(col, Ltl))
+      g.addColorStop(1, shadeRgb(col, Lbr))
+      ctx.fillStyle = g
+    } else {
+      ctx.fillStyle = shadeRgb(col, L)
+    }
     ctx.fill()
 
-    // Moss atlas stamp (wrap lighting via alpha)
+    // Atlas moss decor (multiply blend — continuous UVs, not circular stamps)
     ctx.save()
     ctx.clip()
-    const tile = Math.floor(hash2(x, y, seed) * 4) % 4
     const midX = (tl.x + tr.x + br.x + bl.x) * 0.25
     const midY = (tl.y + tr.y + br.y + bl.y) * 0.25
-    const stampS = CELL * 1.35 * step
-    ctx.globalAlpha = 0.42 + L * 0.25
-    ctx.drawImage(
-      mossStamp,
-      tile * 64,
-      0,
-      64,
-      64,
-      midX - stampS * 0.5,
-      midY - stampS * 0.35,
-      stampS,
-      stampS * 0.72,
+    paintMossDecor(
+      ctx,
+      art.ready ? art.mossTile : null,
+      art.ready ? art.mossAtlas : null,
+      midX,
+      midY,
+      CELL * step,
+      x,
+      y,
+      seed,
+      L,
     )
-    ctx.globalAlpha = 1
+    // Soft AO in valleys / bank lip
+    if (L < 0.82 || wet > 0.2) {
+      ctx.fillStyle = `rgba(28,44,30,${Math.max(0, 0.82 - L) * 0.35 + wet * 0.08})`
+      ctx.fill()
+    }
     ctx.restore()
   }
 
-  // Living stream overlay (every frame — not moss-cached)
+  // Living stream under props (every frame)
   drawLivingStream(ctx, hf, cx, cy, now, art)
 
-  // Soft dome light wrap
+  // Story props on top for Ref1 recognition
+  props.sort((a, b) => a.depth - b.depth)
+  for (const prop of props) {
+    drawProp(ctx, prop, hf, cx, cy, art)
+  }
+
+  // Soft wrap light on mound volume (not a disc replacement)
   {
-    const moundRx = size * CELL * 0.42
-    const moundRy = size * CELL * 0.22
-    const domeY = gridToIso(0, 0, avgH).y
+    let avgH = 0
+    let nLand = 0
+    for (let y = 0; y < size; y += 3) {
+      for (let x = 0; x < size; x += 3) {
+        const ht = getHeight(hf, x, y)
+        if (ht > 0.05) {
+          avgH += ht
+          nLand++
+        }
+      }
+    }
+    avgH = nLand ? avgH / nLand : 0.45
+    const moundRx = size * CELL * 0.4
+    const moundRy = size * CELL * 0.2 + avgH * HEIGHT_SCALE * 0.15
+    const domeY = -avgH * HEIGHT_SCALE * 0.15
     const dome = ctx.createRadialGradient(
-      moundRx * 0.15,
-      domeY - avgH * HEIGHT_SCALE * 0.35,
+      moundRx * 0.12,
+      domeY - avgH * HEIGHT_SCALE * 0.25,
       0,
       0,
       domeY,
       moundRx,
     )
-    dome.addColorStop(0, 'rgba(255, 248, 215, 0.16)')
-    dome.addColorStop(0.45, 'rgba(255, 248, 215, 0.04)')
-    dome.addColorStop(0.8, 'rgba(40, 60, 40, 0.05)')
-    dome.addColorStop(1, 'rgba(28, 44, 30, 0.14)')
+    dome.addColorStop(0, 'rgba(255, 248, 215, 0.12)')
+    dome.addColorStop(0.5, 'rgba(255, 248, 215, 0.03)')
+    dome.addColorStop(0.85, 'rgba(40, 60, 40, 0.04)')
+    dome.addColorStop(1, 'rgba(28, 44, 30, 0.1)')
     ctx.fillStyle = dome
     ctx.beginPath()
     ctx.ellipse(0, domeY, moundRx, moundRy, 0, 0, Math.PI * 2)
@@ -965,14 +869,15 @@ export function screenToGrid(
   const rx = x * cos - y * sin
   const ry = x * sin + y * cos
 
-  let gx = cx + (rx / CELL + (ry * 2) / CELL) * 0.5
-  let gy = cy + ((ry * 2) / CELL - rx / CELL) * 0.5
+  // Inverse of: x=(gx-gy)*ISO_X, y=(gx+gy)*ISO_Y - h*HEIGHT_SCALE
+  let gx = cx + (rx / ISO_X + ry / ISO_Y) * 0.5
+  let gy = cy + (ry / ISO_Y - rx / ISO_X) * 0.5
 
   for (let i = 0; i < 3; i++) {
     const ht = sampleClamped(hf, gx, gy)
     const adjY = ry + ht * HEIGHT_SCALE
-    gx = cx + (rx / CELL + (adjY * 2) / CELL) * 0.5
-    gy = cy + ((adjY * 2) / CELL - rx / CELL) * 0.5
+    gx = cx + (rx / ISO_X + adjY / ISO_Y) * 0.5
+    gy = cy + (adjY / ISO_Y - rx / ISO_X) * 0.5
   }
 
   if (gx < -1 || gy < -1 || gx > size || gy > size) return null

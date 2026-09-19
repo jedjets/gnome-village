@@ -1,6 +1,6 @@
 /**
  * Slice 1e art atlas — load once, drawImage stamps.
- * Locked names under /art/ (Vite public).
+ * Locked names under /art/ (Vite public), respecting base path for Pages.
  */
 
 export type IsleArt = {
@@ -19,19 +19,21 @@ export type IsleArt = {
   ready: boolean
 }
 
+const BASE = import.meta.env.BASE_URL || '/'
+
 const PATHS = {
-  mossTile: '/art/moss-tile.png',
-  mossAtlas: '/art/moss-atlas.png',
-  rockStrata: '/art/rock-strata.png',
-  streamSparkles: '/art/stream-sparkles.png',
-  waterSparkle: '/art/water-sparkle.png',
-  shoreStones: '/art/shore-stones.png',
-  pine: '/art/pine.png',
-  cabin: '/art/cabin-moss-roof.png',
-  hatWren: '/art/hat-wren.png',
-  hatBram: '/art/hat-bram.png',
-  gnomeRed: '/art/gnome-red.png',
-  gnomeBlue: '/art/gnome-blue.png',
+  mossTile: `${BASE}art/moss-tile.png`,
+  mossAtlas: `${BASE}art/moss-atlas.png`,
+  rockStrata: `${BASE}art/rock-strata.png`,
+  streamSparkles: `${BASE}art/stream-sparkles.png`,
+  waterSparkle: `${BASE}art/water-sparkle.png`,
+  shoreStones: `${BASE}art/shore-stones.png`,
+  pine: `${BASE}art/pine.png`,
+  cabin: `${BASE}art/cabin-moss-roof.png`,
+  hatWren: `${BASE}art/hat-wren.png`,
+  hatBram: `${BASE}art/hat-bram.png`,
+  gnomeRed: `${BASE}art/gnome-red.png`,
+  gnomeBlue: `${BASE}art/gnome-blue.png`,
 } as const
 
 let _art: IsleArt | null = null
@@ -79,7 +81,6 @@ export function ensureArt(): IsleArt {
         a.ready = true
       } catch (e) {
         console.warn('[isle art]', e)
-        // Keep ready false — renderer falls back to flat fills
       }
     })()
   }

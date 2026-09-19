@@ -77,7 +77,7 @@ export function IsleCanvas({
       const hit = screenToGrid(sx, sy, cssW, cssH, camRef.current, hfRef.current)
       if (!hit) return
       const now = performance.now()
-      if (now - lastPaintRef.current < 16) return
+      if (now - lastPaintRef.current < 8) return
       lastPaintRef.current = now
       const dir: 1 | -1 = mode === 'raise' ? 1 : -1
       paintTerrain(hfRef.current, hit.gx, hit.gy, dir)
