@@ -121,6 +121,9 @@ export function IsleCanvas({
 
     const tick = () => {
       if (!running) return
+      if (toolRef.current === 'look') {
+        gestures.tickInertia(camRef.current)
+      }
       renderIsle(ctx, {
         width: canvas.clientWidth,
         height: canvas.clientHeight,

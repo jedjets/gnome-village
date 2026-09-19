@@ -5,7 +5,7 @@ type HudProps = {
   onLeave: () => void
 }
 
-/** Top HUD — Mute + Fit. */
+/** Top HUD — floating glass chips over canvas. */
 export function Hud({ muted, onToggleMute, onFit, onLeave }: HudProps) {
   return (
     <header className="hud" role="banner">
@@ -13,22 +13,18 @@ export function Hud({ muted, onToggleMute, onFit, onLeave }: HudProps) {
         <span className="hud-title">Gnome Village</span>
       </div>
       <div className="hud-right">
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          onClick={onFit}
-        >
+        <button type="button" className="hud-chip" onClick={onFit}>
           Fit
         </button>
         <button
           type="button"
-          className="btn btn-ghost btn-sm"
+          className="hud-chip"
           onClick={onToggleMute}
           aria-pressed={muted}
         >
           {muted ? 'Unmute' : 'Mute'}
         </button>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onLeave}>
+        <button type="button" className="hud-chip" onClick={onLeave}>
           Intro
         </button>
       </div>

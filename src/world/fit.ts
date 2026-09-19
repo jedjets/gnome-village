@@ -12,11 +12,20 @@ export type CameraState = {
   rotation: number
 }
 
-export const ZOOM_MIN = 0.45
+/** Lowered in Slice 1c so Fit isn't stuck at CELL*zoom≈8px banding. */
+export const ZOOM_MIN = 0.2
 export const ZOOM_MAX = 2.8
+
+/** Soft clamp on twist so accidental pinch-rotate stays gentle. */
+export const ROTATION_MAX = Math.PI / 3 // ±60°
 
 export function clampZoom(z: number): number {
   return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z))
+}
+
+export function clampRotation(r: number): number {
+  const n = normalizeRotation(r)
+  return Math.max(-ROTATION_MAX, Math.min(ROTATION_MAX, n))
 }
 
 export function defaultCamera(): CameraState {
