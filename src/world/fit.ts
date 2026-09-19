@@ -12,8 +12,8 @@ export type CameraState = {
   rotation: number
 }
 
-/** Lowered in Slice 1c so Fit isn't stuck at CELL*zoom≈8px banding. */
-export const ZOOM_MIN = 0.2
+/** Kept low so Fit isn't stuck at CELL*zoom banding (art-lock). */
+export const ZOOM_MIN = 0.28
 export const ZOOM_MAX = 2.8
 
 /** Soft clamp on twist so accidental pinch-rotate stays gentle. */
@@ -42,7 +42,7 @@ export function computeFit(
   isleWorldW: number,
   isleWorldH: number,
 ): CameraState {
-  const pad = 0.88 // leave ~12% margin
+  const pad = 0.94 // fill phone frame (Ref1/3 readable mound)
   const safeW = Math.max(1, viewW)
   const safeH = Math.max(1, viewH)
   const zoom = clampZoom(

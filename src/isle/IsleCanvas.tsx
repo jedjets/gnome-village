@@ -129,6 +129,7 @@ export function IsleCanvas({
         height: canvas.clientHeight,
         camera: camRef.current,
         hf: hfRef.current,
+        nowMs: performance.now(),
       })
       raf = requestAnimationFrame(tick)
     }

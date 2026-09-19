@@ -1,13 +1,11 @@
 /**
- * Seeded continuous heightfield for the Slice 1 isle.
- * Soft mound + multi-octave noise — never an empty flat plane.
+ * Seeded continuous heightfield — undulating moss mound + carved living stream.
  */
 
 export const GRID_SIZE = 48
 
 export type Heightfield = {
   size: number
-  /** Row-major heights in [0, 1] */
   heights: Float32Array
   seed: number
 }
@@ -50,6 +48,20 @@ function fbm(x: number, y: number, seed: number, octaves = 4): number {
   return sum / norm
 }
 
+/** Distance to winding stream centerline (grid units). */
+export function streamDist(gx: number, gy: number, size: number, seed: number): number {
+  const cx = (size - 1) * 0.5
+  const cy = (size - 1) * 0.5
+  const nx = (gx - cx) / cx
+  const ny = (gy - cy) / cy
+  const along = (nx + ny) * 0.55
+  const wobble =
+    (fbm(along * 2.4 + 2, along * 0.8, seed + 91) - 0.5) * 0.7 +
+    (fbm(along * 5.2, along * 1.9, seed + 203) - 0.5) * 0.3
+  const cross = (nx - ny) * 0.48 - wobble
+  return Math.abs(cross) * cx
+}
+
 export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
   const size = GRID_SIZE
   const heights = new Float32Array(size * size)
@@ -57,22 +69,38 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
 
   const cx = (size - 1) * 0.5
   const cy = (size - 1) * 0.5
-  const maxR = Math.min(cx, cy) * 0.92
+  const maxR = Math.min(cx, cy) * 0.88
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const dx = (x - cx) / maxR
       const dy = (y - cy) / maxR
       const r = Math.sqrt(dx * dx + dy * dy)
-      const island = Math.max(0, 1 - r * r)
-      const mound = Math.pow(island, 1.15)
-      const n =
-        fbm(x * 0.085, y * 0.085, noiseSeed) * 0.55 +
-        fbm(x * 0.22, y * 0.22, noiseSeed + 7) * 0.25
-      let h = mound * (0.35 + n * 0.65)
+
+      // Soft dome with steeper near-rim for cliff loaf
+      const island = Math.max(0, 1 - Math.pow(Math.min(1, r), 1.55))
+      const mound = Math.pow(island, 0.75)
+
+      // Macro hills (mound volume) + meso undulation — avoid high-freq cardboard
+      const macro =
+        fbm(x * 0.045, y * 0.045, noiseSeed) * 0.55 +
+        fbm(x * 0.09 + 4, y * 0.09, noiseSeed + 3) * 0.3
+      const meso = fbm(x * 0.16, y * 0.16, noiseSeed + 11) * 0.2
+
+      let h = mound * (0.45 + macro * 0.7 + meso)
+
+      // Living stream bowl
+      const sd = streamDist(x, y, size, noiseSeed)
+      const bank = 3.8
+      if (sd < bank && r < 0.84) {
+        const carve = Math.pow(1 - sd / bank, 1.1) * (1 - smoothstep(r / 0.84))
+        h -= carve * 0.78
+      }
+
       h = Math.max(0, Math.min(1, h))
-      if (r > 0.98) h = 0
-      else if (r > 0.88) h *= smoothstep((0.98 - r) / 0.1)
+      if (r > 1.0) h = 0
+      else if (r > 0.92) h *= smoothstep((1.0 - r) / 0.08)
+
       heights[y * size + x] = h
     }
   }
@@ -115,4 +143,10 @@ export function applyHeights(hf: Heightfield, data: ArrayLike<number>): void {
   for (let i = 0; i < n; i++) {
     hf.heights[i] = Math.max(0, Math.min(1, data[i]!))
   }
+}
+
+export const WATER_LEVEL = 0.18
+
+export function isWaterHeight(h: number): boolean {
+  return h > 0.001 && h <= WATER_LEVEL
 }
