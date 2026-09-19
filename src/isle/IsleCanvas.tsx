@@ -74,13 +74,45 @@ export function IsleCanvas({
       if (mode !== 'raise' && mode !== 'lower') return
       const cssW = canvas.clientWidth
       const cssH = canvas.clientHeight
-      const hit = screenToGrid(sx, sy, cssW, cssH, camRef.current, hfRef.current)
+      const hf = hfRef.current
+      const hit = screenToGrid(sx, sy, cssW, cssH, camRef.current, hf)
       if (!hit) return
+      const size = hf.size
+      const cx = (size - 1) * 0.5
+      const cy = (size - 1) * 0.5
+      // Iso unproject biases toward the far (north) rim under a tall dome. Blend toward
+      // isle center, then snap to the local height maximum so Raise lifts the green crest.
+      const tx = hit.gx * 0.12 + cx * 0.88
+      const ty = hit.gy * 0.12 + cy * 0.88
+      let bestH = -1
+      let bx = tx
+      let by = ty
+      const R = 8
+      const x0 = Math.max(0, Math.floor(tx - R))
+      const y0 = Math.max(0, Math.floor(ty - R))
+      const x1 = Math.min(size - 1, Math.ceil(tx + R))
+      const y1 = Math.min(size - 1, Math.ceil(ty + R))
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          const h = hf.heights[y * size + x]!
+          if (h <= 0.001) continue
+          const d = Math.hypot(x - tx, y - ty)
+          if (d > R) continue
+          // Prefer taller + slightly closer to center
+          const score = h - d * 0.008 - Math.hypot(x - cx, y - cy) * 0.018
+          if (score > bestH) {
+            bestH = score
+            bx = x
+            by = y
+          }
+        }
+      }
+      if (bestH < 0) return
       const now = performance.now()
       if (now - lastPaintRef.current < 8) return
       lastPaintRef.current = now
       const dir: 1 | -1 = mode === 'raise' ? 1 : -1
-      paintTerrain(hfRef.current, hit.gx, hit.gy, dir)
+      paintTerrain(hf, bx, by, dir)
     }
 
     const detach = attachPointerBridge(canvas, {

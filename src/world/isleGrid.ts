@@ -1,6 +1,8 @@
 /**
- * Seeded continuous heightfield — undulating moss mound + carved living stream.
- * Soft terrace rings give height-true beveled shelves (not painted ellipses).
+ * Seeded continuous heightfield — soft loaf mound + gentle stream bowl.
+ * Soft rim feather + slope clamp so cliffs read as loaf, not saw-teeth.
+ * Amplitude tuned so mound volume reads at Fit with HEIGHT_SCALE 48–70
+ * (≥25 CSS px peak-vs-rim relief at phone Fit when mesh is height-displaced).
  */
 
 export const GRID_SIZE = 48
@@ -49,7 +51,7 @@ function fbm(x: number, y: number, seed: number, octaves = 4): number {
   return sum / norm
 }
 
-/** Stream centerline wobble (must match streamDist / streamCenterline). */
+/** Stream centerline wobble (must match streamDist). */
 export function streamWobble(along: number, seed: number): number {
   return (
     (fbm(along * 2.4 + 2, along * 0.8, seed + 91) - 0.5) * 0.7 +
@@ -69,56 +71,6 @@ export function streamDist(gx: number, gy: number, size: number, seed: number): 
   return Math.abs(cross) * cx
 }
 
-/**
- * Soft meandering centerline in grid space (same field as streamDist).
- * Returns points ordered along the channel — never a jagged hash polyline.
- */
-export function streamCenterline(
-  size: number,
-  seed: number,
-  steps = 64,
-): { gx: number; gy: number }[] {
-  const cx = (size - 1) * 0.5
-  const cy = (size - 1) * 0.5
-  const pts: { gx: number; gy: number }[] = []
-  for (let i = 0; i <= steps; i++) {
-    const u = i / steps
-    const along = (u - 0.5) * 1.62
-    const wobble = streamWobble(along, seed)
-    // Invert streamDist: along = (nx+ny)*0.55, cross=0 => (nx-ny)*0.48 = wobble
-    const sum = along / 0.55
-    const diff = wobble / 0.48
-    const nx = (sum + diff) * 0.5
-    const ny = (sum - diff) * 0.5
-    const gx = cx + nx * cx
-    const gy = cy + ny * cy
-    const r = Math.hypot(gx - cx, gy - cy) / (Math.min(cx, cy) * 0.92)
-    if (r > 0.94) continue
-    pts.push({ gx, gy })
-  }
-  // Chaikin-ish smooth — kill zigzag knife look
-  if (pts.length < 4) return pts
-  let cur = pts
-  for (let pass = 0; pass < 3; pass++) {
-    const next: { gx: number; gy: number }[] = [cur[0]!]
-    for (let i = 0; i < cur.length - 1; i++) {
-      const a = cur[i]!
-      const b = cur[i + 1]!
-      next.push({
-        gx: a.gx * 0.75 + b.gx * 0.25,
-        gy: a.gy * 0.75 + b.gy * 0.25,
-      })
-      next.push({
-        gx: a.gx * 0.25 + b.gx * 0.75,
-        gy: a.gy * 0.25 + b.gy * 0.75,
-      })
-    }
-    next.push(cur[cur.length - 1]!)
-    cur = next
-  }
-  return cur
-}
-
 export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
   const size = GRID_SIZE
   const heights = new Float32Array(size * size)
@@ -134,41 +86,76 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
       const dy = (y - cy) / maxR
       const r = Math.sqrt(dx * dx + dy * dy)
 
-      // Soft dome — steeper near rim so cliffs read at Fit
-      const island = Math.max(0, 1 - Math.pow(Math.min(1, r), 1.45))
-      const mound = Math.pow(island, 0.72)
+      // Tall soft dome — crown high, rim low so height-displaced moss reads as mound
+      // pow(island, 0.48) keeps body plump; outer falloff steepens rim vs peak
+      const island = Math.max(0, 1 - Math.pow(Math.min(1, r), 1.35))
+      const mound = Math.pow(island, 0.48)
 
-      // Macro hills (visible at Fit) + meso undulation
       const macro =
-        fbm(x * 0.04, y * 0.04, noiseSeed) * 0.62 +
-        fbm(x * 0.085 + 4, y * 0.085, noiseSeed + 3) * 0.35
-      const meso = fbm(x * 0.15, y * 0.15, noiseSeed + 11) * 0.22
+        fbm(x * 0.04, y * 0.04, noiseSeed) * 0.45 +
+        fbm(x * 0.085 + 4, y * 0.085, noiseSeed + 3) * 0.25
+      const meso = fbm(x * 0.13, y * 0.13, noiseSeed + 11) * 0.1
 
-      // Peak ~0.70 so Raise has headroom to poke a visible hill (QA blocker).
-      let h = mound * (0.38 + macro * 0.55 + meso * 0.85)
+      // Peak ~0.95 — clear dome relief; Raise still has headroom to 1.0
+      let h = mound * (0.82 + macro * 0.38 + meso * 0.22)
 
-      // Soft terrace rings → rounded beveled shelves (height-true, gradual)
-      if (r > 0.48 && r < 0.98) {
-        const t0 = smoothstep((r - 0.48) / 0.2)
-        const t1 = smoothstep((r - 0.66) / 0.16)
-        const t2 = smoothstep((r - 0.8) / 0.12)
-        h -= t0 * 0.05 + t1 * 0.07 + t2 * 0.1
+      // Drop shoulders toward rim (amplify peak-vs-rim without cliffs)
+      if (r > 0.42) {
+        const shoulder = smoothstep((r - 0.42) / 0.5)
+        h *= 1 - shoulder * 0.38
       }
 
-      // Living stream bowl
+      // Soft stream bowl — continuous valley for wetness field
       const sd = streamDist(x, y, size, noiseSeed)
-      const bank = 4.0
-      if (sd < bank && r < 0.86) {
-        const carve = Math.pow(1 - sd / bank, 1.15) * (1 - smoothstep(r / 0.86))
-        h -= carve * 0.72
+      const bank = 4.2
+      if (sd < bank && r < 0.82) {
+        const carve = Math.pow(1 - sd / bank, 1.2) * (1 - smoothstep(r / 0.82))
+        h -= carve * 0.38
       }
 
-      h = Math.max(0, Math.min(0.72, h))
+      h = Math.max(0, Math.min(0.97, h))
+      // Soft feather at outer ring — kill cliff-wall silhouette, keep loaf body
       if (r > 1.0) h = 0
-      else if (r > 0.92) h *= smoothstep((1.0 - r) / 0.08)
+      else if (r > 0.82) h *= smoothstep((1.0 - r) / 0.18)
 
       heights[y * size + x] = h
     }
+  }
+
+  // Light rim blur + gentle slope clamp — preserve mound peak volume
+  const tmp = new Float32Array(heights)
+  const maxSlope = 0.16
+  for (let pass = 0; pass < 2; pass++) {
+    for (let y = 1; y < size - 1; y++) {
+      for (let x = 1; x < size - 1; x++) {
+        const dx = (x - cx) / maxR
+        const dy = (y - cy) / maxR
+        const r = Math.sqrt(dx * dx + dy * dy)
+        const i = y * size + x
+        const h0 = tmp[i]!
+        if (h0 <= 0.001) {
+          heights[i] = 0
+          continue
+        }
+        // Blur mostly at rim; keep crown coherent
+        const rim = r > 0.65 ? smoothstep((r - 0.65) / 0.3) : 0
+        const s =
+          tmp[i]! * (5 - rim * 1.2) +
+          tmp[i - 1]! +
+          tmp[i + 1]! +
+          tmp[i - size]! +
+          tmp[i + size]!
+        const w = 9 - rim * 1.2
+        let h = s / w
+        for (const n of [tmp[i - 1]!, tmp[i + 1]!, tmp[i - size]!, tmp[i + size]!]) {
+          if (n <= 0.001) continue
+          if (h - n > maxSlope) h = n + maxSlope
+          if (n - h > maxSlope) h = n - maxSlope
+        }
+        heights[i] = Math.max(0, Math.min(0.97, h))
+      }
+    }
+    tmp.set(heights)
   }
 
   return { size, heights, seed: noiseSeed }
@@ -183,7 +170,7 @@ export function getHeight(hf: Heightfield, x: number, y: number): number {
 export function setHeight(hf: Heightfield, x: number, y: number, h: number): void {
   const { size, heights } = hf
   if (x < 0 || y < 0 || x >= size || y >= size) return
-  heights[y * size + x] = Math.max(0, Math.min(1, h))
+  heights[y * size + x] = Math.max(0, Math.min(1.25, h))
 }
 
 export function sampleHeight(hf: Heightfield, gx: number, gy: number): number {
@@ -207,7 +194,7 @@ export function cloneHeights(hf: Heightfield): Float32Array {
 export function applyHeights(hf: Heightfield, data: ArrayLike<number>): void {
   const n = Math.min(hf.heights.length, data.length)
   for (let i = 0; i < n; i++) {
-    hf.heights[i] = Math.max(0, Math.min(1, data[i]!))
+    hf.heights[i] = Math.max(0, Math.min(1.25, data[i]!))
   }
 }
 
