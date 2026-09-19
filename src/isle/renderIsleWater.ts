@@ -8,16 +8,25 @@ import {
   WATER_DEEP,
   COL_SHORE,
   COL_DAMP,
+  COL_MOSS,
+  COL_DEEP,
 } from './renderIsleCore'
 import type { Pt } from './renderIsleDraw'
 import { chaikinClosed, pathFromPts } from './renderIsleDraw'
 
 const WET_THRESH = 0.48
 const WATER_SURF = 0.12
+/** Max segment length (world px) before densify — keeps Chaikin from stair-stepping. */
+const DENSIFY_STEP = 2.4
+const CHAIKIN_PASSES = 6
+/** Outward bank expand (world px) — soft underlap over land, hides residual MS faceting. */
+const BANK_EXPAND = 2.8
+/** Water body sits slightly inside bank so land-coloured feather owns the outer AA. */
+const WATER_INSET = 1.1
 
 /**
- * Continuous shoreline from wetness corner field (marching squares + Chaikin).
- * Living stream banks — not diamond water, cyan knife, or saw-tooth comb.
+ * Continuous shoreline from wetness corner field (marching squares + densify + Chaikin).
+ * Soft feathered banks over land — no bright/white shore stroke, no saw-tooth comb.
  */
 export function drawStreamWater(
   ctx: CanvasRenderingContext2D,
@@ -126,16 +135,20 @@ export function drawStreamWater(
   }
 
   ctx.save()
+  ctx.lineJoin = 'round'
+  ctx.lineCap = 'round'
 
-  // Soft sheet under banks (slight overlap kills bed lattice)
+  // Interior depth sheet — well inside ribbon so jagged quads never define the shore
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const w00 = wet[y * nv + x]!
       const w10 = wet[y * nv + (x + 1)]!
       const w11 = wet[(y + 1) * nv + (x + 1)]!
       const w01 = wet[(y + 1) * nv + x]!
+      const wMin = Math.min(w00, w10, w11, w01)
       const wAvg = (w00 + w10 + w11 + w01) * 0.25
-      if (wAvg < WET_THRESH * 0.85) continue
+      // Require all corners wet enough — keeps sheet away from shoreline
+      if (wMin < WET_THRESH * 1.12 || wAvg < WET_THRESH * 1.2) continue
       const h00 = Math.max(WATER_SURF, vertH[y * nv + x]!)
       const h10 = Math.max(WATER_SURF, vertH[y * nv + (x + 1)]!)
       const h11 = Math.max(WATER_SURF, vertH[(y + 1) * nv + (x + 1)]!)
@@ -146,7 +159,7 @@ export function drawStreamWater(
       const p01 = gridToIso(x - cx, y + 1 - cy, h01)
       const mx = (p00.x + p10.x + p11.x + p01.x) * 0.25
       const my = (p00.y + p10.y + p11.y + p01.y) * 0.25
-      const fat = 1.12
+      const fat = 0.92
       const F = (p: { x: number; y: number }) => ({
         x: mx + (p.x - mx) * fat,
         y: my + (p.y - my) * fat,
@@ -167,7 +180,7 @@ export function drawStreamWater(
       ctx.lineTo(c.x, c.y)
       ctx.lineTo(d.x, d.y)
       ctx.closePath()
-      ctx.fillStyle = rgba(fill, 0.94)
+      ctx.fillStyle = rgba(fill, 0.9)
       ctx.fill()
     }
   }
@@ -216,27 +229,57 @@ export function drawStreamWater(
       if (loop.length >= 6) loops.push(loop)
     }
 
+    const smoothLoops: Pt[][] = []
     for (let loop of loops) {
-      loop = chaikinClosed(loop, 3)
+      loop = densifyClosed(loop, DENSIFY_STEP)
+      loop = chaikinClosed(loop, CHAIKIN_PASSES)
       if (loop.length < 4) continue
+      smoothLoops.push(loop)
+    }
+
+    // Soft feathered bank underlap — land / damp / shore tones only (never bright white)
+    for (const loop of smoothLoops) {
+      const bank = expandClosed(loop, BANK_EXPAND)
       ctx.beginPath()
-      pathFromPts(ctx, loop, 0)
-      ctx.strokeStyle = rgba(lerp3(WATER_SHALLOW, COL_SHORE, 0.35), 0.55)
-      ctx.lineWidth = 7
-      ctx.lineJoin = 'round'
-      ctx.lineCap = 'round'
-      ctx.stroke()
-      ctx.strokeStyle = rgba(lerp3(WATER_MID, COL_DAMP, 0.25), 0.28)
+      pathFromPts(ctx, bank, 0)
+      // Outer moss tuck — opaque enough that AA can't flash sky
+      ctx.strokeStyle = rgba(lerp3(COL_MOSS, COL_DEEP, 0.4), 0.72)
       ctx.lineWidth = 14
       ctx.stroke()
-      ctx.strokeStyle = 'rgba(220, 245, 240, 0.22)'
-      ctx.lineWidth = 2.2
+      ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_MOSS, 0.35), 0.65)
+      ctx.lineWidth = 9
+      ctx.stroke()
+      ctx.strokeStyle = rgba(lerp3(COL_SHORE, COL_DAMP, 0.5), 0.55)
+      ctx.lineWidth = 5
+      ctx.stroke()
+      // Soft bank fill ring: expanded bank minus inset water silhouette
+      ctx.beginPath()
+      pathFromPts(ctx, bank, 0)
+      ctx.fillStyle = rgba(lerp3(COL_DAMP, COL_SHORE, 0.4), 0.28)
+      ctx.fill()
+    }
+
+    // Smooth water body — inset so bank feather owns the outer AA fringe
+    for (const loop of smoothLoops) {
+      const water = expandClosed(loop, -WATER_INSET)
+      const fill = lerp3(WATER_SHALLOW, WATER_MID, 0.55)
+      ctx.beginPath()
+      pathFromPts(ctx, water, 0)
+      ctx.fillStyle = rgba(fill, 0.97)
+      ctx.fill()
+      // Seal AA with water-coloured stroke (same as fill — never sky/white)
+      ctx.strokeStyle = rgba(fill, 1)
+      ctx.lineWidth = 2.8
+      ctx.stroke()
+      // Soft inner depth lip — mid water, not foam
+      ctx.strokeStyle = rgba(lerp3(WATER_MID, WATER_DEEP, 0.4), 0.28)
+      ctx.lineWidth = 4.2
       ctx.stroke()
     }
 
-    if (nowMs != null && Number.isFinite(nowMs) && loops.length) {
-      let best = loops[0]!
-      for (const L of loops) if (L.length > best.length) best = L
+    if (nowMs != null && Number.isFinite(nowMs) && smoothLoops.length) {
+      let best = smoothLoops[0]!
+      for (const L of smoothLoops) if (L.length > best.length) best = L
       let sx = 0
       let sy = 0
       for (const p of best) {
@@ -245,16 +288,87 @@ export function drawStreamWater(
       }
       const mx = sx / best.length
       const my = sy / best.length
-      const shimmer = 0.04 + 0.025 * Math.sin(nowMs * 0.002)
-      const g = ctx.createRadialGradient(mx - 8, my - 10, 0, mx, my, 40)
-      g.addColorStop(0, `rgba(210, 240, 235, ${shimmer})`)
-      g.addColorStop(1, 'rgba(210, 240, 235, 0)')
+      const shimmer = 0.03 + 0.018 * Math.sin(nowMs * 0.002)
+      const g = ctx.createRadialGradient(mx - 8, my - 10, 0, mx, my, 36)
+      g.addColorStop(0, `rgba(170, 210, 205, ${shimmer})`)
+      g.addColorStop(1, 'rgba(170, 210, 205, 0)')
       ctx.fillStyle = g
       ctx.beginPath()
-      pathFromPts(ctx, chaikinClosed(best, 1), 0)
+      pathFromPts(ctx, expandClosed(best, -WATER_INSET), 0)
       ctx.fill()
     }
   }
 
   ctx.restore()
+}
+
+/** Insert points along closed loop so consecutive segments stay short for Chaikin. */
+function densifyClosed(pts: Pt[], maxStep: number): Pt[] {
+  if (pts.length < 3) return pts
+  const out: Pt[] = []
+  const m = pts.length
+  for (let i = 0; i < m; i++) {
+    const a = pts[i]!
+    const b = pts[(i + 1) % m]!
+    out.push(a)
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const len = Math.hypot(dx, dy)
+    if (len <= maxStep) continue
+    const n = Math.ceil(len / maxStep)
+    for (let k = 1; k < n; k++) {
+      const t = k / n
+      out.push({
+        x: a.x + dx * t,
+        y: a.y + dy * t,
+        h: a.h + (b.h - a.h) * t,
+        gx: a.gx + (b.gx - a.gx) * t,
+        gy: a.gy + (b.gy - a.gy) * t,
+      })
+    }
+  }
+  return out
+}
+
+/**
+ * Push closed loop along outward normals (screen-space).
+ * Positive = expand (bank underlap); negative = inset (water body).
+ */
+function expandClosed(pts: Pt[], amount: number): Pt[] {
+  if (pts.length < 3 || Math.abs(amount) < 1e-6) return pts
+  const m = pts.length
+  // signed area — ensure outward is away from centroid for CCW
+  let area = 0
+  for (let i = 0; i < m; i++) {
+    const a = pts[i]!
+    const b = pts[(i + 1) % m]!
+    area += a.x * b.y - b.x * a.y
+  }
+  const sign = area >= 0 ? 1 : -1
+  const out: Pt[] = []
+  for (let i = 0; i < m; i++) {
+    const prev = pts[(i - 1 + m) % m]!
+    const cur = pts[i]!
+    const next = pts[(i + 1) % m]!
+    const e1x = cur.x - prev.x
+    const e1y = cur.y - prev.y
+    const e2x = next.x - cur.x
+    const e2y = next.y - cur.y
+    const l1 = Math.hypot(e1x, e1y) || 1
+    const l2 = Math.hypot(e2x, e2y) || 1
+    // outward normals (perpendicular, flipped by winding)
+    let nx = sign * (e1y / l1 + e2y / l2)
+    let ny = sign * -(e1x / l1 + e2x / l2)
+    const nl = Math.hypot(nx, ny) || 1
+    nx /= nl
+    ny /= nl
+    out.push({
+      x: cur.x + nx * amount,
+      y: cur.y + ny * amount,
+      h: cur.h,
+      gx: cur.gx,
+      gy: cur.gy,
+    })
+  }
+  return out
 }
