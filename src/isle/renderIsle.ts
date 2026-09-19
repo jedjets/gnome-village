@@ -3,7 +3,7 @@ import { getHeight } from '../world/isleGrid'
 import type { CameraState } from '../world/fit'
 import type { RenderIsleOpts } from './renderIsleCore'
 import {
-  CELL, HEIGHT_SCALE, MOSS_VIS_BOOST, LOAF_DEPTH, isleWorldSize, gridToIso, ensureFields,
+  CELL, HEIGHT_SCALE, MOSS_VIS_BOOST, LOAF_DEPTH, gridToIso, ensureFields,
   lerp3, rgba,
   COL_DEEP, COL_MOSS, COL_LIT, EARTH_TOP,
 } from './renderIsleCore'
