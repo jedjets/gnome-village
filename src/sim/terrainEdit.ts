@@ -12,12 +12,13 @@ export type BrushParams = {
 }
 
 /**
- * Large soft brush — Raise must poke a Fit-readable hill in a few strokes.
- * (1c regression: tiny brush read as "not playable".)
+ * Large soft brush — Raise builds soft hills/mounds, not razor ridges.
+ * Strength sized so one continuous crown stroke lifts Fit silhouette ≥6–12 CSS px.
+ * Wider falloff + smoothstep kernel; crown lifts as a coherent hill.
  */
 export const DEFAULT_BRUSH: BrushParams = {
-  radius: 6.5,
-  strength: 0.145,
+  radius: 10.5,
+  strength: 0.28,
 }
 
 /**
@@ -46,12 +47,12 @@ export function paintTerrain(
       const dy = y - gy
       const d2 = dx * dx + dy * dy
       if (d2 > r2) continue
-      const falloff = 1 - Math.sqrt(d2) / r
-      // Gentler falloff so the crown lifts as a coherent hill
-      const soft = falloff * falloff * (0.35 + 0.65 * falloff)
+      const t = 1 - Math.sqrt(d2) / r
+      // Smoothstep^2 — broad plateau, soft skirts (no spike crown)
+      const s = t * t * (3 - 2 * t)
+      const soft = s * s
       const before = getHeight(hf, x, y)
       // Don't grow ocean zeros into spikes — only sculpt existing land
-      // (and immediate wet banks that already have a little height)
       if (before <= 0.001 && direction > 0) continue
       const next = before + direction * brush.strength * soft
       if (Math.abs(next - before) < 1e-7) continue

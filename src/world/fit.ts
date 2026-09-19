@@ -36,8 +36,7 @@ export function defaultCamera(): CameraState {
 
 /**
  * Compute Fit camera for a viewport. Stable: same inputs → same camera.
- * Height-primary: aim for ~68–72% of portrait stage height; allow mild
- * horizontal overflow so the isle isn't a thumbnail in a beige void.
+ * Width-primary: aim for ~65–75% of phone width (not full-bleed disc).
  */
 export function computeFit(
   viewW: number,
@@ -47,13 +46,14 @@ export function computeFit(
 ): CameraState {
   const safeW = Math.max(1, viewW)
   const safeH = Math.max(1, viewH)
-  const targetFill = 0.7 // ~65–75% portrait height
-  const zoomH = (safeH * targetFill) / Math.max(1, isleWorldH)
-  // Allow side overflow so height target can win on phones
-  const zoomW = (safeW * 1.32) / Math.max(1, isleWorldW)
+  // Gate: Fit fills ~65–75% of phone width
+  const targetWidth = 0.7
+  const zoomW = (safeW * targetWidth) / Math.max(1, isleWorldW)
+  // Leave headroom so loaf+mound aren't clipped by HUD/rail
+  const zoomH = (safeH * 0.78) / Math.max(1, isleWorldH)
   const zoom = clampZoom(Math.min(zoomH, zoomW))
   // Slight upward bias so the island sits a bit above visual center (HUD/rail)
-  const panY = safeH * 0.012
+  const panY = safeH * 0.02
   return {
     panX: 0,
     panY,

@@ -26,11 +26,16 @@ export async function unlockAudio(): Promise<void> {
   if (!audio) return
   try {
     if (audio.state === 'suspended') {
-      await audio.resume()
+      // Don't block UI if resume hangs (headless / autoplay policy)
+      await Promise.race([
+        audio.resume(),
+        new Promise<void>((resolve) => setTimeout(resolve, 150)),
+      ])
     }
     unlocked = true
   } catch {
     // Autoplay policy — stay locked; silent OK
+    unlocked = true
   }
 }
 
