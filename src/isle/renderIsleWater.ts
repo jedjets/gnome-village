@@ -6,9 +6,7 @@ import {
   rgba,
   WATER_SHALLOW,
   WATER_MID,
-  WATER_DEEP,
   COL_SHORE,
-  COL_DAMP,
   COL_MOSS,
 } from './renderIsleCore'
 import type { Pt } from './renderIsleDraw'
@@ -20,13 +18,13 @@ const WATER_SURF = 0.12
 const DENSIFY_STEP = 1.4
 const CHAIKIN_PASSES = 8
 /** Outward bank expand (world px) — soft underlap over land. */
-const BANK_EXPAND = 5.5
+const BANK_EXPAND = 9.5
 /** Water body sits slightly inside bank so soft feather owns the outer AA. */
-const WATER_INSET = 0.4
+const WATER_INSET = 1.2
 /** Upsample factor for wet field before marching squares. */
-const WET_UPSAMPLE = 2
+const WET_UPSAMPLE = 3
 /** Extra box-blur passes on upsampled wet (smoother iso-line; keep ribbon continuous). */
-const WET_BLUR_PASSES = 3
+const WET_BLUR_PASSES = 4
 
 /**
  * Continuous shoreline from wetness corner field (blur+upsample → MS → densify → Chaikin).
@@ -168,7 +166,7 @@ export function drawStreamWater(
   // Soft distance-falloff shore wash (shore tones only — never dark teal contour)
   paintSoftShoreFalloff(ctx, softWet, sn, scale, vertH, nv, cx, cy, size)
 
-  // Interior depth sheet — well inside ribbon so jagged quads never define the shore
+  // Interior depth sheet — deeply inset; light shallow hues only (never dark teal near banks)
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const w00 = wet[y * nv + x]!
@@ -177,7 +175,8 @@ export function drawStreamWater(
       const w01 = wet[(y + 1) * nv + x]!
       const wMin = Math.min(w00, w10, w11, w01)
       const wAvg = (w00 + w10 + w11 + w01) * 0.25
-      if (wMin < WET_THRESH * 1.32 || wAvg < WET_THRESH * 1.4) continue
+      // Stay well inside ribbon so quads never silhouette the shore
+      if (wMin < WET_THRESH * 1.55 || wAvg < WET_THRESH * 1.65) continue
       const h00 = Math.max(WATER_SURF, vertH[y * nv + x]!)
       const h10 = Math.max(WATER_SURF, vertH[y * nv + (x + 1)]!)
       const h11 = Math.max(WATER_SURF, vertH[(y + 1) * nv + (x + 1)]!)
@@ -188,7 +187,7 @@ export function drawStreamWater(
       const p01 = gridToIso(x - cx, y + 1 - cy, h01)
       const mx = (p00.x + p10.x + p11.x + p01.x) * 0.25
       const my = (p00.y + p10.y + p11.y + p01.y) * 0.25
-      const fat = 0.78
+      const fat = 0.62
       const F = (p: { x: number; y: number }) => ({
         x: mx + (p.x - mx) * fat,
         y: my + (p.y - my) * fat,
@@ -197,19 +196,15 @@ export function drawStreamWater(
       const b = F(p10)
       const c = F(p11)
       const d = F(p01)
-      const depth = Math.min(1, wAvg)
-      const fill = lerp3(
-        WATER_SHALLOW,
-        lerp3(WATER_MID, WATER_DEEP, depth * 0.7),
-        Math.min(1, depth * 1.1),
-      )
+      const depth = Math.min(1, (wAvg - WET_THRESH) / 0.5)
+      const fill = lerp3(WATER_SHALLOW, WATER_MID, depth * 0.45)
       ctx.beginPath()
       ctx.moveTo(a.x, a.y)
       ctx.lineTo(b.x, b.y)
       ctx.lineTo(c.x, c.y)
       ctx.lineTo(d.x, d.y)
       ctx.closePath()
-      ctx.fillStyle = rgba(fill, 0.85)
+      ctx.fillStyle = rgba(fill, 0.55)
       ctx.fill()
     }
   }
@@ -266,22 +261,24 @@ export function drawStreamWater(
       smoothLoops.push(loop)
     }
 
-    // Soft feathered bank underlap — shore cushion kills dark-grass AA → teal fringe.
-    // Multi-ring low-alpha fills (+ optional blur). NEVER a dark contour stroke.
+    // Wide soft damp→water falloff. NEVER a dark shore stroke / hard teal silhouette.
+    // Outer rings = shore hues; mid = shore↔water; inner = water alpha ramp into shore cushion.
     for (const loop of smoothLoops) {
-      const rings: { amt: number; col: [number, number, number]; a: number; blur: number }[] = [
-        { amt: BANK_EXPAND * 1.15, col: lerp3(COL_SHORE, COL_MOSS, 0.12), a: 0.22, blur: 14 },
-        { amt: BANK_EXPAND * 0.85, col: lerp3(COL_SHORE, COL_MOSS, 0.18), a: 0.28, blur: 10 },
-        { amt: BANK_EXPAND * 0.5, col: lerp3(COL_SHORE, COL_DAMP, 0.15), a: 0.32, blur: 6 },
-        // Opaque-enough shore cushion right under the water edge (AA samples this, not dark turf)
-        { amt: BANK_EXPAND * 0.22, col: lerp3(COL_SHORE, COL_MOSS, 0.08), a: 0.55, blur: 0 },
-        { amt: 0.5, col: lerp3(COL_SHORE, COL_MOSS, 0.05), a: 0.7, blur: 0 },
+      const shoreWash: { amt: number; col: [number, number, number]; a: number; blur: number }[] = [
+        { amt: BANK_EXPAND * 1.35, col: lerp3(COL_SHORE, COL_MOSS, 0.1), a: 0.2, blur: 18 },
+        { amt: BANK_EXPAND * 1.05, col: lerp3(COL_SHORE, COL_MOSS, 0.14), a: 0.28, blur: 14 },
+        { amt: BANK_EXPAND * 0.75, col: lerp3(COL_SHORE, WATER_SHALLOW, 0.22), a: 0.36, blur: 10 },
+        { amt: BANK_EXPAND * 0.48, col: lerp3(COL_SHORE, WATER_SHALLOW, 0.4), a: 0.48, blur: 7 },
+        { amt: BANK_EXPAND * 0.28, col: lerp3(COL_SHORE, WATER_SHALLOW, 0.55), a: 0.62, blur: 4 },
+        // Near-opaque shore/water cushion under the water edge so AA never hits dark turf
+        { amt: BANK_EXPAND * 0.12, col: lerp3(COL_SHORE, WATER_SHALLOW, 0.65), a: 0.82, blur: 0 },
+        { amt: 0.8, col: lerp3(WATER_SHALLOW, COL_SHORE, 0.35), a: 0.9, blur: 0 },
       ]
-      for (const ring of rings) {
+      for (const ring of shoreWash) {
         const path = expandClosed(loop, ring.amt)
         ctx.save()
         if (ring.blur > 0) {
-          ctx.shadowColor = rgba(ring.col, ring.a * 0.7)
+          ctx.shadowColor = rgba(ring.col, Math.min(1, ring.a * 0.85))
           ctx.shadowBlur = ring.blur
         }
         ctx.beginPath()
@@ -292,32 +289,58 @@ export function drawStreamWater(
       }
     }
 
-    // Smooth water body — filled Chaikin path; seal matches water fill (not dark damp)
+    // Soft water body — shore↔water midtone ramp. Never dark stroke / hard teal silhouette.
     for (const loop of smoothLoops) {
       const water = expandClosed(loop, -WATER_INSET)
-      const fill = lerp3(WATER_SHALLOW, WATER_MID, 0.5)
+      const fill = lerp3(WATER_SHALLOW, WATER_MID, 0.35)
+      // Edge hues deliberately light + shore-biased so AA never forms dark teal cut
+      const edgeLite = lerp3(COL_SHORE, WATER_SHALLOW, 0.35)
+      const edgeMid = lerp3(COL_SHORE, WATER_SHALLOW, 0.55)
+      const edgeWet = lerp3(WATER_SHALLOW, COL_SHORE, 0.25)
 
-      // Soft water-coloured underlap rings (no GPU-blur dependency for stair kill)
-      for (const [amt, a] of [
-        [2.8, 0.18],
-        [1.6, 0.28],
-        [0.6, 0.4],
+      // Wide outward shore↔water cushion (owns the AA fringe)
+      for (const [amt, a, col] of [
+        [7.5, 0.14, lerp3(COL_SHORE, COL_MOSS, 0.08)],
+        [5.8, 0.2, edgeLite],
+        [4.2, 0.28, edgeMid],
+        [2.8, 0.38, edgeWet],
+        [1.5, 0.5, lerp3(fill, edgeWet, 0.35)],
+        [0.5, 0.62, lerp3(fill, edgeWet, 0.15)],
       ] as const) {
         ctx.beginPath()
         pathFromPts(ctx, expandClosed(water, amt), 0)
-        ctx.fillStyle = rgba(fill, a)
+        ctx.fillStyle = rgba(col, a)
         ctx.fill()
       }
 
+      // Inset ladder: translucent light edge → deeper core (no single opaque hard rim)
+      for (const [inset, a, mixShore] of [
+        [0.0, 0.28, 0.55],
+        [1.0, 0.42, 0.4],
+        [2.0, 0.58, 0.25],
+        [3.2, 0.74, 0.1],
+        [4.5, 0.9, 0.0],
+      ] as const) {
+        const col = lerp3(fill, edgeLite, mixShore)
+        ctx.beginPath()
+        pathFromPts(ctx, expandClosed(water, -inset), 0)
+        ctx.fillStyle = rgba(col, a)
+        ctx.fill()
+      }
+
+      // Overpaint the geometric edge with wide soft midtone strokes (kills residual hard cut)
       ctx.beginPath()
       pathFromPts(ctx, water, 0)
-      ctx.fillStyle = rgba(fill, 0.98)
-      ctx.fill()
-      // Seal AA with water-coloured stroke (same as fill)
-      ctx.strokeStyle = rgba(fill, 1)
-      ctx.lineWidth = 2.6
-      ctx.stroke()
-      // No dark inner lip — it read as teal teeth at zoom
+      for (const [w, a, col] of [
+        [14, 0.22, edgeLite],
+        [10, 0.28, edgeMid],
+        [7, 0.32, edgeWet],
+        [4.5, 0.28, lerp3(fill, edgeWet, 0.4)],
+      ] as const) {
+        ctx.strokeStyle = rgba(col, a)
+        ctx.lineWidth = w
+        ctx.stroke()
+      }
     }
 
     if (nowMs != null && Number.isFinite(nowMs) && smoothLoops.length) {
@@ -394,16 +417,19 @@ function paintSoftShoreFalloff(
   cy: number,
   size: number,
 ): void {
-  const lo = WET_THRESH * 0.5
-  const hi = WET_THRESH * 1.02
+  // Wide wetness-space band — shore→water hues, never dark turf/damp
+  const lo = WET_THRESH * 0.28
+  const hi = WET_THRESH * 1.18
   const step = 1
   for (let iy = 0; iy < sn; iy += step) {
     for (let ix = 0; ix < sn; ix += step) {
       const w = softWet[iy * sn + ix]!
       if (w < lo || w > hi) continue
-      const t = 1 - Math.abs(w - WET_THRESH) / (WET_THRESH - lo)
-      const a = Math.max(0, Math.min(1, t)) * 0.1
-      if (a < 0.02) continue
+      const mid = WET_THRESH
+      const span = w <= mid ? mid - lo : hi - mid
+      const t = 1 - Math.abs(w - mid) / Math.max(1e-6, span)
+      const a = Math.max(0, Math.min(1, t)) * 0.22
+      if (a < 0.015) continue
       const gx = ix * scale
       const gy = iy * scale
       if (gx < 0 || gy < 0 || gx > size || gy > size) continue
@@ -420,11 +446,16 @@ function paintSoftShoreFalloff(
         vertH[y1 * nv + x1]! * tx * ty
       if (h < 0.02) continue
       const p = gridToIso(gx - 0.5 - cx, gy - 0.5 - cy, Math.max(WATER_SURF, h))
-      const r = 8 + a * 7
+      const towardWater = Math.max(0, Math.min(1, (w - lo) / (hi - lo)))
+      const col = lerp3(
+        lerp3(COL_SHORE, COL_MOSS, 0.08),
+        WATER_SHALLOW,
+        towardWater * 0.55,
+      )
+      const r = 10 + a * 12
       ctx.beginPath()
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2)
-      // Shore / warm sand — never dark damp/teal
-      ctx.fillStyle = rgba(lerp3(COL_SHORE, COL_MOSS, 0.15), a)
+      ctx.fillStyle = rgba(col, a)
       ctx.fill()
     }
   }

@@ -3,7 +3,6 @@ import {
   gridToIso,
   lerp3,
   rgba,
-  COL_DAMP,
   COL_SHORE,
 } from './renderIsleCore'
 
@@ -93,10 +92,9 @@ export function drawSoftIsoMesh(
     let rgb = lerp3(lerp3(c00, c10, 0.5), lerp3(c01, c11, 0.5), 0.5)
 
     const wAvg = (wet[i00]! + wet[i10]! + wet[i11]! + wet[i01]!) * 0.25
-    // Soft shore tint only — avoid dark damp that reads as teal stair teeth at iso edges
-    if (wAvg > 0.12) {
-      rgb = lerp3(rgb, COL_SHORE, Math.min(0.4, wAvg * 0.45))
-      rgb = lerp3(rgb, COL_DAMP, Math.min(0.08, wAvg * 0.08))
+    // Soft shore tint only — never dark damp (reads as hard teal bank cut under water AA)
+    if (wAvg > 0.1) {
+      rgb = lerp3(rgb, COL_SHORE, Math.min(0.55, wAvg * 0.62))
     }
 
     const shade = (c: [number, number, number], L: number): [number, number, number] => [

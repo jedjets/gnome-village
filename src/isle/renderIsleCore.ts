@@ -51,8 +51,8 @@ export const COL_WARM: [number, number, number] = [0x9a, 0xb0, 0x68]
 export const COL_DAMP: [number, number, number] = [0x4a, 0x78, 0x54]
 export const COL_SHORE: [number, number, number] = [0xd0, 0xc2, 0x98]
 export const COL_SAND: [number, number, number] = [0xc8, 0xb8, 0x88]
-export const WATER_SHALLOW: [number, number, number] = [0x6a, 0xb0, 0xb8]
-export const WATER_MID: [number, number, number] = [0x4a, 0x8e, 0x9a]
+export const WATER_SHALLOW: [number, number, number] = [0x7a, 0xba, 0xbe]
+export const WATER_MID: [number, number, number] = [0x5a, 0x9c, 0xa4]
 export const WATER_DEEP: [number, number, number] = [0x36, 0x72, 0x82]
 export const EARTH_TOP: [number, number, number] = [0xa8, 0x7c, 0x58]
 export const EARTH_MID: [number, number, number] = [0x82, 0x5c, 0x40]
@@ -138,10 +138,10 @@ export function ensureFields(hf: Heightfield): {
       const hE = sampleHeight(hf, gx + 1, gy)
       const hW = sampleHeight(hf, gx - 1, gy)
 
-      let L = 0.78 + (hW - hE) * 0.22 + (hN - hS) * 0.16 + hC * 0.12
+      let L = 0.76 + (hW - hE) * 0.28 + (hN - hS) * 0.2 + hC * 0.14
       const meanN = (hN + hS + hE + hW) * 0.25
-      L += Math.max(0, hC - meanN) * 0.18
-      L -= Math.max(0, meanN - hC) * 0.28
+      L += Math.max(0, hC - meanN) * 0.32
+      L -= Math.max(0, meanN - hC) * 0.42
       light[y * nv + x] = L
 
       if (hC <= 0.001) {
@@ -171,10 +171,17 @@ export function ensureFields(hf: Heightfield): {
           const h = sampleHeight(hf, gx + dx, gy + dy)
           if (h <= 0.001) continue
           const sdN = streamDist(gx + dx, gy + dy, size, seed)
-          const nearBank = sdN < STREAM_HALF * 1.6 && h < 0.32
+          const nearBank = sdN < STREAM_HALF * 2.2 && h < 0.4
           let c: [number, number, number]
-          if (nearBank && h < 0.22) {
-            c = lerp3(COL_SHORE, COL_SAND, Math.min(1, (0.22 - h) / 0.12))
+          if (nearBank) {
+            // Wide shore cushion hues so water AA never samples dark turf → teal cut
+            const dampT = Math.min(1, Math.max(0, 1 - sdN / (STREAM_HALF * 2.2)))
+            const shoreMix = Math.min(1, dampT * 0.85 + (h < 0.22 ? 0.25 : 0))
+            const base =
+              h < 0.28
+                ? lerp3(COL_SHORE, COL_SAND, Math.min(1, (0.28 - h) / 0.14))
+                : lerp3(COL_MOSS, COL_LIT, Math.min(1, (h - 0.28) / 0.22))
+            c = lerp3(base, COL_SHORE, shoreMix * 0.7)
           } else if (h < 0.22) {
             c = lerp3(COL_DEEP, COL_MOSS, h / 0.22)
           } else if (h < 0.42) {

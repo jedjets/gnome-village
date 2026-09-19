@@ -70,9 +70,9 @@ export function streamDist(gx: number, gy: number, size: number, seed: number): 
 }
 
 /**
- * Soft-iso village land: rolling plateau with hills + valleys + stream.
- * Shared-vertex relief that *reads* at Fit — not a flat pancake disc / single dome.
- * Peak ~0.85–1.05; interior spread large enough for loaf silhouette undulation.
+ * Soft-iso village land: rolling multi-lobe country + stream in a low path.
+ * Shared-vertex relief that *reads* at Fit — NOT a single central dome/pancake.
+ * Peak ~0.85–1.05; HEIGHT_SCALE stays loaf (non-skyscraper).
  */
 export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
   const size = GRID_SIZE
@@ -83,13 +83,26 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
   const cy = (size - 1) * 0.5
   const maxR = Math.min(cx, cy) * 0.92
 
-  // Fixed lobe centers (grid-ish) so every seed still rolls, not one radial mound
+  // Separated lobes/ridges — asymmetric rolling country (not L/R split-dome)
   const lobes = [
-    { lx: -0.34, ly: -0.2, a: 0.52, s: 0.5 },
-    { lx: 0.3, ly: -0.36, a: 0.46, s: 0.44 },
-    { lx: 0.2, ly: 0.4, a: 0.5, s: 0.48 },
-    { lx: -0.24, ly: 0.3, a: 0.4, s: 0.42 },
-    { lx: 0.04, ly: -0.04, a: 0.22, s: 0.65 },
+    { lx: -0.5, ly: -0.22, a: 0.78, s: 0.24 },
+    { lx: 0.28, ly: -0.48, a: 0.7, s: 0.22 },
+    { lx: 0.5, ly: 0.18, a: 0.76, s: 0.26 },
+    { lx: 0.18, ly: 0.5, a: 0.64, s: 0.24 },
+    { lx: -0.32, ly: 0.48, a: 0.72, s: 0.25 },
+    { lx: -0.55, ly: 0.18, a: 0.54, s: 0.2 },
+    { lx: 0.55, ly: -0.2, a: 0.5, s: 0.18 },
+    { lx: -0.05, ly: -0.55, a: 0.48, s: 0.2 },
+    // Secondary ridge knobs (rolling country, not just L/R split-dome)
+    { lx: -0.28, ly: 0.05, a: 0.42, s: 0.18 },
+    { lx: 0.32, ly: 0.22, a: 0.4, s: 0.17 },
+  ]
+  // Valleys / saddles between lobes (clear lows at Fit)
+  const valleys = [
+    { lx: 0.05, ly: 0.12, a: 0.3, s: 0.36 },
+    { lx: -0.22, ly: -0.05, a: 0.22, s: 0.28 },
+    { lx: 0.28, ly: -0.08, a: 0.2, s: 0.26 },
+    { lx: -0.08, ly: 0.35, a: 0.18, s: 0.24 },
   ]
 
   for (let y = 0; y < size; y++) {
@@ -98,51 +111,78 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
       const dy = (y - cy) / maxR
       const r = Math.sqrt(dx * dx + dy * dy)
 
-      // Soft island mask — plump body, irregular feathered rim
+      // Flat-ish interior mask — rim only (avoids radial multiply-dome)
       const rimWarp =
-        (fbm(x * 0.09 + 1.7, y * 0.09, noiseSeed + 44) - 0.5) * 0.12
+        (fbm(x * 0.09 + 1.7, y * 0.09, noiseSeed + 44) - 0.5) * 0.1
       const rr = r + rimWarp
-      const island = Math.max(0, 1 - Math.pow(Math.min(1.05, rr), 1.35))
-      const mask = Math.pow(island, 0.55)
+      // Near-1 across interior; soft fall only past ~0.72
+      let mask = 1
+      if (rr > 0.72) {
+        mask = smoothstep((1.02 - rr) / 0.3)
+      }
+      if (rr > 1.02) mask = 0
 
-      // Plateau floor + rolling lobes (additive hills, not multiply-dome)
-      const plateau = 0.34 + fbm(x * 0.04, y * 0.04, noiseSeed) * 0.1
+      // Low plateau floor so lobes + valleys dominate the silhouette
+      const plateau = 0.18 + fbm(x * 0.035, y * 0.035, noiseSeed) * 0.07
       let hills = 0
       for (let li = 0; li < lobes.length; li++) {
         const L = lobes[li]!
         const ox = dx - L.lx
         const oy = dy - L.ly
         const d2 = (ox * ox + oy * oy) / (L.s * L.s)
-        hills += L.a * Math.exp(-d2 * 1.65)
+        hills += L.a * Math.exp(-d2 * 2.35)
       }
-      // Broad undulation so valleys sit between lobes
+      let dips = 0
+      for (let vi = 0; vi < valleys.length; vi++) {
+        const V = valleys[vi]!
+        const ox = dx - V.lx
+        const oy = dy - V.ly
+        const d2 = (ox * ox + oy * oy) / (V.s * V.s)
+        dips += V.a * Math.exp(-d2 * 1.7)
+      }
+      // Broad rolling undulation (centered so lows go down)
       const und =
-        (fbm(x * 0.07 + 2.2, y * 0.07, noiseSeed + 5) - 0.42) * 0.42 +
-        (fbm(x * 0.14, y * 0.14, noiseSeed + 17) - 0.5) * 0.14
-      const meso = (fbm(x * 0.22, y * 0.22, noiseSeed + 31) - 0.5) * 0.06
+        (fbm(x * 0.06 + 2.2, y * 0.06, noiseSeed + 5) - 0.5) * 0.48 +
+        (fbm(x * 0.12, y * 0.12, noiseSeed + 17) - 0.5) * 0.2
+      const meso = (fbm(x * 0.26, y * 0.26, noiseSeed + 31) - 0.5) * 0.09
+      // Soft ridge along stream-perpendicular so banks rise into hills
+      const along = (dx + dy) * 0.55
+      const cross = (dx - dy) * 0.48
+      const bankRidge =
+        Math.abs(cross) > 0.08
+          ? Math.exp(-Math.pow((Math.abs(cross) - 0.22) / 0.18, 2)) * 0.12 *
+            (0.5 + 0.5 * fbm(along * 3.1, 0.4, noiseSeed + 77))
+          : 0
 
-      let h = (plateau + hills + und + meso) * mask
+      let h = (plateau + hills - dips + und + meso + bankRidge) * mask
 
-      // Winding stream valley — living bank ribbon, not a crater wet bowl
+      // Winding stream valley — low path between lobes; never notch the loaf rim
       const sd = streamDist(x, y, size, noiseSeed)
-      const bank = 4.2
-      if (sd < bank && r < 0.9) {
+      const bank = 4.8
+      if (sd < bank && r < 0.78) {
         const carve =
-          Math.pow(1 - sd / bank, 1.25) * (0.6 + 0.4 * (1 - smoothstep(r / 0.9)))
-        h -= carve * 0.38
+          Math.pow(1 - sd / bank, 1.15) * (0.75 + 0.25 * (1 - smoothstep(r / 0.78)))
+        // Strong fade near rim — loaf crust stays continuous
+        const rimKeep = r > 0.55 ? Math.pow(smoothstep((0.78 - r) / 0.23), 1.4) : 1
+        h -= carve * 0.52 * rimKeep
       }
 
       h = Math.max(0, Math.min(1.08, h))
       if (rr > 1.02) h = 0
-      else if (rr > 0.82) h *= smoothstep((1.02 - rr) / 0.2)
+      else if (rr > 0.86) h *= smoothstep((1.02 - rr) / 0.16)
+      // Guarantee land floor on island body (closes stream exit notches)
+      if (mask > 0.25 && rr <= 0.98) {
+        const floor = r > 0.6 ? 0.1 + (r - 0.6) * 0.12 : 0.045
+        if (h < floor) h = floor * (0.55 + 0.45 * mask)
+      }
 
       heights[y * size + x] = h
     }
   }
 
-  // Light blur — keep relief; allow readable slopes (not pancake clamp)
+  // Very light blur — preserve multi-hill relief (do not pancake)
   const tmp = new Float32Array(heights)
-  const maxSlope = 0.22
+  const maxSlope = 0.4
   for (let pass = 0; pass < 1; pass++) {
     for (let y = 1; y < size - 1; y++) {
       for (let x = 1; x < size - 1; x++) {
@@ -155,14 +195,14 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
           heights[i] = 0
           continue
         }
-        const rim = r > 0.72 ? smoothstep((r - 0.72) / 0.26) : 0
+        const rim = r > 0.78 ? smoothstep((r - 0.78) / 0.22) : 0
         const s =
-          tmp[i]! * (5 - rim) +
+          tmp[i]! * (6 - rim) +
           tmp[i - 1]! +
           tmp[i + 1]! +
           tmp[i - size]! +
           tmp[i + size]!
-        const w = 9 - rim
+        const w = 10 - rim
         let h = s / w
         for (const n of [tmp[i - 1]!, tmp[i + 1]!, tmp[i - size]!, tmp[i + size]!]) {
           if (n <= 0.001) continue
