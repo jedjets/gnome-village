@@ -1,5 +1,6 @@
 /**
  * QA gate: Raise/Lower must change packed height sum/max.
+ * Mirrors src/world/isleGrid.ts + src/sim/terrainEdit.ts (Slice Zero 0.5).
  * Run from repo root: node scripts/verify-sculpt.mjs
  */
 
@@ -45,27 +46,47 @@ function createIsle(seed = 0x6e0f1e) {
     for (let x = 0; x < SIZE; x++) {
       const dx = (x - cx) / maxR, dy = (y - cy) / maxR
       const r = Math.sqrt(dx * dx + dy * dy)
-      const island = Math.max(0, 1 - Math.pow(Math.min(1, r), 1.45))
-      const mound = Math.pow(island, 0.72)
-      const macro = fbm(x * 0.04, y * 0.04, seed) * 0.62 + fbm(x * 0.085 + 4, y * 0.085, seed + 3) * 0.35
-      const meso = fbm(x * 0.15, y * 0.15, seed + 11) * 0.22
-      let h = mound * (0.38 + macro * 0.55 + meso * 0.85)
-      if (r > 0.48 && r < 0.98) {
-        const t0 = smoothstep((r - 0.48) / 0.2)
-        const t1 = smoothstep((r - 0.66) / 0.16)
-        const t2 = smoothstep((r - 0.8) / 0.12)
-        h -= t0 * 0.05 + t1 * 0.07 + t2 * 0.1
+      const island = Math.max(0, 1 - Math.pow(Math.min(1, r), 1.35))
+      const mound = Math.pow(island, 0.48)
+      const macro = fbm(x * 0.04, y * 0.04, seed) * 0.45 + fbm(x * 0.085 + 4, y * 0.085, seed + 3) * 0.25
+      const meso = fbm(x * 0.13, y * 0.13, seed + 11) * 0.1
+      let h = mound * (0.82 + macro * 0.38 + meso * 0.22)
+      if (r > 0.42) {
+        const shoulder = smoothstep((r - 0.42) / 0.5)
+        h *= 1 - shoulder * 0.38
       }
       const sd = streamDist(x, y, SIZE, seed)
-      if (sd < 4 && r < 0.86) {
-        const carve = Math.pow(1 - sd / 4, 1.15) * (1 - smoothstep(r / 0.86))
-        h -= carve * 0.72
+      if (sd < 4.2 && r < 0.82) {
+        const carve = Math.pow(1 - sd / 4.2, 1.2) * (1 - smoothstep(r / 0.82))
+        h -= carve * 0.38
       }
-      h = Math.max(0, Math.min(0.72, h))
+      h = Math.max(0, Math.min(0.97, h))
       if (r > 1) h = 0
-      else if (r > 0.92) h *= smoothstep((1 - r) / 0.08)
+      else if (r > 0.82) h *= smoothstep((1 - r) / 0.18)
       heights[y * SIZE + x] = h
     }
+  }
+  const tmp = new Float32Array(heights)
+  const maxSlope = 0.16
+  for (let pass = 0; pass < 2; pass++) {
+    for (let y = 1; y < SIZE - 1; y++) {
+      for (let x = 1; x < SIZE - 1; x++) {
+        const dx = (x - cx) / maxR, dy = (y - cy) / maxR
+        const r = Math.sqrt(dx * dx + dy * dy)
+        const i = y * SIZE + x
+        if (tmp[i] <= 0.001) { heights[i] = 0; continue }
+        const rim = r > 0.65 ? smoothstep((r - 0.65) / 0.3) : 0
+        let s = tmp[i] * (5 - rim * 1.2) + tmp[i - 1] + tmp[i + 1] + tmp[i - SIZE] + tmp[i + SIZE]
+        let h = s / (9 - rim * 1.2)
+        for (const n of [tmp[i - 1], tmp[i + 1], tmp[i - SIZE], tmp[i + SIZE]]) {
+          if (n <= 0.001) continue
+          if (h - n > maxSlope) h = n + maxSlope
+          if (n - h > maxSlope) h = n - maxSlope
+        }
+        heights[i] = Math.max(0, Math.min(0.97, h))
+      }
+    }
+    tmp.set(heights)
   }
   return heights
 }
@@ -80,18 +101,19 @@ function stats(heights) {
   return { sum, max }
 }
 
-function paint(heights, gx, gy, dir, radius = 6.5, strength = 0.145) {
+function paint(heights, gx, gy, dir, radius = 10.5, strength = 0.28) {
   const r2 = radius * radius
   let changed = false
   for (let y = Math.max(0, Math.floor(gy - radius)); y <= Math.min(SIZE - 1, Math.ceil(gy + radius)); y++) {
     for (let x = Math.max(0, Math.floor(gx - radius)); x <= Math.min(SIZE - 1, Math.ceil(gx + radius)); x++) {
       const d2 = (x - gx) ** 2 + (y - gy) ** 2
       if (d2 > r2) continue
-      const falloff = 1 - Math.sqrt(d2) / radius
-      const soft = falloff * falloff * (0.35 + 0.65 * falloff)
+      const t = 1 - Math.sqrt(d2) / radius
+      const s = t * t * (3 - 2 * t)
+      const soft = s * s
       const before = heights[y * SIZE + x]
       if (before <= 0.001 && dir > 0) continue
-      const next = Math.max(0, Math.min(1, before + dir * strength * soft))
+      const next = Math.max(0, Math.min(1.25, before + dir * strength * soft))
       if (Math.abs(next - before) < 1e-7) continue
       heights[y * SIZE + x] = next
       changed = true
@@ -102,7 +124,6 @@ function paint(heights, gx, gy, dir, radius = 6.5, strength = 0.145) {
 
 const h = createIsle(0x6e0f1e)
 const before = stats(h)
-// crown
 let bx = 0, by = 0, bh = 0
 for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
   const v = h[y * SIZE + x]
@@ -111,7 +132,7 @@ for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
 console.log('crown', { bx, by, bh: +bh.toFixed(3) }, 'before', before)
 
 let any = false
-for (let i = 0; i < 10; i++) any = paint(h, bx, by, 1) || any
+for (let i = 0; i < 8; i++) any = paint(h, bx, by, 1) || any
 const afterRaise = stats(h)
 console.log('afterRaise', afterRaise, 'dSum', afterRaise.sum - before.sum, 'dMax', afterRaise.max - before.max)
 
@@ -121,6 +142,27 @@ if (!any || afterRaise.sum <= before.sum) {
 }
 if (afterRaise.max <= before.max && before.max < 250) {
   console.error('FAIL: Raise did not increase max (and had headroom)')
+  process.exit(1)
+}
+
+// Peak height delta — readable Raise (packed 0–255 and float)
+let ah = 0
+for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
+  const v = h[y * SIZE + x]
+  if (v > ah) ah = v
+}
+const dPeak = ah - bh
+console.log('peakDelta', { before: +bh.toFixed(3), after: +ah.toFixed(3), dPeak: +dPeak.toFixed(3) })
+// At Fit zoom ~0.25, Δh≥0.12 with outline boost ≈ ≥6 CSS px crest lift
+if (dPeak < 0.18) {
+  console.error('FAIL: Raise peak delta too small for readable silhouette', dPeak)
+  process.exit(1)
+}
+// Approx Fit CSS px: Δh * ~160 world * zoom0.25 ≈ Δh * 40
+const approxCss = dPeak * 40
+console.log('approxCrestCssPx', +approxCss.toFixed(1))
+if (approxCss < 6) {
+  console.error('FAIL: approx crest lift < 6 CSS px', approxCss)
   process.exit(1)
 }
 
