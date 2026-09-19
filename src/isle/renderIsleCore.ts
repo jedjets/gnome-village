@@ -3,8 +3,8 @@ import { sampleHeight, streamDist, WATER_LEVEL } from '../world/isleGrid'
 import type { CameraState } from '../world/fit'
 
 export const CELL = 18
-/** Gate: keep in 48–70. Soft loaf relief — not skyscraper. */
-export const HEIGHT_SCALE = 68
+/** Gate: soft loaf 80–110. Readable rolling relief at Fit — not needles. */
+export const HEIGHT_SCALE = 108
 /** Visible earth loaf depth (world px before zoom). Soft ribbon. */
 export const LOAF_DEPTH = 92
 export const STREAM_HALF = 3.4
@@ -174,14 +174,13 @@ export function ensureFields(hf: Heightfield): {
           const nearBank = sdN < STREAM_HALF * 2.2 && h < 0.4
           let c: [number, number, number]
           if (nearBank) {
-            // Wide shore cushion hues so water AA never samples dark turf → teal cut
+            // Soft damp hint only — soft wet mask owns beige bank (no mesh stair)
             const dampT = Math.min(1, Math.max(0, 1 - sdN / (STREAM_HALF * 2.2)))
-            const shoreMix = Math.min(1, dampT * 0.85 + (h < 0.22 ? 0.25 : 0))
             const base =
               h < 0.28
-                ? lerp3(COL_SHORE, COL_SAND, Math.min(1, (0.28 - h) / 0.14))
+                ? lerp3(COL_MOSS, COL_LIT, h / 0.28)
                 : lerp3(COL_MOSS, COL_LIT, Math.min(1, (h - 0.28) / 0.22))
-            c = lerp3(base, COL_SHORE, shoreMix * 0.7)
+            c = lerp3(base, COL_SHORE, dampT * 0.22)
           } else if (h < 0.22) {
             c = lerp3(COL_DEEP, COL_MOSS, h / 0.22)
           } else if (h < 0.42) {

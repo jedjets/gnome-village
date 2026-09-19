@@ -2,15 +2,15 @@
 
 Programmer will glance + ship URL. Metrics only.
 
-## What changed (0.4 rolling + feather)
-- **Rolling relief:** flatter interior mask (no radial multiply-dome); separated asymmetric lobes + valley dips + stream low path; stronger valley AO. HEIGHT_SCALE stays loaf (68).
-- **Feathered banks:** wide shore↔water midtone cushion + inset alpha ladder + overpaint strokes; no dark shore stroke; interior depth sheet deeply inset + light shallow hues. Upsample×3 + blur×4 wet field.
-- Loaf rim floor so stream does not notch the crust silhouette.
+## What changed (0.5 height-displaced outline + soft water mask)
+- **Rolling silhouette:** `buildSilhouette` uses max-along-ray heights, remapped + silhouette-only Y boost so crest↔valley moves the green outline (not a flat disc rim). HEIGHT_SCALE = 108 (loaf band).
+- **Soft water banks:** MS→Chaikin polygon shore removed. Cached wet-mask stamps + **CSS-pixel** `ctx.filter` blur (zoom-safe). Mesh shore tint removed so cell quads don’t own beige stairs.
+- Keep: continuous turf, loaf sides, Raise live, Fit ~65–75%, no props.
 
 ## Headless checks
 - `npm run build` PASS
 - `node scripts/verify-sculpt.mjs` PASS — peakDelta ≥0.18
-- Local stills: `/workspace/screenshots/softiso-04-ingame.png`, `softiso-04-raise.png` (no push)
-- Pixel vs softiso-03: dark-teal bank (R&lt;40 near water) ~698 → **0**; water-edge grad mean ~32 → ~9
+- Local stills: `/workspace/screenshots/softiso-05-ingame.png`, `softiso-05-raise.png` (no push)
+- Pixel vs softiso-04 (Fit 390 dpr2): top-curve trend residual span ~15.5 → **~39.6 CSS px**; water-edge meanGrad ~19.6 → **~4.4**, p90 ~45.7 → **~5.3**
 
 ## Do not push / Pages — Programmer glances then ships. No PASS claim.

@@ -1,36 +1,69 @@
 import type { Heightfield } from '../world/isleGrid'
 import { sampleHeight } from '../world/isleGrid'
-import { gridToIso } from './renderIsleCore'
+import { HEIGHT_SCALE, gridToIso } from './renderIsleCore'
 
 export type Pt = { x: number; y: number; h: number; gx: number; gy: number }
 
-/** Land silhouette for soft loaf sides (radial rim walk + Chaikin). */
-export function buildSilhouette(hf: Heightfield, cx: number, cy: number, n = 96): Pt[] {
-  const maxR = Math.min(cx, cy) * 1.05
+/**
+ * Height-displaced soft-iso land outline.
+ * Footprint on land rim; silhouette height exaggerated from max-along-ray so
+ * crest↔valley reads ≥25 CSS px at Fit — ridges push the green outline up.
+ */
+export function buildSilhouette(hf: Heightfield, cx: number, cy: number, n = 144): Pt[] {
+  const maxR = Math.min(cx, cy) * 1.08
   const pts: Pt[] = []
   const ang0 = Math.PI * 0.5
+  const step = 0.22
+
+  // First pass: gather rim + maxH
+  type Raw = { dx: number; dy: number; rimR: number; maxH: number }
+  const raw: Raw[] = []
   for (let i = 0; i < n; i++) {
     const ang = ang0 + (i / n) * Math.PI * 2
     const dx = Math.cos(ang)
     const dy = Math.sin(ang)
     let lo = 0
     let hi = maxR
-    for (let k = 0; k < 14; k++) {
+    for (let k = 0; k < 16; k++) {
       const mid = (lo + hi) * 0.5
       if (sampleHeight(hf, cx + dx * mid, cy + dy * mid) > 0.04) lo = mid
       else hi = mid
     }
-    const r = lo
-    const pad = 0.35
-    const gxRim = cx + dx * (r + pad)
-    const gyRim = cy + dy * (r + pad)
-    const gxIn = cx + dx * Math.max(0.5, r * 0.92)
-    const gyIn = cy + dy * Math.max(0.5, r * 0.92)
-    const ht = Math.max(0.06, sampleHeight(hf, gxIn, gyIn))
-    const iso = gridToIso(gxRim - cx, gyRim - cy, ht)
-    pts.push({ x: iso.x, y: iso.y, h: ht, gx: gxRim, gy: gyRim })
+    const rimR = lo
+    if (rimR < 0.5) continue
+    let maxH = 0
+    for (let r = Math.max(0.4, rimR * 0.28); r <= rimR; r += step) {
+      const ht = sampleHeight(hf, cx + dx * r, cy + dy * r)
+      if (ht > maxH) maxH = ht
+    }
+    raw.push({ dx, dy, rimR, maxH })
   }
-  return chaikinClosed(pts, 2)
+
+  // Normalize outline heights so crest↔valley spans ~full loaf relief
+  let hLo = Infinity
+  let hHi = -Infinity
+  for (const r of raw) {
+    hLo = Math.min(hLo, r.maxH)
+    hHi = Math.max(hHi, r.maxH)
+  }
+  const hSpan = Math.max(0.2, hHi - hLo)
+
+  for (const r of raw) {
+    const t = Math.max(0, Math.min(1, (r.maxH - hLo) / hSpan))
+    // Ease toward crests — silhouette Y undulates clearly at Fit
+    const te = t * t * (3 - 2 * t)
+    const hSil = 0.1 + te * 1.0
+    const inset = Math.min(0.1, Math.max(0, (hSil - 0.4) * 0.08))
+    const useR = r.rimR * (1 - inset) + 0.2
+    const gx = cx + r.dx * useR
+    const gy = cy + r.dy * useR
+    const iso = gridToIso(gx - cx, gy - cy, hSil)
+    // Extra silhouette-only Y boost (mesh keeps true heights) — rolling not pancake
+    const meanH = 0.55
+    iso.y -= (hSil - meanH) * HEIGHT_SCALE * 0.45
+    pts.push({ x: iso.x, y: iso.y, h: hSil, gx, gy })
+  }
+  return chaikinClosed(pts, 1)
 }
 
 export function chaikinClosed(pts: Pt[], passes: number): Pt[] {

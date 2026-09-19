@@ -72,7 +72,7 @@ export function streamDist(gx: number, gy: number, size: number, seed: number): 
 /**
  * Soft-iso village land: rolling multi-lobe country + stream in a low path.
  * Shared-vertex relief that *reads* at Fit — NOT a single central dome/pancake.
- * Peak ~0.85–1.05; HEIGHT_SCALE stays loaf (non-skyscraper).
+ * Peak ~0.95–1.18; HEIGHT_SCALE loaf ~80–110 for ≥25 CSS px crest↔valley at Fit.
  */
 export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
   const size = GRID_SIZE
@@ -83,26 +83,26 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
   const cy = (size - 1) * 0.5
   const maxR = Math.min(cx, cy) * 0.92
 
-  // Separated lobes/ridges — asymmetric rolling country (not L/R split-dome)
+  // Separated lobes/ridges — asymmetric rolling country (crests near rim for outline)
   const lobes = [
-    { lx: -0.5, ly: -0.22, a: 0.78, s: 0.24 },
-    { lx: 0.28, ly: -0.48, a: 0.7, s: 0.22 },
-    { lx: 0.5, ly: 0.18, a: 0.76, s: 0.26 },
-    { lx: 0.18, ly: 0.5, a: 0.64, s: 0.24 },
-    { lx: -0.32, ly: 0.48, a: 0.72, s: 0.25 },
-    { lx: -0.55, ly: 0.18, a: 0.54, s: 0.2 },
-    { lx: 0.55, ly: -0.2, a: 0.5, s: 0.18 },
-    { lx: -0.05, ly: -0.55, a: 0.48, s: 0.2 },
+    { lx: -0.52, ly: -0.24, a: 0.88, s: 0.26 },
+    { lx: 0.3, ly: -0.52, a: 0.82, s: 0.24 },
+    { lx: 0.54, ly: 0.2, a: 0.86, s: 0.28 },
+    { lx: 0.2, ly: 0.54, a: 0.74, s: 0.26 },
+    { lx: -0.36, ly: 0.52, a: 0.8, s: 0.27 },
+    { lx: -0.58, ly: 0.16, a: 0.62, s: 0.22 },
+    { lx: 0.58, ly: -0.22, a: 0.58, s: 0.2 },
+    { lx: -0.06, ly: -0.58, a: 0.56, s: 0.22 },
     // Secondary ridge knobs (rolling country, not just L/R split-dome)
-    { lx: -0.28, ly: 0.05, a: 0.42, s: 0.18 },
-    { lx: 0.32, ly: 0.22, a: 0.4, s: 0.17 },
+    { lx: -0.3, ly: 0.04, a: 0.48, s: 0.19 },
+    { lx: 0.34, ly: 0.24, a: 0.46, s: 0.18 },
   ]
-  // Valleys / saddles between lobes (clear lows at Fit)
+  // Valleys / saddles between lobes (clear lows at Fit — ≥25 CSS px vs crests)
   const valleys = [
-    { lx: 0.05, ly: 0.12, a: 0.3, s: 0.36 },
-    { lx: -0.22, ly: -0.05, a: 0.22, s: 0.28 },
-    { lx: 0.28, ly: -0.08, a: 0.2, s: 0.26 },
-    { lx: -0.08, ly: 0.35, a: 0.18, s: 0.24 },
+    { lx: 0.05, ly: 0.12, a: 0.42, s: 0.38 },
+    { lx: -0.22, ly: -0.05, a: 0.32, s: 0.3 },
+    { lx: 0.28, ly: -0.08, a: 0.3, s: 0.28 },
+    { lx: -0.08, ly: 0.35, a: 0.28, s: 0.26 },
   ]
 
   for (let y = 0; y < size; y++) {
@@ -123,14 +123,14 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
       if (rr > 1.02) mask = 0
 
       // Low plateau floor so lobes + valleys dominate the silhouette
-      const plateau = 0.18 + fbm(x * 0.035, y * 0.035, noiseSeed) * 0.07
+      const plateau = 0.12 + fbm(x * 0.035, y * 0.035, noiseSeed) * 0.06
       let hills = 0
       for (let li = 0; li < lobes.length; li++) {
         const L = lobes[li]!
         const ox = dx - L.lx
         const oy = dy - L.ly
         const d2 = (ox * ox + oy * oy) / (L.s * L.s)
-        hills += L.a * Math.exp(-d2 * 2.35)
+        hills += L.a * Math.exp(-d2 * 2.2)
       }
       let dips = 0
       for (let vi = 0; vi < valleys.length; vi++) {
@@ -138,42 +138,42 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
         const ox = dx - V.lx
         const oy = dy - V.ly
         const d2 = (ox * ox + oy * oy) / (V.s * V.s)
-        dips += V.a * Math.exp(-d2 * 1.7)
+        dips += V.a * Math.exp(-d2 * 1.55)
       }
       // Broad rolling undulation (centered so lows go down)
       const und =
-        (fbm(x * 0.06 + 2.2, y * 0.06, noiseSeed + 5) - 0.5) * 0.48 +
-        (fbm(x * 0.12, y * 0.12, noiseSeed + 17) - 0.5) * 0.2
-      const meso = (fbm(x * 0.26, y * 0.26, noiseSeed + 31) - 0.5) * 0.09
+        (fbm(x * 0.06 + 2.2, y * 0.06, noiseSeed + 5) - 0.5) * 0.58 +
+        (fbm(x * 0.12, y * 0.12, noiseSeed + 17) - 0.5) * 0.26
+      const meso = (fbm(x * 0.26, y * 0.26, noiseSeed + 31) - 0.5) * 0.12
       // Soft ridge along stream-perpendicular so banks rise into hills
       const along = (dx + dy) * 0.55
       const cross = (dx - dy) * 0.48
       const bankRidge =
         Math.abs(cross) > 0.08
-          ? Math.exp(-Math.pow((Math.abs(cross) - 0.22) / 0.18, 2)) * 0.12 *
+          ? Math.exp(-Math.pow((Math.abs(cross) - 0.22) / 0.18, 2)) * 0.18 *
             (0.5 + 0.5 * fbm(along * 3.1, 0.4, noiseSeed + 77))
           : 0
 
       let h = (plateau + hills - dips + und + meso + bankRidge) * mask
 
-      // Winding stream valley — low path between lobes; never notch the loaf rim
+      // Winding stream valley — deep low path between lobes; never notch the loaf rim
       const sd = streamDist(x, y, size, noiseSeed)
-      const bank = 4.8
+      const bank = 5.2
       if (sd < bank && r < 0.78) {
         const carve =
-          Math.pow(1 - sd / bank, 1.15) * (0.75 + 0.25 * (1 - smoothstep(r / 0.78)))
+          Math.pow(1 - sd / bank, 1.1) * (0.8 + 0.2 * (1 - smoothstep(r / 0.78)))
         // Strong fade near rim — loaf crust stays continuous
         const rimKeep = r > 0.55 ? Math.pow(smoothstep((0.78 - r) / 0.23), 1.4) : 1
-        h -= carve * 0.52 * rimKeep
+        h -= carve * 0.68 * rimKeep
       }
 
-      h = Math.max(0, Math.min(1.08, h))
+      h = Math.max(0, Math.min(1.05, h))
       if (rr > 1.02) h = 0
       else if (rr > 0.86) h *= smoothstep((1.02 - rr) / 0.16)
-      // Guarantee land floor on island body (closes stream exit notches)
+      // Soft land floor — allow valley relief near rim to read in silhouette
       if (mask > 0.25 && rr <= 0.98) {
-        const floor = r > 0.6 ? 0.1 + (r - 0.6) * 0.12 : 0.045
-        if (h < floor) h = floor * (0.55 + 0.45 * mask)
+        const floor = r > 0.7 ? 0.08 + (r - 0.7) * 0.1 : 0.03
+        if (h < floor) h = floor * (0.5 + 0.5 * mask)
       }
 
       heights[y * size + x] = h
@@ -209,7 +209,7 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
           if (h - n > maxSlope) h = n + maxSlope
           if (n - h > maxSlope) h = n - maxSlope
         }
-        heights[i] = Math.max(0, Math.min(1.08, h))
+        heights[i] = Math.max(0, Math.min(1.05, h))
       }
     }
     tmp.set(heights)

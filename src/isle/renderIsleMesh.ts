@@ -3,7 +3,6 @@ import {
   gridToIso,
   lerp3,
   rgba,
-  COL_SHORE,
 } from './renderIsleCore'
 
 /**
@@ -25,7 +24,7 @@ export function drawSoftIsoMesh(
   cy: number,
 ): void {
   const size = nv - 1
-  const WET_SKIP = 0.55
+  const WET_SKIP = 0.88
   /** Absolute outward push in world px — must beat Canvas AA gaps. */
   const EX = 2.8
   type Face = { x: number; y: number }
@@ -89,13 +88,8 @@ export function drawSoftIsoMesh(
     const c10: [number, number, number] = [col[i10 * 3]!, col[i10 * 3 + 1]!, col[i10 * 3 + 2]!]
     const c11: [number, number, number] = [col[i11 * 3]!, col[i11 * 3 + 1]!, col[i11 * 3 + 2]!]
     const c01: [number, number, number] = [col[i01 * 3]!, col[i01 * 3 + 1]!, col[i01 * 3 + 2]!]
-    let rgb = lerp3(lerp3(c00, c10, 0.5), lerp3(c01, c11, 0.5), 0.5)
-
-    const wAvg = (wet[i00]! + wet[i10]! + wet[i11]! + wet[i01]!) * 0.25
-    // Soft shore tint only — never dark damp (reads as hard teal bank cut under water AA)
-    if (wAvg > 0.1) {
-      rgb = lerp3(rgb, COL_SHORE, Math.min(0.55, wAvg * 0.62))
-    }
+    const rgb = lerp3(lerp3(c00, c10, 0.5), lerp3(c01, c11, 0.5), 0.5)
+    // No mesh shore tint — soft wet mask owns beige bank (avoids cell-stair AA)
 
     const shade = (c: [number, number, number], L: number): [number, number, number] => [
       c[0] * L,
