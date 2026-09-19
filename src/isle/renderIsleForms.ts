@@ -44,7 +44,7 @@ export function drawLoafFromSilhouette(ctx: CanvasRenderingContext2D, sil: Pt[])
     maxY = Math.max(maxY, p.y)
   }
   const midX = (minX + maxX) * 0.5
-  const halfW = Math.max(8, (maxX - minX) * 0.5
+  const halfW = Math.max(8, (maxX - minX) * 0.5)
   const scaleX = 1 + 2.15 / halfW
   const top = sil.map((p) => ({
     x: midX + (p.x - midX) * scaleX,
