@@ -20,7 +20,7 @@ export function saveJson(key: string, value: unknown): void {
   try {
     localStorage.setItem(storageKey(key), JSON.stringify(value))
   } catch {
-    // Quota or private mode — ignore for greenfield
+    // Quota or private mode
   }
 }
 
@@ -30,22 +30,4 @@ export function clearKey(key: string): void {
   } catch {
     // ignore
   }
-}
-
-export type VillageSave = {
-  hasEntered: boolean
-  muted: boolean
-}
-
-export const DEFAULT_SAVE: VillageSave = {
-  hasEntered: false,
-  muted: false,
-}
-
-export function loadVillageSave(): VillageSave {
-  return loadJson<VillageSave>('save', DEFAULT_SAVE)
-}
-
-export function saveVillageSave(save: VillageSave): void {
-  saveJson('save', save)
 }

@@ -1,9 +1,10 @@
 /**
- * Minimal procedural Web Audio stub.
- * No sample packs — oscillators only. Safe no-op when AudioContext unavailable.
+ * Procedural Web Audio stub.
+ * Unlock on Begin (user gesture); mute remembered. Silent OK.
  */
 
 let ctx: AudioContext | null = null
+let unlocked = false
 let muted = false
 
 function getCtx(): AudioContext | null {
@@ -19,6 +20,24 @@ function getCtx(): AudioContext | null {
   return ctx
 }
 
+/** Call from Begin / Continue (user gesture) to unlock the audio graph. */
+export async function unlockAudio(): Promise<void> {
+  const audio = getCtx()
+  if (!audio) return
+  try {
+    if (audio.state === 'suspended') {
+      await audio.resume()
+    }
+    unlocked = true
+  } catch {
+    // Autoplay policy — stay locked; silent OK
+  }
+}
+
+export function isAudioUnlocked(): boolean {
+  return unlocked
+}
+
 export function setMuted(next: boolean): void {
   muted = next
 }
@@ -27,9 +46,9 @@ export function isMuted(): boolean {
   return muted
 }
 
-/** Soft blip for UI confirmations (e.g. enter village). */
+/** Soft blip for UI confirmations. No-op if muted or locked. */
 export function playBlip(): void {
-  if (muted) return
+  if (muted || !unlocked) return
   const audio = getCtx()
   if (!audio) return
 

@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Then open the URL Vite prints (usually `http://localhost:5173`).
+Then open the URL Vite prints (usually `http://localhost:5173`). On a phone, use the LAN URL Vite shows, or Chrome DevTools device mode (~390×844).
 
 ## Scripts
 
@@ -22,18 +22,29 @@ Then open the URL Vite prints (usually `http://localhost:5173`).
 | `npm run preview` | Preview the production build |
 | `npm run lint` | Oxlint |
 
+## Slice 1
+
+- Seeded soft-isometric heightfield isle
+- Camera: drag pan, pinch zoom, twist rotate, Fit
+- Tools: Look · Raise · Lower (bottom rail, one scrolling row)
+- Silent save on tab hide (`gnome-village:slice1-v1`)
+- Begin unlocks audio stub; mute remembered
+
 ## Layout
 
 ```
 src/
-  shell/     Intro, HUD, Rail (React chrome)
-  isle/      Canvas 2D loop + procedural draw
+  shell/     Intro, HUD, Rail
+  isle/      Canvas loop + soft-iso render
+  world/     Heightfield + Fit
+  sim/       Tools + terrain brush
+  input/     Pointer bridge + camera gestures
   audio/     Procedural Web Audio stub
-  storage/   localStorage helpers
+  storage/   Slice 1 localStorage
 docs/        Product brief
 ```
 
 ## Notes
 
-- Progress and mute preference are stored under `gnome-village:*` keys in `localStorage`.
-- Designed for narrow phone viewports; safe-area insets respected where available.
+- Slice 1 uses `gnome-village:slice1-v1`. Legacy `gnome-village:save` is ignored (mute may soft-migrate).
+- Designed for narrow phone viewports; `touch-action: none` on the canvas; safe-area insets respected.
