@@ -4,16 +4,17 @@ import type { CameraState } from '../world/fit'
 
 export const CELL = 18
 /** Gate: keep in 48–70. Soft loaf relief — not skyscraper. */
-export const HEIGHT_SCALE = 56
+export const HEIGHT_SCALE = 68
 /** Visible earth loaf depth (world px before zoom). Soft ribbon. */
 export const LOAF_DEPTH = 92
 export const STREAM_HALF = 3.4
 
 export function isleWorldSize(gridSize: number): { w: number; h: number } {
+  // Match measured loaf silhouette width (~grid * CELL * √2 * 0.88)
   const foot = gridSize * CELL * Math.SQRT2 * 0.88
   return {
     w: foot,
-    h: foot * 0.42 + HEIGHT_SCALE * 0.85 + LOAF_DEPTH * 0.75,
+    h: foot * 0.42 + HEIGHT_SCALE * 0.9 + LOAF_DEPTH * 0.75,
   }
 }
 
@@ -203,12 +204,12 @@ export function ensureFields(hf: Heightfield): {
     }
   }
 
-  boxBlurInPlace(light, nv, 3)
+  boxBlurInPlace(light, nv, 2)
   boxBlurInPlace(wet, nv, 2)
   const ch = new Float32Array(nv * nv)
   for (let c = 0; c < 3; c++) {
     for (let i = 0; i < nv * nv; i++) ch[i] = col[i * 3 + c]!
-    boxBlurInPlace(ch, nv, 2)
+    boxBlurInPlace(ch, nv, 4)
     for (let i = 0; i < nv * nv; i++) col[i * 3 + c] = ch[i]!
   }
 

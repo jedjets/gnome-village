@@ -81,10 +81,11 @@ export function IsleCanvas({
       // Soft-iso pick: stay near the click, mild snap to local land (no dome-crown bias).
       const tx = hit.gx
       const ty = hit.gy
-      let bestH = -1
-      let bx = tx
-      let by = ty
-      const R = 3.5
+      let bestScore = -Infinity
+      let found = false
+      let bx = Math.round(tx)
+      let by = Math.round(ty)
+      const R = 5
       const x0 = Math.max(0, Math.floor(tx - R))
       const y0 = Math.max(0, Math.floor(ty - R))
       const x1 = Math.min(size - 1, Math.ceil(tx + R))
@@ -97,14 +98,22 @@ export function IsleCanvas({
           if (d > R) continue
           // Prefer nearer click; slight height preference for readable Raise
           const score = h * 0.15 - d
-          if (score > bestH) {
-            bestH = score
+          if (score > bestScore) {
+            bestScore = score
             bx = x
             by = y
+            found = true
           }
         }
       }
-      if (bestH < 0) return
+      if (!found) {
+        // Fallback: paint at hit if on land
+        const ix = Math.max(0, Math.min(size - 1, Math.round(tx)))
+        const iy = Math.max(0, Math.min(size - 1, Math.round(ty)))
+        if (hf.heights[iy * size + ix]! <= 0.001) return
+        bx = ix
+        by = iy
+      }
       const now = performance.now()
       if (now - lastPaintRef.current < 8) return
       lastPaintRef.current = now

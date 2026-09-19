@@ -92,6 +92,12 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
   pathFromPts(ctx, loafSil, 0)
   ctx.clip()
 
+  // Turf underfill — any residual AA gap shows moss, never sky white
+  ctx.fillStyle = rgba(COL_MOSS, 1)
+  ctx.beginPath()
+  pathFromPts(ctx, loafSil, 0)
+  ctx.fill()
+
   drawSoftIsoMesh(ctx, hf, light, col, wet, vertH, nv, cx, cy)
   drawStreamWater(ctx, hf, wet, vertH, nv, cx, cy, nowMs)
 

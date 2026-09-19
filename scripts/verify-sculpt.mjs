@@ -57,36 +57,52 @@ function createIsle(seed = 0x6e0f1e) {
   const heights = new Float32Array(SIZE * SIZE)
   const cx = (SIZE - 1) * 0.5,
     cy = (SIZE - 1) * 0.5
-  const maxR = Math.min(cx, cy) * 0.9
+  const maxR = Math.min(cx, cy) * 0.92
+  const lobes = [
+    { lx: -0.34, ly: -0.2, a: 0.52, s: 0.5 },
+    { lx: 0.3, ly: -0.36, a: 0.46, s: 0.44 },
+    { lx: 0.2, ly: 0.4, a: 0.5, s: 0.48 },
+    { lx: -0.24, ly: 0.3, a: 0.4, s: 0.42 },
+    { lx: 0.04, ly: -0.04, a: 0.22, s: 0.65 },
+  ]
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
       const dx = (x - cx) / maxR,
         dy = (y - cy) / maxR
       const r = Math.sqrt(dx * dx + dy * dy)
-      const island = Math.max(0, 1 - Math.pow(Math.min(1, r), 1.55))
-      const base = Math.pow(island, 0.72)
-      const macro =
-        fbm(x * 0.055, y * 0.055, seed) * 0.38 +
-        fbm(x * 0.11 + 3.1, y * 0.11, seed + 5) * 0.22
-      const meso = fbm(x * 0.2, y * 0.2, seed + 17) * 0.08
-      const tilt = Math.max(0, -(dx * 0.08 + dy * 0.12))
-      let h = base * (0.42 + macro * 0.55 + meso + tilt)
-      const sd = streamDist(x, y, SIZE, seed)
-      const bank = 3.6
-      if (sd < bank && r < 0.88) {
-        const carve =
-          Math.pow(1 - sd / bank, 1.35) * (0.55 + 0.45 * (1 - smoothstep(r / 0.88)))
-        h -= carve * 0.28
+      const rimWarp = (fbm(x * 0.09 + 1.7, y * 0.09, seed + 44) - 0.5) * 0.12
+      const rr = r + rimWarp
+      const island = Math.max(0, 1 - Math.pow(Math.min(1.05, rr), 1.35))
+      const mask = Math.pow(island, 0.55)
+      const plateau = 0.34 + fbm(x * 0.04, y * 0.04, seed) * 0.1
+      let hills = 0
+      for (const L of lobes) {
+        const ox = dx - L.lx,
+          oy = dy - L.ly
+        const d2 = (ox * ox + oy * oy) / (L.s * L.s)
+        hills += L.a * Math.exp(-d2 * 1.65)
       }
-      h = Math.max(0, Math.min(0.72, h))
-      if (r > 1.0) h = 0
-      else if (r > 0.84) h *= smoothstep((1.0 - r) / 0.16)
+      const und =
+        (fbm(x * 0.07 + 2.2, y * 0.07, seed + 5) - 0.42) * 0.34 +
+        (fbm(x * 0.14, y * 0.14, seed + 17) - 0.5) * 0.14
+      const meso = (fbm(x * 0.22, y * 0.22, seed + 31) - 0.5) * 0.06
+      let h = (plateau + hills + und + meso) * mask
+      const sd = streamDist(x, y, SIZE, seed)
+      const bank = 4.2
+      if (sd < bank && r < 0.9) {
+        const carve =
+          Math.pow(1 - sd / bank, 1.25) * (0.6 + 0.4 * (1 - smoothstep(r / 0.9)))
+        h -= carve * 0.38
+      }
+      h = Math.max(0, Math.min(1.08, h))
+      if (rr > 1.02) h = 0
+      else if (rr > 0.82) h *= smoothstep((1.02 - rr) / 0.2)
       heights[y * SIZE + x] = h
     }
   }
   const tmp = new Float32Array(heights)
-  const maxSlope = 0.12
-  for (let pass = 0; pass < 2; pass++) {
+  const maxSlope = 0.22
+  for (let pass = 0; pass < 1; pass++) {
     for (let y = 1; y < SIZE - 1; y++) {
       for (let x = 1; x < SIZE - 1; x++) {
         const dx = (x - cx) / maxR,
@@ -97,16 +113,16 @@ function createIsle(seed = 0x6e0f1e) {
           heights[i] = 0
           continue
         }
-        const rim = r > 0.7 ? smoothstep((r - 0.7) / 0.28) : 0
+        const rim = r > 0.72 ? smoothstep((r - 0.72) / 0.26) : 0
         let s =
-          tmp[i] * (4 - rim) + tmp[i - 1] + tmp[i + 1] + tmp[i - SIZE] + tmp[i + SIZE]
-        let h = s / (8 - rim)
+          tmp[i] * (5 - rim) + tmp[i - 1] + tmp[i + 1] + tmp[i - SIZE] + tmp[i + SIZE]
+        let h = s / (9 - rim)
         for (const n of [tmp[i - 1], tmp[i + 1], tmp[i - SIZE], tmp[i + SIZE]]) {
           if (n <= 0.001) continue
           if (h - n > maxSlope) h = n + maxSlope
           if (n - h > maxSlope) h = n - maxSlope
         }
-        heights[i] = Math.max(0, Math.min(0.72, h))
+        heights[i] = Math.max(0, Math.min(1.08, h))
       }
     }
     tmp.set(heights)

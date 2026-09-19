@@ -10,6 +10,9 @@ import {
 /**
  * Soft-iso heightfield mesh — shared vertex heights, neighbourhood colour,
  * blurred vertex light, slope gradients. Continuous turf (no diamond lattice).
+ *
+ * Lattice kill: absolute outward fatten (prototype EX≈0.7+) PLUS opaque
+ * inset stroke in the same fill colour so AA never leaves sky hairlines.
  */
 export function drawSoftIsoMesh(
   ctx: CanvasRenderingContext2D,
@@ -24,6 +27,8 @@ export function drawSoftIsoMesh(
 ): void {
   const size = nv - 1
   const WET_SKIP = 0.55
+  /** Absolute outward push in world px — must beat Canvas AA gaps. */
+  const EX = 2.8
   type Face = { x: number; y: number }
   const faces: Face[] = []
   for (let y = 0; y < size; y++) {
@@ -43,6 +48,9 @@ export function drawSoftIsoMesh(
   }
   faces.sort((p, q) => p.x + p.y - (q.x + q.y))
 
+  ctx.lineJoin = 'round'
+  ctx.lineCap = 'round'
+
   for (const f of faces) {
     const { x, y } = f
     const i00 = y * nv + x
@@ -57,11 +65,14 @@ export function drawSoftIsoMesh(
 
     const mx = (p00.x + p10.x + p11.x + p01.x) * 0.25
     const my = (p00.y + p10.y + p11.y + p01.y) * 0.25
+    // Prototype-style absolute fatten: push each corner outward from centroid
     const fatten = (p: { x: number; y: number }) => {
-      const d = Math.max(8, Math.hypot(p.x - mx, p.y - my))
+      const dx = p.x - mx
+      const dy = p.y - my
+      const len = Math.hypot(dx, dy) || 1
       return {
-        x: mx + (p.x - mx) * (1 + 0.55 / d),
-        y: my + (p.y - my) * (1 + 0.55 / d),
+        x: p.x + (dx / len) * EX,
+        y: p.y + (dy / len) * EX,
       }
     }
     const q00 = fatten(p00)
@@ -100,26 +111,13 @@ export function drawSoftIsoMesh(
     ctx.lineTo(q01.x, q01.y)
     ctx.closePath()
 
-    const dL = Math.max(L00, L10, L11, L01) - Math.min(L00, L10, L11, L01)
-    if (dL > 0.045) {
-      let lo = { p: q00, L: L00 }
-      let hi = { p: q00, L: L00 }
-      for (const t of [
-        { p: q00, L: L00 },
-        { p: q10, L: L10 },
-        { p: q11, L: L11 },
-        { p: q01, L: L01 },
-      ]) {
-        if (t.L < lo.L) lo = t
-        if (t.L > hi.L) hi = t
-      }
-      const g = ctx.createLinearGradient(hi.p.x, hi.p.y, lo.p.x, lo.p.y)
-      g.addColorStop(0, rgba(shade(rgb, hi.L), 1))
-      g.addColorStop(1, rgba(shade(rgb, lo.L), 1))
-      ctx.fillStyle = g
-    } else {
-      ctx.fillStyle = rgba(shade(rgb, Lavg), 1)
-    }
+    // Flat fill only — per-quad gradients left diamond seams; light is pre-blurred
+    const fillStr = rgba(shade(rgb, Lavg), 1)
+    ctx.fillStyle = fillStr
     ctx.fill()
+    // Seal AA hairlines with land-coloured stroke (same avg shade)
+    ctx.strokeStyle = fillStr
+    ctx.lineWidth = 3.2
+    ctx.stroke()
   }
 }
