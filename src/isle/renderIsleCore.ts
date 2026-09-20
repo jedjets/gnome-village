@@ -138,11 +138,12 @@ export function ensureFields(hf: Heightfield): {
       const hE = sampleHeight(hf, gx + 1, gy)
       const hW = sampleHeight(hf, gx - 1, gy)
 
-      let L = 0.76 + (hW - hE) * 0.28 + (hN - hS) * 0.2 + hC * 0.14
+      // Very soft slope response — continuity blur owns shade (no Fit diamond facets)
+      let L = 0.88 + (hW - hE) * 0.1 + (hN - hS) * 0.07 + hC * 0.06
       const meanN = (hN + hS + hE + hW) * 0.25
-      L += Math.max(0, hC - meanN) * 0.32
-      L -= Math.max(0, meanN - hC) * 0.42
-      light[y * nv + x] = L
+      L += Math.max(0, hC - meanN) * 0.12
+      L -= Math.max(0, meanN - hC) * 0.16
+      light[y * nv + x] = Math.max(0.72, Math.min(1.08, L))
 
       if (hC <= 0.001) {
         wet[y * nv + x] = 0
@@ -163,11 +164,11 @@ export function ensureFields(hf: Heightfield): {
       let acc1 = 0
       let acc2 = 0
       let wsum = 0
-      for (let dy = -2; dy <= 2; dy++) {
-        for (let dx = -2; dx <= 2; dx++) {
+      for (let dy = -3; dy <= 3; dy++) {
+        for (let dx = -3; dx <= 3; dx++) {
           const dist = Math.hypot(dx, dy)
-          if (dist > 2.2) continue
-          const w = dist < 0.1 ? 4 : 1 / (1 + dist)
+          if (dist > 3.15) continue
+          const w = dist < 0.1 ? 5 : 1 / (1 + dist * 0.85)
           const h = sampleHeight(hf, gx + dx, gy + dy)
           if (h <= 0.001) continue
           const sdN = streamDist(gx + dx, gy + dy, size, seed)
@@ -210,12 +211,13 @@ export function ensureFields(hf: Heightfield): {
     }
   }
 
-  boxBlurInPlace(light, nv, 2)
+  // Extra light blur passes — neighbouring faces share almost all shade
+  boxBlurInPlace(light, nv, 8)
   boxBlurInPlace(wet, nv, 2)
   const ch = new Float32Array(nv * nv)
   for (let c = 0; c < 3; c++) {
     for (let i = 0; i < nv * nv; i++) ch[i] = col[i * 3 + c]!
-    boxBlurInPlace(ch, nv, 4)
+    boxBlurInPlace(ch, nv, 8)
     for (let i = 0; i < nv * nv; i++) col[i * 3 + c] = ch[i]!
   }
 

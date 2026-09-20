@@ -46,15 +46,15 @@ export function computeFit(
 ): CameraState {
   const safeW = Math.max(1, viewW)
   const safeH = Math.max(1, viewH)
-  // Gate: Fit fills ~65–75% of phone width (width-primary)
-  const targetWidth = 0.7
+  // Fuller Fit on tall phones — less empty vertical; still width-primary
+  const aspect = safeH / safeW
+  // Tall phones: fill ~82–88% width so less empty vertical
+  const targetWidth = aspect > 1.85 ? 0.88 : aspect > 1.6 ? 0.8 : 0.74
   const zoomW = (safeW * targetWidth) / Math.max(1, isleWorldW)
-  // Soft height guard only — inflated loaf+moss world.h must not crush to a thumbnail
-  const zoomH = (safeH * 0.92) / Math.max(1, isleWorldH)
-  // Prefer width target; never shrink below 90% of zoomW for height alone
-  const zoom = clampZoom(Math.min(zoomW, Math.max(zoomH, zoomW * 0.9)))
-  // Slight upward bias so the island sits a bit above visual center (HUD/rail)
-  const panY = safeH * 0.02
+  const heightFill = aspect > 1.85 ? 0.72 : 0.86
+  const zoomH = (safeH * heightFill) / Math.max(1, isleWorldH)
+  const zoom = clampZoom(Math.min(zoomW, Math.max(zoomH, zoomW * 0.94)))
+  const panY = safeH * 0.01
   return {
     panX: 0,
     panY,

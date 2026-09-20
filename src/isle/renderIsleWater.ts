@@ -1,70 +1,197 @@
 import type { Heightfield } from '../world/isleGrid'
+import { sampleHeight, streamWobble } from '../world/isleGrid'
 import {
-  boxBlurInPlace,
   gridToIso,
-  heightsSig,
   lerp3,
   rgba,
   WATER_SHALLOW,
   WATER_MID,
   COL_SHORE,
   COL_MOSS,
-  CELL,
+  STREAM_HALF,
 } from './renderIsleCore'
+import type { Pt } from './renderIsleDraw'
+import { chaikinClosed, pathFromPts } from './renderIsleDraw'
 
-const WET_THRESH = 0.48
 const WATER_SURF = 0.12
-const WET_UPSAMPLE = 4
-const WET_BLUR_PASSES = 5
-const WET_SOFT_BAND = 0.26
-
-let _maskCanvas: HTMLCanvasElement | null = null
-let _maskSig = 0
-let _maskMeta: { ox: number; oy: number; worldW: number; worldH: number } | null = null
+const CHAIKIN_PASSES = 8
 
 /**
- * Soft wet-mask stream. Mask stamped in world space; composited with
- * CSS-pixel blur so Fit zoom still kills stair/saw-tooth bank AA.
- * No MS→Chaikin polygon edge owning the shore.
+ * Crafted winding stream ribbon with soft living banks.
+ * Prototype lesson: continuous shoreline craft — NOT Gaussian wet-mask blob,
+ * NOT MS saw-tooth, NOT cyan knife stroke.
+ *
+ * Readable water body (near-opaque core) + beige soft bank band that follows
+ * the winding centerline.
  */
 export function drawStreamWater(
   ctx: CanvasRenderingContext2D,
   hf: Heightfield,
-  wet: Float32Array,
+  _wet: Float32Array,
   vertH: Float32Array,
   nv: number,
   cx: number,
   cy: number,
   nowMs?: number,
 ): void {
-  const size = hf.size
-  const sig = heightsSig(hf)
-  ensureSoftWetMask(sig, wet, vertH, nv, cx, cy, size)
+  const seed = hf.seed
+  const ribbon = buildStreamRibbon(hf, vertH, nv, cx, cy, seed)
+  if (!ribbon || ribbon.length < 8) return
+
+  let loop = densifyClosed(ribbon, 1.2)
+  loop = chaikinClosed(loop, CHAIKIN_PASSES)
+  if (loop.length < 6) return
 
   ctx.save()
-  if (_maskCanvas && _maskMeta) {
-    const { ox, oy, worldW, worldH } = _maskMeta
-    // Blur in CSS pixels (not world) — survives Fit zoom ~0.25
-    ctx.filter = 'blur(7px)'
-    ctx.imageSmoothingEnabled = true
-    ctx.imageSmoothingQuality = 'high'
-    ctx.drawImage(_maskCanvas, ox, oy, worldW, worldH)
-    ctx.filter = 'none'
+  ctx.lineJoin = 'round'
+  ctx.lineCap = 'round'
+
+  // --- Soft living banks: readable beige shore ribbon (craft, not Gaussian flood) ---
+  ctx.beginPath()
+  pathFromPts(ctx, expandClosed(loop, 5.5), 0)
+  ctx.fillStyle = rgba(lerp3(COL_MOSS, COL_SHORE, 0.55), 0.4)
+  ctx.fill()
+
+  // Opaque-ish shore cushion — the crafted bank
+  ctx.beginPath()
+  pathFromPts(ctx, expandClosed(loop, 3.6), 0)
+  ctx.fillStyle = rgba(COL_SHORE, 0.95)
+  ctx.fill()
+
+  ctx.beginPath()
+  pathFromPts(ctx, expandClosed(loop, 2.0), 0)
+  ctx.fillStyle = rgba(lerp3(COL_SHORE, WATER_SHALLOW, 0.35), 0.95)
+  ctx.fill()
+
+  // --- Water body: near-opaque readable core, soft edge owned by banks ---
+  const water = expandClosed(loop, -0.6)
+  const fill = lerp3(WATER_SHALLOW, WATER_MID, 0.28)
+  const edgeLite = lerp3(COL_SHORE, WATER_SHALLOW, 0.42)
+
+  // Soft edge ladder (narrow — keeps ribbon readable, not a pond blob)
+  for (const [inset, a, mix] of [
+    [0.0, 0.7, 0.28],
+    [0.8, 0.85, 0.14],
+    [1.8, 0.95, 0.04],
+    [3.0, 1.0, 0.0],
+  ] as const) {
+    ctx.beginPath()
+    pathFromPts(ctx, expandClosed(water, -inset), 0)
+    ctx.fillStyle = rgba(lerp3(fill, edgeLite, mix), a)
+    ctx.fill()
   }
 
-  // Soft interior wash only (no hard quads near bank)
+  // Soft midtone bank strokes — living edge, never cyan knife / dark teal
+  ctx.beginPath()
+  pathFromPts(ctx, water, 0)
+  for (const [w, a, col] of [
+    [7, 0.22, lerp3(COL_SHORE, WATER_SHALLOW, 0.35)],
+    [4.5, 0.28, lerp3(COL_SHORE, WATER_SHALLOW, 0.5)],
+    [2.5, 0.2, lerp3(fill, COL_SHORE, 0.3)],
+  ] as const) {
+    ctx.strokeStyle = rgba(col, a)
+    ctx.lineWidth = w
+    ctx.stroke()
+  }
+
   if (nowMs != null && Number.isFinite(nowMs)) {
+    let sx = 0
+    let sy = 0
+    for (const p of water) {
+      sx += p.x
+      sy += p.y
+    }
+    const mx = sx / water.length
+    const my = sy / water.length
     const shimmer = 0.025 + 0.014 * Math.sin(nowMs * 0.002)
-    const g = ctx.createRadialGradient(-4, 6, 0, 0, 10, 40)
+    const g = ctx.createRadialGradient(mx - 5, my - 6, 0, mx, my, 28)
     g.addColorStop(0, `rgba(170, 210, 205, ${shimmer})`)
     g.addColorStop(1, 'rgba(170, 210, 205, 0)')
     ctx.fillStyle = g
     ctx.beginPath()
-    ctx.arc(0, 10, 44, 0, Math.PI * 2)
+    pathFromPts(ctx, expandClosed(water, -2.5), 0)
     ctx.fill()
   }
 
   ctx.restore()
+}
+
+/**
+ * Parametric winding ribbon from stream centerline.
+ * Mild mid-island widen (lagoon hint) but stays a ribbon, not a round pond.
+ */
+function buildStreamRibbon(
+  hf: Heightfield,
+  vertH: Float32Array,
+  nv: number,
+  cx: number,
+  cy: number,
+  seed: number,
+): Pt[] | null {
+  const samples: { gx: number; gy: number; half: number; h: number }[] = []
+  const n = 64
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1)
+    const along = -0.78 + t * 1.56
+    const wobble = streamWobble(along, seed)
+    const sum = along / 0.55
+    const diff = wobble / 0.48
+    const nx = (sum + diff) * 0.5
+    const ny = (sum - diff) * 0.5
+    const gx = cx + nx * cx
+    const gy = cy + ny * cy
+    const r = Math.hypot(nx, ny)
+    if (r > 0.76) continue
+    const h = sampleVertH(vertH, nv, gx + 0.5, gy + 0.5)
+    if (h < 0.02) continue
+    if (sampleHeight(hf, gx, gy) < 0.01) continue
+    // Ribbon half-width: modest mid widen, fade at rim
+    const midBoost = Math.exp(-along * along * 3.4) * 0.75
+    const rimFade = r > 0.52 ? Math.max(0, 1 - (r - 0.52) / 0.24) : 1
+    if (rimFade < 0.18) continue
+    const half = (STREAM_HALF * 0.42 + midBoost) * rimFade
+    if (half < 0.55) continue
+    samples.push({ gx, gy, half, h: Math.max(WATER_SURF, Math.min(h, WATER_SURF + 0.06)) })
+  }
+  if (samples.length < 8) return null
+
+  for (let pass = 0; pass < 3; pass++) {
+    const next = samples.map((s) => s.half)
+    for (let i = 1; i < samples.length - 1; i++) {
+      next[i] =
+        samples[i - 1]!.half * 0.25 + samples[i]!.half * 0.5 + samples[i + 1]!.half * 0.25
+    }
+    for (let i = 0; i < samples.length; i++) samples[i]!.half = next[i]!
+  }
+
+  const left: Pt[] = []
+  const right: Pt[] = []
+  for (let i = 0; i < samples.length; i++) {
+    const s = samples[i]!
+    const prev = samples[Math.max(0, i - 1)]!
+    const next = samples[Math.min(samples.length - 1, i + 1)]!
+    let tx = next.gx - prev.gx
+    let ty = next.gy - prev.gy
+    const tl = Math.hypot(tx, ty) || 1
+    tx /= tl
+    ty /= tl
+    const px = -ty
+    const py = tx
+    const hL = Math.max(
+      WATER_SURF,
+      sampleVertH(vertH, nv, s.gx + px * s.half + 0.5, s.gy + py * s.half + 0.5),
+    )
+    const hR = Math.max(
+      WATER_SURF,
+      sampleVertH(vertH, nv, s.gx - px * s.half + 0.5, s.gy - py * s.half + 0.5),
+    )
+    const pL = gridToIso(s.gx + px * s.half - cx, s.gy + py * s.half - cy, Math.min(hL, WATER_SURF + 0.08))
+    const pR = gridToIso(s.gx - px * s.half - cx, s.gy - py * s.half - cy, Math.min(hR, WATER_SURF + 0.08))
+    left.push({ x: pL.x, y: pL.y, h: hL, gx: s.gx, gy: s.gy })
+    right.push({ x: pR.x, y: pR.y, h: hR, gx: s.gx, gy: s.gy })
+  }
+
+  return [...left, ...right.reverse()]
 }
 
 function sampleVertH(vertH: Float32Array, nv: number, gx: number, gy: number): number {
@@ -84,136 +211,66 @@ function sampleVertH(vertH: Float32Array, nv: number, gx: number, gy: number): n
   )
 }
 
-function ensureSoftWetMask(
-  sig: number,
-  wet: Float32Array,
-  vertH: Float32Array,
-  nv: number,
-  cx: number,
-  cy: number,
-  size: number,
-): void {
-  if (_maskCanvas && _maskSig === sig && _maskMeta) return
-
-  const { field: softWet, n: sn } = upsampleBlurWet(wet, nv, WET_UPSAMPLE, WET_BLUR_PASSES)
-  const scale = (nv - 1) / (sn - 1)
-
-  const half = size * CELL * 0.78
-  const pad = 48
-  const worldW = half * 2 + pad * 2
-  const worldH = half * 1.25 + pad * 2
-  const ox = -half - pad
-  const oy = -half * 0.55 - pad
-
-  const scalePx = 1.6
-  const stamp = document.createElement('canvas')
-  stamp.width = Math.max(8, Math.ceil(worldW * scalePx))
-  stamp.height = Math.max(8, Math.ceil(worldH * scalePx))
-  const sctx = stamp.getContext('2d')
-  if (!sctx) return
-  sctx.clearRect(0, 0, stamp.width, stamp.height)
-  sctx.setTransform(scalePx, 0, 0, scalePx, -ox * scalePx, -oy * scalePx)
-
-  const lo = WET_THRESH - WET_SOFT_BAND
-  const hi = WET_THRESH + WET_SOFT_BAND * 1.35
-
-  for (let iy = 0; iy < sn; iy++) {
-    for (let ix = 0; ix < sn; ix++) {
-      const w = softWet[iy * sn + ix]!
-      if (w < lo) continue
-      const gx = ix * scale
-      const gy = iy * scale
-      if (gx < -1 || gy < -1 || gx > size + 1 || gy > size + 1) continue
-      const h = sampleVertH(vertH, nv, gx, gy)
-      if (h < 0.015) continue
-      const p = gridToIso(gx - 0.5 - cx, gy - 0.5 - cy, Math.max(WATER_SURF, h))
-
-      const tShore = smooth01((w - lo) / Math.max(1e-6, WET_THRESH - lo))
-      const tWater = smooth01((w - WET_THRESH) / Math.max(1e-6, hi - WET_THRESH))
-      const towardWater = Math.max(0, Math.min(1, (w - lo) / (hi - lo)))
-
-      // Compact bank discs — ribbon only, not a sand floodplain
-      if (w < WET_THRESH + WET_SOFT_BAND * 0.95) {
-        const bankA = tShore * (1 - tWater * 0.8) * 0.78
-        if (bankA > 0.02) {
-          const col = lerp3(
-            lerp3(COL_SHORE, COL_MOSS, 0.04),
-            lerp3(COL_SHORE, WATER_SHALLOW, 0.55),
-            towardWater * 0.8,
-          )
-          const r = 7.5 + tShore * 9
-          sctx.beginPath()
-          sctx.arc(p.x, p.y, r, 0, Math.PI * 2)
-          sctx.fillStyle = rgba(col, bankA)
-          sctx.fill()
-        }
-      }
-
-      if (w > WET_THRESH - WET_SOFT_BAND * 0.4) {
-        const waterA =
-          Math.pow(
-            Math.max(
-              0,
-              Math.min(1, (w - (WET_THRESH - WET_SOFT_BAND * 0.4)) / (WET_SOFT_BAND * 1.5)),
-            ),
-            1.2,
-          ) * 0.88
-        if (waterA > 0.02) {
-          const depth = Math.min(1, Math.max(0, (w - WET_THRESH) / 0.45))
-          const col = lerp3(
-            lerp3(COL_SHORE, WATER_SHALLOW, 0.65),
-            lerp3(WATER_SHALLOW, WATER_MID, 0.4),
-            depth,
-          )
-          const r = 5.5 + depth * 5 + tWater * 4
-          sctx.beginPath()
-          sctx.arc(p.x, p.y, r, 0, Math.PI * 2)
-          sctx.fillStyle = rgba(col, waterA)
-          sctx.fill()
-        }
-      }
+function densifyClosed(pts: Pt[], maxStep: number): Pt[] {
+  if (pts.length < 3) return pts
+  const out: Pt[] = []
+  const m = pts.length
+  for (let i = 0; i < m; i++) {
+    const a = pts[i]!
+    const b = pts[(i + 1) % m]!
+    out.push(a)
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const len = Math.hypot(dx, dy)
+    if (len <= maxStep) continue
+    const n = Math.ceil(len / maxStep)
+    for (let k = 1; k < n; k++) {
+      const t = k / n
+      out.push({
+        x: a.x + dx * t,
+        y: a.y + dy * t,
+        h: a.h + (b.h - a.h) * t,
+        gx: a.gx + (b.gx - a.gx) * t,
+        gy: a.gy + (b.gy - a.gy) * t,
+      })
     }
   }
-
-  _maskCanvas = stamp
-  _maskSig = sig
-  _maskMeta = { ox, oy, worldW, worldH }
+  return out
 }
 
-function smooth01(t: number): number {
-  const u = Math.max(0, Math.min(1, t))
-  return u * u * (3 - 2 * u)
-}
-
-function upsampleBlurWet(
-  wet: Float32Array,
-  nv: number,
-  factor: number,
-  blurPasses: number,
-): { field: Float32Array; n: number } {
-  const n = (nv - 1) * factor + 1
-  const field = new Float32Array(n * n)
-  for (let y = 0; y < n; y++) {
-    for (let x = 0; x < n; x++) {
-      const fx = x / factor
-      const fy = y / factor
-      const x0 = Math.floor(fx)
-      const y0 = Math.floor(fy)
-      const x1 = Math.min(nv - 1, x0 + 1)
-      const y1 = Math.min(nv - 1, y0 + 1)
-      const tx = fx - x0
-      const ty = fy - y0
-      const v00 = wet[y0 * nv + x0]!
-      const v10 = wet[y0 * nv + x1]!
-      const v01 = wet[y1 * nv + x0]!
-      const v11 = wet[y1 * nv + x1]!
-      field[y * n + x] =
-        v00 * (1 - tx) * (1 - ty) +
-        v10 * tx * (1 - ty) +
-        v01 * (1 - tx) * ty +
-        v11 * tx * ty
-    }
+function expandClosed(pts: Pt[], amount: number): Pt[] {
+  if (pts.length < 3 || Math.abs(amount) < 1e-6) return pts
+  const m = pts.length
+  let area = 0
+  for (let i = 0; i < m; i++) {
+    const a = pts[i]!
+    const b = pts[(i + 1) % m]!
+    area += a.x * b.y - b.x * a.y
   }
-  boxBlurInPlace(field, n, blurPasses)
-  return { field, n }
+  const sign = area >= 0 ? 1 : -1
+  const out: Pt[] = []
+  for (let i = 0; i < m; i++) {
+    const prev = pts[(i - 1 + m) % m]!
+    const cur = pts[i]!
+    const next = pts[(i + 1) % m]!
+    const e1x = cur.x - prev.x
+    const e1y = cur.y - prev.y
+    const e2x = next.x - cur.x
+    const e2y = next.y - cur.y
+    const l1 = Math.hypot(e1x, e1y) || 1
+    const l2 = Math.hypot(e2x, e2y) || 1
+    let nx = sign * (e1y / l1 + e2y / l2)
+    let ny = sign * -(e1x / l1 + e2x / l2)
+    const nl = Math.hypot(nx, ny) || 1
+    nx /= nl
+    ny /= nl
+    out.push({
+      x: cur.x + nx * amount,
+      y: cur.y + ny * amount,
+      h: cur.h,
+      gx: cur.gx,
+      gy: cur.gy,
+    })
+  }
+  return out
 }
