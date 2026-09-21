@@ -1,20 +1,22 @@
 import type { Heightfield } from '../world/isleGrid'
-import { sampleHeight, streamDist, WATER_LEVEL } from '../world/isleGrid'
+import { sampleHeight, streamDist, meltChannelDist, WATER_LEVEL } from '../world/isleGrid'
 import type { CameraState } from '../world/fit'
 
 export const CELL = 18
-/** Gate: soft loaf 80–110. Readable rolling relief at Fit — not needles. */
-export const HEIGHT_SCALE = 92
-/** Visible earth loaf depth (world px before zoom). Soft ribbon. */
-export const LOAF_DEPTH = 88
-export const STREAM_HALF = 2.6
+/** Soft-iso relief — flatter oval-in-sea (0.7.3), not thick floating loaf. */
+export const HEIGHT_SCALE = 46
+/** Very thin earth skirt — land sits IN sea (old-HTML family). */
+export const LOAF_DEPTH = 12
+/** Narrow meltwater half-width (grid units) — carved channels, not fat ribbon. */
+export const STREAM_HALF = 1.35
 
 export function isleWorldSize(gridSize: number): { w: number; h: number } {
   // Match measured loaf silhouette width (~grid * CELL * √2 * 0.88)
   const foot = gridSize * CELL * Math.SQRT2 * 0.88
   return {
     w: foot,
-    h: foot * 0.42 + HEIGHT_SCALE * 0.9 + LOAF_DEPTH * 0.75,
+    // Keep Fit zoom stable (don't magnify thin skirt by shrinking envelope)
+    h: foot * 0.4 + 48,
   }
 }
 
@@ -148,15 +150,19 @@ export function ensureFields(hf: Heightfield): {
       if (hC <= 0.001) {
         wet[y * nv + x] = 0
       } else {
-        const sd = streamDist(gx, gy, size, seed)
-        // Stream ribbon only — do NOT flood lows across the whole loaf
+        const sd = meltChannelDist(gx, gy, size, seed)
+        // Narrow carved channels — wetness follows heightfield trenches
         const stream = Math.max(0, 1 - sd / STREAM_HALF)
-        const streamGate = stream * stream // sharp falloff away from centerline
+        const streamGate = stream * stream * stream // sharp falloff
         const depthNudge =
-          streamGate > 0.05 && hC < WATER_LEVEL + 0.12
-            ? (WATER_LEVEL + 0.12 - hC) * 0.9 * streamGate
+          streamGate > 0.04 && hC < WATER_LEVEL + 0.16
+            ? (WATER_LEVEL + 0.16 - hC) * 1.15 * streamGate
             : 0
-        wet[y * nv + x] = Math.min(1.15, streamGate * 1.05 + depthNudge)
+        const bedWet =
+          hC < WATER_LEVEL + 0.07 && sd < STREAM_HALF * 2.6
+            ? (1 - sd / (STREAM_HALF * 2.6)) * (WATER_LEVEL + 0.07 - hC) * 2.4
+            : 0
+        wet[y * nv + x] = Math.min(1.15, streamGate * 0.95 + depthNudge + bedWet)
       }
 
       let acc0 = 0
@@ -171,16 +177,29 @@ export function ensureFields(hf: Heightfield): {
           const h = sampleHeight(hf, gx + dx, gy + dy)
           if (h <= 0.001) continue
           const sdN = streamDist(gx + dx, gy + dy, size, seed)
-          const nearBank = sdN < STREAM_HALF * 2.2 && h < 0.4
+          const nearBank = sdN < STREAM_HALF * 2.4 && h < 0.38
+          // Ocean-edge: sample toward void — pale perimeter sand (not green fade only)
+          const hOut = sampleHeight(hf, gx + dx * 1.6, gy + dy * 1.6)
+          const edgeSand =
+            h > 0.02 && h < 0.34 && (hOut < 0.04 || h < 0.14)
+              ? Math.min(1, (0.34 - h) / 0.28 + (hOut < 0.04 ? 0.55 : 0))
+              : 0
           let c: [number, number, number]
-          if (nearBank) {
-            // Soft damp hint only — soft wet mask owns beige bank (no mesh stair)
-            const dampT = Math.min(1, Math.max(0, 1 - sdN / (STREAM_HALF * 2.2)))
+          if (edgeSand > 0.12) {
+            const base =
+              h < 0.22
+                ? lerp3(COL_MOSS, COL_LIT, h / 0.22)
+                : lerp3(COL_MOSS, COL_LIT, Math.min(1, (h - 0.22) / 0.2))
+            c = lerp3(base, COL_SAND, Math.min(0.78, edgeSand * 0.85))
+            c = lerp3(c, COL_SHORE, Math.min(0.45, edgeSand * 0.5))
+          } else if (nearBank) {
+            // Soft damp hint — soft wet mask owns beige bank (no mesh stair)
+            const dampT = Math.min(1, Math.max(0, 1 - sdN / (STREAM_HALF * 2.4)))
             const base =
               h < 0.28
                 ? lerp3(COL_MOSS, COL_LIT, h / 0.28)
                 : lerp3(COL_MOSS, COL_LIT, Math.min(1, (h - 0.28) / 0.22))
-            c = lerp3(base, COL_SHORE, dampT * 0.22)
+            c = lerp3(base, COL_SHORE, dampT * 0.28)
           } else if (h < 0.22) {
             c = lerp3(COL_DEEP, COL_MOSS, h / 0.22)
           } else if (h < 0.42) {

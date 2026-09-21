@@ -10,8 +10,9 @@ import {
   heightsSig,
   lerp3,
   rgba,
-  COL_DEEP,
   COL_MOSS,
+  COL_SAND,
+  COL_SHORE,
   EARTH_TOP,
   WATER_SHALLOW,
   WATER_MID,
@@ -70,7 +71,7 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
 
-  // Tiny dark contact shade only (no large oval that reads as a water disc)
+  // Soft land↔sea contact — no large under-shadow (that read as floating loaf)
   {
     let maxY = -Infinity
     let minX = Infinity
@@ -80,35 +81,50 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
       minX = Math.min(minX, p.x)
       maxX = Math.max(maxX, p.x)
     }
-    const footR = (maxX - minX) * 0.22
-    const footY = maxY + LOAF_DEPTH * 0.72
+    const footR = (maxX - minX) * 0.28
+    const footY = maxY + LOAF_DEPTH * 0.35
     const shadow = ctx.createRadialGradient(0, footY, 0, 0, footY, footR)
-    shadow.addColorStop(0, 'rgba(20, 32, 40, 0.28)')
-    shadow.addColorStop(1, 'rgba(20, 32, 40, 0)')
+    shadow.addColorStop(0, 'rgba(28, 48, 58, 0.03)')
+    shadow.addColorStop(0.55, 'rgba(28, 48, 58, 0.01)')
+    shadow.addColorStop(1, 'rgba(28, 48, 58, 0)')
     ctx.fillStyle = shadow
     ctx.beginPath()
-    ctx.ellipse(0, footY, footR, footR * 0.22, 0, 0, Math.PI * 2)
+    ctx.ellipse(0, footY, footR, footR * 0.18, 0, 0, Math.PI * 2)
     ctx.fill()
   }
 
-  // Ocean plane is screen-space continuous sheet (drawOceanPlane above).
-  // No world-space radial shelf — that read as pale disc under the loaf.
-  drawLoafFromSilhouette(ctx, loafSil)
-
-  // Lip tuck BEFORE clip — earth underpaint on exact sil kills white AA seam
+  // Shallow water underlap just outside sil — tighter land↔sea contact
   {
     ctx.beginPath()
-    pathFromPts(ctx, loafSil, 0)
-    ctx.strokeStyle = rgba(EARTH_TOP, 1)
-    ctx.lineWidth = 14
+    pathFromPts(ctx, loafSil, LOAF_DEPTH * 0.15)
+    ctx.strokeStyle = rgba(lerp3(WATER_SHALLOW, [210, 228, 232], 0.35), 0.55)
+    ctx.lineWidth = 18
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
     ctx.stroke()
-    ctx.strokeStyle = rgba(lerp3(EARTH_TOP, COL_DEEP, 0.35), 1)
-    ctx.lineWidth = 7
+    ctx.beginPath()
+    pathFromPts(ctx, loafSil, LOAF_DEPTH * 0.08)
+    ctx.strokeStyle = rgba(WATER_SHALLOW, 0.35)
+    ctx.lineWidth = 10
     ctx.stroke()
-    ctx.strokeStyle = rgba(COL_DEEP, 0.85)
-    ctx.lineWidth = 3.5
+  }
+
+  drawLoafFromSilhouette(ctx, loafSil)
+
+  // Pale perimeter underpaint BEFORE clip — sand + foam (old-HTML shore craft)
+  {
+    ctx.beginPath()
+    pathFromPts(ctx, loafSil, 0)
+    ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
+    ctx.strokeStyle = rgba(lerp3(COL_SAND, [236, 230, 210], 0.4), 1)
+    ctx.lineWidth = 18
+    ctx.stroke()
+    ctx.strokeStyle = rgba(lerp3(COL_SHORE, [245, 242, 228], 0.45), 1)
+    ctx.lineWidth = 11
+    ctx.stroke()
+    ctx.strokeStyle = rgba(lerp3(COL_SHORE, EARTH_TOP, 0.25), 0.85)
+    ctx.lineWidth = 4.5
     ctx.stroke()
   }
 
@@ -149,15 +165,39 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
 
   ctx.restore()
 
-  // Soft turf rim — deep moss, not light/white
-  ctx.beginPath()
-  pathFromPts(ctx, loafSil, 0)
-  ctx.strokeStyle = rgba(lerp3(COL_DEEP, COL_MOSS, 0.4), 0.4)
-  ctx.lineWidth = 4.5
-  ctx.lineJoin = 'round'
-  ctx.stroke()
+  // Continuous pale perimeter rim (old-HTML shore craft) — sand → foam band
+  {
+    // Outer expanded wash (tight land↔sea, not floating disc)
+    const outer = expandSil(loafSil, 5.5)
+    ctx.beginPath()
+    pathFromPts(ctx, outer, 0)
+    ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
+    ctx.strokeStyle = rgba(lerp3(WATER_SHALLOW, [236, 246, 244], 0.5), 0.42)
+    ctx.lineWidth = 10
+    ctx.stroke()
 
-  // South loaf lip tuck
+    ctx.beginPath()
+    pathFromPts(ctx, loafSil, 0)
+    // Outer shallow wash into sea
+    ctx.strokeStyle = rgba(lerp3(WATER_SHALLOW, [230, 240, 238], 0.45), 0.55)
+    ctx.lineWidth = 12
+    ctx.stroke()
+    // Pale sand rim (must read at Fit)
+    ctx.strokeStyle = rgba(lerp3(COL_SHORE, [248, 244, 228], 0.55), 0.98)
+    ctx.lineWidth = 9
+    ctx.stroke()
+    // Bright foam lip
+    ctx.strokeStyle = 'rgba(250, 253, 252, 0.62)'
+    ctx.lineWidth = 4.2
+    ctx.stroke()
+    // Inner sand tuck under turf
+    ctx.strokeStyle = rgba(lerp3(COL_SAND, COL_MOSS, 0.2), 0.75)
+    ctx.lineWidth = 2.8
+    ctx.stroke()
+  }
+
+  // South contact — thin earth→sand, not thick cliff lip
   {
     const mcy = loafSil.reduce((s, p) => s + p.y, 0) / loafSil.length
     ctx.beginPath()
@@ -174,8 +214,8 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
         ctx.lineTo(p.x, p.y)
       }
     }
-    ctx.strokeStyle = rgba(lerp3(COL_DEEP, EARTH_TOP, 0.35), 0.75)
-    ctx.lineWidth = 9
+    ctx.strokeStyle = rgba(lerp3(COL_SHORE, EARTH_TOP, 0.45), 0.65)
+    ctx.lineWidth = 5
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
     ctx.stroke()
@@ -241,6 +281,44 @@ function paintSoftTurf(
   ctx.drawImage(_turfCanvas!, ox, oy, worldW, worldH)
   ctx.filter = 'none'
   ctx.restore()
+}
+
+function expandSil(
+  pts: { x: number; y: number }[],
+  amount: number,
+): { x: number; y: number; h: number; gx: number; gy: number }[] {
+  const m = pts.length
+  if (m < 3) return pts as { x: number; y: number; h: number; gx: number; gy: number }[]
+  let area = 0
+  for (let i = 0; i < m; i++) {
+    const a = pts[i]!
+    const b = pts[(i + 1) % m]!
+    area += a.x * b.y - b.x * a.y
+  }
+  const sign = area >= 0 ? 1 : -1
+  const out: { x: number; y: number; h: number; gx: number; gy: number }[] = []
+  for (let i = 0; i < m; i++) {
+    const prev = pts[(i - 1 + m) % m]!
+    const cur = pts[i]!
+    const next = pts[(i + 1) % m]!
+    const e1x = cur.x - prev.x
+    const e1y = cur.y - prev.y
+    const e2x = next.x - cur.x
+    const e2y = next.y - cur.y
+    const l1 = Math.hypot(e1x, e1y) || 1
+    const l2 = Math.hypot(e2x, e2y) || 1
+    let nx = sign * (e1y / l1 + e2y / l2)
+    let ny = sign * -(e1x / l1 + e2x / l2)
+    const nl = Math.hypot(nx, ny) || 1
+    out.push({
+      x: cur.x + (nx / nl) * amount,
+      y: cur.y + (ny / nl) * amount,
+      h: 0,
+      gx: 0,
+      gy: 0,
+    })
+  }
+  return out
 }
 
 /**

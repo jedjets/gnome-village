@@ -25,18 +25,20 @@ export function drawLoafFromSilhouette(ctx: CanvasRenderingContext2D, sil: Pt[])
   }
   const midX = (minX + maxX) * 0.5
   const halfW = Math.max(8, (maxX - minX) * 0.5)
-  const scaleX = 1 + 2.2 / halfW
+  // Thin skirt — slight outward only (no fat cake extrusion)
+  const scaleX = 1 + 1.1 / halfW
   const rim: XY[] = top.map((p) => ({
     x: midX + (p.x - midX) * scaleX,
     y: p.y,
   }))
-  const bulgeBot = 1.02
-  const g = ctx.createLinearGradient(0, maxY - 8, 0, maxY + LOAF_DEPTH)
-  g.addColorStop(0, rgba(EARTH_TOP, 1))
-  g.addColorStop(0.2, rgba(EARTH_TOP, 1))
-  g.addColorStop(0.5, rgba(EARTH_MID, 1))
-  g.addColorStop(0.82, rgba(EARTH_BOT, 1))
-  g.addColorStop(1, rgba(lerp3(EARTH_BOT, [40, 28, 20], 0.28), 1))
+  const bulgeBot = 1.01
+  const depth = LOAF_DEPTH
+  const g = ctx.createLinearGradient(0, maxY - 4, 0, maxY + depth)
+  g.addColorStop(0, rgba(lerp3(EARTH_TOP, [208, 190, 150], 0.35), 1))
+  g.addColorStop(0.25, rgba(EARTH_TOP, 1))
+  g.addColorStop(0.55, rgba(EARTH_MID, 1))
+  g.addColorStop(0.88, rgba(EARTH_BOT, 1))
+  g.addColorStop(1, rgba(lerp3(EARTH_BOT, [40, 28, 20], 0.2), 1))
 
   ctx.beginPath()
   ctx.moveTo(rim[0]!.x, rim[0]!.y)
@@ -44,14 +46,14 @@ export function drawLoafFromSilhouette(ctx: CanvasRenderingContext2D, sil: Pt[])
   for (let i = n - 1; i >= 0; i--) {
     const p = rim[i]!
     const x = midX + (p.x - midX) * bulgeBot
-    ctx.lineTo(x, p.y + LOAF_DEPTH)
+    ctx.lineTo(x, p.y + depth)
   }
   ctx.closePath()
   ctx.fillStyle = g
   ctx.fill()
 
-  ctx.strokeStyle = rgba(EARTH_MID, 1)
-  ctx.lineWidth = 7
+  ctx.strokeStyle = rgba(EARTH_MID, 0.85)
+  ctx.lineWidth = 2.2
   ctx.lineJoin = 'round'
   ctx.lineCap = 'round'
   ctx.miterLimit = 1.4
@@ -61,8 +63,8 @@ export function drawLoafFromSilhouette(ctx: CanvasRenderingContext2D, sil: Pt[])
   ctx.moveTo(rim[0]!.x, rim[0]!.y)
   for (let i = 1; i < n; i++) ctx.lineTo(rim[i]!.x, rim[i]!.y)
   ctx.closePath()
-  ctx.strokeStyle = 'rgba(42, 30, 22, 0.34)'
-  ctx.lineWidth = 6
+  ctx.strokeStyle = 'rgba(42, 30, 22, 0.1)'
+  ctx.lineWidth = 1.8
   ctx.lineJoin = 'round'
   ctx.stroke()
 }

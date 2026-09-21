@@ -24,7 +24,7 @@ import { chaikinClosed, pathFromPts } from './renderIsleDraw'
  * body is the union of MS wet polys (near-opaque, lightly fattened).
  */
 
-const WET_THRESH = 0.52
+const WET_THRESH = 0.48
 const WATER_SURF = 0.1
 const CHAIKIN_PASSES = 2
 const DENSIFY_STEP = 1.2
@@ -99,22 +99,22 @@ export function drawStreamWater(
   // --- Soft living banks under the sheet ---
   if (loop && loop.length >= 6) {
     ctx.beginPath()
-    pathFromPts(ctx, expandClosed(loop, 5.0), 0)
+    pathFromPts(ctx, expandClosed(loop, 3.2), 0)
     ctx.fillStyle = rgba(lerp3(COL_MOSS, COL_DAMP, 0.4), 0.32)
     ctx.fill()
 
     ctx.beginPath()
-    pathFromPts(ctx, expandClosed(loop, 3.4), 0)
+    pathFromPts(ctx, expandClosed(loop, 2.4), 0)
     ctx.fillStyle = rgba(lerp3(COL_DAMP, COL_SHORE, 0.55), 0.55)
     ctx.fill()
 
     ctx.beginPath()
-    pathFromPts(ctx, expandClosed(loop, 2.2), 0)
+    pathFromPts(ctx, expandClosed(loop, 1.5), 0)
     ctx.fillStyle = rgba(COL_SHORE, 0.92)
     ctx.fill()
 
     ctx.beginPath()
-    pathFromPts(ctx, expandClosed(loop, 1.15), 0)
+    pathFromPts(ctx, expandClosed(loop, 0.7), 0)
     ctx.fillStyle = rgba(lerp3(COL_SHORE, WATER_SHALLOW, 0.4), 0.95)
     ctx.fill()
   }
@@ -123,7 +123,7 @@ export function drawStreamWater(
   const fillCore = lerp3(WATER_SHALLOW, WATER_MID, 0.2)
   const fillDeep = lerp3(WATER_SHALLOW, WATER_MID, 0.5)
   for (const poly of waterPolys) {
-    const fat = fattenPoly(poly, 1.35)
+    const fat = fattenPoly(poly, 0.55)
     ctx.beginPath()
     ctx.moveTo(fat[0]!.x, fat[0]!.y)
     for (let i = 1; i < fat.length; i++) ctx.lineTo(fat[i]!.x, fat[i]!.y)
@@ -207,11 +207,11 @@ function buildStreamRibbon(
     const h = sampleVertH(vertH, nv, gx + 0.5, gy + 0.5)
     if (h < 0.02) continue
     if (sampleHeight(hf, gx, gy) < 0.01) continue
-    const midBoost = Math.exp(-along * along * 3.2) * 0.35
+    const midBoost = Math.exp(-along * along * 3.2) * 0.12
     const rimFade = r > 0.5 ? Math.max(0, 1 - (r - 0.5) / 0.22) : 1
     if (rimFade < 0.2) continue
-    const half = (STREAM_HALF * 0.38 + midBoost) * rimFade
-    if (half < 0.45) continue
+    const half = (STREAM_HALF * 0.32 + midBoost) * rimFade
+    if (half < 0.28) continue
     samples.push({
       gx,
       gy,

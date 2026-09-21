@@ -72,7 +72,7 @@ export function streamDist(gx: number, gy: number, size: number, seed: number): 
 /**
  * Soft-iso village land: rolling multi-lobe country + stream in a low path.
  * Shared-vertex relief that *reads* at Fit — NOT a single central dome/pancake.
- * Peak ~0.95–1.18; HEIGHT_SCALE loaf ~80–110 for ≥25 CSS px crest↔valley at Fit.
+ * Peak ~0.85–1.05; flatter oval-in-sea (0.7.3). Channels carved into heightfield.
  */
 export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
   const size = GRID_SIZE
@@ -153,23 +153,49 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
 
       let h = (plateau + hills - dips + und + meso + bankRidge) * mask
 
-      // Winding stream valley — deep low path between lobes; never notch the loaf rim
+      // Main meltwater trench — narrow + deep so water reads as carved channels
       const sd = streamDist(x, y, size, noiseSeed)
-      const bank = 4.0
-      if (sd < bank && r < 0.78) {
+      const bank = 2.85
+      if (sd < bank && r < 0.8) {
         const carve =
-          Math.pow(1 - sd / bank, 1.25) * (0.75 + 0.25 * (1 - smoothstep(r / 0.78)))
-        // Strong fade near rim — loaf crust stays continuous
-        const rimKeep = r > 0.55 ? Math.pow(smoothstep((0.78 - r) / 0.23), 1.4) : 1
-        h -= carve * 0.42 * rimKeep
+          Math.pow(1 - sd / bank, 1.45) * (0.82 + 0.18 * (1 - smoothstep(r / 0.8)))
+        // Soft fade near rim — keep perimeter continuous but allow mouth
+        const rimKeep = r > 0.62 ? Math.pow(smoothstep((0.82 - r) / 0.2), 1.15) : 1
+        h -= carve * 0.62 * rimKeep
+      }
+
+      // Branch meltwater — winding side channels (not one fat ribbon)
+      const wob = streamWobble(along, noiseSeed)
+      const branches = [
+        { t0: -0.42, t1: 0.12, side: 0.22, w: 1.7, a: 0.52 },
+        { t0: -0.12, t1: 0.48, side: -0.2, w: 1.55, a: 0.48 },
+        { t0: 0.08, t1: 0.58, side: 0.16, w: 1.4, a: 0.4 },
+      ]
+      for (let bi = 0; bi < branches.length; bi++) {
+        const B = branches[bi]!
+        if (along < B.t0 || along > B.t1) continue
+        const u = (along - B.t0) / (B.t1 - B.t0)
+        const flare = Math.sin(u * Math.PI) // taper at ends into main
+        const bCross = (dx - dy) * 0.48 - wob
+        const bd = Math.abs(bCross - B.side) * cx
+        if (bd < B.w && r < 0.72) {
+          const carveB = Math.pow(1 - bd / B.w, 1.35) * flare * B.a
+          const rimKeepB = r > 0.55 ? Math.pow(smoothstep((0.74 - r) / 0.2), 1.2) : 1
+          h -= carveB * rimKeepB
+        }
       }
 
       h = Math.max(0, Math.min(1.05, h))
       if (rr > 1.02) h = 0
       else if (rr > 0.86) h *= smoothstep((1.02 - rr) / 0.16)
-      // Soft land floor — allow valley relief near rim to read in silhouette
+      // Soft land floor — leave carved beds free to sit at waterline
       if (mask > 0.25 && rr <= 0.98) {
-        const floor = r > 0.7 ? 0.08 + (r - 0.7) * 0.1 : 0.03
+        const inChannel = sd < bank * 1.05 || (Math.abs((dx - dy) * 0.48 - wob) * cx < 1.8)
+        const floor = inChannel
+          ? 0.02
+          : r > 0.7
+            ? 0.07 + (r - 0.7) * 0.08
+            : 0.04
         if (h < floor) h = floor * (0.5 + 0.5 * mask)
       }
 
@@ -250,6 +276,33 @@ export function applyHeights(hf: Heightfield, data: ArrayLike<number>): void {
   for (let i = 0; i < n; i++) {
     hf.heights[i] = Math.max(0, Math.min(1.25, data[i]!))
   }
+}
+
+/**
+ * Distance to nearest meltwater channel (main stream + branches).
+ * Used by wetness so carved side channels fill, not only the fat centerline.
+ */
+export function meltChannelDist(gx: number, gy: number, size: number, seed: number): number {
+  const cx = (size - 1) * 0.5
+  const cy = (size - 1) * 0.5
+  const nx = (gx - cx) / cx
+  const ny = (gy - cy) / cy
+  const along = (nx + ny) * 0.55
+  const wobble = streamWobble(along, seed)
+  const cross = (nx - ny) * 0.48 - wobble
+  let best = Math.abs(cross) * cx
+  const branches = [
+    { t0: -0.42, t1: 0.12, side: 0.22 },
+    { t0: -0.12, t1: 0.48, side: -0.2 },
+    { t0: 0.08, t1: 0.58, side: 0.16 },
+  ]
+  for (let i = 0; i < branches.length; i++) {
+    const B = branches[i]!
+    if (along < B.t0 - 0.04 || along > B.t1 + 0.04) continue
+    const bd = Math.abs(cross - B.side) * cx
+    if (bd < best) best = bd
+  }
+  return best
 }
 
 /** Soft waterline — stream beds sit under this; land above stays turf. */

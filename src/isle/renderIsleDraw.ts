@@ -50,18 +50,19 @@ export function buildSilhouette(hf: Heightfield, cx: number, cy: number, n = 144
 
   for (const r of raw) {
     const t = Math.max(0, Math.min(1, (r.maxH - hLo) / hSpan))
-    // Ease toward crests — silhouette Y undulates clearly at Fit
+    // Mild crest ease — low island undulation, not cliff-cake outline
     const te = t * t * (3 - 2 * t)
-    const hSil = 0.1 + te * 1.0
-    const inset = Math.min(0.1, Math.max(0, (hSil - 0.4) * 0.08))
-    const useR = r.rimR * (1 - inset) + 0.2
+    const hSil = 0.06 + te * 0.55
+    const inset = Math.min(0.06, Math.max(0, (hSil - 0.35) * 0.05))
+    const useR = r.rimR * (1 - inset) + 0.15
     const gx = cx + r.dx * useR
     const gy = cy + r.dy * useR
-    const iso = gridToIso(gx - cx, gy - cy, hSil)
-    // Extra silhouette-only Y boost (mesh keeps true heights) — rolling not pancake
-    const meanH = 0.55
-    iso.y -= (hSil - meanH) * HEIGHT_SCALE * 0.45
-    pts.push({ x: iso.x, y: iso.y, h: hSil, gx, gy })
+    // Prefer true rim height so outline sits IN the sea like old HTML
+    const hRim = Math.max(0.06, Math.min(hSil, sampleHeight(hf, gx, gy) * 0.55 + hSil * 0.45))
+    const iso = gridToIso(gx - cx, gy - cy, hRim)
+    const meanH = 0.38
+    iso.y -= (hSil - meanH) * HEIGHT_SCALE * 0.1
+    pts.push({ x: iso.x, y: iso.y, h: hRim, gx, gy })
   }
   return chaikinClosed(pts, 1)
 }
