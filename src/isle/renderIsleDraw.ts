@@ -50,18 +50,18 @@ export function buildSilhouette(hf: Heightfield, cx: number, cy: number, n = 144
 
   for (const r of raw) {
     const t = Math.max(0, Math.min(1, (r.maxH - hLo) / hSpan))
-    // Mild crest ease — low island undulation, not cliff-cake outline
+    // Crest ease — gentle peaks/valleys on outline (not cookie, not cliff-cake)
     const te = t * t * (3 - 2 * t)
-    const hSil = 0.06 + te * 0.55
-    const inset = Math.min(0.06, Math.max(0, (hSil - 0.35) * 0.05))
+    const hSil = 0.08 + te * 0.72
+    const inset = Math.min(0.07, Math.max(0, (hSil - 0.35) * 0.06))
     const useR = r.rimR * (1 - inset) + 0.15
     const gx = cx + r.dx * useR
     const gy = cy + r.dy * useR
     // Prefer true rim height so outline sits IN the sea like old HTML
-    const hRim = Math.max(0.06, Math.min(hSil, sampleHeight(hf, gx, gy) * 0.55 + hSil * 0.45))
+    const hRim = Math.max(0.06, Math.min(hSil, sampleHeight(hf, gx, gy) * 0.5 + hSil * 0.5))
     const iso = gridToIso(gx - cx, gy - cy, hRim)
-    const meanH = 0.38
-    iso.y -= (hSil - meanH) * HEIGHT_SCALE * 0.1
+    const meanH = 0.4
+    iso.y -= (hSil - meanH) * HEIGHT_SCALE * 0.16
     pts.push({ x: iso.x, y: iso.y, h: hRim, gx, gy })
   }
   return chaikinClosed(pts, 1)

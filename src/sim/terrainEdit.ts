@@ -17,8 +17,8 @@ export type BrushParams = {
  * Wider falloff + smoothstep kernel; crown lifts as a coherent hill.
  */
 export const DEFAULT_BRUSH: BrushParams = {
-  radius: 11.5,
-  strength: 0.34,
+  radius: 12.5,
+  strength: 0.48,
 }
 
 /**

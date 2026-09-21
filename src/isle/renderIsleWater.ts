@@ -194,7 +194,8 @@ function buildStreamRibbon(
   const n = 100
   for (let i = 0; i < n; i++) {
     const t = i / (n - 1)
-    const along = -0.72 + t * 1.44
+    // Extend past SE rim so melt opens into bay / sea (not a closed pond)
+    const along = -0.68 + t * 1.55
     const wobble = streamWobble(along, seed)
     const sum = along / 0.55
     const diff = wobble / 0.48
@@ -203,15 +204,28 @@ function buildStreamRibbon(
     const gx = cx + nx * cx
     const gy = cy + ny * cy
     const r = Math.hypot(nx, ny)
-    if (r > 0.72) continue
+    const mouthGate = Math.max(0, Math.min(1, (along - 0.12) / 0.5))
+    if (r > 0.98) continue
+    // Inland: need land under ribbon; at mouth allow near-ocean samples
     const h = sampleVertH(vertH, nv, gx + 0.5, gy + 0.5)
-    if (h < 0.02) continue
-    if (sampleHeight(hf, gx, gy) < 0.01) continue
-    const midBoost = Math.exp(-along * along * 3.2) * 0.12
-    const rimFade = r > 0.5 ? Math.max(0, 1 - (r - 0.5) / 0.22) : 1
-    if (rimFade < 0.2) continue
-    const half = (STREAM_HALF * 0.32 + midBoost) * rimFade
-    if (half < 0.28) continue
+    const landH = sampleHeight(hf, gx, gy)
+    if (mouthGate < 0.35) {
+      if (h < 0.02) continue
+      if (landH < 0.01) continue
+    } else if (landH < 0.001 && r < 0.78) {
+      continue
+    }
+    const midBoost = Math.exp(-along * along * 2.6) * 0.1
+    // Keep width at mouth (bay flare) instead of fading to a closed tip
+    const rimFade =
+      mouthGate > 0.25
+        ? 0.55 + mouthGate * 0.7
+        : r > 0.55
+          ? Math.max(0.25, 1 - (r - 0.55) / 0.35)
+          : 1
+    const half =
+      (STREAM_HALF * 0.34 + midBoost + mouthGate * 0.55) * rimFade
+    if (half < 0.22) continue
     samples.push({
       gx,
       gy,

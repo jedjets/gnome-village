@@ -3,12 +3,12 @@ import { sampleHeight, streamDist, meltChannelDist, WATER_LEVEL } from '../world
 import type { CameraState } from '../world/fit'
 
 export const CELL = 18
-/** Soft-iso relief — flatter oval-in-sea (0.7.3), not thick floating loaf. */
-export const HEIGHT_SCALE = 46
-/** Very thin earth skirt — land sits IN sea (old-HTML family). */
+/** Soft-iso relief — readable roll at Fit (0.7.4), still flush-in-sea (not thick loaf). */
+export const HEIGHT_SCALE = 70
+/** Very thin earth skirt — land sits IN sea (old-HTML family). KEEP low. */
 export const LOAF_DEPTH = 12
-/** Narrow meltwater half-width (grid units) — carved channels, not fat ribbon. */
-export const STREAM_HALF = 1.35
+/** Narrow meltwater half-width (grid units) — carved channels + bay mouth. */
+export const STREAM_HALF = 1.45
 
 export function isleWorldSize(gridSize: number): { w: number; h: number } {
   // Match measured loaf silhouette width (~grid * CELL * √2 * 0.88)
@@ -154,15 +154,29 @@ export function ensureFields(hf: Heightfield): {
         // Narrow carved channels — wetness follows heightfield trenches
         const stream = Math.max(0, 1 - sd / STREAM_HALF)
         const streamGate = stream * stream * stream // sharp falloff
+        const nx = (gx - (size - 1) * 0.5) / ((size - 1) * 0.5)
+        const ny = (gy - (size - 1) * 0.5) / ((size - 1) * 0.5)
+        const along = (nx + ny) * 0.55
+        const mouthGate = Math.max(0, Math.min(1, (along - 0.12) / 0.5))
         const depthNudge =
           streamGate > 0.04 && hC < WATER_LEVEL + 0.16
             ? (WATER_LEVEL + 0.16 - hC) * 1.15 * streamGate
             : 0
         const bedWet =
-          hC < WATER_LEVEL + 0.07 && sd < STREAM_HALF * 2.6
-            ? (1 - sd / (STREAM_HALF * 2.6)) * (WATER_LEVEL + 0.07 - hC) * 2.4
+          hC < WATER_LEVEL + 0.07 && sd < STREAM_HALF * (2.6 + mouthGate * 2.2)
+            ? (1 - sd / (STREAM_HALF * (2.6 + mouthGate * 2.2))) *
+              (WATER_LEVEL + 0.07 - hC) *
+              (2.4 + mouthGate * 1.2)
             : 0
-        wet[y * nv + x] = Math.min(1.15, streamGate * 0.95 + depthNudge + bedWet)
+        // Mouth boost — keep melt readable as it opens to the bay
+        const mouthWet =
+          mouthGate > 0.2 && sd < STREAM_HALF * (1.8 + mouthGate * 2.5)
+            ? mouthGate * streamGate * 0.55
+            : 0
+        wet[y * nv + x] = Math.min(
+          1.2,
+          streamGate * 0.95 + depthNudge + bedWet + mouthWet,
+        )
       }
 
       let acc0 = 0

@@ -70,9 +70,9 @@ export function streamDist(gx: number, gy: number, size: number, seed: number): 
 }
 
 /**
- * Soft-iso village land: rolling multi-lobe country + stream in a low path.
- * Shared-vertex relief that *reads* at Fit — NOT a single central dome/pancake.
- * Peak ~0.85–1.05; flatter oval-in-sea (0.7.3). Channels carved into heightfield.
+ * Soft-iso village land: rolling multi-lobe country + open melt bay.
+ * Shared-vertex relief that *reads* at Fit — NOT a flat cookie / thick loaf.
+ * Peak ~0.9–1.1; HEIGHT_SCALE mid (~70) + LOAF_DEPTH thin (~12) = flush roll-in-sea.
  */
 export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
   const size = GRID_SIZE
@@ -83,51 +83,50 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
   const cy = (size - 1) * 0.5
   const maxR = Math.min(cx, cy) * 0.92
 
-  // Separated lobes/ridges — asymmetric rolling country (crests near rim for outline)
-  // Soft loaf mounds — gentle crests, separated enough to read at Fit
+  // Separated lobes — gentle peaks/valleys (old snowy-oval family), not flat disc
   const lobes = [
-    { lx: -0.42, ly: -0.28, a: 0.78, s: 0.32 },
-    { lx: 0.36, ly: -0.38, a: 0.72, s: 0.3 },
-    { lx: 0.44, ly: 0.28, a: 0.76, s: 0.34 },
-    { lx: -0.08, ly: 0.46, a: 0.68, s: 0.32 },
-    { lx: -0.48, ly: 0.22, a: 0.7, s: 0.3 },
-    { lx: 0.12, ly: -0.08, a: 0.42, s: 0.28 }, // gentle central saddle mound
-    { lx: -0.22, ly: 0.08, a: 0.38, s: 0.24 },
-    { lx: 0.3, ly: 0.12, a: 0.36, s: 0.22 },
+    { lx: -0.46, ly: -0.3, a: 0.92, s: 0.3 },
+    { lx: 0.4, ly: -0.42, a: 0.86, s: 0.28 },
+    { lx: 0.48, ly: 0.3, a: 0.9, s: 0.32 },
+    { lx: -0.1, ly: 0.5, a: 0.8, s: 0.3 },
+    { lx: -0.52, ly: 0.24, a: 0.84, s: 0.28 },
+    { lx: 0.14, ly: -0.06, a: 0.5, s: 0.26 },
+    { lx: -0.26, ly: 0.1, a: 0.46, s: 0.22 },
+    { lx: 0.32, ly: 0.14, a: 0.44, s: 0.2 },
   ]
-  // Soft valleys — stream path is carved separately; these are saddles only
+  // Soft valleys / saddles between lobes
   const valleys = [
-    { lx: 0.02, ly: 0.1, a: 0.28, s: 0.4 },
-    { lx: -0.18, ly: -0.12, a: 0.2, s: 0.32 },
-    { lx: 0.22, ly: -0.05, a: 0.18, s: 0.3 },
+    { lx: 0.02, ly: 0.12, a: 0.36, s: 0.4 },
+    { lx: -0.2, ly: -0.14, a: 0.28, s: 0.32 },
+    { lx: 0.24, ly: -0.06, a: 0.26, s: 0.3 },
   ]
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const dx = (x - cx) / maxR
       const dy = (y - cy) / maxR
-      const r = Math.sqrt(dx * dx + dy * dy)
-
-      // Flat-ish interior mask — rim only (avoids radial multiply-dome)
+      // Mild ellipse + multi-freq warp → irregular coast (not cookie disc)
+      const rEll = Math.sqrt(dx * dx * 1.08 + dy * dy * 0.92)
       const rimWarp =
-        (fbm(x * 0.09 + 1.7, y * 0.09, noiseSeed + 44) - 0.5) * 0.1
-      const rr = r + rimWarp
-      // Near-1 across interior; soft fall only past ~0.72
+        (fbm(x * 0.07 + 1.7, y * 0.07, noiseSeed + 44) - 0.5) * 0.16 +
+        (fbm(x * 0.16, y * 0.16, noiseSeed + 88) - 0.5) * 0.09 +
+        (fbm(x * 0.28 + 3.1, y * 0.24, noiseSeed + 121) - 0.5) * 0.05
+      const rr = rEll + rimWarp
+      const r = rEll
       let mask = 1
-      if (rr > 0.72) {
-        mask = smoothstep((1.02 - rr) / 0.3)
+      if (rr > 0.68) {
+        mask = smoothstep((1.05 - rr) / 0.37)
       }
-      if (rr > 1.02) mask = 0
+      if (rr > 1.05) mask = 0
 
-      // Low plateau floor so lobes + valleys dominate the silhouette
-      const plateau = 0.18 + fbm(x * 0.03, y * 0.03, noiseSeed) * 0.05
+      const plateau = 0.14 + fbm(x * 0.03, y * 0.03, noiseSeed) * 0.05
       let hills = 0
       for (let li = 0; li < lobes.length; li++) {
         const L = lobes[li]!
         const ox = dx - L.lx
         const oy = dy - L.ly
         const d2 = (ox * ox + oy * oy) / (L.s * L.s)
-        hills += L.a * Math.exp(-d2 * 1.55)
+        hills += L.a * Math.exp(-d2 * 1.7)
       }
       let dips = 0
       for (let vi = 0; vi < valleys.length; vi++) {
@@ -135,68 +134,86 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
         const ox = dx - V.lx
         const oy = dy - V.ly
         const d2 = (ox * ox + oy * oy) / (V.s * V.s)
-        dips += V.a * Math.exp(-d2 * 1.35)
+        dips += V.a * Math.exp(-d2 * 1.4)
       }
-      // Broad rolling undulation (centered so lows go down)
       const und =
-        (fbm(x * 0.055 + 2.2, y * 0.055, noiseSeed + 5) - 0.5) * 0.42 +
-        (fbm(x * 0.11, y * 0.11, noiseSeed + 17) - 0.5) * 0.18
-      const meso = (fbm(x * 0.22, y * 0.22, noiseSeed + 31) - 0.5) * 0.08
-      // Soft ridge along stream-perpendicular so banks rise into hills
+        (fbm(x * 0.05 + 2.2, y * 0.05, noiseSeed + 5) - 0.5) * 0.52 +
+        (fbm(x * 0.1, y * 0.1, noiseSeed + 17) - 0.5) * 0.24
+      const meso = (fbm(x * 0.2, y * 0.2, noiseSeed + 31) - 0.5) * 0.1
       const along = (dx + dy) * 0.55
       const cross = (dx - dy) * 0.48
       const bankRidge =
         Math.abs(cross) > 0.08
-          ? Math.exp(-Math.pow((Math.abs(cross) - 0.22) / 0.18, 2)) * 0.18 *
+          ? Math.exp(-Math.pow((Math.abs(cross) - 0.22) / 0.18, 2)) * 0.2 *
             (0.5 + 0.5 * fbm(along * 3.1, 0.4, noiseSeed + 77))
           : 0
 
       let h = (plateau + hills - dips + und + meso + bankRidge) * mask
 
-      // Main meltwater trench — narrow + deep so water reads as carved channels
+      // Main melt trench — opens to sea as a SE bay inlet (not a closed pond)
       const sd = streamDist(x, y, size, noiseSeed)
-      const bank = 2.85
-      if (sd < bank && r < 0.8) {
+      const bank = 2.95
+      const wob = streamWobble(along, noiseSeed)
+      // Mouth toward +along (SE) — carve through rim into bay (start earlier)
+      const mouthGate = smoothstep((along - 0.12) / 0.5) // 0 inland → 1 at SE rim
+      if (sd < bank && r < 0.99) {
         const carve =
-          Math.pow(1 - sd / bank, 1.45) * (0.82 + 0.18 * (1 - smoothstep(r / 0.8)))
-        // Soft fade near rim — keep perimeter continuous but allow mouth
-        const rimKeep = r > 0.62 ? Math.pow(smoothstep((0.82 - r) / 0.2), 1.15) : 1
-        h -= carve * 0.62 * rimKeep
+          Math.pow(1 - sd / bank, 1.35) * (0.78 + 0.22 * (1 - smoothstep(r / 0.9)))
+        // Keep pale land rim elsewhere; at mouth allow full carve through
+        const rimKeep =
+          mouthGate > 0.1
+            ? Math.max(0.02, 1 - mouthGate * 1.15)
+            : r > 0.64
+              ? Math.pow(smoothstep((0.88 - r) / 0.24), 1.1)
+              : 1
+        h -= carve * (0.58 + mouthGate * 0.65) * Math.max(0.05, rimKeep)
+        // Bay flare: wide funnel at SE outlet so channel clearly meets ocean
+        if (mouthGate > 0.2 && sd < bank * (1.25 + mouthGate * 2.2)) {
+          const bay =
+            Math.pow(1 - sd / (bank * (1.25 + mouthGate * 2.2)), 1.1) * mouthGate
+          h -= bay * (0.65 + mouthGate * 0.35)
+        }
       }
 
-      // Branch meltwater — winding side channels (not one fat ribbon)
-      const wob = streamWobble(along, noiseSeed)
+      // 1–2 subtle melt forks (not a fat ribbon maze)
       const branches = [
-        { t0: -0.42, t1: 0.12, side: 0.22, w: 1.7, a: 0.52 },
-        { t0: -0.12, t1: 0.48, side: -0.2, w: 1.55, a: 0.48 },
-        { t0: 0.08, t1: 0.58, side: 0.16, w: 1.4, a: 0.4 },
+        { t0: -0.38, t1: 0.18, side: 0.2, w: 1.65, a: 0.5 },
+        { t0: -0.05, t1: 0.52, side: -0.18, w: 1.5, a: 0.44 },
       ]
       for (let bi = 0; bi < branches.length; bi++) {
         const B = branches[bi]!
         if (along < B.t0 || along > B.t1) continue
         const u = (along - B.t0) / (B.t1 - B.t0)
-        const flare = Math.sin(u * Math.PI) // taper at ends into main
+        const flare = Math.sin(u * Math.PI)
         const bCross = (dx - dy) * 0.48 - wob
         const bd = Math.abs(bCross - B.side) * cx
-        if (bd < B.w && r < 0.72) {
+        if (bd < B.w && r < 0.78) {
           const carveB = Math.pow(1 - bd / B.w, 1.35) * flare * B.a
-          const rimKeepB = r > 0.55 ? Math.pow(smoothstep((0.74 - r) / 0.2), 1.2) : 1
+          const rimKeepB = r > 0.58 ? Math.pow(smoothstep((0.8 - r) / 0.22), 1.15) : 1
           h -= carveB * rimKeepB
         }
       }
 
-      h = Math.max(0, Math.min(1.05, h))
-      if (rr > 1.02) h = 0
-      else if (rr > 0.86) h *= smoothstep((1.02 - rr) / 0.16)
-      // Soft land floor — leave carved beds free to sit at waterline
-      if (mask > 0.25 && rr <= 0.98) {
-        const inChannel = sd < bank * 1.05 || (Math.abs((dx - dy) * 0.48 - wob) * cx < 1.8)
-        const floor = inChannel
-          ? 0.02
+      h = Math.max(0, Math.min(1.1, h))
+      if (rr > 1.05) h = 0
+      else if (rr > 0.88) h *= smoothstep((1.05 - rr) / 0.17)
+
+      // Floor — channel/mouth may sit at ocean zero; other land keeps soft floor
+      const inMain = sd < bank * 1.1
+      const inFork = Math.abs((dx - dy) * 0.48 - wob) * cx < 1.85
+      const atMouth = mouthGate > 0.28 && inMain
+      if (mask > 0.2 && rr <= 1.0 && !atMouth) {
+        const floor = inMain || inFork
+          ? 0.015
           : r > 0.7
-            ? 0.07 + (r - 0.7) * 0.08
-            : 0.04
+            ? 0.06 + (r - 0.7) * 0.07
+            : 0.035
         if (h < floor) h = floor * (0.5 + 0.5 * mask)
+      }
+      // Force open bay: zero heights where trench meets ocean (silhouette notch)
+      if (atMouth && sd < bank * (1.0 + mouthGate * 1.8) && rr > 0.62) {
+        h = Math.min(h, Math.max(0, 0.05 * (1 - mouthGate)))
+        if (mouthGate > 0.55 && sd < bank * (1.3 + mouthGate * 1.6)) h = 0
       }
 
       heights[y * size + x] = h
@@ -216,6 +233,15 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
         const h0 = tmp[i]!
         if (h0 <= 0.001) {
           heights[i] = 0
+          continue
+        }
+        // Keep bay mouth open — don't let blur pull land into the notch
+        const alongB = (dx + dy) * 0.55
+        const mouthB = smoothstep((alongB - 0.12) / 0.5)
+        const sdB = streamDist(x, y, size, noiseSeed)
+        if (mouthB > 0.55 && sdB < 4.5 && r > 0.6) {
+          heights[i] = Math.min(h0, 0.02)
+          if (mouthB > 0.7 && sdB < 5.5) heights[i] = 0
           continue
         }
         const rim = r > 0.78 ? smoothstep((r - 0.78) / 0.22) : 0
@@ -291,10 +317,14 @@ export function meltChannelDist(gx: number, gy: number, size: number, seed: numb
   const wobble = streamWobble(along, seed)
   const cross = (nx - ny) * 0.48 - wobble
   let best = Math.abs(cross) * cx
+  // Bay mouth flare — wetness widens toward SE sea inlet
+  const mouthGate = Math.max(0, Math.min(1, (along - 0.12) / 0.5))
+  if (mouthGate > 0.2) {
+    best = best / (1 + mouthGate * 1.35)
+  }
   const branches = [
-    { t0: -0.42, t1: 0.12, side: 0.22 },
-    { t0: -0.12, t1: 0.48, side: -0.2 },
-    { t0: 0.08, t1: 0.58, side: 0.16 },
+    { t0: -0.38, t1: 0.18, side: 0.2 },
+    { t0: -0.05, t1: 0.52, side: -0.18 },
   ]
   for (let i = 0; i < branches.length; i++) {
     const B = branches[i]!
