@@ -1,6 +1,7 @@
 /**
  * Drag pan + pinch zoom + twist rotate for Look mode.
- * Slice 1c: light inertia/ease-out on pan; clamp twist.
+ * Phone-first: damped pan gain + soft edge clamp so short drags
+ * keep the isle mostly on-screen (Fit still recovers).
  */
 
 import type { CameraState } from '../world/fit'
@@ -32,18 +33,40 @@ function angle(a: PointerSample, b: PointerSample): number {
   return Math.atan2(b.y - a.y, b.x - a.x)
 }
 
-const INERTIA_FRICTION = 0.88
-const INERTIA_MIN = 0.15
-const VELOCITY_SMOOTH = 0.35
+/** Screen-delta → pan. <1 so Look feels controlled on phone (and mouse harness). */
+export const LOOK_PAN_GAIN = 0.38
+
+/** Soft clamp: keep isle within this fraction of half-viewport from center. */
+const PAN_CLAMP_X = 0.42
+const PAN_CLAMP_Y = 0.48
+
+const INERTIA_FRICTION = 0.82
+const INERTIA_MIN = 0.12
+const VELOCITY_SMOOTH = 0.28
+
+function softClampPan(camera: CameraState, viewW: number, viewH: number): void {
+  const maxX = Math.max(24, viewW * PAN_CLAMP_X)
+  const maxY = Math.max(24, viewH * PAN_CLAMP_Y)
+  if (camera.panX > maxX) camera.panX = maxX
+  else if (camera.panX < -maxX) camera.panX = -maxX
+  if (camera.panY > maxY) camera.panY = maxY
+  else if (camera.panY < -maxY) camera.panY = -maxY
+}
 
 export class CameraGestureController {
   private session: GestureSession = null
   private coastVx = 0
   private coastVy = 0
   private coasting = false
+  private viewW = 390
+  private viewH = 844
+
+  setViewport(w: number, h: number): void {
+    this.viewW = Math.max(1, w)
+    this.viewH = Math.max(1, h)
+  }
 
   reset(): void {
-    // On pointer-up with pan velocity, start coast; otherwise clear
     if (this.session?.kind === 'pan') {
       this.coastVx = this.session.vx
       this.coastVy = this.session.vy
@@ -61,7 +84,6 @@ export class CameraGestureController {
   tickInertia(camera: CameraState): void {
     if (!this.coasting) return
     if (this.session) {
-      // Active gesture cancels coast
       this.coasting = false
       this.coastVx = 0
       this.coastVy = 0
@@ -69,6 +91,7 @@ export class CameraGestureController {
     }
     camera.panX += this.coastVx
     camera.panY += this.coastVy
+    softClampPan(camera, this.viewW, this.viewH)
     this.coastVx *= INERTIA_FRICTION
     this.coastVy *= INERTIA_FRICTION
     if (Math.hypot(this.coastVx, this.coastVy) < INERTIA_MIN) {
@@ -88,7 +111,6 @@ export class CameraGestureController {
       return
     }
 
-    // Active touch cancels coast
     this.coasting = false
     this.coastVx = 0
     this.coastVy = 0
@@ -99,11 +121,11 @@ export class CameraGestureController {
         this.session = { kind: 'pan', lastX: p.x, lastY: p.y, vx: 0, vy: 0 }
         return
       }
-      const dx = p.x - this.session.lastX
-      const dy = p.y - this.session.lastY
+      const dx = (p.x - this.session.lastX) * LOOK_PAN_GAIN
+      const dy = (p.y - this.session.lastY) * LOOK_PAN_GAIN
       camera.panX += dx
       camera.panY += dy
-      // Smooth velocity for ease-out inertia
+      softClampPan(camera, this.viewW, this.viewH)
       this.session.vx =
         this.session.vx * (1 - VELOCITY_SMOOTH) + dx * VELOCITY_SMOOTH
       this.session.vy =
@@ -113,7 +135,6 @@ export class CameraGestureController {
       return
     }
 
-    // Two+ fingers: pinch + twist (use first two)
     const a = list[0]!
     const b = list[1]!
     const d = Math.max(1, dist(a, b))
@@ -137,11 +158,11 @@ export class CameraGestureController {
     let dAng = ang - this.session.lastAngle
     if (dAng > Math.PI) dAng -= Math.PI * 2
     if (dAng < -Math.PI) dAng += Math.PI * 2
-    // Soften twist response + clamp
     camera.rotation = clampRotation(camera.rotation + dAng * 0.85)
 
-    camera.panX += m.x - this.session.lastMidX
-    camera.panY += m.y - this.session.lastMidY
+    camera.panX += (m.x - this.session.lastMidX) * LOOK_PAN_GAIN
+    camera.panY += (m.y - this.session.lastMidY) * LOOK_PAN_GAIN
+    softClampPan(camera, this.viewW, this.viewH)
 
     this.session.lastDist = d
     this.session.lastAngle = ang

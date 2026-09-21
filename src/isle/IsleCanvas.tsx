@@ -62,6 +62,7 @@ export function IsleCanvas({
       canvas.style.width = `${cssW}px`
       canvas.style.height = `${cssH}px`
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      gestures.setViewport(cssW, cssH)
     }
 
     resize()
