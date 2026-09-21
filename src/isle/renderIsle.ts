@@ -275,8 +275,8 @@ function paintSoftTurf(
   }
   const { ox, oy, worldW, worldH } = _turfMeta!
   ctx.save()
-  // Mild blur — kills residual AA facets without turning turf into a moss disc
-  ctx.filter = 'blur(1.7px)'
+  // Stronger neighbourhood light blur via CSS — kill residual mesh lattice on slopes
+  ctx.filter = 'blur(3.1px)'
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
   ctx.drawImage(_turfCanvas!, ox, oy, worldW, worldH)

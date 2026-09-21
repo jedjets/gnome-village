@@ -1,5 +1,5 @@
 import type { Heightfield } from '../world/isleGrid'
-import { sampleHeight, streamWobble } from '../world/isleGrid'
+import { sampleHeight, streamWobble, streamDist } from '../world/isleGrid'
 import {
   gridToIso,
   lerp3,
@@ -59,11 +59,30 @@ export function drawStreamWater(
   const size = nv - 1
   const softWet = new Float32Array(wet)
   boxBlurField(softWet, nv, 1)
+  // Blur must not resurrect side-pond wet outside main ribbon
+  for (let y = 0; y < nv; y++) {
+    for (let x = 0; x < nv; x++) {
+      const sd = streamDist(x - 0.5, y - 0.5, size, hf.seed)
+      const nx = (x - 0.5 - cx) / cx
+      const ny = (y - 0.5 - cy) / cy
+      const along = (nx + ny) * 0.55
+      const mouthGate = Math.max(0, Math.min(1, (along - 0.22) / 0.48))
+      if (sd > STREAM_HALF * (1.7 + mouthGate * 0.55)) softWet[y * nv + x] = 0
+    }
+  }
 
   const waterPolys: XY[][] = []
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
+      // Ribbon-only cells — skip orphan pond wet pockets off the main melt
+      const sdCell = streamDist(x + 0.5, y + 0.5, size, hf.seed)
+      const nxC = (x + 0.5 - cx) / cx
+      const nyC = (y + 0.5 - cy) / cy
+      const alongC = (nxC + nyC) * 0.55
+      const mouthC = Math.max(0, Math.min(1, (alongC - 0.22) / 0.48))
+      if (sdCell > STREAM_HALF * (1.7 + mouthC * 0.55)) continue
+
       const i00 = y * nv + x
       const i10 = y * nv + (x + 1)
       const i11 = (y + 1) * nv + (x + 1)
@@ -148,18 +167,23 @@ export function drawStreamWater(
     ctx.fill()
   }
 
-  // Soft mid wash along ribbon (not a filled hull)
+  // Continuous ribbon body (primary melt — open to sea, no side ponds)
   if (loop && loop.length >= 6) {
-    const mid = expandClosed(loop, -0.8)
     ctx.beginPath()
-    pathFromPts(ctx, mid, 0)
-    ctx.fillStyle = rgba(fillDeep, 0.5)
+    pathFromPts(ctx, expandClosed(loop, 0.15), 0)
+    ctx.fillStyle = rgba(fillCore, 0.98)
     ctx.fill()
 
-    const core = expandClosed(loop, -1.8)
+    const mid = expandClosed(loop, -0.6)
+    ctx.beginPath()
+    pathFromPts(ctx, mid, 0)
+    ctx.fillStyle = rgba(fillDeep, 0.62)
+    ctx.fill()
+
+    const core = expandClosed(loop, -1.5)
     ctx.beginPath()
     pathFromPts(ctx, core, 0)
-    ctx.fillStyle = rgba(lerp3(fillDeep, WATER_DEEP, 0.35), 0.42)
+    ctx.fillStyle = rgba(lerp3(fillDeep, WATER_DEEP, 0.35), 0.48)
     ctx.fill()
 
     // Soft bank washes — muddy→water feather (never bright white / cyan knife)

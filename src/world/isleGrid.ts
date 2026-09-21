@@ -71,10 +71,9 @@ export function streamDist(gx: number, gy: number, size: number, seed: number): 
 
 /** Side-branch descriptors — shared by carve + wetness (village creek network). */
 export const MELT_BRANCHES = [
-  { t0: -0.48, t1: -0.02, side: 0.12, w: 1.05, a: 0.38 },
-  { t0: -0.22, t1: 0.28, side: -0.11, w: 1.0, a: 0.36 },
-  { t0: 0.05, t1: 0.52, side: 0.18, w: 1.05, a: 0.34 },
-  { t0: 0.22, t1: 0.62, side: -0.14, w: 0.9, a: 0.28 },
+  // 0.7.6.2: tiny near-ribbon wobbles only — no side-pond fork bowls
+  { t0: -0.28, t1: 0.12, side: 0.06, w: 0.55, a: 0.14 },
+  { t0: 0.08, t1: 0.42, side: -0.05, w: 0.5, a: 0.12 },
 ] as const
 
 /** Short shore-cut melt fingers (old-HTML density into the rim). */
@@ -206,9 +205,9 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
           const carveB = Math.pow(1 - bd / B.w, 1.35) * flare * (B.a + 0.12)
           const rimKeepB = r > 0.65 ? Math.pow(smoothstep((0.86 - r) / 0.2), 1.15) : 1
           h -= carveB * rimKeepB
-          // Mild fork bed — under waterline but not a punched pond crater
-          if (carveB * rimKeepB > 0.12) {
-            h = Math.min(h, 0.09)
+          // No punched fork beds — keep land continuous (anti orphan ponds)
+          if (carveB * rimKeepB > 0.18) {
+            h = Math.min(h, 0.14)
           }
         }
       }

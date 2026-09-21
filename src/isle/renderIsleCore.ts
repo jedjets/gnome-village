@@ -1,5 +1,5 @@
 import type { Heightfield } from '../world/isleGrid'
-import { sampleHeight, meltChannelDist, WATER_LEVEL } from '../world/isleGrid'
+import { sampleHeight, meltChannelDist, streamDist, WATER_LEVEL } from '../world/isleGrid'
 import type { CameraState } from '../world/fit'
 
 export const CELL = 18
@@ -145,46 +145,50 @@ export function ensureFields(hf: Heightfield): {
       const hW = sampleHeight(hf, gx - 1, gy)
 
       // Soft diffuse ambient + gentle SE key (old-HTML sun from upper-right).
-      // Blur (≥2) shares light so faces roll together — kills sticker flat fill.
-      // 0.7.6: stronger valley AO, dampened crest glitter (less sterile facet sparkle).
-      const seKey = (hW - hE) * 0.26 + (hN - hS) * 0.14
-      let L = 0.76 + seKey + hC * 0.09
+      // Heavy neighbourhood blur shares light so faces roll — kill lattice facets.
+      // 0.7.6.2: softer per-vertex contrast before blur (less mesh chequer).
+      const seKey = (hW - hE) * 0.18 + (hN - hS) * 0.1
+      let L = 0.78 + seKey + hC * 0.07
       const meanN = (hN + hS + hE + hW) * 0.25
-      L += Math.max(0, hC - meanN) * 0.18 // soft crest lift (not facet glitter)
-      L -= Math.max(0, meanN - hC) * 0.48 // stronger valley AO / neighbourhood craft
-      light[y * nv + x] = Math.max(0.52, Math.min(1.08, L))
+      L += Math.max(0, hC - meanN) * 0.12 // soft crest lift (not facet glitter)
+      L -= Math.max(0, meanN - hC) * 0.42 // valley AO / neighbourhood craft
+      light[y * nv + x] = Math.max(0.58, Math.min(1.04, L))
 
       if (hC <= 0.001) {
         wet[y * nv + x] = 0
       } else {
-        const sd = meltChannelDist(gx, gy, size, seed)
-        // Village-creek wetness — follows carved trenches (main + forks + shore cuts)
+        // 0.7.6.2: MAIN ribbon wetness only (streamDist) — no fork/shore pond fills
+        const sd = streamDist(gx, gy, size, seed)
         const stream = Math.max(0, 1 - sd / STREAM_HALF)
-        const streamGate = Math.pow(stream, 1.35) // fill thin forks at creek scale
+        const streamGate = Math.pow(stream, 1.45)
         const nx = (gx - (size - 1) * 0.5) / ((size - 1) * 0.5)
         const ny = (gy - (size - 1) * 0.5) / ((size - 1) * 0.5)
         const along = (nx + ny) * 0.55
         const mouthGate = Math.max(0, Math.min(1, (along - 0.22) / 0.48))
-        const depthNudge =
-          streamGate > 0.05 && hC < WATER_LEVEL + 0.14
-            ? (WATER_LEVEL + 0.14 - hC) * 1.25 * streamGate
-            : 0
-        // Tight bed wet — stay on channel (anti disconnected pond blotches)
-        const bedWet =
-          hC < WATER_LEVEL + 0.1 && sd < STREAM_HALF * (1.85 + mouthGate * 0.35)
-            ? (1 - sd / (STREAM_HALF * (1.85 + mouthGate * 0.35))) *
-              (WATER_LEVEL + 0.1 - hC) *
-              (2.6 + mouthGate * 0.3)
-            : 0
-        // Mild mouth wet — open creek to sea, not fat bay sheet
-        const mouthWet =
-          mouthGate > 0.25 && sd < STREAM_HALF * (1.6 + mouthGate * 1.4)
-            ? mouthGate * streamGate * 0.45
-            : 0
-        wet[y * nv + x] = Math.min(
-          1.2,
-          streamGate * 1.12 + depthNudge + bedWet + mouthWet,
-        )
+        // Hard corridor gate — anything outside main ribbon stays dry (anti orphan ponds)
+        const corridor = STREAM_HALF * (1.55 + mouthGate * 0.55)
+        if (sd > corridor) {
+          wet[y * nv + x] = 0
+        } else {
+          const depthNudge =
+            streamGate > 0.08 && hC < WATER_LEVEL + 0.12
+              ? (WATER_LEVEL + 0.12 - hC) * 1.15 * streamGate
+              : 0
+          const bedWet =
+            hC < WATER_LEVEL + 0.08 && sd < STREAM_HALF * (1.35 + mouthGate * 0.25)
+              ? (1 - sd / (STREAM_HALF * (1.35 + mouthGate * 0.25))) *
+                (WATER_LEVEL + 0.08 - hC) *
+                (2.4 + mouthGate * 0.25)
+              : 0
+          const mouthWet =
+            mouthGate > 0.3 && sd < STREAM_HALF * (1.4 + mouthGate * 1.1)
+              ? mouthGate * streamGate * 0.5
+              : 0
+          wet[y * nv + x] = Math.min(
+            1.15,
+            streamGate * 1.05 + depthNudge + bedWet + mouthWet,
+          )
+        }
       }
 
       let acc0 = 0
@@ -271,13 +275,27 @@ export function ensureFields(hf: Heightfield): {
     if (vertH[i]! < 0.004) vertH[i] = 0
   }
 
-  // Extra light blur passes — neighbouring faces share shade across slopes
-  boxBlurInPlace(light, nv, 4)
+  // Extra light blur — share shade across slopes (kill residual mesh facets)
+  boxBlurInPlace(light, nv, 7)
   boxBlurInPlace(wet, nv, 1)
+  // Re-gate wet after blur — blur must not resurrect orphan pond wet fills
+  for (let y = 0; y < nv; y++) {
+    for (let x = 0; x < nv; x++) {
+      const gx = x - 0.5
+      const gy = y - 0.5
+      const sd = streamDist(gx, gy, size, seed)
+      const nx = (gx - (size - 1) * 0.5) / ((size - 1) * 0.5)
+      const ny = (gy - (size - 1) * 0.5) / ((size - 1) * 0.5)
+      const along = (nx + ny) * 0.55
+      const mouthGate = Math.max(0, Math.min(1, (along - 0.22) / 0.48))
+      const corridor = STREAM_HALF * (1.65 + mouthGate * 0.6)
+      if (sd > corridor) wet[y * nv + x] = 0
+    }
+  }
   const ch = new Float32Array(nv * nv)
   for (let c = 0; c < 3; c++) {
     for (let i = 0; i < nv * nv; i++) ch[i] = col[i * 3 + c]!
-    boxBlurInPlace(ch, nv, 2)
+    boxBlurInPlace(ch, nv, 3)
     for (let i = 0; i < nv * nv; i++) col[i * 3 + c] = ch[i]!
   }
 

@@ -18,11 +18,11 @@ import {
  */
 const WET_SKIP = 0.78
 /** Absolute outward push in world px — must beat Canvas AA gaps. */
-const EX = 5.4
+const EX = 6.6
 /** Seal stroke width (same fill colour). */
 const SEAL = 0 // stroke seals redraw diamond edges — overdraw only
 /** Corner luminance span before we use a soft plane gradient. */
-const GRAD_MIN = 14 // soft plane on slopes — kill sticker facet chequer
+const GRAD_MIN = 8 // soft plane earlier — kill residual facet chequer
 
 export function drawSoftIsoMesh(
   ctx: CanvasRenderingContext2D,
