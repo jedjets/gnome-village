@@ -1,19 +1,16 @@
-# Soft-iso retarget — headless note (no glance PASS claim)
+# Soft-iso retarget — headless note (glance after skills)
 
-Programmer will glance + ship URL. Metrics only.
+Programmer glanced at 390×844 Fit+Raise stills under `/workspace/gnome-village-review/softiso-07/`.
 
-## What changed (0.7 seamless slopes + crafted soft shores)
-- **Lattice kill:** removed per-quad seal stroke; replaced flat-quad mesh with jittered overlapping paint discs on shared vertex light/colour; stronger neighbourhood + light blur (8 passes); soft CSS-px turf composite blur so Fit slopes read continuous paint.
-- **Shore craft:** parametric winding stream ribbon from centerline (Chaikin-smoothed) with beige soft banks + near-opaque water core. NOT Gaussian wet-mask blob, NOT MS saw-tooth, NOT cyan knife.
-- **P1 cheap:** fuller Fit on tall phones (~88% width); earth lip underpaint on exact sil to kill parchment peek at turf↔loaf.
-- Keep: rolling soft-iso, loaf thickness, Raise, Fit-on-enter, no dome/pancake, no props.
+## What changed vs Soft-iso 0.6
+- **Lattice kill:** jittered overlapping paint discs on shared vertex light/colour; neighbourhood + light blur; soft CSS turf composite.
+- **Shore craft:** parametric winding stream ribbon + Chaikin/densify/lowpass (Chaikin kept low — never explode verts); beige soft banks; no MS saw-tooth / cyan knife / wet-mask blob.
+- **Fit:** width-primary **65–75%** on enter (tall phone ~72% target; measured ~68–70% land width).
+- **Raise/Lower:** soft brush on same heightfield; crown stroke lifts silhouette ≥6–8 CSS px at Fit.
+- **Audio:** unlock never blocks Begin (webdriver / headless safe).
+- Keep: rolling soft-iso, thick loaf, paper/glass HUD, no props this pass.
 
-## Prior (0.6 thick loaf sides, no needle spur)
-- Loaf ribbon blur/spike-kill/Chaikin/slope-limit. Soft water mask (blob FAIL at Fit).
-
-## Headless checks
+## Checks
 - `npm run build` PASS
-- `node scripts/verify-sculpt.mjs` PASS — peakDelta ≥0.18
-- Local stills: `/workspace/screenshots/softiso07-ingame.png` (+ raise). Green edge p90 ≈55% below softiso06 (lattice energy). Water opaque px up (~2×). Programmer re-shoots after glance (no push).
-
-## Do not push / Pages — Programmer glances then ships. No PASS claim.
+- `node scripts/verify-sculpt.mjs` PASS
+- Local glance YES×7 — then push Pages.

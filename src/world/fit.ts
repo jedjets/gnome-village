@@ -46,13 +46,13 @@ export function computeFit(
 ): CameraState {
   const safeW = Math.max(1, viewW)
   const safeH = Math.max(1, viewH)
-  // Fuller Fit on tall phones — less empty vertical; still width-primary
+  // Width-primary Fit: land fills ~65–75% of phone width (stylist lock)
   const aspect = safeH / safeW
-  // Tall phones: fill ~82–88% width so less empty vertical
-  const targetWidth = aspect > 1.85 ? 0.88 : aspect > 1.6 ? 0.8 : 0.74
+  const targetWidth = aspect > 1.85 ? 0.72 : aspect > 1.6 ? 0.7 : 0.68
   const zoomW = (safeW * targetWidth) / Math.max(1, isleWorldW)
-  const heightFill = aspect > 1.85 ? 0.72 : 0.86
+  const heightFill = aspect > 1.85 ? 0.58 : 0.7
   const zoomH = (safeH * heightFill) / Math.max(1, isleWorldH)
+  // Never exceed width target (keeps Fit inside 65–75%)
   const zoom = clampZoom(Math.min(zoomW, Math.max(zoomH, zoomW * 0.94)))
   const panY = safeH * 0.01
   return {

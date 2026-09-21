@@ -89,8 +89,9 @@ function App() {
     }
   }, [persistSilent])
 
-  const enterPlay = useCallback(async (mode: 'begin' | 'continue') => {
-    await unlockAudio()
+  const enterPlay = useCallback((mode: 'begin' | 'continue') => {
+    // Fire-and-forget — never gate land paint on AudioContext
+    void unlockAudio()
 
     if (mode === 'begin') {
       playBlip()
@@ -140,8 +141,8 @@ function App() {
     return (
       <Intro
         canContinue={continueAvailable}
-        onBegin={() => void enterPlay('begin')}
-        onContinue={() => void enterPlay('continue')}
+        onBegin={() => enterPlay('begin')}
+        onContinue={() => enterPlay('continue')}
         muted={muted}
         onToggleMute={toggleMute}
       />

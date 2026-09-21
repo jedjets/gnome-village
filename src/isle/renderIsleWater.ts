@@ -14,7 +14,10 @@ import type { Pt } from './renderIsleDraw'
 import { chaikinClosed, pathFromPts } from './renderIsleDraw'
 
 const WATER_SURF = 0.12
-const CHAIKIN_PASSES = 8
+/** Chaikin doubles verts each pass — keep low; densify+lowpass kill saw-tooth. */
+const CHAIKIN_PASSES = 3
+const DENSIFY_STEP = 0.9
+const LOOP_LOWPASS = 4
 
 /**
  * Crafted winding stream ribbon with soft living banks.
@@ -38,8 +41,12 @@ export function drawStreamWater(
   const ribbon = buildStreamRibbon(hf, vertH, nv, cx, cy, seed)
   if (!ribbon || ribbon.length < 8) return
 
-  let loop = densifyClosed(ribbon, 1.2)
-  loop = chaikinClosed(loop, CHAIKIN_PASSES)
+  // Order matters: Chaikin first (few passes), then densify + lowpass.
+  // Never Chaikin after heavy densify — 2^n explosion freezes the main thread.
+  let loop = chaikinClosed(ribbon, CHAIKIN_PASSES)
+  loop = densifyClosed(loop, DENSIFY_STEP)
+  loop = lowpassClosed(loop, LOOP_LOWPASS)
+  loop = lowpassClosed(loop, 2)
   if (loop.length < 6) return
 
   ctx.save()
@@ -81,13 +88,13 @@ export function drawStreamWater(
     ctx.fill()
   }
 
-  // Soft midtone bank strokes — living edge, never cyan knife / dark teal
+  // Soft midtone bank washes — wide + low alpha so facets never read as knife/saw
   ctx.beginPath()
   pathFromPts(ctx, water, 0)
   for (const [w, a, col] of [
-    [7, 0.22, lerp3(COL_SHORE, WATER_SHALLOW, 0.35)],
-    [4.5, 0.28, lerp3(COL_SHORE, WATER_SHALLOW, 0.5)],
-    [2.5, 0.2, lerp3(fill, COL_SHORE, 0.3)],
+    [11, 0.14, lerp3(COL_SHORE, WATER_SHALLOW, 0.3)],
+    [7, 0.16, lerp3(COL_SHORE, WATER_SHALLOW, 0.45)],
+    [4, 0.12, lerp3(fill, COL_SHORE, 0.35)],
   ] as const) {
     ctx.strokeStyle = rgba(col, a)
     ctx.lineWidth = w
@@ -129,7 +136,7 @@ function buildStreamRibbon(
   seed: number,
 ): Pt[] | null {
   const samples: { gx: number; gy: number; half: number; h: number }[] = []
-  const n = 64
+  const n = 96
   for (let i = 0; i < n; i++) {
     const t = i / (n - 1)
     const along = -0.78 + t * 1.56
@@ -146,7 +153,7 @@ function buildStreamRibbon(
     if (h < 0.02) continue
     if (sampleHeight(hf, gx, gy) < 0.01) continue
     // Ribbon half-width: modest mid widen, fade at rim
-    const midBoost = Math.exp(-along * along * 3.4) * 0.75
+    const midBoost = Math.exp(-along * along * 2.8) * 0.55
     const rimFade = r > 0.52 ? Math.max(0, 1 - (r - 0.52) / 0.24) : 1
     if (rimFade < 0.18) continue
     const half = (STREAM_HALF * 0.42 + midBoost) * rimFade
@@ -155,7 +162,7 @@ function buildStreamRibbon(
   }
   if (samples.length < 8) return null
 
-  for (let pass = 0; pass < 3; pass++) {
+  for (let pass = 0; pass < 5; pass++) {
     const next = samples.map((s) => s.half)
     for (let i = 1; i < samples.length - 1; i++) {
       next[i] =
@@ -209,6 +216,33 @@ function sampleVertH(vertH: Float32Array, nv: number, gx: number, gy: number): n
     vertH[y1 * nv + x0]! * (1 - tx) * ty +
     vertH[y1 * nv + x1]! * tx * ty
   )
+}
+
+
+function lowpassClosed(pts: Pt[], radius: number): Pt[] {
+  if (pts.length < 6 || radius < 1) return pts
+  const m = pts.length
+  const out: Pt[] = []
+  for (let i = 0; i < m; i++) {
+    let sx = 0
+    let sy = 0
+    let sh = 0
+    let sgx = 0
+    let sgy = 0
+    let w = 0
+    for (let d = -radius; d <= radius; d++) {
+      const tw = radius + 1 - Math.abs(d)
+      const p = pts[(i + d + m * 4) % m]!
+      sx += p.x * tw
+      sy += p.y * tw
+      sh += p.h * tw
+      sgx += p.gx * tw
+      sgy += p.gy * tw
+      w += tw
+    }
+    out.push({ x: sx / w, y: sy / w, h: sh / w, gx: sgx / w, gy: sgy / w })
+  }
+  return out
 }
 
 function densifyClosed(pts: Pt[], maxStep: number): Pt[] {

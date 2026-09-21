@@ -9,6 +9,8 @@ let muted = false
 
 function getCtx(): AudioContext | null {
   if (typeof window === 'undefined') return null
+  // Headless/automation: AudioContext ctor can freeze the main thread forever.
+  if (typeof navigator !== 'undefined' && navigator.webdriver) return null
   if (!ctx) {
     const AC =
       window.AudioContext ||
@@ -20,23 +22,21 @@ function getCtx(): AudioContext | null {
   return ctx
 }
 
-/** Call from Begin / Continue (user gesture) to unlock the audio graph. Continue stays silent (no blip). */
+/**
+ * Mark unlocked immediately. Defer AudioContext creation — constructor can
+ * freeze the main thread in some headless / autoplay environments.
+ */
 export async function unlockAudio(): Promise<void> {
-  const audio = getCtx()
-  if (!audio) return
-  try {
-    if (audio.state === 'suspended') {
-      // Don't block UI if resume hangs (headless / autoplay policy)
-      await Promise.race([
-        audio.resume(),
-        new Promise<void>((resolve) => setTimeout(resolve, 150)),
-      ])
+  unlocked = true
+  if (typeof window === 'undefined') return
+  window.setTimeout(() => {
+    try {
+      const audio = getCtx()
+      if (audio && audio.state === 'suspended') void audio.resume()
+    } catch {
+      // silent OK
     }
-    unlocked = true
-  } catch {
-    // Autoplay policy — stay locked; silent OK
-    unlocked = true
-  }
+  }, 0)
 }
 
 export function setMuted(next: boolean): void {
@@ -46,20 +46,25 @@ export function setMuted(next: boolean): void {
 /** Soft blip for UI confirmations. No-op if muted or locked. */
 export function playBlip(): void {
   if (muted || !unlocked) return
-  const audio = getCtx()
-  if (!audio) return
-
-  void audio.resume()
-
-  const osc = audio.createOscillator()
-  const gain = audio.createGain()
-  osc.type = 'sine'
-  osc.frequency.setValueAtTime(520, audio.currentTime)
-  osc.frequency.exponentialRampToValueAtTime(280, audio.currentTime + 0.12)
-  gain.gain.setValueAtTime(0.08, audio.currentTime)
-  gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.15)
-  osc.connect(gain)
-  gain.connect(audio.destination)
-  osc.start()
-  osc.stop(audio.currentTime + 0.16)
+  // Defer so Begin paint is never gated on AudioContext
+  window.setTimeout(() => {
+    try {
+      const audio = getCtx()
+      if (!audio) return
+      void audio.resume()
+      const osc = audio.createOscillator()
+      const gain = audio.createGain()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(520, audio.currentTime)
+      osc.frequency.exponentialRampToValueAtTime(280, audio.currentTime + 0.12)
+      gain.gain.setValueAtTime(0.08, audio.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.15)
+      osc.connect(gain)
+      gain.connect(audio.destination)
+      osc.start()
+      osc.stop(audio.currentTime + 0.16)
+    } catch {
+      // silent OK
+    }
+  }, 0)
 }

@@ -208,7 +208,7 @@ function stats(heights) {
   return { sum, max }
 }
 
-function paint(heights, gx, gy, dir, radius = 10.5, strength = 0.28) {
+function paint(heights, gx, gy, dir, radius = 11.5, strength = 0.34) {
   const r2 = radius * radius
   let changed = false
   for (
