@@ -24,6 +24,16 @@ type Phase = 'intro' | 'play'
 type World = { hf: Heightfield; camera: CameraState }
 
 function freshSeed(): number {
+  // Optional ?seed=0x… for deterministic local stills / QA (ignored in production URLs)
+  try {
+    const q = new URLSearchParams(window.location.search).get('seed')
+    if (q != null && q !== '') {
+      const n = Number(q)
+      if (Number.isFinite(n)) return n >>> 0
+    }
+  } catch {
+    /* ignore */
+  }
   return (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0
 }
 

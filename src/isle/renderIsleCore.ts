@@ -4,10 +4,10 @@ import type { CameraState } from '../world/fit'
 
 export const CELL = 18
 /** Gate: soft loaf 80–110. Readable rolling relief at Fit — not needles. */
-export const HEIGHT_SCALE = 108
+export const HEIGHT_SCALE = 92
 /** Visible earth loaf depth (world px before zoom). Soft ribbon. */
-export const LOAF_DEPTH = 92
-export const STREAM_HALF = 3.4
+export const LOAF_DEPTH = 88
+export const STREAM_HALF = 2.6
 
 export function isleWorldSize(gridSize: number): { w: number; h: number } {
   // Match measured loaf silhouette width (~grid * CELL * √2 * 0.88)
@@ -138,26 +138,25 @@ export function ensureFields(hf: Heightfield): {
       const hE = sampleHeight(hf, gx + 1, gy)
       const hW = sampleHeight(hf, gx - 1, gy)
 
-      // Very soft slope response — continuity blur owns shade (no Fit diamond facets)
-      let L = 0.88 + (hW - hE) * 0.1 + (hN - hS) * 0.07 + hC * 0.06
+      // Vertex slope + soft valley AO (prototype family). Blur (≥2) shares light.
+      let L = 0.84 + (hW - hE) * 0.22 + (hN - hS) * 0.14 + hC * 0.08
       const meanN = (hN + hS + hE + hW) * 0.25
-      L += Math.max(0, hC - meanN) * 0.12
-      L -= Math.max(0, meanN - hC) * 0.16
-      light[y * nv + x] = Math.max(0.72, Math.min(1.08, L))
+      L += Math.max(0, hC - meanN) * 0.18 // crest lift
+      L -= Math.max(0, meanN - hC) * 0.22 // valley AO
+      light[y * nv + x] = Math.max(0.68, Math.min(1.12, L))
 
       if (hC <= 0.001) {
         wet[y * nv + x] = 0
       } else {
         const sd = streamDist(gx, gy, size, seed)
+        // Stream ribbon only — do NOT flood lows across the whole loaf
         const stream = Math.max(0, 1 - sd / STREAM_HALF)
-        const low =
-          hC <= WATER_LEVEL + 0.04 ? Math.max(0, 1 - hC / (WATER_LEVEL + 0.04)) : 0
+        const streamGate = stream * stream // sharp falloff away from centerline
         const depthNudge =
-          hC < WATER_LEVEL + 0.08 ? (WATER_LEVEL + 0.08 - hC) * 1.4 : 0
-        wet[y * nv + x] = Math.min(
-          1.15,
-          Math.max(stream * 0.92, low * 0.75) + depthNudge * 0.35,
-        )
+          streamGate > 0.05 && hC < WATER_LEVEL + 0.12
+            ? (WATER_LEVEL + 0.12 - hC) * 0.9 * streamGate
+            : 0
+        wet[y * nv + x] = Math.min(1.15, streamGate * 1.05 + depthNudge)
       }
 
       let acc0 = 0
@@ -211,13 +210,20 @@ export function ensureFields(hf: Heightfield): {
     }
   }
 
-  // Extra light blur passes — neighbouring faces share almost all shade
-  boxBlurInPlace(light, nv, 8)
-  boxBlurInPlace(wet, nv, 2)
+  // Soften draw heights slightly so erosion/sculpt ripples don't facet every cell
+  boxBlurInPlace(vertH, nv, 1)
+  // Zero ocean stays zero (blur can leak tiny heights)
+  for (let i = 0; i < nv * nv; i++) {
+    if (vertH[i]! < 0.004) vertH[i] = 0
+  }
+
+  // Extra light blur passes — neighbouring faces share shade across slopes
+  boxBlurInPlace(light, nv, 4)
+  boxBlurInPlace(wet, nv, 1)
   const ch = new Float32Array(nv * nv)
   for (let c = 0; c < 3; c++) {
     for (let i = 0; i < nv * nv; i++) ch[i] = col[i * 3 + c]!
-    boxBlurInPlace(ch, nv, 8)
+    boxBlurInPlace(ch, nv, 4)
     for (let i = 0; i < nv * nv; i++) col[i * 3 + c] = ch[i]!
   }
 

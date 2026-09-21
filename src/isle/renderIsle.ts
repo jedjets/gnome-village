@@ -13,6 +13,9 @@ import {
   COL_DEEP,
   COL_MOSS,
   EARTH_TOP,
+  WATER_SHALLOW,
+  WATER_MID,
+  WATER_DEEP,
 } from './renderIsleCore'
 import { buildSilhouette, pathFromPts } from './renderIsleDraw'
 import { drawLoafFromSilhouette } from './renderIsleForms'
@@ -22,13 +25,10 @@ import { drawStreamWater } from './renderIsleWater'
 export type { RenderIsleOpts } from './renderIsleCore'
 export { CELL, HEIGHT_SCALE, isleWorldSize } from './renderIsleCore'
 
-let _turfCanvas: HTMLCanvasElement | null = null
-let _turfSig = 0
-let _turfMeta: { ox: number; oy: number; worldW: number; worldH: number } | null = null
-
 /**
- * Soft-iso village land + water — prototype language, prettier craft.
- * No moss dome, no radial fans, no crater wet bowl.
+ * Soft-iso village land + water — shared-vertex mesh + wetness-field shores.
+ * Prototype techniques, prettier craft. No moss dome, no disc-stamp blob,
+ * no parametric-only water shortcut.
  */
 export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts): void {
   const { width: w, height: h, camera, hf, nowMs } = opts
@@ -60,6 +60,9 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
   ctx.arc(sunX, sunY, sunR * 2.2, 0, Math.PI * 2)
   ctx.fill()
 
+  // Continuous ocean plane (screen) — NOT a pale disc under the loaf
+  drawOceanPlane(ctx, w, h)
+
   ctx.save()
   ctx.translate(w * 0.5 + camera.panX, h * 0.5 + camera.panY)
   ctx.rotate(camera.rotation)
@@ -67,28 +70,29 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
 
-  // Soft ground shadow
+  // Tiny dark contact shade only (no large oval that reads as a water disc)
   {
+    let maxY = -Infinity
     let minX = Infinity
     let maxX = -Infinity
-    let maxY = -Infinity
     for (const p of loafSil) {
+      maxY = Math.max(maxY, p.y)
       minX = Math.min(minX, p.x)
       maxX = Math.max(maxX, p.x)
-      maxY = Math.max(maxY, p.y)
     }
-    const footR = (maxX - minX) * 0.5
-    const footY = maxY + LOAF_DEPTH * 0.55
-    const shadow = ctx.createRadialGradient(0, footY, footR * 0.1, 0, footY, footR)
-    shadow.addColorStop(0, 'rgba(48, 34, 26, 0.28)')
-    shadow.addColorStop(0.55, 'rgba(48, 34, 26, 0.08)')
-    shadow.addColorStop(1, 'rgba(48, 34, 26, 0)')
+    const footR = (maxX - minX) * 0.22
+    const footY = maxY + LOAF_DEPTH * 0.72
+    const shadow = ctx.createRadialGradient(0, footY, 0, 0, footY, footR)
+    shadow.addColorStop(0, 'rgba(20, 32, 40, 0.28)')
+    shadow.addColorStop(1, 'rgba(20, 32, 40, 0)')
     ctx.fillStyle = shadow
     ctx.beginPath()
-    ctx.ellipse(0, footY, footR, footR * 0.32, 0, 0, Math.PI * 2)
+    ctx.ellipse(0, footY, footR, footR * 0.22, 0, 0, Math.PI * 2)
     ctx.fill()
   }
 
+  // Ocean plane is screen-space continuous sheet (drawOceanPlane above).
+  // No world-space radial shelf — that read as pale disc under the loaf.
   drawLoafFromSilhouette(ctx, loafSil)
 
   // Lip tuck BEFORE clip — earth underpaint on exact sil kills white AA seam
@@ -103,25 +107,24 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
     ctx.strokeStyle = rgba(lerp3(EARTH_TOP, COL_DEEP, 0.35), 1)
     ctx.lineWidth = 7
     ctx.stroke()
-    // Deep moss tuck under turf edge (no parchment peek)
     ctx.strokeStyle = rgba(COL_DEEP, 0.85)
     ctx.lineWidth = 3.5
     ctx.stroke()
   }
 
-  // Clip land top to silhouette, paint continuous soft-iso mesh + stream
+  // Clip land top to silhouette, paint shared-vertex mesh + wetness water
   ctx.save()
   ctx.beginPath()
   pathFromPts(ctx, loafSil, 0)
   ctx.clip()
 
-  // Turf underfill — any residual AA gap shows moss, never sky white
+  // Turf underfill — residual AA gap shows moss, never sky white
   ctx.fillStyle = rgba(COL_MOSS, 1)
   ctx.beginPath()
   pathFromPts(ctx, loafSil, 0)
   ctx.fill()
 
-  // Soft-blurred turf composite — CSS-px blur kills residual diamond facets at Fit
+  // Shared-vertex mesh with light CSS blur (AA only — not disc stamps)
   paintSoftTurf(ctx, hf, light, col, wet, vertH, nv, cx, cy, loafSil)
 
   drawStreamWater(ctx, hf, wet, vertH, nv, cx, cy, nowMs)
@@ -154,7 +157,7 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
   ctx.lineJoin = 'round'
   ctx.stroke()
 
-  // South loaf lip tuck — earth matches turf edge (no light seam gap)
+  // South loaf lip tuck
   {
     const mcy = loafSil.reduce((s, p) => s + p.y, 0) / loafSil.length
     ctx.beginPath()
@@ -181,10 +184,11 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
   ctx.restore()
 }
 
-/**
- * Draw mesh to cached stamp, composite with CSS-pixel blur so Fit zoom still
- * reads slopes as continuous paint (not a diamond grid).
- */
+
+let _turfCanvas: HTMLCanvasElement | null = null
+let _turfSig = 0
+let _turfMeta: { ox: number; oy: number; worldW: number; worldH: number } | null = null
+
 function paintSoftTurf(
   ctx: CanvasRenderingContext2D,
   hf: Heightfield,
@@ -198,67 +202,69 @@ function paintSoftTurf(
   loafSil: { x: number; y: number }[],
 ): void {
   const sig = heightsSig(hf)
-  ensureTurfStamp(sig, hf, light, col, wet, vertH, nv, cx, cy, loafSil)
-  if (!_turfCanvas || !_turfMeta) {
-    drawSoftIsoMesh(ctx, hf, light, col, wet, vertH, nv, cx, cy)
-    return
+  if (!_turfCanvas || _turfSig !== sig || !_turfMeta) {
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+    for (const p of loafSil) {
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x)
+      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y)
+    }
+    const pad = 40
+    const worldW = maxX - minX + pad * 2
+    const worldH = maxY - minY + pad * 2
+    const ox = minX - pad
+    const oy = minY - pad
+    const scalePx = 2
+    const stamp = document.createElement('canvas')
+    stamp.width = Math.max(8, Math.ceil(worldW * scalePx))
+    stamp.height = Math.max(8, Math.ceil(worldH * scalePx))
+    const sctx = stamp.getContext('2d')
+    if (!sctx) {
+      drawSoftIsoMesh(ctx, hf, light, col, wet, vertH, nv, cx, cy)
+      return
+    }
+    sctx.setTransform(scalePx, 0, 0, scalePx, -ox * scalePx, -oy * scalePx)
+    sctx.fillStyle = rgba(COL_MOSS, 1)
+    sctx.beginPath()
+    pathFromPts(sctx, loafSil as Parameters<typeof pathFromPts>[1], 0)
+    sctx.fill()
+    drawSoftIsoMesh(sctx, hf, light, col, wet, vertH, nv, cx, cy)
+    _turfCanvas = stamp
+    _turfSig = sig
+    _turfMeta = { ox, oy, worldW, worldH }
   }
-  const { ox, oy, worldW, worldH } = _turfMeta
+  const { ox, oy, worldW, worldH } = _turfMeta!
   ctx.save()
-  ctx.filter = 'blur(5px)'
+  // Mild blur — kills residual AA facets without turning turf into a moss disc
+  ctx.filter = 'blur(2.8px)'
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
-  ctx.drawImage(_turfCanvas, ox, oy, worldW, worldH)
+  ctx.drawImage(_turfCanvas!, ox, oy, worldW, worldH)
   ctx.filter = 'none'
   ctx.restore()
 }
 
-function ensureTurfStamp(
-  sig: number,
-  hf: Heightfield,
-  light: Float32Array,
-  col: Float32Array,
-  wet: Float32Array,
-  vertH: Float32Array,
-  nv: number,
-  cx: number,
-  cy: number,
-  loafSil: { x: number; y: number }[],
-): void {
-  if (_turfCanvas && _turfSig === sig && _turfMeta) return
+/**
+ * Viewport ocean plane — continuous two-tone sheet (shallow→deep), not a
+ * pale disc under the loaf. Matches old-HTML "sea as one sheet" language.
+ */
+function drawOceanPlane(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  // Continuous ocean sheet from horizon to bottom — fills the viewport, not a disc
+  const horizon = h * 0.34
+  const sea = ctx.createLinearGradient(0, horizon - h * 0.05, 0, h)
+  sea.addColorStop(0, 'rgba(186, 214, 222, 0)')
+  sea.addColorStop(0.08, rgba(lerp3(WATER_SHALLOW, [210, 226, 232], 0.4), 0.7))
+  sea.addColorStop(0.28, rgba(WATER_SHALLOW, 0.9))
+  sea.addColorStop(0.55, rgba(WATER_MID, 0.95))
+  sea.addColorStop(1, rgba(WATER_DEEP, 0.98))
+  ctx.fillStyle = sea
+  ctx.fillRect(0, horizon - h * 0.04, w, h - (horizon - h * 0.04) + 2)
 
-  let minX = Infinity
-  let maxX = -Infinity
-  let minY = Infinity
-  let maxY = -Infinity
-  for (const p of loafSil) {
-    minX = Math.min(minX, p.x)
-    maxX = Math.max(maxX, p.x)
-    minY = Math.min(minY, p.y)
-    maxY = Math.max(maxY, p.y)
-  }
-  const pad = 36
-  const worldW = maxX - minX + pad * 2
-  const worldH = maxY - minY + pad * 2
-  const ox = minX - pad
-  const oy = minY - pad
-  const scalePx = 2
-  const stamp = document.createElement('canvas')
-  stamp.width = Math.max(8, Math.ceil(worldW * scalePx))
-  stamp.height = Math.max(8, Math.ceil(worldH * scalePx))
-  const sctx = stamp.getContext('2d')
-  if (!sctx) return
-  sctx.clearRect(0, 0, stamp.width, stamp.height)
-  sctx.setTransform(scalePx, 0, 0, scalePx, -ox * scalePx, -oy * scalePx)
-  sctx.fillStyle = rgba(COL_MOSS, 1)
-  sctx.beginPath()
-  pathFromPts(sctx, loafSil as Parameters<typeof pathFromPts>[1], 0)
-  sctx.fill()
-  drawSoftIsoMesh(sctx, hf, light, col, wet, vertH, nv, cx, cy)
-
-  _turfCanvas = stamp
-  _turfSig = sig
-  _turfMeta = { ox, oy, worldW, worldH }
+  // Soft horizon haze (open water, not puddle edge)
+  const haze = ctx.createLinearGradient(0, horizon, 0, horizon + h * 0.18)
+  haze.addColorStop(0, 'rgba(236, 244, 246, 0.4)')
+  haze.addColorStop(1, 'rgba(236, 244, 246, 0)')
+  ctx.fillStyle = haze
+  ctx.fillRect(0, horizon, w, h * 0.18)
 }
 
 export function screenToGrid(
