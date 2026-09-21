@@ -1,5 +1,5 @@
 import type { Heightfield } from '../world/isleGrid'
-import { sampleHeight, streamDist, meltChannelDist, WATER_LEVEL } from '../world/isleGrid'
+import { sampleHeight, meltChannelDist, WATER_LEVEL } from '../world/isleGrid'
 import type { CameraState } from '../world/fit'
 
 export const CELL = 18
@@ -7,8 +7,8 @@ export const CELL = 18
 export const HEIGHT_SCALE = 70
 /** Very thin earth skirt — land sits IN sea (old-HTML family). KEEP low. */
 export const LOAF_DEPTH = 12
-/** Narrow meltwater half-width (grid units) — carved channels + bay mouth. */
-export const STREAM_HALF = 1.45
+/** Village-creek half-width (grid units) — thin vs hills, not fat bay ribbon. */
+export const STREAM_HALF = 0.88
 
 export function isleWorldSize(gridSize: number): { w: number; h: number } {
   // Match measured loaf silhouette width (~grid * CELL * √2 * 0.88)
@@ -146,42 +146,43 @@ export function ensureFields(hf: Heightfield): {
 
       // Soft diffuse ambient + gentle SE key (old-HTML sun from upper-right).
       // Blur (≥2) shares light so faces roll together — kills sticker flat fill.
-      const seKey = (hW - hE) * 0.32 + (hN - hS) * 0.18
-      let L = 0.78 + seKey + hC * 0.12
+      // 0.7.6: stronger valley AO, dampened crest glitter (less sterile facet sparkle).
+      const seKey = (hW - hE) * 0.26 + (hN - hS) * 0.14
+      let L = 0.76 + seKey + hC * 0.09
       const meanN = (hN + hS + hE + hW) * 0.25
-      L += Math.max(0, hC - meanN) * 0.28 // crest lift / frost read
-      L -= Math.max(0, meanN - hC) * 0.36 // valley AO (craft, not flat cookie)
-      light[y * nv + x] = Math.max(0.58, Math.min(1.18, L))
+      L += Math.max(0, hC - meanN) * 0.18 // soft crest lift (not facet glitter)
+      L -= Math.max(0, meanN - hC) * 0.48 // stronger valley AO / neighbourhood craft
+      light[y * nv + x] = Math.max(0.52, Math.min(1.08, L))
 
       if (hC <= 0.001) {
         wet[y * nv + x] = 0
       } else {
         const sd = meltChannelDist(gx, gy, size, seed)
-        // Narrow carved channels — wetness follows heightfield trenches
+        // Village-creek wetness — follows carved trenches (main + forks + shore cuts)
         const stream = Math.max(0, 1 - sd / STREAM_HALF)
-        const streamGate = stream * stream * stream // sharp falloff
+        const streamGate = Math.pow(stream, 1.35) // fill thin forks at creek scale
         const nx = (gx - (size - 1) * 0.5) / ((size - 1) * 0.5)
         const ny = (gy - (size - 1) * 0.5) / ((size - 1) * 0.5)
         const along = (nx + ny) * 0.55
-        const mouthGate = Math.max(0, Math.min(1, (along - 0.12) / 0.5))
+        const mouthGate = Math.max(0, Math.min(1, (along - 0.22) / 0.48))
         const depthNudge =
-          streamGate > 0.04 && hC < WATER_LEVEL + 0.16
-            ? (WATER_LEVEL + 0.16 - hC) * 1.15 * streamGate
+          streamGate > 0.05 && hC < WATER_LEVEL + 0.14
+            ? (WATER_LEVEL + 0.14 - hC) * 1.25 * streamGate
             : 0
         const bedWet =
-          hC < WATER_LEVEL + 0.09 && sd < STREAM_HALF * (2.9 + mouthGate * 2.4)
-            ? (1 - sd / (STREAM_HALF * (2.9 + mouthGate * 2.4))) *
-              (WATER_LEVEL + 0.09 - hC) *
-              (2.7 + mouthGate * 1.35)
+          hC < WATER_LEVEL + 0.12 && sd < STREAM_HALF * (3.2 + mouthGate * 0.6)
+            ? (1 - sd / (STREAM_HALF * (3.2 + mouthGate * 0.6))) *
+              (WATER_LEVEL + 0.12 - hC) *
+              (3.4 + mouthGate * 0.4)
             : 0
-        // Mouth boost — denser melt cuts / bay feel (wetness only; silhouette holds)
+        // Mild mouth wet — open creek to sea, not fat bay sheet
         const mouthWet =
-          mouthGate > 0.15 && sd < STREAM_HALF * (2.0 + mouthGate * 2.8)
-            ? mouthGate * streamGate * 0.72
+          mouthGate > 0.25 && sd < STREAM_HALF * (1.6 + mouthGate * 1.4)
+            ? mouthGate * streamGate * 0.45
             : 0
         wet[y * nv + x] = Math.min(
-          1.25,
-          streamGate * 1.05 + depthNudge + bedWet + mouthWet,
+          1.2,
+          streamGate * 1.12 + depthNudge + bedWet + mouthWet,
         )
       }
 
@@ -196,8 +197,8 @@ export function ensureFields(hf: Heightfield): {
           const w = dist < 0.1 ? 5 : 1 / (1 + dist * 0.85)
           const h = sampleHeight(hf, gx + dx, gy + dy)
           if (h <= 0.001) continue
-          const sdN = streamDist(gx + dx, gy + dy, size, seed)
-          const nearBank = sdN < STREAM_HALF * 2.4 && h < 0.38
+          const sdN = meltChannelDist(gx + dx, gy + dy, size, seed)
+          const nearBank = sdN < STREAM_HALF * 2.8 && h < 0.4
           // Ocean-edge: sample toward void — pale perimeter sand (not green fade only)
           const hOut = sampleHeight(hf, gx + dx * 1.6, gy + dy * 1.6)
           const edgeSand =
@@ -221,8 +222,9 @@ export function ensureFields(hf: Heightfield): {
               h < 0.28
                 ? lerp3(COL_MOSS, COL_LIT, h / 0.28)
                 : lerp3(COL_MOSS, COL_LIT, Math.min(1, (h - 0.28) / 0.22))
-            c = lerp3(base, COL_DAMP, dampT * 0.48)
-            c = lerp3(c, COL_MUD, dampT * 0.22)
+            c = lerp3(base, COL_DAMP, dampT * 0.62)
+            c = lerp3(c, COL_MUD, dampT * 0.32)
+            c = lerp3(c, COL_SAND, dampT * 0.12)
           } else if (h < 0.22) {
             c = lerp3(COL_DEEP, COL_MOSS, h / 0.22)
           } else if (h < 0.42) {
@@ -231,13 +233,17 @@ export function ensureFields(hf: Heightfield): {
             // Pale frost/snow on crests (old-HTML sage→white frost)
             c = lerp3(COL_LIT, COL_WARM, Math.min(1, (h - 0.42) / 0.28))
           }
-          // Off-grid grain — coarse noise not aligned to iso grid (craft unevenness)
+          // Off-grid grain — stronger neighbourhood craft (kill sterile cookie)
           const g = hash2((x + dx) >> 2, (y + dy) >> 2, seed + 17)
           const g2 = hash2((x + dx * 3) >> 3, (y + dy * 3) >> 3, seed + 91)
-          if (g > 0.55) c = lerp3(c, COL_LIT, 0.18 + g2 * 0.08)
-          if (g < 0.36) c = lerp3(c, COL_DEEP, 0.2 + (1 - g2) * 0.08)
-          if (g2 > 0.68 && h > 0.32) c = lerp3(c, COL_WARM, 0.12)
-          if (g2 < 0.22 && h < 0.35) c = lerp3(c, COL_DAMP, 0.1)
+          const g3 = hash2((x + dx) >> 1, (y + dy) >> 1, seed + 44)
+          if (g > 0.48) c = lerp3(c, COL_LIT, 0.32 + g2 * 0.14)
+          if (g < 0.42) c = lerp3(c, COL_DEEP, 0.34 + (1 - g2) * 0.14)
+          if (g2 > 0.58 && h > 0.28) c = lerp3(c, COL_WARM, 0.22) // frost flecks
+          if (g2 < 0.32 && h < 0.4) c = lerp3(c, COL_DAMP, 0.2)
+          if (g3 > 0.68 && h < 0.3) c = lerp3(c, COL_MUD, 0.14)
+          if (g3 < 0.22 && nearBank) c = lerp3(c, COL_SHORE, 0.12)
+          if (g3 > 0.55 && g < 0.5 && h > 0.2 && h < 0.45) c = lerp3(c, COL_MOSS, 0.1)
           acc0 += c[0] * w
           acc1 += c[1] * w
           acc2 += c[2] * w

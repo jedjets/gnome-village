@@ -281,11 +281,30 @@ function paintSoftTurf(
   const { ox, oy, worldW, worldH } = _turfMeta!
   ctx.save()
   // Mild blur — kills residual AA facets without turning turf into a moss disc
-  ctx.filter = 'blur(1.6px)'
+  ctx.filter = 'blur(1.05px)'
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
   ctx.drawImage(_turfCanvas!, ox, oy, worldW, worldH)
   ctx.filter = 'none'
+  // Off-grid craft grain speckles (kill sterile cookie fill)
+  {
+    const seed = hf.seed
+    ctx.globalCompositeOperation = 'soft-light'
+    for (let i = 0; i < 220; i++) {
+      const u = ((Math.imul(i + 3, 2654435761) ^ seed) >>> 0) / 4294967296
+      const v = ((Math.imul(i + 17, 1597334677) ^ (seed * 3)) >>> 0) / 4294967296
+      const gx = ox + u * worldW
+      const gy = oy + v * worldH
+      const rr = 1.2 + ((Math.imul(i, 974) ^ seed) >>> 0) % 18 / 10
+      const tone = u > 0.55 ? 'rgba(232,240,232,' : u < 0.35 ? 'rgba(90,110,80,' : 'rgba(176,168,136,'
+      const a = 0.04 + v * 0.07
+      ctx.fillStyle = tone + a + ')'
+      ctx.beginPath()
+      ctx.ellipse(gx, gy, rr, rr * 0.55, u * 2, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    ctx.globalCompositeOperation = 'source-over'
+  }
   ctx.restore()
 }
 
@@ -302,9 +321,9 @@ function paintRimGlints(
   const t = nowMs != null && Number.isFinite(nowMs) ? nowMs * 0.0012 : 0
   ctx.save()
   ctx.lineCap = 'round'
-  for (let i = 0; i < n; i += 3) {
+  for (let i = 0; i < n; i += 2) {
     const hv = ((Math.imul(i + 1, 2654435761) ^ seed) >>> 0) / 4294967296
-    if (hv < 0.42) continue
+    if (hv < 0.32) continue
     const a = sil[i]!
     const b = sil[(i + 1) % n]!
     const breathe = 0.35 + 0.25 * Math.sin(t + hv * 6.2 + i * 0.08)

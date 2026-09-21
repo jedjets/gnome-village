@@ -26,11 +26,24 @@ import { chaikinClosed, pathFromPts } from './renderIsleDraw'
  * body is the union of MS wet polys (near-opaque, lightly fattened).
  */
 
-const WET_THRESH = 0.48
+const WET_THRESH = 0.36
 const WATER_SURF = 0.1
 const CHAIKIN_PASSES = 2
 const DENSIFY_STEP = 1.2
 const LOOP_LOWPASS = 3
+
+function fbmBank(t: number, seed: number): number {
+  // cheap 1D value noise for bank irregularity
+  const i0 = Math.floor(t)
+  const f = t - i0
+  const s = f * f * (3 - 2 * f)
+  const h = (i: number) => {
+    let n = Math.imul(i, 374761393) ^ seed
+    n = Math.imul(n ^ (n >>> 13), 1274126177)
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967296
+  }
+  return h(i0) * (1 - s) + h(i0 + 1) * s
+}
 
 type XY = { x: number; y: number }
 
@@ -101,22 +114,22 @@ export function drawStreamWater(
   // --- Soft living banks under the sheet (muddy sage → cyan foam) ---
   if (loop && loop.length >= 6) {
     ctx.beginPath()
-    pathFromPts(ctx, expandClosed(loop, 3.4), 0)
+    pathFromPts(ctx, expandClosed(loop, 1.8), 0)
     ctx.fillStyle = rgba(lerp3(COL_MOSS, COL_DAMP, 0.55), 0.38)
     ctx.fill()
 
     ctx.beginPath()
-    pathFromPts(ctx, expandClosed(loop, 2.5), 0)
+    pathFromPts(ctx, expandClosed(loop, 0.85), 0)
     ctx.fillStyle = rgba(lerp3(COL_DAMP, COL_MUD, 0.4), 0.58)
     ctx.fill()
 
     ctx.beginPath()
-    pathFromPts(ctx, expandClosed(loop, 1.6), 0)
+    pathFromPts(ctx, expandClosed(loop, 0.85), 0)
     ctx.fillStyle = rgba(lerp3(COL_DAMP, COL_SHORE, 0.5), 0.75)
     ctx.fill()
 
     ctx.beginPath()
-    pathFromPts(ctx, expandClosed(loop, 0.75), 0)
+    pathFromPts(ctx, expandClosed(loop, 0.5), 0)
     ctx.fillStyle = rgba(lerp3(COL_SHORE, WATER_SHALLOW, 0.35), 0.92)
     ctx.fill()
   }
@@ -125,7 +138,7 @@ export function drawStreamWater(
   const fillCore = lerp3(WATER_SHALLOW, WATER_MID, 0.35)
   const fillDeep = lerp3(WATER_MID, WATER_DEEP, 0.45)
   for (const poly of waterPolys) {
-    const fat = fattenPoly(poly, 0.55)
+    const fat = fattenPoly(poly, 0.3)
     ctx.beginPath()
     ctx.moveTo(fat[0]!.x, fat[0]!.y)
     for (let i = 1; i < fat.length; i++) ctx.lineTo(fat[i]!.x, fat[i]!.y)
@@ -152,10 +165,10 @@ export function drawStreamWater(
     ctx.beginPath()
     pathFromPts(ctx, loop, 0)
     for (const [w, a, col] of [
-      [11, 0.16, lerp3(COL_DAMP, WATER_SHALLOW, 0.22)],
-      [7, 0.18, lerp3(COL_SHORE, WATER_SHALLOW, 0.38)],
-      [4, 0.2, lerp3(fillCore, COL_SHORE, 0.4)],
-      [2.4, 0.38, lerp3(COL_SHORE, SKY_SOFT, 0.55)],
+      [7.5, 0.2, lerp3(COL_DAMP, WATER_SHALLOW, 0.28)],
+      [5, 0.22, lerp3(COL_SHORE, WATER_SHALLOW, 0.42)],
+      [3, 0.28, lerp3(fillCore, COL_SHORE, 0.45)],
+      [1.8, 0.42, lerp3(COL_SHORE, SKY_SOFT, 0.55)],
     ] as const) {
       ctx.strokeStyle = rgba(col, a)
       ctx.lineWidth = w
@@ -199,7 +212,7 @@ function buildStreamRibbon(
   for (let i = 0; i < n; i++) {
     const t = i / (n - 1)
     // Extend past SE rim so melt opens into bay / sea (not a closed pond)
-    const along = -0.68 + t * 1.55
+    const along = -0.72 + t * 1.5
     const wobble = streamWobble(along, seed)
     const sum = along / 0.55
     const diff = wobble / 0.48
@@ -208,7 +221,7 @@ function buildStreamRibbon(
     const gx = cx + nx * cx
     const gy = cy + ny * cy
     const r = Math.hypot(nx, ny)
-    const mouthGate = Math.max(0, Math.min(1, (along - 0.12) / 0.5))
+    const mouthGate = Math.max(0, Math.min(1, (along - 0.22) / 0.48))
     if (r > 0.98) continue
     // Inland: need land under ribbon; at mouth allow near-ocean samples
     const h = sampleVertH(vertH, nv, gx + 0.5, gy + 0.5)
@@ -219,17 +232,19 @@ function buildStreamRibbon(
     } else if (landH < 0.001 && r < 0.78) {
       continue
     }
-    const midBoost = Math.exp(-along * along * 2.6) * 0.1
-    // Keep width at mouth (bay flare) instead of fading to a closed tip
+    const midBoost = Math.exp(-along * along * 2.6) * 0.08
+    // Village-creek width — readable vs hills, not fat bay / hairline
     const rimFade =
-      mouthGate > 0.25
-        ? 0.55 + mouthGate * 0.7
-        : r > 0.55
-          ? Math.max(0.25, 1 - (r - 0.55) / 0.35)
+      mouthGate > 0.35
+        ? 0.75 + mouthGate * 0.4
+        : r > 0.58
+          ? Math.max(0.35, 1 - (r - 0.58) / 0.32)
           : 1
-    const half =
-      (STREAM_HALF * 0.34 + midBoost + mouthGate * 0.55) * rimFade
-    if (half < 0.22) continue
+    let half =
+      (STREAM_HALF * 0.42 + midBoost + mouthGate * 0.12) * rimFade
+    // Living bank wobble — irregular wet lip, not ruled canal
+    half *= 0.82 + 0.36 * fbmBank(along * 4.2, seed)
+    if (half < 0.18) continue
     samples.push({
       gx,
       gy,

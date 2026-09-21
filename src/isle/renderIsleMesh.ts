@@ -16,7 +16,7 @@ import {
  * Lattice kill: absolute outward fatten + land-coloured seal stroke so AA
  * never leaves sky hairlines between quads.
  */
-const WET_SKIP = 0.72
+const WET_SKIP = 0.78
 /** Absolute outward push in world px — must beat Canvas AA gaps. */
 const EX = 4.2
 /** Seal stroke width (same fill colour). */
@@ -99,11 +99,11 @@ export function drawSoftIsoMesh(
     let rgb = lerp3(lerp3(c00, c10, 0.5), lerp3(c01, c11, 0.5), 0.5)
 
     const wAvg = (wet[i00]! + wet[i10]! + wet[i11]! + wet[i01]!) * 0.25
-    if (wAvg > 0.08) {
-      // Soft damp/mud fade near melt — paint-like, not sterile cream stripe
-      rgb = lerp3(rgb, COL_DAMP, Math.min(0.42, wAvg * 0.55))
-      rgb = lerp3(rgb, COL_MUD, Math.min(0.22, wAvg * 0.3))
-      rgb = lerp3(rgb, COL_SHORE, Math.min(0.28, wAvg * 0.32))
+    if (wAvg > 0.06) {
+      // Soft damp/sand fade near melt — turf variation, not sterile stripe
+      rgb = lerp3(rgb, COL_DAMP, Math.min(0.55, wAvg * 0.7))
+      rgb = lerp3(rgb, COL_MUD, Math.min(0.3, wAvg * 0.38))
+      rgb = lerp3(rgb, COL_SHORE, Math.min(0.22, wAvg * 0.28))
     }
 
     const shade = (c: [number, number, number], L: number): [number, number, number] => [
