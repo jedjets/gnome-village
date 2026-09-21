@@ -25,16 +25,16 @@ export function drawLoafFromSilhouette(ctx: CanvasRenderingContext2D, sil: Pt[])
   }
   const midX = (minX + maxX) * 0.5
   const halfW = Math.max(8, (maxX - minX) * 0.5)
-  // Thin skirt — slight outward only (no fat cake extrusion)
-  const scaleX = 1 + 1.1 / halfW
+  // Soft bank skirt — modest outward (earth-loaf soft bank, not floating cake)
+  const scaleX = 1 + 1.6 / halfW
   const rim: XY[] = top.map((p) => ({
     x: midX + (p.x - midX) * scaleX,
     y: p.y,
   }))
-  const bulgeBot = 1.01
+  const bulgeBot = 1.015
   const depth = LOAF_DEPTH
   const g = ctx.createLinearGradient(0, maxY - 4, 0, maxY + depth)
-  g.addColorStop(0, rgba(lerp3(EARTH_TOP, [208, 190, 150], 0.35), 1))
+  g.addColorStop(0, rgba(lerp3(EARTH_TOP, [208, 190, 150], 0.28), 1))
   g.addColorStop(0.25, rgba(EARTH_TOP, 1))
   g.addColorStop(0.55, rgba(EARTH_MID, 1))
   g.addColorStop(0.88, rgba(EARTH_BOT, 1))

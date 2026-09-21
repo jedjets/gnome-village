@@ -3,10 +3,10 @@ import { sampleHeight, meltChannelDist, WATER_LEVEL } from '../world/isleGrid'
 import type { CameraState } from '../world/fit'
 
 export const CELL = 18
-/** Soft-iso relief — readable roll at Fit (0.7.4), still flush-in-sea (not thick loaf). */
-export const HEIGHT_SCALE = 70
-/** Very thin earth skirt — land sits IN sea (old-HTML family). KEEP low. */
-export const LOAF_DEPTH = 12
+/** Soft-iso relief — multi-lobe roll at Fit (0.7.6.4), still flush-in-sea (not thick cake). */
+export const HEIGHT_SCALE = 98
+/** Soft earth-bank skirt under muddy rim — thicker than sticker, still flush (not floating cake). */
+export const LOAF_DEPTH = 30
 /** Village-creek half-width (grid units) — readable vs hills (0.7.6.3 scale-up). */
 export const STREAM_HALF = 1.32
 
@@ -46,23 +46,23 @@ export function hash2(ix: number, iy: number, seed: number): number {
   return ((n ^ (n >>> 16)) >>> 0) / 4294967296
 }
 
-/** Cooler sage turf (old-HTML family) — not flat mid-green cookie. */
-export const COL_DEEP: [number, number, number] = [0x7a, 0x9a, 0x78]
-export const COL_MOSS: [number, number, number] = [0xa8, 0xc4, 0xa0]
-export const COL_LIT: [number, number, number] = [0xbf, 0xd0, 0xb8]
-export const COL_WARM: [number, number, number] = [0xd4, 0xe0, 0xd2] // pale frost crest
-export const COL_DAMP: [number, number, number] = [0x9a, 0xaa, 0x88] // muddy sage wet-bank
-export const COL_SHORE: [number, number, number] = [0xd8, 0xee, 0xf2] // cyan-white rim sparkle
-export const COL_SAND: [number, number, number] = [0xe8, 0xf4, 0xf6] // pale foam/sand tuck
-export const COL_MUD: [number, number, number] = [0xb0, 0xa8, 0x88] // thin warm sediment tint
-export const WATER_SHALLOW: [number, number, number] = [0x84, 0xa8, 0xc8]
-export const WATER_MID: [number, number, number] = [0x6e, 0x96, 0xb8]
-export const WATER_DEEP: [number, number, number] = [0x5a, 0x87, 0xb0] // melt channel mid
-export const EARTH_TOP: [number, number, number] = [0xa8, 0x8a, 0x68]
-export const EARTH_MID: [number, number, number] = [0x82, 0x5c, 0x40]
-export const EARTH_BOT: [number, number, number] = [0x5e, 0x42, 0x30]
+/** Warmer pastel paper turf (Stylist 0.7.6.4) — not sterile gray-green. */
+export const COL_DEEP: [number, number, number] = [0x96, 0xc0, 0x86] // warm valley under #AECF9E
+export const COL_MOSS: [number, number, number] = [0xae, 0xcf, 0x9e] // #AECF9E paper green
+export const COL_LIT: [number, number, number] = [0xc2, 0xdd, 0xb0] // #C2DDB0 lit turf
+export const COL_WARM: [number, number, number] = [0xd8, 0xe8, 0xd4] // #D8E8D4 frost kiss crests
+export const COL_DAMP: [number, number, number] = [0xb0, 0xc6, 0x96] // warm-damp wet-bank
+export const COL_SHORE: [number, number, number] = [0xe2, 0xf2, 0xf5] // #E2F2F5 cyan-paper rim
+export const COL_SAND: [number, number, number] = [0xec, 0xf4, 0xf0] // pale foam tuck
+export const COL_MUD: [number, number, number] = [0xb0, 0x9a, 0x78] // #B09A78 warm damp earth bank
+export const WATER_SHALLOW: [number, number, number] = [0xa0, 0xc4, 0xdc] // #A0C4DC paper shallow
+export const WATER_MID: [number, number, number] = [0x7e, 0xab, 0xc8] // #7EABC8 paper sea
+export const WATER_DEEP: [number, number, number] = [0x6a, 0x9a, 0xba] // gentle depth
+export const EARTH_TOP: [number, number, number] = [0xb0, 0x9a, 0x78] // #B09A78 soft bank
+export const EARTH_MID: [number, number, number] = [0x8e, 0x72, 0x52]
+export const EARTH_BOT: [number, number, number] = [0x68, 0x4e, 0x38]
 /** Soft sky sample for water→sky mix at rims. */
-export const SKY_SOFT: [number, number, number] = [0xc8, 0xd6, 0xe4]
+export const SKY_SOFT: [number, number, number] = [0xc9, 0xd8, 0xe8] // #C9D8E8 cool paper haze
 
 export type RenderIsleOpts = {
   width: number
@@ -199,15 +199,14 @@ export function ensureFields(hf: Heightfield): {
       const hE = sampleHeight(hf, gx + 1, gy)
       const hW = sampleHeight(hf, gx - 1, gy)
 
-      // Soft diffuse ambient + gentle SE key (old-HTML sun from upper-right).
-      // Neighbourhood blur shares light so faces roll — lattice kill without pancake CSS.
-      // 0.7.6.3: slightly stronger crest/valley so Fit roll + Raise read.
-      const seKey = (hW - hE) * 0.22 + (hN - hS) * 0.12
-      let L = 0.77 + seKey + hC * 0.08
+      // Soft diffuse ambient + SE key — stronger crest/valley so Fit roll reads (0.7.6.4).
+      // Neighbourhood blur shares light (lattice kill) without pancake wash.
+      const seKey = (hW - hE) * 0.34 + (hN - hS) * 0.2
+      let L = 0.74 + seKey + hC * 0.12
       const meanN = (hN + hS + hE + hW) * 0.25
-      L += Math.max(0, hC - meanN) * 0.16 // soft crest lift (not facet glitter)
-      L -= Math.max(0, meanN - hC) * 0.46 // valley AO / neighbourhood craft
-      light[y * nv + x] = Math.max(0.55, Math.min(1.06, L))
+      L += Math.max(0, hC - meanN) * 0.28 // soft crest lift
+      L -= Math.max(0, meanN - hC) * 0.62 // valley AO / neighbourhood craft
+      light[y * nv + x] = Math.max(0.48, Math.min(1.12, L))
 
       if (hC <= 0.001) {
         wet[y * nv + x] = 0
@@ -285,13 +284,13 @@ export function ensureFields(hf: Heightfield): {
             c = lerp3(base, COL_DAMP, dampT * 0.62)
             c = lerp3(c, COL_MUD, dampT * 0.32)
             c = lerp3(c, COL_SAND, dampT * 0.12)
-          } else if (h < 0.22) {
-            c = lerp3(COL_DEEP, COL_MOSS, h / 0.22)
-          } else if (h < 0.42) {
-            c = lerp3(COL_MOSS, COL_LIT, (h - 0.22) / 0.2)
+          } else if (h < 0.2) {
+            c = lerp3(COL_DEEP, COL_MOSS, h / 0.2)
+          } else if (h < 0.38) {
+            c = lerp3(COL_MOSS, COL_LIT, (h - 0.2) / 0.18)
           } else {
-            // Pale frost/snow on crests (old-HTML sage→white frost)
-            c = lerp3(COL_LIT, COL_WARM, Math.min(1, (h - 0.42) / 0.28))
+            // Soft frost kiss on crests (#D8E8D4 paper family)
+            c = lerp3(COL_LIT, COL_WARM, Math.min(1, (h - 0.38) / 0.32))
           }
           // Off-grid grain — stronger neighbourhood craft (kill sterile cookie)
           const g = hash2((x + dx) >> 2, (y + dy) >> 2, seed + 17)
@@ -331,7 +330,7 @@ export function ensureFields(hf: Heightfield): {
   }
 
   // Neighbourhood light blur — lattice kill via paint/light, not turf CSS fatten
-  boxBlurInPlace(light, nv, 6)
+  boxBlurInPlace(light, nv, 3)
   boxBlurInPlace(wet, nv, 1)
   // Re-gate wet after blur — keep connected melt network; kill far orphans
   for (let y = 0; y < nv; y++) {

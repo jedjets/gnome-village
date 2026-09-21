@@ -42,24 +42,24 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
   const { light, wet, col, vertH, nv } = ensureFields(hf)
   const loafSil = buildSilhouette(hf, cx, cy, 128)
 
-  // Cool soft blue-grey sky (old-HTML morning family) — NOT warm parchment
+  // Cool paper haze sky (Stylist #C9D8E8 family)
   const sky = ctx.createLinearGradient(0, 0, 0, h)
-  sky.addColorStop(0, '#B8C8DA')
-  sky.addColorStop(0.35, '#C8D6E4')
-  sky.addColorStop(0.62, '#D5E0EC')
-  sky.addColorStop(1, '#E2EAF0')
+  sky.addColorStop(0, '#B8CADC')
+  sky.addColorStop(0.35, '#C9D8E8')
+  sky.addColorStop(0.62, '#D6E2EE')
+  sky.addColorStop(1, '#E4ECF4')
   ctx.fillStyle = sky
   ctx.fillRect(0, 0, w, h)
 
-  // Soft sun disc — pale yellow, low-contrast haze (SE key)
+  // Soft sun disc — pale paper sun #F6EBC0
   const sunX = w * 0.74
   const sunY = h * 0.1
   const sunR = Math.min(w, h) * 0.085
   const sunGrad = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR * 2.6)
-  sunGrad.addColorStop(0, 'rgba(245, 230, 176, 0.55)')
-  sunGrad.addColorStop(0.35, 'rgba(245, 230, 176, 0.22)')
-  sunGrad.addColorStop(0.7, 'rgba(200, 214, 228, 0.08)')
-  sunGrad.addColorStop(1, 'rgba(200, 214, 228, 0)')
+  sunGrad.addColorStop(0, 'rgba(246, 235, 192, 0.58)')
+  sunGrad.addColorStop(0.35, 'rgba(246, 235, 192, 0.24)')
+  sunGrad.addColorStop(0.7, 'rgba(201, 216, 232, 0.08)')
+  sunGrad.addColorStop(1, 'rgba(201, 216, 232, 0)')
   ctx.fillStyle = sunGrad
   ctx.beginPath()
   ctx.arc(sunX, sunY, sunR * 2.6, 0, Math.PI * 2)
@@ -108,22 +108,35 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
 
   drawLoafFromSilhouette(ctx, loafSil)
 
-  // Living shore underpaint BEFORE clip — muddy soft lip (no bright white seal)
+  // Soft earth-bank SKIRT (filled annulus) — thicker than sticker, flush (not floating cake)
   {
+    const outerBank = expandSil(loafSil, 14)
+    const midBank = expandSil(loafSil, 7)
+    // Warm damp earth fill between outer skirt and land sil
+    ctx.beginPath()
+    pathFromPts(ctx, outerBank, LOAF_DEPTH * 0.12)
+    pathFromPts(ctx, loafSil, 0)
+    ctx.fillStyle = rgba(lerp3(COL_MUD, EARTH_TOP, 0.35), 0.88)
+    ctx.fill('evenodd')
+    ctx.beginPath()
+    pathFromPts(ctx, midBank, LOAF_DEPTH * 0.05)
+    pathFromPts(ctx, loafSil, 0)
+    ctx.fillStyle = rgba(lerp3(COL_MUD, COL_DAMP, 0.25), 0.72)
+    ctx.fill('evenodd')
+    // Living shore underpaint — muddy soft lip + cyan-paper rim
     ctx.beginPath()
     pathFromPts(ctx, loafSil, 0)
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
-    // Warm-damp muddy sage under rim (land↔sea lip)
-    ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_MUD, 0.35), 0.72)
-    ctx.lineWidth = 15
+    ctx.strokeStyle = rgba(lerp3(COL_MUD, EARTH_TOP, 0.4), 0.75)
+    ctx.lineWidth = 18
     ctx.stroke()
-    ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_SHORE, 0.28), 0.45)
-    ctx.lineWidth = 8
+    ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_MUD, 0.45), 0.55)
+    ctx.lineWidth = 9
     ctx.stroke()
-    // Soft pale foam tuck — low alpha so AA never owns a white knife
-    ctx.strokeStyle = rgba(lerp3(COL_SHORE, WATER_SHALLOW, 0.35), 0.38)
-    ctx.lineWidth = 3.2
+    // Soft cyan-paper foam tuck — low alpha (never white knife)
+    ctx.strokeStyle = rgba(lerp3(COL_SHORE, WATER_SHALLOW, 0.3), 0.42)
+    ctx.lineWidth = 4
     ctx.stroke()
   }
 
@@ -153,9 +166,9 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
       maxY = Math.max(maxY, p.y)
     }
     const wash = ctx.createLinearGradient(0, minY, 0, maxY)
-    wash.addColorStop(0, 'rgba(232, 240, 246, 0.16)')
-    wash.addColorStop(0.4, 'rgba(245, 230, 176, 0.04)')
-    wash.addColorStop(1, 'rgba(50, 72, 58, 0.12)')
+    wash.addColorStop(0, 'rgba(216, 232, 212, 0.14)')
+    wash.addColorStop(0.4, 'rgba(246, 235, 192, 0.05)')
+    wash.addColorStop(1, 'rgba(72, 96, 68, 0.1)')
     ctx.fillStyle = wash
     ctx.beginPath()
     pathFromPts(ctx, loafSil, 0)
@@ -164,37 +177,40 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
 
   ctx.restore()
 
-  // Living soft perimeter — muddy lip + sky-mix foam (no bright white seal)
+  // Living soft perimeter — thicker muddy bank + cyan-paper rim (no white knife)
   {
-    const outer = expandSil(loafSil, 5.5)
+    const outer = expandSil(loafSil, 6.5)
     ctx.beginPath()
     pathFromPts(ctx, outer, 0)
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
     // Water mixes toward sky at rim
-    ctx.strokeStyle = rgba(lerp3(WATER_SHALLOW, SKY_SOFT, 0.45), 0.42)
-    ctx.lineWidth = 12
+    ctx.strokeStyle = rgba(lerp3(WATER_SHALLOW, SKY_SOFT, 0.45), 0.44)
+    ctx.lineWidth = 14
     ctx.stroke()
 
     ctx.beginPath()
     pathFromPts(ctx, loafSil, 0)
     // Sediment tint wash into sea
-    ctx.strokeStyle = rgba(lerp3(WATER_SHALLOW, COL_MUD, 0.22), 0.4)
-    ctx.lineWidth = 14
+    ctx.strokeStyle = rgba(lerp3(WATER_SHALLOW, COL_MUD, 0.28), 0.52)
+    ctx.lineWidth = 26
     ctx.stroke()
-    // Muddy sage wet-bank lip (owns the contact, not a white hairline)
-    ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_MUD, 0.28), 0.68)
-    ctx.lineWidth = 8
+    // Warm damp earth soft bank (owns contact — thicker than sticker outline)
+    ctx.strokeStyle = rgba(lerp3(COL_MUD, EARTH_TOP, 0.4), 0.85)
+    ctx.lineWidth = 18
     ctx.stroke()
-    // Soft pale shore tuck — muted (skill: never bright white outline)
-    ctx.strokeStyle = rgba(lerp3(COL_SHORE, WATER_SHALLOW, 0.4), 0.42)
-    ctx.lineWidth = 4.2
+    ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_MUD, 0.35), 0.68)
+    ctx.lineWidth = 10
+    ctx.stroke()
+    // Soft cyan-paper shore tuck (#E2F2F5)
+    ctx.strokeStyle = rgba(lerp3(COL_SHORE, WATER_SHALLOW, 0.35), 0.46)
+    ctx.lineWidth = 4.6
     ctx.stroke()
     // Soft glint dashes along rim (seeded, not uniform stroke)
     paintRimGlints(ctx, loafSil, hf.seed, nowMs)
     // Inner damp tuck under turf
-    ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_MOSS, 0.35), 0.5)
-    ctx.lineWidth = 2.2
+    ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_MOSS, 0.35), 0.52)
+    ctx.lineWidth = 2.6
     ctx.stroke()
   }
 
@@ -215,8 +231,8 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
         ctx.lineTo(p.x, p.y)
       }
     }
-    ctx.strokeStyle = rgba(lerp3(COL_DAMP, EARTH_TOP, 0.35), 0.55)
-    ctx.lineWidth = 4.5
+    ctx.strokeStyle = rgba(lerp3(COL_MUD, EARTH_TOP, 0.45), 0.7)
+    ctx.lineWidth = 11
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
     ctx.stroke()
@@ -276,7 +292,7 @@ function paintSoftTurf(
   const { ox, oy, worldW, worldH } = _turfMeta!
   ctx.save()
   // Mild CSS blur — AA soften only; roll + Raise crest must read at Fit (0.7.6.3)
-  ctx.filter = 'blur(1.35px)'
+  ctx.filter = 'blur(0.7px)'
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
   ctx.drawImage(_turfCanvas!, ox, oy, worldW, worldH)
@@ -376,8 +392,7 @@ function expandSil(
  * pale disc under the loaf. Matches old-HTML "sea as one sheet" language.
  */
 function drawOceanPlane(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-  // Mid-blue sea (#6E96B8–#84A8C8) — richer near camera, paler at horizon
-  // Avoid sterile teal aquarium (#52909A)
+  // Paper sea (#7EABC8→#A0C4DC) — gentle depth, not dead slate/teal
   const horizon = h * 0.34
   const sea = ctx.createLinearGradient(0, horizon - h * 0.05, 0, h)
   sea.addColorStop(0, 'rgba(200, 214, 228, 0)')

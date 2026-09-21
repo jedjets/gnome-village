@@ -89,7 +89,7 @@ export const MELT_SHORE_CUTS: readonly {
 /**
  * Soft-iso village land: snowy-oval family + thin multi-channel melt.
  * Shared-vertex relief that *reads* at Fit — NOT twin-bean cookie / thick loaf.
- * Peak ~0.9–1.1; HEIGHT_SCALE mid (~70) + LOAF_DEPTH thin (~12) = flush roll-in-sea.
+ * Peak ~0.95–1.15; HEIGHT_SCALE (~84) + LOAF_DEPTH soft-bank (~18) = flush roll-in-sea.
  */
 export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
   const size = GRID_SIZE
@@ -100,22 +100,23 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
   const cy = (size - 1) * 0.5
   const maxR = Math.min(cx, cy) * 0.92
 
-  // Irregular peaks on ONE soft oval — not two equal bean lobes
+  // Multi-lobe soft roll on ONE oval — readable hills, not pancake / twin-bean
   const peaks = [
-    { lx: -0.08, ly: -0.12, a: 0.82, s: 0.42 }, // primary crest (oval family)
-    { lx: 0.28, ly: 0.18, a: 0.42, s: 0.28 }, // SE spur (lower)
-    { lx: -0.36, ly: 0.16, a: 0.38, s: 0.26 }, // W shoulder
-    { lx: 0.12, ly: -0.36, a: 0.4, s: 0.24 }, // N spur
-    { lx: 0.34, ly: -0.14, a: 0.32, s: 0.22 }, // NE knoll
-    { lx: -0.3, ly: -0.32, a: 0.3, s: 0.2 }, // NW knoll
-    { lx: 0.06, ly: 0.34, a: 0.28, s: 0.28 }, // S rise
-    { lx: 0.02, ly: 0.04, a: 0.48, s: 0.4 }, // mid fill — kills bean gap
+    { lx: -0.1, ly: -0.14, a: 1.08, s: 0.38 }, // primary crest
+    { lx: 0.3, ly: 0.2, a: 0.68, s: 0.25 }, // SE spur
+    { lx: -0.38, ly: 0.18, a: 0.62, s: 0.23 }, // W shoulder
+    { lx: 0.14, ly: -0.38, a: 0.64, s: 0.21 }, // N spur
+    { lx: 0.36, ly: -0.16, a: 0.46, s: 0.2 }, // NE knoll
+    { lx: -0.32, ly: -0.34, a: 0.44, s: 0.19 }, // NW knoll
+    { lx: 0.08, ly: 0.36, a: 0.4, s: 0.26 }, // S rise
+    { lx: 0.0, ly: 0.02, a: 0.42, s: 0.36 }, // mid fill — connected mass
   ]
-  // Soft valleys / hollows (stream can follow) — not bean separator
+  // Soft valleys deepen lobe read without splitting island
   const valleys = [
-    { lx: 0.06, ly: 0.02, a: 0.16, s: 0.34 },
-    { lx: -0.18, ly: 0.06, a: 0.12, s: 0.26 },
-    { lx: 0.2, ly: -0.12, a: 0.1, s: 0.24 },
+    { lx: 0.08, ly: 0.04, a: 0.22, s: 0.32 },
+    { lx: -0.2, ly: 0.08, a: 0.18, s: 0.24 },
+    { lx: 0.22, ly: -0.14, a: 0.16, s: 0.22 },
+    { lx: -0.08, ly: -0.22, a: 0.12, s: 0.2 },
   ]
 
   for (let y = 0; y < size; y++) {
@@ -137,14 +138,14 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
       if (rr > 1.02) mask = 0
 
       // Continuous oval plateau — land stays one mass (anti twin-bean)
-      const plateau = 0.46 + fbm(x * 0.025, y * 0.025, noiseSeed) * 0.05
+      const plateau = 0.42 + fbm(x * 0.025, y * 0.025, noiseSeed) * 0.05
       let hills = 0
       for (let li = 0; li < peaks.length; li++) {
         const L = peaks[li]!
         const ox = dx - L.lx
         const oy = dy - L.ly
         const d2 = (ox * ox + oy * oy) / (L.s * L.s)
-        hills += L.a * Math.exp(-d2 * 1.55)
+        hills += L.a * Math.exp(-d2 * 1.45)
       }
       let dips = 0
       for (let vi = 0; vi < valleys.length; vi++) {
@@ -152,19 +153,19 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
         const ox = dx - V.lx
         const oy = dy - V.ly
         const d2 = (ox * ox + oy * oy) / (V.s * V.s)
-        dips += V.a * Math.exp(-d2 * 1.35)
+        dips += V.a * Math.exp(-d2 * 1.25)
       }
-      // Stronger irregular roll (peaks/valleys) — craft, not sterile dome
+      // Stronger irregular roll (peaks/valleys) — rolling hills, not pancake
       const und =
-        (fbm(x * 0.045 + 2.2, y * 0.045, noiseSeed + 5) - 0.5) * 0.64 +
-        (fbm(x * 0.09, y * 0.09, noiseSeed + 17) - 0.5) * 0.34
-      const meso = (fbm(x * 0.18, y * 0.18, noiseSeed + 31) - 0.5) * 0.16
-      const micro = (fbm(x * 0.34, y * 0.34, noiseSeed + 55) - 0.5) * 0.07
+        (fbm(x * 0.04 + 2.2, y * 0.04, noiseSeed + 5) - 0.5) * 0.95 +
+        (fbm(x * 0.08, y * 0.08, noiseSeed + 17) - 0.5) * 0.5
+      const meso = (fbm(x * 0.16, y * 0.16, noiseSeed + 31) - 0.5) * 0.28
+      const micro = (fbm(x * 0.3, y * 0.3, noiseSeed + 55) - 0.5) * 0.1
       const along = (dx + dy) * 0.55
       const cross = (dx - dy) * 0.48
       const bankRidge =
         Math.abs(cross) > 0.06
-          ? Math.exp(-Math.pow((Math.abs(cross) - 0.18) / 0.16, 2)) * 0.14 *
+          ? Math.exp(-Math.pow((Math.abs(cross) - 0.18) / 0.16, 2)) * 0.18 *
             (0.5 + 0.5 * fbm(along * 3.1, 0.4, noiseSeed + 77))
           : 0
 
@@ -233,7 +234,7 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
         h = Math.max(rimFloor, h - carveC)
       }
 
-      h = Math.max(0, Math.min(1.1, h))
+      h = Math.max(0, Math.min(1.18, h))
       if (rr > 1.02) h = 0
       else if (rr > 0.86) h *= smoothstep((1.02 - rr) / 0.16)
 
