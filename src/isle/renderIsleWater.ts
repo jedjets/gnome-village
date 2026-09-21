@@ -10,6 +10,8 @@ import {
   COL_SHORE,
   COL_MOSS,
   COL_DAMP,
+  COL_MUD,
+  SKY_SOFT,
   STREAM_HALF,
 } from './renderIsleCore'
 import type { Pt } from './renderIsleDraw'
@@ -96,39 +98,39 @@ export function drawStreamWater(
   ctx.lineJoin = 'round'
   ctx.lineCap = 'round'
 
-  // --- Soft living banks under the sheet ---
+  // --- Soft living banks under the sheet (muddy sage → cyan foam) ---
   if (loop && loop.length >= 6) {
     ctx.beginPath()
-    pathFromPts(ctx, expandClosed(loop, 3.2), 0)
-    ctx.fillStyle = rgba(lerp3(COL_MOSS, COL_DAMP, 0.4), 0.32)
+    pathFromPts(ctx, expandClosed(loop, 3.4), 0)
+    ctx.fillStyle = rgba(lerp3(COL_MOSS, COL_DAMP, 0.55), 0.38)
     ctx.fill()
 
     ctx.beginPath()
-    pathFromPts(ctx, expandClosed(loop, 2.4), 0)
-    ctx.fillStyle = rgba(lerp3(COL_DAMP, COL_SHORE, 0.55), 0.55)
+    pathFromPts(ctx, expandClosed(loop, 2.5), 0)
+    ctx.fillStyle = rgba(lerp3(COL_DAMP, COL_MUD, 0.4), 0.58)
     ctx.fill()
 
     ctx.beginPath()
-    pathFromPts(ctx, expandClosed(loop, 1.5), 0)
-    ctx.fillStyle = rgba(COL_SHORE, 0.92)
+    pathFromPts(ctx, expandClosed(loop, 1.6), 0)
+    ctx.fillStyle = rgba(lerp3(COL_DAMP, COL_SHORE, 0.5), 0.75)
     ctx.fill()
 
     ctx.beginPath()
-    pathFromPts(ctx, expandClosed(loop, 0.7), 0)
-    ctx.fillStyle = rgba(lerp3(COL_SHORE, WATER_SHALLOW, 0.4), 0.95)
+    pathFromPts(ctx, expandClosed(loop, 0.75), 0)
+    ctx.fillStyle = rgba(lerp3(COL_SHORE, WATER_SHALLOW, 0.35), 0.92)
     ctx.fill()
   }
 
-  // --- Water body: MS cell sheet (ribbon-shaped, near-opaque) ---
-  const fillCore = lerp3(WATER_SHALLOW, WATER_MID, 0.2)
-  const fillDeep = lerp3(WATER_SHALLOW, WATER_MID, 0.5)
+  // --- Water body: darker mid-blue melt (#5A87B0 family), not sterile teal ---
+  const fillCore = lerp3(WATER_SHALLOW, WATER_MID, 0.35)
+  const fillDeep = lerp3(WATER_MID, WATER_DEEP, 0.45)
   for (const poly of waterPolys) {
     const fat = fattenPoly(poly, 0.55)
     ctx.beginPath()
     ctx.moveTo(fat[0]!.x, fat[0]!.y)
     for (let i = 1; i < fat.length; i++) ctx.lineTo(fat[i]!.x, fat[i]!.y)
     ctx.closePath()
-    ctx.fillStyle = rgba(fillCore, 0.98)
+    ctx.fillStyle = rgba(fillCore, 0.97)
     ctx.fill()
   }
 
@@ -137,22 +139,23 @@ export function drawStreamWater(
     const mid = expandClosed(loop, -0.8)
     ctx.beginPath()
     pathFromPts(ctx, mid, 0)
-    ctx.fillStyle = rgba(fillDeep, 0.45)
+    ctx.fillStyle = rgba(fillDeep, 0.5)
     ctx.fill()
 
     const core = expandClosed(loop, -1.8)
     ctx.beginPath()
     pathFromPts(ctx, core, 0)
-    ctx.fillStyle = rgba(lerp3(fillDeep, WATER_DEEP, 0.2), 0.35)
+    ctx.fillStyle = rgba(lerp3(fillDeep, WATER_DEEP, 0.35), 0.42)
     ctx.fill()
 
-    // Soft bank washes — wide + low alpha (never knife/stair seal)
+    // Soft bank washes — muddy lip + foam (never knife/stair seal)
     ctx.beginPath()
     pathFromPts(ctx, loop, 0)
     for (const [w, a, col] of [
-      [9, 0.12, lerp3(COL_SHORE, WATER_SHALLOW, 0.28)],
-      [5.5, 0.14, lerp3(COL_SHORE, WATER_SHALLOW, 0.45)],
-      [3, 0.1, lerp3(fillCore, COL_SHORE, 0.3)],
+      [11, 0.16, lerp3(COL_DAMP, WATER_SHALLOW, 0.22)],
+      [7, 0.18, lerp3(COL_SHORE, WATER_SHALLOW, 0.38)],
+      [4, 0.2, lerp3(fillCore, COL_SHORE, 0.4)],
+      [2.4, 0.38, lerp3(COL_SHORE, SKY_SOFT, 0.55)],
     ] as const) {
       ctx.strokeStyle = rgba(col, a)
       ctx.lineWidth = w
@@ -169,10 +172,11 @@ export function drawStreamWater(
     }
     const mx = sx / loop.length
     const my = sy / loop.length
-    const shimmer = 0.02 + 0.01 * Math.sin(nowMs * 0.002)
-    const g = ctx.createRadialGradient(mx - 4, my - 5, 0, mx, my, 22)
-    g.addColorStop(0, `rgba(175, 215, 210, ${shimmer})`)
-    g.addColorStop(1, 'rgba(175, 215, 210, 0)')
+    const shimmer = 0.025 + 0.015 * Math.sin(nowMs * 0.002)
+    // Cool sky-mix glint (not teal aquarium sparkle)
+    const g = ctx.createRadialGradient(mx - 4, my - 5, 0, mx, my, 24)
+    g.addColorStop(0, `rgba(220, 236, 246, ${shimmer})`)
+    g.addColorStop(1, 'rgba(220, 236, 246, 0)')
     ctx.fillStyle = g
     ctx.beginPath()
     pathFromPts(ctx, expandClosed(loop, -1.6), 0)

@@ -13,10 +13,13 @@ import {
   COL_MOSS,
   COL_SAND,
   COL_SHORE,
+  COL_DAMP,
+  COL_MUD,
   EARTH_TOP,
   WATER_SHALLOW,
   WATER_MID,
   WATER_DEEP,
+  SKY_SOFT,
 } from './renderIsleCore'
 import { buildSilhouette, pathFromPts } from './renderIsleDraw'
 import { drawLoafFromSilhouette } from './renderIsleForms'
@@ -40,25 +43,27 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
   const { light, wet, col, vertH, nv } = ensureFields(hf)
   const loafSil = buildSilhouette(hf, cx, cy, 96)
 
-  // Calmer parchment sky
+  // Cool soft blue-grey sky (old-HTML morning family) — NOT warm parchment
   const sky = ctx.createLinearGradient(0, 0, 0, h)
-  sky.addColorStop(0, '#E8DFD2')
-  sky.addColorStop(0.45, '#F0EAE0')
-  sky.addColorStop(0.78, '#E6ECF0')
-  sky.addColorStop(1, '#EFE8F2')
+  sky.addColorStop(0, '#B8C8DA')
+  sky.addColorStop(0.35, '#C8D6E4')
+  sky.addColorStop(0.62, '#D5E0EC')
+  sky.addColorStop(1, '#E2EAF0')
   ctx.fillStyle = sky
   ctx.fillRect(0, 0, w, h)
 
-  const sunX = w * 0.72
-  const sunY = h * 0.11
-  const sunR = Math.min(w, h) * 0.09
-  const sunGrad = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR * 2.2)
-  sunGrad.addColorStop(0, 'rgba(255, 244, 210, 0.42)')
-  sunGrad.addColorStop(0.55, 'rgba(255, 220, 170, 0.08)')
-  sunGrad.addColorStop(1, 'rgba(255, 220, 170, 0)')
+  // Soft sun disc — pale yellow, low-contrast haze (SE key)
+  const sunX = w * 0.74
+  const sunY = h * 0.1
+  const sunR = Math.min(w, h) * 0.085
+  const sunGrad = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR * 2.6)
+  sunGrad.addColorStop(0, 'rgba(245, 230, 176, 0.55)')
+  sunGrad.addColorStop(0.35, 'rgba(245, 230, 176, 0.22)')
+  sunGrad.addColorStop(0.7, 'rgba(200, 214, 228, 0.08)')
+  sunGrad.addColorStop(1, 'rgba(200, 214, 228, 0)')
   ctx.fillStyle = sunGrad
   ctx.beginPath()
-  ctx.arc(sunX, sunY, sunR * 2.2, 0, Math.PI * 2)
+  ctx.arc(sunX, sunY, sunR * 2.6, 0, Math.PI * 2)
   ctx.fill()
 
   // Continuous ocean plane (screen) — NOT a pale disc under the loaf
@@ -71,60 +76,55 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
 
-  // Soft land↔sea contact — no large under-shadow (that read as floating loaf)
+  // Tiny contact shade in water under rim only (not floating-loaf disc)
   {
-    let maxY = -Infinity
-    let minX = Infinity
-    let maxX = -Infinity
-    for (const p of loafSil) {
-      maxY = Math.max(maxY, p.y)
-      minX = Math.min(minX, p.x)
-      maxX = Math.max(maxX, p.x)
-    }
-    const footR = (maxX - minX) * 0.28
-    const footY = maxY + LOAF_DEPTH * 0.35
-    const shadow = ctx.createRadialGradient(0, footY, 0, 0, footY, footR)
-    shadow.addColorStop(0, 'rgba(28, 48, 58, 0.03)')
-    shadow.addColorStop(0.55, 'rgba(28, 48, 58, 0.01)')
-    shadow.addColorStop(1, 'rgba(28, 48, 58, 0)')
-    ctx.fillStyle = shadow
     ctx.beginPath()
-    ctx.ellipse(0, footY, footR, footR * 0.18, 0, 0, Math.PI * 2)
-    ctx.fill()
+    pathFromPts(ctx, loafSil, LOAF_DEPTH * 0.22)
+    ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
+    ctx.strokeStyle = 'rgba(40, 62, 82, 0.14)'
+    ctx.lineWidth = 7
+    ctx.stroke()
+    ctx.strokeStyle = 'rgba(40, 62, 82, 0.07)'
+    ctx.lineWidth = 14
+    ctx.stroke()
   }
 
-  // Shallow water underlap just outside sil — tighter land↔sea contact
+  // Shallow water underlap — mid-blue mixes toward sky at rim
   {
+    const rimMix = lerp3(WATER_SHALLOW, SKY_SOFT, 0.35)
     ctx.beginPath()
     pathFromPts(ctx, loafSil, LOAF_DEPTH * 0.15)
-    ctx.strokeStyle = rgba(lerp3(WATER_SHALLOW, [210, 228, 232], 0.35), 0.55)
-    ctx.lineWidth = 18
+    ctx.strokeStyle = rgba(rimMix, 0.5)
+    ctx.lineWidth = 16
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
     ctx.stroke()
     ctx.beginPath()
     pathFromPts(ctx, loafSil, LOAF_DEPTH * 0.08)
-    ctx.strokeStyle = rgba(WATER_SHALLOW, 0.35)
-    ctx.lineWidth = 10
+    ctx.strokeStyle = rgba(lerp3(WATER_SHALLOW, WATER_MID, 0.25), 0.32)
+    ctx.lineWidth = 9
     ctx.stroke()
   }
 
   drawLoafFromSilhouette(ctx, loafSil)
 
-  // Pale perimeter underpaint BEFORE clip — sand + foam (old-HTML shore craft)
+  // Living shore underpaint BEFORE clip — muddy sage lip + cyan-white rim
   {
     ctx.beginPath()
     pathFromPts(ctx, loafSil, 0)
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
-    ctx.strokeStyle = rgba(lerp3(COL_SAND, [236, 230, 210], 0.4), 1)
-    ctx.lineWidth = 18
+    // Warm-damp muddy sage under rim (land↔sea lip)
+    ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_MUD, 0.35), 0.75)
+    ctx.lineWidth = 16
     ctx.stroke()
-    ctx.strokeStyle = rgba(lerp3(COL_SHORE, [245, 242, 228], 0.45), 1)
-    ctx.lineWidth = 11
+    ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_SHORE, 0.4), 0.7)
+    ctx.lineWidth = 10
     ctx.stroke()
-    ctx.strokeStyle = rgba(lerp3(COL_SHORE, EARTH_TOP, 0.25), 0.85)
-    ctx.lineWidth = 4.5
+    // Cyan-white rim sparkle (old shore, not tan sand stroke)
+    ctx.strokeStyle = rgba(COL_SHORE, 0.95)
+    ctx.lineWidth = 5.5
     ctx.stroke()
   }
 
@@ -145,7 +145,7 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
 
   drawStreamWater(ctx, hf, wet, vertH, nv, cx, cy, nowMs)
 
-  // Soft aerial wash
+  // Soft aerial wash — cool SE key lift on crests, valley tuck
   {
     let minY = Infinity
     let maxY = -Infinity
@@ -154,9 +154,9 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
       maxY = Math.max(maxY, p.y)
     }
     const wash = ctx.createLinearGradient(0, minY, 0, maxY)
-    wash.addColorStop(0, 'rgba(255, 248, 230, 0.14)')
-    wash.addColorStop(0.45, 'rgba(255, 248, 230, 0.02)')
-    wash.addColorStop(1, 'rgba(30, 50, 36, 0.1)')
+    wash.addColorStop(0, 'rgba(232, 240, 246, 0.16)')
+    wash.addColorStop(0.4, 'rgba(245, 230, 176, 0.04)')
+    wash.addColorStop(1, 'rgba(50, 72, 58, 0.12)')
     ctx.fillStyle = wash
     ctx.beginPath()
     pathFromPts(ctx, loafSil, 0)
@@ -165,39 +165,45 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
 
   ctx.restore()
 
-  // Continuous pale perimeter rim (old-HTML shore craft) — sand → foam band
+  // Living pale perimeter — cyan-white foam/glints (not tidy cream stroke)
   {
-    // Outer expanded wash (tight land↔sea, not floating disc)
     const outer = expandSil(loafSil, 5.5)
     ctx.beginPath()
     pathFromPts(ctx, outer, 0)
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
-    ctx.strokeStyle = rgba(lerp3(WATER_SHALLOW, [236, 246, 244], 0.5), 0.42)
-    ctx.lineWidth = 10
+    // Water mixes toward sky at rim
+    ctx.strokeStyle = rgba(lerp3(WATER_SHALLOW, SKY_SOFT, 0.45), 0.4)
+    ctx.lineWidth = 11
     ctx.stroke()
 
     ctx.beginPath()
     pathFromPts(ctx, loafSil, 0)
-    // Outer shallow wash into sea
-    ctx.strokeStyle = rgba(lerp3(WATER_SHALLOW, [230, 240, 238], 0.45), 0.55)
-    ctx.lineWidth = 12
+    // Sediment tint wash into sea
+    ctx.strokeStyle = rgba(lerp3(WATER_SHALLOW, COL_MUD, 0.18), 0.38)
+    ctx.lineWidth = 13
     ctx.stroke()
-    // Pale sand rim (must read at Fit)
-    ctx.strokeStyle = rgba(lerp3(COL_SHORE, [248, 244, 228], 0.55), 0.98)
-    ctx.lineWidth = 9
+    // Muddy sage wet-bank lip under pale rim
+    ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_MUD, 0.3), 0.7)
+    ctx.lineWidth = 7.5
     ctx.stroke()
-    // Bright foam lip
-    ctx.strokeStyle = 'rgba(250, 253, 252, 0.62)'
-    ctx.lineWidth = 4.2
+    // Cyan-white rim sparkle (old-HTML shore)
+    ctx.strokeStyle = rgba(lerp3(COL_SHORE, COL_SAND, 0.35), 0.95)
+    ctx.lineWidth = 6.5
     ctx.stroke()
-    // Inner sand tuck under turf
-    ctx.strokeStyle = rgba(lerp3(COL_SAND, COL_MOSS, 0.2), 0.75)
-    ctx.lineWidth = 2.8
+    // Breathing foam lip (brighter, thinner)
+    ctx.strokeStyle = 'rgba(244, 250, 252, 0.72)'
+    ctx.lineWidth = 3.2
+    ctx.stroke()
+    // Soft glint dashes along rim (seeded, not uniform stroke)
+    paintRimGlints(ctx, loafSil, hf.seed, nowMs)
+    // Inner damp tuck under turf
+    ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_MOSS, 0.35), 0.55)
+    ctx.lineWidth = 2.4
     ctx.stroke()
   }
 
-  // South contact — thin earth→sand, not thick cliff lip
+  // South contact — thin damp→mud, not thick cliff lip
   {
     const mcy = loafSil.reduce((s, p) => s + p.y, 0) / loafSil.length
     ctx.beginPath()
@@ -214,8 +220,8 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
         ctx.lineTo(p.x, p.y)
       }
     }
-    ctx.strokeStyle = rgba(lerp3(COL_SHORE, EARTH_TOP, 0.45), 0.65)
-    ctx.lineWidth = 5
+    ctx.strokeStyle = rgba(lerp3(COL_DAMP, EARTH_TOP, 0.35), 0.55)
+    ctx.lineWidth = 4.5
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
     ctx.stroke()
@@ -275,11 +281,40 @@ function paintSoftTurf(
   const { ox, oy, worldW, worldH } = _turfMeta!
   ctx.save()
   // Mild blur — kills residual AA facets without turning turf into a moss disc
-  ctx.filter = 'blur(2.8px)'
+  ctx.filter = 'blur(1.6px)'
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
   ctx.drawImage(_turfCanvas!, ox, oy, worldW, worldH)
   ctx.filter = 'none'
+  ctx.restore()
+}
+
+
+/** Soft foam/glint dashes along rim — living shore, not perfect cream stroke. */
+function paintRimGlints(
+  ctx: CanvasRenderingContext2D,
+  sil: { x: number; y: number }[],
+  seed: number,
+  nowMs?: number,
+): void {
+  const n = sil.length
+  if (n < 8) return
+  const t = nowMs != null && Number.isFinite(nowMs) ? nowMs * 0.0012 : 0
+  ctx.save()
+  ctx.lineCap = 'round'
+  for (let i = 0; i < n; i += 3) {
+    const hv = ((Math.imul(i + 1, 2654435761) ^ seed) >>> 0) / 4294967296
+    if (hv < 0.42) continue
+    const a = sil[i]!
+    const b = sil[(i + 1) % n]!
+    const breathe = 0.35 + 0.25 * Math.sin(t + hv * 6.2 + i * 0.08)
+    ctx.strokeStyle = `rgba(244, 250, 252, ${0.28 + breathe * 0.35})`
+    ctx.lineWidth = 1.4 + hv * 1.8
+    ctx.beginPath()
+    ctx.moveTo(a.x, a.y)
+    ctx.lineTo(a.x + (b.x - a.x) * 0.55, a.y + (b.y - a.y) * 0.55)
+    ctx.stroke()
+  }
   ctx.restore()
 }
 
@@ -326,23 +361,25 @@ function expandSil(
  * pale disc under the loaf. Matches old-HTML "sea as one sheet" language.
  */
 function drawOceanPlane(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-  // Continuous ocean sheet from horizon to bottom — fills the viewport, not a disc
+  // Mid-blue sea (#6E96B8–#84A8C8) — richer near camera, paler at horizon
+  // Avoid sterile teal aquarium (#52909A)
   const horizon = h * 0.34
   const sea = ctx.createLinearGradient(0, horizon - h * 0.05, 0, h)
-  sea.addColorStop(0, 'rgba(186, 214, 222, 0)')
-  sea.addColorStop(0.08, rgba(lerp3(WATER_SHALLOW, [210, 226, 232], 0.4), 0.7))
-  sea.addColorStop(0.28, rgba(WATER_SHALLOW, 0.9))
-  sea.addColorStop(0.55, rgba(WATER_MID, 0.95))
-  sea.addColorStop(1, rgba(WATER_DEEP, 0.98))
+  sea.addColorStop(0, 'rgba(200, 214, 228, 0)')
+  sea.addColorStop(0.06, rgba(lerp3(WATER_SHALLOW, SKY_SOFT, 0.55), 0.55))
+  sea.addColorStop(0.2, rgba(lerp3(WATER_SHALLOW, SKY_SOFT, 0.2), 0.88))
+  sea.addColorStop(0.45, rgba(WATER_SHALLOW, 0.94))
+  sea.addColorStop(0.72, rgba(WATER_MID, 0.97))
+  sea.addColorStop(1, rgba(lerp3(WATER_MID, WATER_DEEP, 0.45), 0.99))
   ctx.fillStyle = sea
   ctx.fillRect(0, horizon - h * 0.04, w, h - (horizon - h * 0.04) + 2)
 
-  // Soft horizon haze (open water, not puddle edge)
-  const haze = ctx.createLinearGradient(0, horizon, 0, horizon + h * 0.18)
-  haze.addColorStop(0, 'rgba(236, 244, 246, 0.4)')
-  haze.addColorStop(1, 'rgba(236, 244, 246, 0)')
+  // Soft horizon haze — water mixes toward sky
+  const haze = ctx.createLinearGradient(0, horizon, 0, horizon + h * 0.2)
+  haze.addColorStop(0, 'rgba(213, 224, 236, 0.5)')
+  haze.addColorStop(1, 'rgba(213, 224, 236, 0)')
   ctx.fillStyle = haze
-  ctx.fillRect(0, horizon, w, h * 0.18)
+  ctx.fillRect(0, horizon, w, h * 0.2)
 }
 
 export function screenToGrid(

@@ -46,19 +46,23 @@ export function hash2(ix: number, iy: number, seed: number): number {
   return ((n ^ (n >>> 16)) >>> 0) / 4294967296
 }
 
-export const COL_DEEP: [number, number, number] = [0x3e, 0x72, 0x48]
-export const COL_MOSS: [number, number, number] = [0x5c, 0x96, 0x58]
-export const COL_LIT: [number, number, number] = [0x8a, 0xb8, 0x6e]
-export const COL_WARM: [number, number, number] = [0x9a, 0xb0, 0x68]
-export const COL_DAMP: [number, number, number] = [0x4a, 0x78, 0x54]
-export const COL_SHORE: [number, number, number] = [0xd0, 0xc2, 0x98]
-export const COL_SAND: [number, number, number] = [0xc8, 0xb8, 0x88]
-export const WATER_SHALLOW: [number, number, number] = [0x7a, 0xba, 0xbe]
-export const WATER_MID: [number, number, number] = [0x5a, 0x9c, 0xa4]
-export const WATER_DEEP: [number, number, number] = [0x36, 0x72, 0x82]
-export const EARTH_TOP: [number, number, number] = [0xa8, 0x7c, 0x58]
+/** Cooler sage turf (old-HTML family) — not flat mid-green cookie. */
+export const COL_DEEP: [number, number, number] = [0x7a, 0x9a, 0x78]
+export const COL_MOSS: [number, number, number] = [0xa8, 0xc4, 0xa0]
+export const COL_LIT: [number, number, number] = [0xbf, 0xd0, 0xb8]
+export const COL_WARM: [number, number, number] = [0xd4, 0xe0, 0xd2] // pale frost crest
+export const COL_DAMP: [number, number, number] = [0x9a, 0xaa, 0x88] // muddy sage wet-bank
+export const COL_SHORE: [number, number, number] = [0xd8, 0xee, 0xf2] // cyan-white rim sparkle
+export const COL_SAND: [number, number, number] = [0xe8, 0xf4, 0xf6] // pale foam/sand tuck
+export const COL_MUD: [number, number, number] = [0xb0, 0xa8, 0x88] // thin warm sediment tint
+export const WATER_SHALLOW: [number, number, number] = [0x84, 0xa8, 0xc8]
+export const WATER_MID: [number, number, number] = [0x6e, 0x96, 0xb8]
+export const WATER_DEEP: [number, number, number] = [0x5a, 0x87, 0xb0] // melt channel mid
+export const EARTH_TOP: [number, number, number] = [0xa8, 0x8a, 0x68]
 export const EARTH_MID: [number, number, number] = [0x82, 0x5c, 0x40]
 export const EARTH_BOT: [number, number, number] = [0x5e, 0x42, 0x30]
+/** Soft sky sample for water→sky mix at rims. */
+export const SKY_SOFT: [number, number, number] = [0xc8, 0xd6, 0xe4]
 
 export type RenderIsleOpts = {
   width: number
@@ -140,12 +144,14 @@ export function ensureFields(hf: Heightfield): {
       const hE = sampleHeight(hf, gx + 1, gy)
       const hW = sampleHeight(hf, gx - 1, gy)
 
-      // Vertex slope + soft valley AO (prototype family). Blur (≥2) shares light.
-      let L = 0.84 + (hW - hE) * 0.22 + (hN - hS) * 0.14 + hC * 0.08
+      // Soft diffuse ambient + gentle SE key (old-HTML sun from upper-right).
+      // Blur (≥2) shares light so faces roll together — kills sticker flat fill.
+      const seKey = (hW - hE) * 0.32 + (hN - hS) * 0.18
+      let L = 0.78 + seKey + hC * 0.12
       const meanN = (hN + hS + hE + hW) * 0.25
-      L += Math.max(0, hC - meanN) * 0.18 // crest lift
-      L -= Math.max(0, meanN - hC) * 0.22 // valley AO
-      light[y * nv + x] = Math.max(0.68, Math.min(1.12, L))
+      L += Math.max(0, hC - meanN) * 0.28 // crest lift / frost read
+      L -= Math.max(0, meanN - hC) * 0.36 // valley AO (craft, not flat cookie)
+      light[y * nv + x] = Math.max(0.58, Math.min(1.18, L))
 
       if (hC <= 0.001) {
         wet[y * nv + x] = 0
@@ -163,19 +169,19 @@ export function ensureFields(hf: Heightfield): {
             ? (WATER_LEVEL + 0.16 - hC) * 1.15 * streamGate
             : 0
         const bedWet =
-          hC < WATER_LEVEL + 0.07 && sd < STREAM_HALF * (2.6 + mouthGate * 2.2)
-            ? (1 - sd / (STREAM_HALF * (2.6 + mouthGate * 2.2))) *
-              (WATER_LEVEL + 0.07 - hC) *
-              (2.4 + mouthGate * 1.2)
+          hC < WATER_LEVEL + 0.09 && sd < STREAM_HALF * (2.9 + mouthGate * 2.4)
+            ? (1 - sd / (STREAM_HALF * (2.9 + mouthGate * 2.4))) *
+              (WATER_LEVEL + 0.09 - hC) *
+              (2.7 + mouthGate * 1.35)
             : 0
-        // Mouth boost — keep melt readable as it opens to the bay
+        // Mouth boost — denser melt cuts / bay feel (wetness only; silhouette holds)
         const mouthWet =
-          mouthGate > 0.2 && sd < STREAM_HALF * (1.8 + mouthGate * 2.5)
-            ? mouthGate * streamGate * 0.55
+          mouthGate > 0.15 && sd < STREAM_HALF * (2.0 + mouthGate * 2.8)
+            ? mouthGate * streamGate * 0.72
             : 0
         wet[y * nv + x] = Math.min(
-          1.2,
-          streamGate * 0.95 + depthNudge + bedWet + mouthWet,
+          1.25,
+          streamGate * 1.05 + depthNudge + bedWet + mouthWet,
         )
       }
 
@@ -200,30 +206,38 @@ export function ensureFields(hf: Heightfield): {
               : 0
           let c: [number, number, number]
           if (edgeSand > 0.12) {
+            // Living shoreline: muddy sage lip under cyan-white rim (not tan stroke)
             const base =
               h < 0.22
                 ? lerp3(COL_MOSS, COL_LIT, h / 0.22)
                 : lerp3(COL_MOSS, COL_LIT, Math.min(1, (h - 0.22) / 0.2))
-            c = lerp3(base, COL_SAND, Math.min(0.78, edgeSand * 0.85))
-            c = lerp3(c, COL_SHORE, Math.min(0.45, edgeSand * 0.5))
+            c = lerp3(base, COL_DAMP, Math.min(0.55, edgeSand * 0.7))
+            c = lerp3(c, COL_MUD, Math.min(0.35, edgeSand * 0.4))
+            c = lerp3(c, COL_SHORE, Math.min(0.55, edgeSand * 0.55))
           } else if (nearBank) {
-            // Soft damp hint — soft wet mask owns beige bank (no mesh stair)
+            // Soft damp/mud fade into melt — paint-like, not sterile stripe
             const dampT = Math.min(1, Math.max(0, 1 - sdN / (STREAM_HALF * 2.4)))
             const base =
               h < 0.28
                 ? lerp3(COL_MOSS, COL_LIT, h / 0.28)
                 : lerp3(COL_MOSS, COL_LIT, Math.min(1, (h - 0.28) / 0.22))
-            c = lerp3(base, COL_SHORE, dampT * 0.28)
+            c = lerp3(base, COL_DAMP, dampT * 0.48)
+            c = lerp3(c, COL_MUD, dampT * 0.22)
           } else if (h < 0.22) {
             c = lerp3(COL_DEEP, COL_MOSS, h / 0.22)
           } else if (h < 0.42) {
             c = lerp3(COL_MOSS, COL_LIT, (h - 0.22) / 0.2)
           } else {
-            c = lerp3(COL_LIT, COL_WARM, Math.min(1, (h - 0.42) / 0.3))
+            // Pale frost/snow on crests (old-HTML sage→white frost)
+            c = lerp3(COL_LIT, COL_WARM, Math.min(1, (h - 0.42) / 0.28))
           }
+          // Off-grid grain — coarse noise not aligned to iso grid (craft unevenness)
           const g = hash2((x + dx) >> 2, (y + dy) >> 2, seed + 17)
-          if (g > 0.62) c = lerp3(c, COL_LIT, 0.1)
-          if (g < 0.28) c = lerp3(c, COL_DEEP, 0.12)
+          const g2 = hash2((x + dx * 3) >> 3, (y + dy * 3) >> 3, seed + 91)
+          if (g > 0.55) c = lerp3(c, COL_LIT, 0.18 + g2 * 0.08)
+          if (g < 0.36) c = lerp3(c, COL_DEEP, 0.2 + (1 - g2) * 0.08)
+          if (g2 > 0.68 && h > 0.32) c = lerp3(c, COL_WARM, 0.12)
+          if (g2 < 0.22 && h < 0.35) c = lerp3(c, COL_DAMP, 0.1)
           acc0 += c[0] * w
           acc1 += c[1] * w
           acc2 += c[2] * w
@@ -256,7 +270,7 @@ export function ensureFields(hf: Heightfield): {
   const ch = new Float32Array(nv * nv)
   for (let c = 0; c < 3; c++) {
     for (let i = 0; i < nv * nv; i++) ch[i] = col[i * 3 + c]!
-    boxBlurInPlace(ch, nv, 4)
+    boxBlurInPlace(ch, nv, 2)
     for (let i = 0; i < nv * nv; i++) col[i * 3 + c] = ch[i]!
   }
 

@@ -5,6 +5,7 @@ import {
   rgba,
   COL_DAMP,
   COL_SHORE,
+  COL_MUD,
 } from './renderIsleCore'
 
 /**
@@ -98,9 +99,11 @@ export function drawSoftIsoMesh(
     let rgb = lerp3(lerp3(c00, c10, 0.5), lerp3(c01, c11, 0.5), 0.5)
 
     const wAvg = (wet[i00]! + wet[i10]! + wet[i11]! + wet[i01]!) * 0.25
-    if (wAvg > 0.1) {
-      rgb = lerp3(rgb, COL_SHORE, Math.min(0.42, wAvg * 0.48))
-      rgb = lerp3(rgb, COL_DAMP, Math.min(0.22, wAvg * 0.28))
+    if (wAvg > 0.08) {
+      // Soft damp/mud fade near melt — paint-like, not sterile cream stripe
+      rgb = lerp3(rgb, COL_DAMP, Math.min(0.42, wAvg * 0.55))
+      rgb = lerp3(rgb, COL_MUD, Math.min(0.22, wAvg * 0.3))
+      rgb = lerp3(rgb, COL_SHORE, Math.min(0.28, wAvg * 0.32))
     }
 
     const shade = (c: [number, number, number], L: number): [number, number, number] => [
