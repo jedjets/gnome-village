@@ -71,23 +71,21 @@ export function streamDist(gx: number, gy: number, size: number, seed: number): 
 
 /** Side-branch descriptors — shared by carve + wetness (village creek network). */
 export const MELT_BRANCHES = [
-  { t0: -0.55, t1: -0.05, side: 0.15, w: 1.25, a: 0.5 },
-  { t0: -0.32, t1: 0.2, side: -0.13, w: 1.15, a: 0.46 },
-  { t0: -0.02, t1: 0.5, side: 0.22, w: 1.2, a: 0.48 },
-  { t0: 0.12, t1: 0.58, side: -0.2, w: 1.05, a: 0.42 },
-  { t0: -0.18, t1: 0.28, side: 0.34, w: 0.95, a: 0.36 },
-  { t0: 0.28, t1: 0.68, side: 0.08, w: 1.0, a: 0.34 },
+  { t0: -0.48, t1: -0.02, side: 0.12, w: 1.05, a: 0.38 },
+  { t0: -0.22, t1: 0.28, side: -0.11, w: 1.0, a: 0.36 },
+  { t0: 0.05, t1: 0.52, side: 0.18, w: 1.05, a: 0.34 },
+  { t0: 0.22, t1: 0.62, side: -0.14, w: 0.9, a: 0.28 },
 ] as const
 
 /** Short shore-cut melt fingers (old-HTML density into the rim). */
-export const MELT_SHORE_CUTS = [
-  // Shallow scoops only — living wet lip, never silhouette notches
-  { ang: -0.85, len: 0.22, w: 0.55, a: 0.22 },
-  { ang: -0.2, len: 0.2, w: 0.5, a: 0.2 },
-  { ang: 0.55, len: 0.24, w: 0.58, a: 0.22 },
-  { ang: 1.15, len: 0.18, w: 0.48, a: 0.18 },
-  { ang: 1.7, len: 0.2, w: 0.52, a: 0.2 },
-] as const
+export const MELT_SHORE_CUTS: readonly {
+  ang: number
+  len: number
+  w: number
+  a: number
+}[] = [
+  // Empty — shore scoops read as disconnected pond blotches at Fit
+]
 
 /**
  * Soft-iso village land: snowy-oval family + thin multi-channel melt.
@@ -116,10 +114,9 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
   ]
   // Soft valleys / hollows (stream can follow) — not bean separator
   const valleys = [
-    { lx: 0.06, ly: 0.02, a: 0.22, s: 0.36 },
-    { lx: -0.18, ly: 0.06, a: 0.18, s: 0.28 },
-    { lx: 0.2, ly: -0.12, a: 0.16, s: 0.26 },
-    { lx: -0.06, ly: 0.28, a: 0.14, s: 0.24 },
+    { lx: 0.06, ly: 0.02, a: 0.16, s: 0.34 },
+    { lx: -0.18, ly: 0.06, a: 0.12, s: 0.26 },
+    { lx: 0.2, ly: -0.12, a: 0.1, s: 0.24 },
   ]
 
   for (let y = 0; y < size; y++) {
@@ -160,10 +157,10 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
       }
       // Stronger irregular roll (peaks/valleys) — craft, not sterile dome
       const und =
-        (fbm(x * 0.045 + 2.2, y * 0.045, noiseSeed + 5) - 0.5) * 0.58 +
-        (fbm(x * 0.09, y * 0.09, noiseSeed + 17) - 0.5) * 0.3
-      const meso = (fbm(x * 0.18, y * 0.18, noiseSeed + 31) - 0.5) * 0.14
-      const micro = (fbm(x * 0.34, y * 0.34, noiseSeed + 55) - 0.5) * 0.06
+        (fbm(x * 0.045 + 2.2, y * 0.045, noiseSeed + 5) - 0.5) * 0.64 +
+        (fbm(x * 0.09, y * 0.09, noiseSeed + 17) - 0.5) * 0.34
+      const meso = (fbm(x * 0.18, y * 0.18, noiseSeed + 31) - 0.5) * 0.16
+      const micro = (fbm(x * 0.34, y * 0.34, noiseSeed + 55) - 0.5) * 0.07
       const along = (dx + dy) * 0.55
       const cross = (dx - dy) * 0.48
       const bankRidge =
@@ -209,9 +206,9 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
           const carveB = Math.pow(1 - bd / B.w, 1.35) * flare * (B.a + 0.12)
           const rimKeepB = r > 0.65 ? Math.pow(smoothstep((0.86 - r) / 0.2), 1.15) : 1
           h -= carveB * rimKeepB
-          // Ensure fork beds sit under waterline so wetness fills
-          if (carveB * rimKeepB > 0.08) {
-            h = Math.min(h, 0.075)
+          // Mild fork bed — under waterline but not a punched pond crater
+          if (carveB * rimKeepB > 0.12) {
+            h = Math.min(h, 0.09)
           }
         }
       }

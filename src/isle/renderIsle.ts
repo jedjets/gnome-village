@@ -11,7 +11,6 @@ import {
   lerp3,
   rgba,
   COL_MOSS,
-  COL_SAND,
   COL_SHORE,
   COL_DAMP,
   COL_MUD,
@@ -41,7 +40,7 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
   const cx = (size - 1) * 0.5
   const cy = (size - 1) * 0.5
   const { light, wet, col, vertH, nv } = ensureFields(hf)
-  const loafSil = buildSilhouette(hf, cx, cy, 96)
+  const loafSil = buildSilhouette(hf, cx, cy, 128)
 
   // Cool soft blue-grey sky (old-HTML morning family) — NOT warm parchment
   const sky = ctx.createLinearGradient(0, 0, 0, h)
@@ -109,22 +108,22 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
 
   drawLoafFromSilhouette(ctx, loafSil)
 
-  // Living shore underpaint BEFORE clip — muddy sage lip + cyan-white rim
+  // Living shore underpaint BEFORE clip — muddy soft lip (no bright white seal)
   {
     ctx.beginPath()
     pathFromPts(ctx, loafSil, 0)
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
     // Warm-damp muddy sage under rim (land↔sea lip)
-    ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_MUD, 0.35), 0.75)
-    ctx.lineWidth = 16
+    ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_MUD, 0.35), 0.72)
+    ctx.lineWidth = 15
     ctx.stroke()
-    ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_SHORE, 0.4), 0.7)
-    ctx.lineWidth = 10
+    ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_SHORE, 0.28), 0.45)
+    ctx.lineWidth = 8
     ctx.stroke()
-    // Cyan-white rim sparkle (old shore, not tan sand stroke)
-    ctx.strokeStyle = rgba(COL_SHORE, 0.95)
-    ctx.lineWidth = 5.5
+    // Soft pale foam tuck — low alpha so AA never owns a white knife
+    ctx.strokeStyle = rgba(lerp3(COL_SHORE, WATER_SHALLOW, 0.35), 0.38)
+    ctx.lineWidth = 3.2
     ctx.stroke()
   }
 
@@ -165,7 +164,7 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
 
   ctx.restore()
 
-  // Living pale perimeter — cyan-white foam/glints (not tidy cream stroke)
+  // Living soft perimeter — muddy lip + sky-mix foam (no bright white seal)
   {
     const outer = expandSil(loafSil, 5.5)
     ctx.beginPath()
@@ -173,33 +172,29 @@ export function renderIsle(ctx: CanvasRenderingContext2D, opts: RenderIsleOpts):
     ctx.lineJoin = 'round'
     ctx.lineCap = 'round'
     // Water mixes toward sky at rim
-    ctx.strokeStyle = rgba(lerp3(WATER_SHALLOW, SKY_SOFT, 0.45), 0.4)
-    ctx.lineWidth = 11
+    ctx.strokeStyle = rgba(lerp3(WATER_SHALLOW, SKY_SOFT, 0.45), 0.42)
+    ctx.lineWidth = 12
     ctx.stroke()
 
     ctx.beginPath()
     pathFromPts(ctx, loafSil, 0)
     // Sediment tint wash into sea
-    ctx.strokeStyle = rgba(lerp3(WATER_SHALLOW, COL_MUD, 0.18), 0.38)
-    ctx.lineWidth = 13
+    ctx.strokeStyle = rgba(lerp3(WATER_SHALLOW, COL_MUD, 0.22), 0.4)
+    ctx.lineWidth = 14
     ctx.stroke()
-    // Muddy sage wet-bank lip under pale rim
-    ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_MUD, 0.3), 0.7)
-    ctx.lineWidth = 7.5
+    // Muddy sage wet-bank lip (owns the contact, not a white hairline)
+    ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_MUD, 0.28), 0.68)
+    ctx.lineWidth = 8
     ctx.stroke()
-    // Cyan-white rim sparkle (old-HTML shore)
-    ctx.strokeStyle = rgba(lerp3(COL_SHORE, COL_SAND, 0.35), 0.95)
-    ctx.lineWidth = 6.5
-    ctx.stroke()
-    // Breathing foam lip (brighter, thinner)
-    ctx.strokeStyle = 'rgba(244, 250, 252, 0.72)'
-    ctx.lineWidth = 3.2
+    // Soft pale shore tuck — muted (skill: never bright white outline)
+    ctx.strokeStyle = rgba(lerp3(COL_SHORE, WATER_SHALLOW, 0.4), 0.42)
+    ctx.lineWidth = 4.2
     ctx.stroke()
     // Soft glint dashes along rim (seeded, not uniform stroke)
     paintRimGlints(ctx, loafSil, hf.seed, nowMs)
     // Inner damp tuck under turf
-    ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_MOSS, 0.35), 0.55)
-    ctx.lineWidth = 2.4
+    ctx.strokeStyle = rgba(lerp3(COL_DAMP, COL_MOSS, 0.35), 0.5)
+    ctx.lineWidth = 2.2
     ctx.stroke()
   }
 
@@ -281,7 +276,7 @@ function paintSoftTurf(
   const { ox, oy, worldW, worldH } = _turfMeta!
   ctx.save()
   // Mild blur — kills residual AA facets without turning turf into a moss disc
-  ctx.filter = 'blur(1.05px)'
+  ctx.filter = 'blur(1.7px)'
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
   ctx.drawImage(_turfCanvas!, ox, oy, worldW, worldH)
@@ -327,8 +322,9 @@ function paintRimGlints(
     const a = sil[i]!
     const b = sil[(i + 1) % n]!
     const breathe = 0.35 + 0.25 * Math.sin(t + hv * 6.2 + i * 0.08)
-    ctx.strokeStyle = `rgba(244, 250, 252, ${0.28 + breathe * 0.35})`
-    ctx.lineWidth = 1.4 + hv * 1.8
+    // Soft sky-mix glints — never bright white hairline seal
+    ctx.strokeStyle = `rgba(210, 226, 236, ${0.12 + breathe * 0.18})`
+    ctx.lineWidth = 1.1 + hv * 1.2
     ctx.beginPath()
     ctx.moveTo(a.x, a.y)
     ctx.lineTo(a.x + (b.x - a.x) * 0.55, a.y + (b.y - a.y) * 0.55)

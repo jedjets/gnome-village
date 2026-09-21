@@ -64,7 +64,38 @@ export function buildSilhouette(hf: Heightfield, cx: number, cy: number, n = 144
     iso.y -= (hSil - meanH) * HEIGHT_SCALE * 0.16
     pts.push({ x: iso.x, y: iso.y, h: hRim, gx, gy })
   }
-  return chaikinClosed(pts, 1)
+  // Extra Chaikin + circular low-pass — kill N-shore saw / stair teeth at Fit
+  let out = chaikinClosed(pts, 2)
+  out = circularLowpassPts(out, 2)
+  out = chaikinClosed(out, 1)
+  return out
+}
+
+/** Mild circular blur on closed outline (world px). */
+function circularLowpassPts(pts: Pt[], radius: number): Pt[] {
+  const n = pts.length
+  if (n < 6 || radius < 1) return pts
+  const out: Pt[] = new Array(n)
+  for (let i = 0; i < n; i++) {
+    let sx = 0
+    let sy = 0
+    let sh = 0
+    let sgx = 0
+    let sgy = 0
+    let w = 0
+    for (let d = -radius; d <= radius; d++) {
+      const tw = radius + 1 - Math.abs(d)
+      const p = pts[(i + d + n * 4) % n]!
+      sx += p.x * tw
+      sy += p.y * tw
+      sh += p.h * tw
+      sgx += p.gx * tw
+      sgy += p.gy * tw
+      w += tw
+    }
+    out[i] = { x: sx / w, y: sy / w, h: sh / w, gx: sgx / w, gy: sgy / w }
+  }
+  return out
 }
 
 export function chaikinClosed(pts: Pt[], passes: number): Pt[] {

@@ -169,11 +169,12 @@ export function ensureFields(hf: Heightfield): {
           streamGate > 0.05 && hC < WATER_LEVEL + 0.14
             ? (WATER_LEVEL + 0.14 - hC) * 1.25 * streamGate
             : 0
+        // Tight bed wet — stay on channel (anti disconnected pond blotches)
         const bedWet =
-          hC < WATER_LEVEL + 0.12 && sd < STREAM_HALF * (3.2 + mouthGate * 0.6)
-            ? (1 - sd / (STREAM_HALF * (3.2 + mouthGate * 0.6))) *
-              (WATER_LEVEL + 0.12 - hC) *
-              (3.4 + mouthGate * 0.4)
+          hC < WATER_LEVEL + 0.1 && sd < STREAM_HALF * (1.85 + mouthGate * 0.35)
+            ? (1 - sd / (STREAM_HALF * (1.85 + mouthGate * 0.35))) *
+              (WATER_LEVEL + 0.1 - hC) *
+              (2.6 + mouthGate * 0.3)
             : 0
         // Mild mouth wet — open creek to sea, not fat bay sheet
         const mouthWet =
@@ -214,7 +215,7 @@ export function ensureFields(hf: Heightfield): {
                 : lerp3(COL_MOSS, COL_LIT, Math.min(1, (h - 0.22) / 0.2))
             c = lerp3(base, COL_DAMP, Math.min(0.55, edgeSand * 0.7))
             c = lerp3(c, COL_MUD, Math.min(0.35, edgeSand * 0.4))
-            c = lerp3(c, COL_SHORE, Math.min(0.55, edgeSand * 0.55))
+            c = lerp3(c, COL_SHORE, Math.min(0.28, edgeSand * 0.32))
           } else if (nearBank) {
             // Soft damp/mud fade into melt — paint-like, not sterile stripe
             const dampT = Math.min(1, Math.max(0, 1 - sdN / (STREAM_HALF * 2.4)))

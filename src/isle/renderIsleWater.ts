@@ -7,7 +7,6 @@ import {
   WATER_SHALLOW,
   WATER_MID,
   WATER_DEEP,
-  COL_SHORE,
   COL_MOSS,
   COL_DAMP,
   COL_MUD,
@@ -111,7 +110,11 @@ export function drawStreamWater(
   ctx.lineJoin = 'round'
   ctx.lineCap = 'round'
 
-  // --- Soft living banks under the sheet (muddy sage → cyan foam) ---
+  // --- Water body colours (shared by bank underpaint + sheet) ---
+  const fillCore = lerp3(WATER_SHALLOW, WATER_MID, 0.35)
+  const fillDeep = lerp3(WATER_MID, WATER_DEEP, 0.45)
+
+  // --- Soft living banks under the sheet (muddy sage → water feather) ---
   if (loop && loop.length >= 6) {
     ctx.beginPath()
     pathFromPts(ctx, expandClosed(loop, 1.8), 0)
@@ -125,18 +128,16 @@ export function drawStreamWater(
 
     ctx.beginPath()
     pathFromPts(ctx, expandClosed(loop, 0.85), 0)
-    ctx.fillStyle = rgba(lerp3(COL_DAMP, COL_SHORE, 0.5), 0.75)
+    ctx.fillStyle = rgba(lerp3(COL_DAMP, WATER_SHALLOW, 0.35), 0.55)
     ctx.fill()
 
     ctx.beginPath()
     pathFromPts(ctx, expandClosed(loop, 0.5), 0)
-    ctx.fillStyle = rgba(lerp3(COL_SHORE, WATER_SHALLOW, 0.35), 0.92)
+    ctx.fillStyle = rgba(lerp3(WATER_SHALLOW, fillCore, 0.2), 0.85)
     ctx.fill()
   }
 
   // --- Water body: darker mid-blue melt (#5A87B0 family), not sterile teal ---
-  const fillCore = lerp3(WATER_SHALLOW, WATER_MID, 0.35)
-  const fillDeep = lerp3(WATER_MID, WATER_DEEP, 0.45)
   for (const poly of waterPolys) {
     const fat = fattenPoly(poly, 0.3)
     ctx.beginPath()
@@ -161,14 +162,14 @@ export function drawStreamWater(
     ctx.fillStyle = rgba(lerp3(fillDeep, WATER_DEEP, 0.35), 0.42)
     ctx.fill()
 
-    // Soft bank washes — muddy lip + foam (never knife/stair seal)
+    // Soft bank washes — muddy→water feather (never bright white / cyan knife)
     ctx.beginPath()
     pathFromPts(ctx, loop, 0)
     for (const [w, a, col] of [
-      [7.5, 0.2, lerp3(COL_DAMP, WATER_SHALLOW, 0.28)],
-      [5, 0.22, lerp3(COL_SHORE, WATER_SHALLOW, 0.42)],
-      [3, 0.28, lerp3(fillCore, COL_SHORE, 0.45)],
-      [1.8, 0.42, lerp3(COL_SHORE, SKY_SOFT, 0.55)],
+      [8.5, 0.22, lerp3(COL_DAMP, WATER_SHALLOW, 0.35)],
+      [5.5, 0.2, lerp3(COL_DAMP, fillCore, 0.4)],
+      [3.2, 0.18, lerp3(fillCore, WATER_MID, 0.25)],
+      [1.6, 0.14, lerp3(fillCore, SKY_SOFT, 0.35)],
     ] as const) {
       ctx.strokeStyle = rgba(col, a)
       ctx.lineWidth = w
