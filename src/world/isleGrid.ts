@@ -71,9 +71,9 @@ export function streamDist(gx: number, gy: number, size: number, seed: number): 
 
 /** Side-branch descriptors — shared by carve + wetness (village creek network). */
 export const MELT_BRANCHES = [
-  // 0.7.6.2: tiny near-ribbon wobbles only — no side-pond fork bowls
-  { t0: -0.28, t1: 0.12, side: 0.06, w: 0.55, a: 0.14 },
-  { t0: 0.08, t1: 0.42, side: -0.05, w: 0.5, a: 0.12 },
+  // 0.7.6.3: 2 forks — side peaks mid-span; flare→0 at ends so they JOIN main
+  { t0: -0.45, t1: 0.3, side: 0.2, w: 1.35, a: 0.5 },
+  { t0: -0.05, t1: 0.62, side: -0.18, w: 1.25, a: 0.46 },
 ] as const
 
 /** Short shore-cut melt fingers (old-HTML density into the rim). */
@@ -172,7 +172,7 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
 
       // Main melt trench — village creek scale (NOT fat bay ribbon)
       const sd = streamDist(x, y, size, noiseSeed)
-      const bank = 1.45
+      const bank = 1.85
       const wob = streamWobble(along, noiseSeed)
       const mouthGate = smoothstep((along - 0.22) / 0.48) // later, milder mouth
       if (sd < bank && r < 0.98) {
@@ -184,12 +184,12 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
             : r > 0.7
               ? Math.pow(smoothstep((0.92 - r) / 0.22), 1.05)
               : 1
-        h -= carve * (0.36 + mouthGate * 0.22) * Math.max(0.15, rimKeep)
+        h -= carve * (0.44 + mouthGate * 0.28) * Math.max(0.15, rimKeep)
         // Mild mouth flare at rim only — not inland fat bay
-        if (mouthGate > 0.5 && r > 0.7 && sd < bank * (1.0 + mouthGate * 0.45)) {
+        if (mouthGate > 0.45 && r > 0.68 && sd < bank * (1.15 + mouthGate * 0.7)) {
           const bay =
-            Math.pow(1 - sd / (bank * (1.0 + mouthGate * 0.45)), 1.35) * mouthGate
-          h -= bay * (0.2 + mouthGate * 0.15)
+            Math.pow(1 - sd / (bank * (1.15 + mouthGate * 0.7)), 1.3) * mouthGate
+          h -= bay * (0.28 + mouthGate * 0.22)
         }
       }
 
@@ -198,16 +198,17 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
         const B = MELT_BRANCHES[bi]!
         if (along < B.t0 || along > B.t1) continue
         const u = (along - B.t0) / (B.t1 - B.t0)
-        const flare = Math.sin(u * Math.PI)
+        const flare = Math.sin(u * Math.PI) // 0 at ends → joins main; peak mid
+        const sideNow = B.side * flare
         const bCross = (dx - dy) * 0.48 - wob
-        const bd = Math.abs(bCross - B.side) * cx
-        if (bd < B.w && r < 0.8) {
-          const carveB = Math.pow(1 - bd / B.w, 1.35) * flare * (B.a + 0.12)
-          const rimKeepB = r > 0.65 ? Math.pow(smoothstep((0.86 - r) / 0.2), 1.15) : 1
+        const bd = Math.abs(bCross - sideNow) * cx
+        if (bd < B.w && r < 0.9) {
+          const carveB = Math.pow(1 - bd / B.w, 1.25) * Math.max(0.35, flare) * (B.a + 0.18)
+          const rimKeepB = r > 0.72 ? Math.pow(smoothstep((0.92 - r) / 0.2), 1.05) : 1
           h -= carveB * rimKeepB
-          // No punched fork beds — keep land continuous (anti orphan ponds)
-          if (carveB * rimKeepB > 0.18) {
-            h = Math.min(h, 0.14)
+          // Connected fork bed under waterline (joins main melt — not orphan pond)
+          if (carveB * rimKeepB > 0.12) {
+            h = Math.min(h, 0.085)
           }
         }
       }
@@ -242,23 +243,25 @@ export function createSeededIsle(seed = 0x6e0f1e): Heightfield {
       for (let bi = 0; bi < MELT_BRANCHES.length; bi++) {
         const B = MELT_BRANCHES[bi]!
         if (along < B.t0 || along > B.t1) continue
+        const u = (along - B.t0) / (B.t1 - B.t0)
+        const sideNow = B.side * Math.sin(u * Math.PI)
         const bCross = (dx - dy) * 0.48 - wob
-        if (Math.abs(bCross - B.side) * cx < B.w * 1.05) inFork = true
+        if (Math.abs(bCross - sideNow) * cx < B.w * 1.1) inFork = true
       }
       // Mouth only at SE rim — inland channel never punched to void
       const atMouth = mouthGate > 0.55 && inMain && rr > 0.78
       if (mask > 0.15 && rr <= 1.0) {
         if (atMouth) {
-          // Narrow open into sea at rim only
-          if (sd < bank * (0.85 + mouthGate * 0.35)) {
+          // Wider melt cut open into sea at rim (connected network mouth)
+          if (sd < bank * (1.05 + mouthGate * 0.55)) {
             h = Math.min(h, Math.max(0, 0.02 * (1 - mouthGate)))
-            if (mouthGate > 0.8 && sd < bank * 0.9 && rr > 0.86) h = 0
+            if (mouthGate > 0.75 && sd < bank * (1.0 + mouthGate * 0.35) && rr > 0.84) h = 0
           }
         } else if (inMain || inFork) {
           // Wet bed under waterline, land mass stays connected (no twin-bean split)
-          const bed = 0.05 + 0.015 * (1 - mouthGate)
+          const bed = 0.045 + 0.012 * (1 - mouthGate)
           if (h < bed) h = bed
-          if (sd < bank * 0.65) h = Math.min(h, 0.08)
+          if (sd < bank * 0.7 || inFork) h = Math.min(h, 0.075)
         } else {
           const floor = r > 0.72 ? 0.08 + (r - 0.72) * 0.08 : 0.05
           if (h < floor) h = floor * (0.55 + 0.45 * mask)
@@ -371,13 +374,18 @@ export function meltChannelDist(gx: number, gy: number, size: number, seed: numb
   // Mild mouth widen — not fat bay
   const mouthGate = Math.max(0, Math.min(1, (along - 0.22) / 0.48))
   if (mouthGate > 0.3) {
-    best = best / (1 + mouthGate * 0.55)
+    best = best / (1 + mouthGate * 0.75)
   }
   for (let i = 0; i < MELT_BRANCHES.length; i++) {
     const B = MELT_BRANCHES[i]!
     if (along < B.t0 - 0.04 || along > B.t1 + 0.04) continue
-    const bd = Math.abs(cross - B.side) * cx
-    if (bd < best) best = bd
+    const u = Math.max(0, Math.min(1, (along - B.t0) / (B.t1 - B.t0)))
+    const sideNow = B.side * Math.sin(u * Math.PI)
+    const bd = Math.abs(cross - sideNow) * cx
+    // Widen effective half near mid-fork so creek network reads at Fit
+    const forkHalf = B.w * (0.55 + 0.55 * Math.sin(u * Math.PI))
+    const adj = bd / Math.max(0.35, forkHalf / 1.2)
+    if (adj < best) best = adj
   }
   // Shore-cut fingers
   const r = Math.sqrt(dx * dx * 1.0 + dy * dy * 1.06)

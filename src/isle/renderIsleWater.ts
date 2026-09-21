@@ -1,5 +1,5 @@
 import type { Heightfield } from '../world/isleGrid'
-import { sampleHeight, streamWobble, streamDist } from '../world/isleGrid'
+import { sampleHeight, streamWobble, meltChannelDist } from '../world/isleGrid'
 import {
   gridToIso,
   lerp3,
@@ -59,15 +59,15 @@ export function drawStreamWater(
   const size = nv - 1
   const softWet = new Float32Array(wet)
   boxBlurField(softWet, nv, 1)
-  // Blur must not resurrect side-pond wet outside main ribbon
+  // Blur must not resurrect wet outside connected melt network
   for (let y = 0; y < nv; y++) {
     for (let x = 0; x < nv; x++) {
-      const sd = streamDist(x - 0.5, y - 0.5, size, hf.seed)
+      const sd = meltChannelDist(x - 0.5, y - 0.5, size, hf.seed)
       const nx = (x - 0.5 - cx) / cx
       const ny = (y - 0.5 - cy) / cy
       const along = (nx + ny) * 0.55
       const mouthGate = Math.max(0, Math.min(1, (along - 0.22) / 0.48))
-      if (sd > STREAM_HALF * (1.7 + mouthGate * 0.55)) softWet[y * nv + x] = 0
+      if (sd > STREAM_HALF * (1.9 + mouthGate * 0.7)) softWet[y * nv + x] = 0
     }
   }
 
@@ -75,13 +75,13 @@ export function drawStreamWater(
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      // Ribbon-only cells — skip orphan pond wet pockets off the main melt
-      const sdCell = streamDist(x + 0.5, y + 0.5, size, hf.seed)
+      // Melt-network cells — keep connected forks; skip far orphan pockets
+      const sdCell = meltChannelDist(x + 0.5, y + 0.5, size, hf.seed)
       const nxC = (x + 0.5 - cx) / cx
       const nyC = (y + 0.5 - cy) / cy
       const alongC = (nxC + nyC) * 0.55
       const mouthC = Math.max(0, Math.min(1, (alongC - 0.22) / 0.48))
-      if (sdCell > STREAM_HALF * (1.7 + mouthC * 0.55)) continue
+      if (sdCell > STREAM_HALF * (1.9 + mouthC * 0.7)) continue
 
       const i00 = y * nv + x
       const i10 = y * nv + (x + 1)
@@ -167,7 +167,7 @@ export function drawStreamWater(
     ctx.fill()
   }
 
-  // Continuous ribbon body (primary melt — open to sea, no side ponds)
+  // Continuous melt body (main + connected forks open to sea)
   if (loop && loop.length >= 6) {
     ctx.beginPath()
     pathFromPts(ctx, expandClosed(loop, 0.15), 0)
@@ -266,10 +266,10 @@ function buildStreamRibbon(
           ? Math.max(0.35, 1 - (r - 0.58) / 0.32)
           : 1
     let half =
-      (STREAM_HALF * 0.42 + midBoost + mouthGate * 0.12) * rimFade
+      (STREAM_HALF * 0.52 + midBoost + mouthGate * 0.18) * rimFade
     // Living bank wobble — irregular wet lip, not ruled canal
     half *= 0.82 + 0.36 * fbmBank(along * 4.2, seed)
-    if (half < 0.18) continue
+    if (half < 0.22) continue
     samples.push({
       gx,
       gy,

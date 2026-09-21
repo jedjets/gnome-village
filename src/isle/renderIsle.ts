@@ -275,8 +275,8 @@ function paintSoftTurf(
   }
   const { ox, oy, worldW, worldH } = _turfMeta!
   ctx.save()
-  // Stronger neighbourhood light blur via CSS — kill residual mesh lattice on slopes
-  ctx.filter = 'blur(3.1px)'
+  // Mild CSS blur — AA soften only; roll + Raise crest must read at Fit (0.7.6.3)
+  ctx.filter = 'blur(1.35px)'
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
   ctx.drawImage(_turfCanvas!, ox, oy, worldW, worldH)
