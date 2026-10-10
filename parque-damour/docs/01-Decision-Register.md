@@ -27,8 +27,8 @@ Status legend: **LOCKED** = the owner decided · **ADVISED** = Claude's recommen
 | 12 | Avatars | "Okay" | Possessable actors unlocked by the ladders. Mischief: pigeon, pomeranian, mime. Cupid: flower seller, busker, the matchmaker (the girl with the baguette). | LOCKED |
 | 13 | Control | "Taps" | Tap-to-move, tap-on-thing for a contextual action, exactly the GV `playerTap` cascade pattern. No joystick. | LOCKED |
 | 14 | Leaving avatar mode | "Yes" | The possessed actor returns to its own AI. | LOCKED |
-| 15 | Boundary | "Advise." | Railings with five gates; facades and river drawn as world-space props outside the bounds so they rotate with the camera; landmarks only as a distant skyline band, not in-park props. One in-park "folly" set (bandstand, fountain, statue) is placeable. | ADVISED |
-| 16 | Tool lists | "Advise." | Section 3.7 (16 park tools) and 3.8 (18 abilities, 6 avatars). | ADVISED |
+| 15 | Boundary | "Advise." | Railings with five gates; facades and river drawn as world-space props outside the bounds so they rotate with the camera; landmarks only as a distant skyline band, not in-park props. One in-park "folly" set (bandstand, fountain) is placeable. | ADVISED |
+| 16 | Tool lists | "Advise." | Section 3.7 (16 park tools) and 3.8 (19 abilities: 9 Cupid, 10 Mischief; 6 avatars). | ADVISED |
 | 17 | Park self-building | "Advise." | Light touch: visitors wear desire paths in lawn; a gardener NPC paves worn runs with gravel; pigeons gather where crumbs fall. No autonomous construction, no construction economy. | ADVISED |
 | 18 | Time | "Ok" | 360 s day, 3-day seasons, 12-day year, weather simulated and castable. | LOCKED |
 | 19 | Visitors | "Advise." | Section 3.4: singles, couples, families with children, elders, tourists, joggers, artists, buskers, dog walkers, staff; pigeons; dogs. Cap 30 people. | ADVISED |
@@ -236,3 +236,23 @@ No multiplayer transport, no monetisation, no store build, no terrain heights, n
 1. Create `parque-damour` on GitHub (empty, no README).
 2. In this branch: `git subtree split --prefix=parque-damour -b parque-damour-split`, then push that branch to the new repo's `main`; or simply copy the folder and commit.
 3. Set `base: '/parque-damour/'` in `vite.config.ts` and add the Pages workflow from `07-Build-Plan.md` Slice 0.
+
+---
+
+## 8. Document index (the design pack)
+
+| File | Purpose | Read by |
+|---|---|---|
+| `00-Product-Brief.md` | Locked intent, scope, success criteria, governance | every model, first |
+| `01-Decision-Register.md` | This file: decisions and the design spine | every model, second |
+| `02-Game-Design.md` | Complete rules of play | design and feature slices |
+| `03-Technical-Architecture.md` | Modules, data model, loop, commands, render, save, i18n | all code slices |
+| `04-Art-and-UI-Style-Guide.md` | GV look, the three style directions, the Style Gate board, props, characters, effects | art slices |
+| `05-Audio-and-Music-Design.md` | Engine port, cue vocabulary, ambience, the waltz, the Music Gate board | audio slices |
+| `06-Content-Tables.md` | Every tunable number and every string key | data entry and balancing |
+| `07-Build-Plan.md` | Slices S0 to S12 as self-contained task briefs with model tiers | whoever runs the project |
+| `08-Test-Plan.md` | Unit, determinism, screenshot, performance, manual QA | every slice's done-when |
+| `09-Porting-Map-from-Gnome-Village.md` | GV line ranges to port, adapt or drop, per module | porting slices |
+| `10-Gnome-Village-HTML-Architecture-Review.md` | Line-referenced review of the GV single-file build | reference |
+| `gv-review-notes/` | 21 per-section notes behind the review | reference |
+| `reference-art/` | The owner's three aesthetic references | art slices |
