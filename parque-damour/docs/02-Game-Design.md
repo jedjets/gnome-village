@@ -51,7 +51,7 @@ Version 1 · 2026-10-10 · Owner: Jeduthun Oosthuis · Author: Claude (design se
 | `WEAR` | Float32 | 0 to 4 | visitors walking on lawn (section 11.1) |
 | `OCC` | Uint16 | 0 or prop id | props (section 2.6) |
 | `WATER` | Float32 | 0 or 0.6 | pond and canal tiles only |
-| `ICE` | Uint8 | 0 or 1 | winter snow (section 3.4) |
+| `ICE` | Uint8 | 0 or 1 | winter snow (section 3.3, snow row) |
 | `WET` | Float32 | 0 to 1 | rain puddles: rises 0.2 per sim second of rain > 0.3, falls 0.01 per second otherwise |
 | `PETALS` | Float32 | 0 to 1 | `c_petals` and `a_florist`; fades 1/40 per second |
 
@@ -102,7 +102,7 @@ Fixed skeleton (never varies with the seed):
 Seed also varies: bed colour order, pond outline, tree positions. Nothing else.
 
 ### 2.6 Props (`src/entities` `Prop` type)
-A prop has `id, kind, x, y, w, h, rot, placedBy ('gen' | 'player'), passable`. Non-passable props write their id into `OCC` on every footprint tile. Kinds: bench, lamp, fountain, kiosk, table, bandstand, picnic, bridge, hedge, tree, easel, crumbs, peel, sprinkler, basket, rowboat. `passable` is true for picnic, crumbs, peel, bridge; false for the rest.
+A prop has `id, kind, x, y, w, h, rot, placedBy ('gen' | 'player' | 'sim'), passable`. Non-passable props write their id into `OCC` on every footprint tile. Kinds: bench, lamp, fountain, kiosk, table, bandstand, picnic, bridge, hedge, tree, easel, crumbs, peel, sprinkler, rowboat. `passable` is true for picnic, crumbs, peel, bridge; false for the rest.
 
 Spots the romance system looks for (`src/entities/romance.ts`): **bench** (prop bench, 2 seats), **picnic spot** (prop picnic or table), **romantic spot** (bandstand within 4, bridge tile, within 3 of a fountain, bench within 3 of a lit lamp), **viewpoint** (within 6 of fountain, bandstand, pond edge, or y ≤ 3).
 
@@ -246,7 +246,7 @@ Each routine is a loop: pick an activity by weight, do it, idle `rnd(2, 5)` s, p
 |---|---|---|---|
 | hunger | 0–1 | +0.5/day | kiosk (→ 0.1), picnic (→ 0.1), bench snack (−0.4 when no kiosk exists) |
 | energy | 0–1 | −0.6/day awake; +0.4/day while sitting on a bench | rest rung |
-| comfort | 0–1 | eases toward `target` at 0.2/s (GV 5578 pattern); −0.3 at once on an embarrassment | weather, lamps, time |
+| comfort | 0–1 | eases toward `target`: each step `comfort += clamp(target − comfort, −1, 1) × 0.2 × dt` (GV 5579 idiom); −0.3 at once on an embarrassment | weather, lamps, time |
 | social | 0–1 | +0.3/day while a single is not in a `Pair` | Chat stage sets 0; stays 0 while paired |
 
 Comfort target = 0.7 + 0.15 (lit lamp within 3 tiles at night) − 0.35 × rain − 0.30 × snow − 0.10 × mist − 0.15 (night and no lit lamp within 3) + 0.10 (inside a `c_sunbeam`) + season term (section 3.4) + weather term (section 3.3), clamped to [0, 1], using `weatherAt(v)`.
@@ -285,7 +285,7 @@ Children run rungs 0–3 by following the parent, then their own list in 4.3.
 | Set | Members | Used by |
 |---|---|---|
 | `BUSY` | every reaction state (6.4), `eat, sit, read, feed, chat, bench, stroll, picnic, kiss, proposal, boat, photo, paint, play, pave, tidy, serve, shelter, chase, goLeave, laugh` | rung 0; abilities that need a free target |
-| `CAN_INTERRUPT` (GV `CAN_HELP` 4563) | `idle, wander, strollLoop, goBench, goKiosk, goSit, goEat, watch` | romance stage start; `a_matchmaker` introduce |
+| `CAN_INTERRUPT` (GV `CAN_HELP` 4564) | `idle, wander, strollLoop, goBench, goKiosk, goSit, goEat, watch` | romance stage start; `a_matchmaker` introduce |
 | `NO_SPACE` (GV 5586) | `sit, chat, picnic, kiss, proposal, boat, shelter, chess` and every reaction state | `spaceOut` skips these |
 | `PLAYER_HOLD` (GV 5631) | per avatar, section 10 | the tap cascade returns `'busy'` |
 | `SHELTERED` | `shelter, eat` at a kiosk | rain does not lower comfort in these states |
@@ -313,7 +313,7 @@ Arrival radius 0.7 tile, waypoint radius 0.44, replan cooldown 0.6 s, give up af
 ## 6. Romance (`src/entities/romance.ts`)
 
 ### 6.1 Pair formation
-A `Pair { id, a, b, stage, affinity, retryT, togetherT, embToday, embDay, formedDay, featured }` forms when all of these hold at a decision of either single:
+A `Pair { id, a, b, stage, affinity, retryT, togetherT, embToday, embDay, formedDay, ... }` (full type in 03 §3.4; featured is computed, 6.6) forms when all of these hold at a decision of either single:
 1. Both are `single` archetype, neither has a `pairId`, neither is a child.
 2. Within 4 tiles (2 in mist) with line of sight (no `OCC` non-passable prop and no water on the Bresenham line between tile centres).
 3. Both in `CAN_INTERRUPT` states ("idle or strolling").
@@ -542,7 +542,7 @@ Brushes report the centre tile's reason only when the whole stroke changed nothi
 1. **Be someone** (row 3) opens the avatar picker sheet: the six avatars with side, tier and lock state. Tapping an unlocked one calls `setMode('avatar', avatarId)`.
 2. `setMode` (GV 11252–11269 pattern): find or spawn the actor (table 10.2), set `PLAYER = actor id`, `MODE = 'avatar'`, select and follow the actor, zoom to 1.5 if below 1.3 (GV 11257), show the card, toast the avatar's hint for 6 s (GV 11259), `body.avatar` class, button text **Creator**.
 3. Row 1 shows the avatar's three action hints (table 10.2). Park strip, size row and Undo are hidden. Abilities are hidden too (the avatar is the ability).
-4. **Creator** (row 3) calls `setMode('creator')`: `PLAYER = null`, follow and selection dropped, the actor returns to its own AI at once (register Q14), toast "X goes on by themselves".
+4. **Creator** (row 3) calls `setMode('creator')`: `PLAYER = null`, follow and selection dropped, the actor returns to its own AI at once (register Q14), toast `avatar.goes_on` (06 §16.7).
 5. New forces creator mode and discards the possessed actor if it was spawned for the player (GV 12107).
 6. One tap in the world while in avatar mode runs the cascade (GV `playerCommand` 11270–11279): the cascade returns a status string; `'busy'` toasts "X: busy"; `'walking'` and `'flying'` are silent; any other string is toasted as "X: string". Tap detection as GV 11223: moved < 9 px and < 420 ms.
 
@@ -604,7 +604,7 @@ Cooldown: 120 s between landed `mime` events (shown as `resting` in the card); a
 | 3c | bench | 0.75 | sit (interruptible) | 'resting' | — |
 | 4 | lawn tile | tile | walk there, `scatter` 2 s: petals 3×3 as `c_petals` (charm +2, 20 s); 30 s cooldown | 'petals' | Cupid action |
 | 5 | any tile | | walk | 'walking' | — |
-Refusals: empty basket → "the basket is empty — pick some flowers"; unpaired person → "they are not courting".
+Refusals: empty basket → `reason.basket_empty` ("the basket is empty: pick some flowers"); unpaired person → "they are not courting".
 
 ### 10.8 `a_busker`
 | Step | Candidate | Radius | Action | Returns | Scores |
@@ -687,7 +687,7 @@ Chips, card and overlay layout refresh every 0.35 s (GV `updateHUD` 10845); the 
 | Progress | two ladders with the tier marks, points, and the next unlock on each; the unlock table 7.4 | — |
 | Events | last 40 lines (GV `feedEv` cap 40, 10723), "Day N · phase" per line | go to the subject with a 5.2 s focus pin (GV `goToEvent` 10751, `drawFocusMark` 10764) |
 | Avatar picker | six cards with side, tier, lock | enter avatar mode |
-| Options | language EN/ES, sound on/off, speed; dev flag reveals sound check and perf | — |
+| Options | language EN/ES, sound on/off, speed, the park seed (`sheet.options.seed`); dev flag reveals sound check and perf | — |
 
 Census and Events are mutually exclusive (GV 10748).
 
@@ -751,7 +751,7 @@ Values this document defines that the register does not (the owner can object to
 17. Ability targeting rules, timelines, failure cases and interactions (9); the pomeranian's 60 s wait outside; `m_rival` 50 % at t+15.
 18. Avatar spawn gates, speeds, hold states, cascades, cooldowns (the florist's basket of 3, the busker's no-cooldown play, the matchmaker's 45 s / 30 s) (10).
 19. Paving every 60 s with a 3-runs-per-day cap, the trodden look thresholds 1.6 / 2.6 (11.1); pigeon counts and scatter triggers (11.2); the pomeranian's presence rule (11.3).
-20. "+" chip archetype split 60 % single (12.2); card and sheet details (12.3–12.4); New confirmation wording (12.5).
+20. "+" chip archetype split 60 % single (12.2); card and sheet details (12.3–12.4); the seed in Options (12.4); New confirmation wording (12.5).
 21. The command log length 600 (14.5).
 
 Open points for the owner:

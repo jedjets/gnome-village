@@ -118,7 +118,7 @@ Confirm that the scaffold a parallel agent created matches `03-Technical-Archite
 Tier B. The verify half may be Tier C if the finish half is handed to Tier B afterwards.
 
 ### S0.3 Read first
-03 section 2.1 (dependency direction), 2.2 (`main.ts` boot order), 10.1 (DOM ids), 10.2 (body classes), 14 (build and tooling); 04 section 1.10 (glass recipe), 5.2 (tokens, type scale), 5.3 (z-index map); brief section 2 (stack) and 3.2 (tokens).
+03 section 2.1 (dependency direction), 2.2 (`main.ts` boot order), 10.1 (DOM ids), 10.2 (body classes), 14 (build and tooling); 04 section 1.10 (glass recipe), 5.2 (tokens, type scale), 5.3 (z-index map); brief section 2 (stack) and 3.2 (tokens). 08 section 2.1 `rng.test.ts`; 09 section 2.2 `rng.ts`, `math.ts`, `loop.ts`.
 
 ### S0.4 Inputs that already exist
 Whatever the parallel agent produced under `/home/user/gnome-village/parque-damour`. At the time of writing only `docs/` existed; treat every row of S0.6 as unverified.
@@ -216,7 +216,7 @@ Tier A. The slice is two independent sub-briefs, S1a (style) and S1b (music), wh
 
 ### S1.3 Read first
 S1a: 04 sections 2 (the three references, with the images in `docs/reference-art/`), 3 (the three directions, all 16 palette tokens and the treatment table), 4 (the board specification, tile by tile), 5.1, 5.2, 6.2, 6.3, 7.1, 7.4, 12 (checklist); register section 4 Style Gate row; brief section 3.
-S1b: 05 sections 1, 2 (engine port, line by line), 2.3, 2.4, 5 (the waltz), 6 (the board specification), 7.1, 7.5; register section 4 Music Gate row; brief section 4.
+S1b: 05 sections 1, 2 (engine port, line by line), 2.3, 2.4, 5 (the waltz), 6 (the board specification), 7.1, 7.5; register section 4 Music Gate row; brief section 4. 08 section 2.8; 09 section 2.7.
 
 ### S1.4 Inputs that already exist
 S0: the shell, `tokens.css`, `render/camera.ts` and `project.ts` (projection), `core/rng.ts` (`vrng`), `ui/i18n.ts`, `save/store.ts` stub.
@@ -278,7 +278,7 @@ Build the deterministic engine (rng, clock, weather, events, commands, loop, gri
 Part A (steps 1 to 15, engine): Tier B; it needs no gate and may start while S1 runs. Part B (steps 16 to 27, renderer): Tier A; it starts after the Style Gate is recorded.
 
 ### S2.3 Read first
-Register sections 3.1, 3.2, 6. 02 sections 2 (the park, gates, starter park, props), 3 (time, light, weather), 11.1 (wear), 14 (two-player hook). 03 sections 2.3, 2.4, 2.7, 3.1, 3.2, 3.6, 3.11, 4 (the loop), 5 (commands), 6.1, 6.2, 7 (rendering), 8 (input), 11 (state hash row), 13 (harness), 15 (performance). 04 sections 5.1, 6 (prop vocabulary), 10.1, 12. Review sections 2.1, 2.4, 7.1 to 7.4, 9, 13, 14 (rows "Core & loop", "World state", "Renderer"). Notes `02-notes.md`, `03-notes.md`, `13-notes.md`, `16-notes.md`, `17-notes.md` for line-level detail.
+Register sections 3.1, 3.2, 6. 02 sections 2 (the park, gates, starter park, props), 3 (time, light, weather), 11.1 (wear), 14 (two-player hook). 03 sections 2.3, 2.4, 2.7, 3.1, 3.2, 3.6, 3.11, 4 (the loop), 5 (commands), 6.1, 6.2, 7 (rendering), 8 (input), 11 (state hash row), 13 (harness), 15 (performance). 04 sections 5.1, 6 (prop vocabulary), 10.1, 12. Review sections 2.1, 2.4, 7.1 to 7.4, 9, 13, 14 (rows "Core & loop", "World state", "Renderer"). Notes `02-notes.md`, `03-notes.md`, `13-notes.md`, `16-notes.md`, `17-notes.md` for line-level detail. 08 sections 2.1, 2.2, 2.9, 3; 09 sections 2.2, 2.3, 2.6, 3.
 
 ### S2.4 Inputs that already exist
 S0 shell and loop skeleton; S1 primitives in `render/*` drawn with `style()`; `ambient.ts` palettes; the register's pick.
@@ -363,7 +363,7 @@ The sixteen park tools place, validate with ranked reasons and undo through comm
 Tier B.
 
 ### S3.3 Read first
-Register 3.7, 3.11. 02 sections 2.2, 2.3, 2.6, 8 (creator mode: rail rows, tool classes, the sixteen tools, ranked reasons, undo), 12.5 item 4. 03 sections 2.6 (`tools.ts`, `undo.ts`), 2.9 (`dom.ts`, `rail.ts`, `intro.ts`), 2.10 (`save/*`), 5.1 (`ToolPayload`), 5.4 (reason keys), 5.6 (undo), 7.8 item 3, 8.1 item 4, 8.2 item 3, 10.4, 11. 04 sections 5.4 (rail), 5.7 (intro with Continue). Review section 4 (tools, undo), 3.4 (pick, ghost, Place). Notes `11-notes.md` (5840-6049), `20-notes.md` (11086-11167).
+Register 3.7, 3.11. 02 sections 2.2, 2.3, 2.6, 8 (creator mode: rail rows, tool classes, the sixteen tools, ranked reasons, undo), 12.5 item 4. 03 sections 2.6 (`tools.ts`, `undo.ts`), 2.9 (`dom.ts`, `rail.ts`, `intro.ts`), 2.10 (`save/*`), 5.1 (`ToolPayload`), 5.4 (reason keys), 5.6 (undo), 7.8 item 3, 8.1 item 4, 8.2 item 3, 10.4, 11. 04 sections 5.4 (rail), 5.7 (intro with Continue). Review section 4 (tools, undo), 3.4 (pick, ghost, Place). Notes `11-notes.md` (5840-6049), `20-notes.md` (11086-11167). 08 section 2.5 tools and undo, 2.6; 09 section 2.5 `tools.ts`, `undo.ts`, 2.9.
 
 ### S3.4 Inputs that already exist
 S2 engine and renderer; `ghost.ts` stub; `commands.ts` with `tool` and `undo` kinds reserved; `store.ts` snapshot and hash.
@@ -400,7 +400,7 @@ S2 engine and renderer; `ghost.ts` stub; `commands.ts` with `tool` and `undo` ki
 Visitors reacting to tools (S4), the gardener (S4), abilities (S6), the Cupid and Mischief strips (S6), the Options sheet (S11).
 
 ### S3.10 Ask the owner before
-Adding a `statue` tool (register row 15 names one, 3.7 does not; brief section 11 item 13); changing the undo depth; confirming on tree removal (02 section 15 open point 3 says no).
+Adding a `statue` tool (none in register 3.7; AGENTS section 5 item 7); changing the undo depth; confirming on tree removal (02 section 15 open point 3 says no).
 
 ### S3.11 Hand-back
 Format 0.6 plus the list of hooks left for S4 (vendor spawn, sitter eviction, `openNear` on undo).
@@ -416,7 +416,7 @@ Visitors arrive through the gates, follow the eleven archetype routines with nee
 Tier B for the simulation (steps 1 to 11, 14 to 17). Tier A for the figure rig and creature drawing (steps 12 and 13), handed over as a sub-brief with the options rule. Tier C for `names.ts` data (step 2) and the archetype strings.
 
 ### S4.3 Read first
-Register 3.3, 3.4, 3.10. 02 sections 4 (visitors: record, arrivals, every routine, needs, regulars, names), 5 (cadence, ladder, interrupt sets, movement, pathing), 11 (desire paths, pigeons, dogs), 12.2 (Visitors chip), 12.3 (card), 12.4 (Census). 03 sections 2.5, 3.3, 3.5, 4.3, 4.4, 6.3, 6.6, 7.6, 7.7 item 5, 8.2 (`pickAt`), 10.1 (card ids). 04 sections 7.1 to 7.3, 7.5, 9.1. Review sections 6.3, 6.4 (newcomer rule), 7.6, 5 (card, census). Notes `05-notes.md` (1359-1751), `09-notes.md`, `10-notes.md`, `15-notes.md`, `19-notes.md`.
+Register 3.3, 3.4, 3.10. 02 sections 4 (visitors: record, arrivals, every routine, needs, regulars, names), 5 (cadence, ladder, interrupt sets, movement, pathing), 11 (desire paths, pigeons, dogs), 12.2 (Visitors chip), 12.3 (card), 12.4 (Census). 03 sections 2.5, 3.3, 3.5, 4.3, 4.4, 6.3, 6.6, 7.6, 7.7 item 5, 8.2 (`pickAt`), 10.1 (card ids). 04 sections 7.1 to 7.3, 7.5, 9.1. Review sections 6.3, 6.4 (newcomer rule), 7.6, 5 (card, census). Notes `05-notes.md` (1359-1751), `09-notes.md`, `10-notes.md`, `15-notes.md`, `19-notes.md`. 08 section 2.3; 09 section 2.4.
 
 ### S4.4 Inputs that already exist
 S2 engine, S3 tools and save; `pickAt` with the people branch stubbed; S1 figure and creature tiles in `figures.ts` and `creatures.ts`.
@@ -475,7 +475,7 @@ Singles notice each other and climb the seven stages to Happily or Parted, drive
 Tier A.
 
 ### S5.3 Read first
-Register 3.5, 3.6 (events only), 3.14, 5. 02 sections 6 (all of romance), 7.1 to 7.2 (which events carry points), 11.2 item 4, 12.2 (Romance chip), 12.3 item 3 (pair card), 12.4 (Romances, Events), 12.5 (feed events), 13 (tone rules). 03 sections 2.4 (`charm.ts`), 2.5 (`romance.ts`, `embarrass.ts`), 3.4, 4.2 phase 10, 6.4, 6.7, 12 item 6 (nested keys). 04 sections 7.5, 7.6, 9.2, 9.3. Review 6.4 (`court` rendezvous), 5 (events sheet). Notes `09-notes.md` (4327-4386), `10-notes.md` (5483-5491).
+Register 3.5, 3.6 (events only), 3.14, 5. 02 sections 6 (all of romance), 7.1 to 7.2 (which events carry points), 11.2 item 4, 12.2 (Romance chip), 12.3 item 3 (pair card), 12.4 (Romances, Events), 12.5 (feed events), 13 (tone rules). 03 sections 2.4 (`charm.ts`), 2.5 (`romance.ts`, `embarrass.ts`), 3.4, 4.2 phase 10, 6.4, 6.7, 12 item 6 (nested keys). 04 sections 7.5, 7.6, 9.2, 9.3. Review 6.4 (`court` rendezvous), 5 (events sheet). Notes `09-notes.md` (4327-4386), `10-notes.md` (5483-5491). 08 section 2.4; 09 section 2.4 `romance.ts`, `embarrass.ts`.
 
 ### S5.4 Inputs that already exist
 S4 visitors, brain rung 6 hook, `act.ts`, feed pipe, card, sheets; `charm.ts` API stub from S2.
@@ -525,7 +525,7 @@ The eight tier 0 and tier 1 abilities fire as commands with cooldowns and target
 Tier B. Tier C for the ability strings and the content test.
 
 ### S6.3 Read first
-Register 3.6, 3.8 (rows `c_petals, c_bouquet, c_musician, c_sunbeam, m_pigeon, m_sprinkler, m_peel, m_pomeranian`), 3.9. 02 sections 7 (points, tiers, unlock table), 9.1 (common rules), 9.2 and 9.3 (the eight rows), 11.2 and 11.3 (pigeons, the pomeranian), 12.2 (Points chip), 12.4 (Progress), 3.5 (overrides). 03 sections 2.6 (`abilities.ts`, `progression.ts`), 3.8 (`Effect`), 3.9 (profile), 4.2 phases 5 and 6, 5.3, 5.4 (reason keys), 6.5, 8.2 item 2, 10.4. 04 section 5.4 items 2 to 4 (locked pills, cooldown chip), 5.6 (Progress). Review 3.4 (pick and ghost shape for validation).
+Register 3.6, 3.8 (rows `c_petals, c_bouquet, c_musician, c_sunbeam, m_pigeon, m_sprinkler, m_peel, m_pomeranian`), 3.9. 02 sections 7 (points, tiers, unlock table), 9.1 (common rules), 9.2 and 9.3 (the eight rows), 11.2 and 11.3 (pigeons, the pomeranian), 12.2 (Points chip), 12.4 (Progress), 3.5 (overrides). 03 sections 2.6 (`abilities.ts`, `progression.ts`), 3.8 (`Effect`), 3.9 (profile), 4.2 phases 5 and 6, 5.3, 5.4 (reason keys), 6.5, 8.2 item 2, 10.4. 04 section 5.4 items 2 to 4 (locked pills, cooldown chip), 5.6 (Progress). Review 3.4 (pick and ghost shape for validation). 08 section 2.5 progression and abilities; 09 section 2.5.
 
 ### S6.4 Inputs that already exist
 S5 romance, `embarrass.land`, `charm.addSource`, `weather.addOverride`, creatures with the pomeranian record, the cameo archetype slot, the rail with the Park group.
@@ -539,7 +539,7 @@ S5 romance, `embarrass.land`, `charm.addSource`, `weather.addOverride`, creature
 3. The eight timelines exactly as 02 sections 9.2 and 9.3: `c_petals` (PETALS, charm +2 for 20 s), `c_bouquet` (flower seller cameo, affinity +0.05), `c_musician` (busker visitor, 90 s, charm +3 within 8), `c_sunbeam` (override r 3, 60 s, charm +1, comfort +0.10), `m_pigeon` (nearest pigeon `swoop` at 6.0, `poop` via `embarrass.land`), `m_sprinkler` (prop, 3x3 soak 10 s, `soaked`), `m_peel` (prop 120 s, `trip` on the first adult non-staff walker), `m_pomeranian` (the creature enters, 4.5, `snatched`, item order hat, purse, baguette, iceCream, carry to the gate, 8 s chase, drop, 60 s wait outside).
 4. Scoring: Cupid casts set `pair.lastCupidAt` for pairs within 6 tiles or targeted (02 section 9.1 item 7); Mischief scores through `land`.
 5. `progression.ts`: CP and MP rules of 02 sections 7.1 and 7.2 (the contributed test with `charmAt().player >= 2` or a Cupid action within 60 s); `TIERS [0, 8, 20, 40, 70]`; `isUnlocked` for all 19 abilities and 6 avatars by the table of 02 section 7.4; `unlocked[]` in the profile so the toast fires once; the day tally feed line "Today: Cupid n · Mischief m".
-6. `rail.ts`: the Cupid and Mischief strips from `ABILITIES` with `--berry` and `--ember` swatches, locked pills at opacity 0.45 with the tier badge and the toast `t('rail.unlocks_at', { side, tier })`; arming (chip highlighted, stays armed across camera moves, second tap disarms); row 2 cooldown chip with the SVG ring, seconds left and charges (04 section 5.4 item 4).
+6. `rail.ts`: the Cupid and Mischief strips from `ABILITIES` with `--berry` and `--ember` swatches, locked pills at opacity 0.45 with the tier badge and the toast `t('rail.locked_at', { side, tier })`; arming (chip highlighted, stays armed across camera moves, second tap disarms); row 2 cooldown chip with the SVG ring, seconds left and charges (04 section 5.4 item 4).
 7. `main.ts`: tap routing item 2 of 03 section 8.2 (resolve the target by type, enqueue, keep armed); `ghost.ts` draws the area square for armed `area` abilities.
 8. `hud.ts`: Points chip "Cupid n · Mischief m" with the flash; unlock toast "Unlocked: Musician (Cupid T1)" through `t()` and a feed line.
 9. `sheets.ts`: Progress with the two ladders, tier ticks, next unlock, the unlock table (04 section 5.6).
@@ -576,7 +576,7 @@ Format 0.6 plus the profile JSON after the progression test.
 Tier B.
 
 ### S7.3 Read first
-Register rows 12, 13, 14, sections 3.8 (avatars), 3.9, 6. 02 section 10 (all of avatar mode: entering and leaving, the six-avatar table, shared cascade rules, 10.4 pigeon, 10.5 pomeranian, 10.7 florist, 10.10), 12.3 item 4 (avatar strip), 12.4 (picker), 14 items 6 and 7. 03 sections 2.6 (`mode.ts`, `avatar.ts`), 4.4, 5.1 (`avatar.*` commands), 5.2 item 4 (hit re-validation), 5.3, 8.2 item 1, 10.2 (`body.avatar`). 04 sections 5.4 item 6, 5.5 item 3, 5.6 (picker), 7.4. Review section 3 (the whole MODE system), 17.1 claims 1 to 9. Notes `11-notes.md` (5622-5716), `20-notes.md` (11252-11322).
+Register rows 12, 13, 14, sections 3.8 (avatars), 3.9, 6. 02 section 10 (all of avatar mode: entering and leaving, the six-avatar table, shared cascade rules, 10.4 pigeon, 10.5 pomeranian, 10.7 florist, 10.10), 12.3 item 4 (avatar strip), 12.4 (picker), 14 items 6 and 7. 03 sections 2.6 (`mode.ts`, `avatar.ts`), 4.4, 5.1 (`avatar.*` commands), 5.2 item 4 (hit re-validation), 5.3, 8.2 item 1, 10.2 (`body.avatar`). 04 sections 5.4 item 6, 5.5 item 3, 5.6 (picker), 7.4. Review section 3 (the whole MODE system), 17.1 claims 1 to 9. Notes `11-notes.md` (5622-5716), `20-notes.md` (11252-11322). 08 section 2.5 avatar and mode; 09 section 2.5 `mode.ts`, `avatar.ts`.
 
 ### S7.4 Inputs that already exist
 S6 abilities and scoring, creatures with `swoop` and `snatch`, `charm.addSource`, `PETALS`, the florist cameo drawing from S6's `c_bouquet`, `setAvatarDecide` hook, `camera.follow`.
@@ -624,7 +624,7 @@ Every romance and mischief beat has a cue, the park has its ambience (fountain, 
 Tier A.
 
 ### S8.3 Read first
-Register 3.13, 3.2 (real-time gaps), section 4 Music Gate row (the pick and knobs). 05 sections 1 to 5, 6.5 item 3, 7, 8, 9. 03 sections 2.8, 4.1 item 8, 9, 13 (audio harness). 02 section 12.4 (Options, dev flag). Review section 8. Note `12-notes.md`.
+Register 3.13, 3.2 (real-time gaps), section 4 Music Gate row (the pick and knobs). 05 sections 1 to 5, 6.5 item 3, 7, 8, 9. 03 sections 2.8, 4.1 item 8, 9, 13 (audio harness). 02 section 12.4 (Options, dev flag). Review section 8. Note `12-notes.md`. 08 section 2.8; 09 section 2.7, section 4 rows 1 and 14.
 
 ### S8.4 Inputs that already exist
 S1 `engine.ts`, `limiter.ts`, `music.ts` (motif A) and `debug/motifs.ts`; the event bus with `stage, embarrassed, backfired, happily, parted, cast, unlock, fx, newday` events from S4 to S7; the register's music pick.
@@ -672,7 +672,7 @@ The scene shows the four seasons on trees and lawn, the eight weather kinds and 
 Tier A for the renderer and effects (steps 2 to 9); Tier B for the simulation ties (steps 1 and 10).
 
 ### S9.3 Read first
-Register 3.2. 02 sections 3 (time, light, weather, seasons, overrides), 2.2 (`WET`, `PETALS`, `ICE`), 4.4 (comfort terms), 5.2 rung 2 (shelter). 03 sections 6.2, 7.3, 7.5, 7.7 items 2 and 3, 7.8 items 1 and 2, 15.1. 04 sections 6.3, 6.5, 8 (effects and particles), 10 (light and seasons), 11 (accessibility: flash limit, reduced motion). Review 7.2, 7.3, 7.7 (`drawWeather`, `ambientFx`), 6.1. Notes `13-notes.md` (6450-6620), `18-notes.md` (10057-10105), `15-notes.md` (8820-8847).
+Register 3.2. 02 sections 3 (time, light, weather, seasons, overrides), 2.2 (`WET`, `PETALS`, `ICE`), 4.4 (comfort terms), 5.2 rung 2 (shelter). 03 sections 6.2, 7.3, 7.5, 7.7 items 2 and 3, 7.8 items 1 and 2, 15.1. 04 sections 6.3, 6.5, 8 (effects and particles), 10 (light and seasons), 11 (accessibility: flash limit, reduced motion). Review 7.2, 7.3, 7.7 (`drawWeather`, `ambientFx`), 6.1. Notes `13-notes.md` (6450-6620), `18-notes.md` (10057-10105), `15-notes.md` (8820-8847). 08 sections 4.5, 5; 09 section 2.6 `effects.ts`.
 
 ### S9.4 Inputs that already exist
 S2 `weather.ts` with overrides and `WET`, `water.stepIce`, `ambient.ts`, `effects.ts` particles, `flora.crownPhase`; S6 `c_sunbeam` data; S4 shelter rung reading `weatherAt`.
@@ -722,7 +722,7 @@ The eleven tier 2 to 4 abilities and the avatars `a_busker`, `a_mime` and `a_mat
 Tier B. Tier A sub-brief for the `a_matchmaker` look (ref2) and the rowboat, mime and fireworks drawings, with the options rule.
 
 ### S10.3 Read first
-Register 3.8 (rows `c_umbrella, c_lamplight, c_picnic, c_rowboat, c_fireworks, m_wasp, m_raincloud, m_rival, m_mime, m_fog, m_flock` and the avatar line). 02 sections 9.2 and 9.3 (those eleven rows), 10.6, 10.8, 10.9, 10.10, 6.3 (umbrella, boat, fireworks charm), 6.4 (`wasp, drenched, rival, mime, fog, flock`), 3.5 (overrides), 11.2 item 5 (fog perching). 03 sections 2.6, 3.8, 6.5, 6.7. 04 sections 7.4 (avatars), 6.1 (rowboat, basket, umbrella), 8 (fireworks, wasp).
+Register 3.8 (rows `c_umbrella, c_lamplight, c_picnic, c_rowboat, c_fireworks, m_wasp, m_raincloud, m_rival, m_mime, m_fog, m_flock` and the avatar line). 02 sections 9.2 and 9.3 (those eleven rows), 10.6, 10.8, 10.9, 10.10, 6.3 (umbrella, boat, fireworks charm), 6.4 (`wasp, drenched, rival, mime, fog, flock`), 3.5 (overrides), 11.2 item 5 (fog perching). 03 sections 2.6, 3.8, 6.5, 6.7. 04 sections 7.4 (avatars), 6.1 (rowboat, basket, umbrella), 8 (fireworks, wasp). 08 sections 7.3, 7.4; 09 section 2.5.
 
 ### S10.4 Inputs that already exist
 S6 registry with the eleven ids returning `reason.not_here`; S7 cascade with three avatars returning `reason.not_here`; S9 draws overrides, fog, umbrella, fireworks kinds; `water.waterBodies` for the pond size; `charm.setPairCharm`.
@@ -767,7 +767,7 @@ The game is complete in EN and ES, the intro and Options are final, photo mode w
 Tier B. Tier C sub-briefs: the ES table (step 1), the aria-label keys (step 5), the README.
 
 ### S11.3 Read first
-Register 3.10, 3.12, rows 21, 22, 23. Brief sections 8.2, 9 (all twelve rows), 11 item 1 (fonts). 02 sections 12.4 (Options), 12.5. 03 sections 10.5, 12, 13, 14 (Capacitor readiness checklist), 15. 04 sections 5.7 (intro), 5.8, 11, 12 items 8 to 13. 05 section 7.3.
+Register 3.10, 3.12, rows 21, 22, 23. Brief sections 8.2, 9 (all twelve rows), 11 item 1 (fonts). 02 sections 12.4 (Options), 12.5. 03 sections 10.5, 12, 13, 14 (Capacitor readiness checklist), 15. 04 sections 5.7 (intro), 5.8, 11, 12 items 8 to 13. 05 section 7.3. 08 sections 2.7, 6, 7, 8; 09 section 1.5.
 
 ### S11.4 Inputs that already exist
 Everything from S0 to S10; `strings/es.ts` partially filled by earlier slices.
@@ -952,9 +952,6 @@ Values this document defines that the register does not (the owner may object to
 14. S12's config choices (`webDir dist`, `androidScheme https`, icons under `resources/`).
 
 Open points for the owner:
-1. Register row 16 says 18 abilities; section 3.8 lists 19 ids. This plan follows the table (brief section 11 item 12) and every count here says 19.
-2. Register row 15 names a statue; section 3.7 has no `statue` tool. This plan builds no statue (S3.10 asks before adding one).
-3. `08-Test-Plan.md` and `09-Porting-Map-from-Gnome-Village.md` were not present when this plan was written, and `06-Content-Tables.md` appeared only as it was finished; the slice briefs cite 02, 03, 04 and 05 directly and will not need rewriting when those files appear, but S6 and S9 should copy their weight and cost tables from 06, and every slice should add 08's test names and 09's port verdicts to its "Read first" once they exist.
-4. Whether the owner wants the two gate picks on the same day (S1a and S1b in parallel, 4 EU, two Tier A models) or one after the other.
-5. Whether a Tier C model may own `tests/content.test.ts` and `strings.test.ts` (this plan says yes) or whether every test stays with the slice's tier.
-6. The three-lane schedule assumes three models can run at once; with one model the total is the 44.5 EU in order S0, S1, S2, S3, S4, S5, S6, S7, S9, S8, S10, S11.
+1. Whether the owner wants the two gate picks on the same day (S1a and S1b in parallel, 4 EU, two Tier A models) or one after the other.
+2. Whether a Tier C model may own `tests/content.test.ts` and `strings.test.ts` (this plan says yes) or whether every test stays with the slice's tier.
+3. The three-lane schedule assumes three models can run at once; with one model the total is the 44.5 EU in order S0, S1, S2, S3, S4, S5, S6, S7, S9, S8, S10, S11.

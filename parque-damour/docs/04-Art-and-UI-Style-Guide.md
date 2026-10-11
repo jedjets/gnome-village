@@ -48,7 +48,7 @@ Other constants a port needs:
 | `SKIN`, `LINE` (figure) | `#F0DCCB`, `#736C82` | 8046 |
 | `TRUNK` | round `#B39A86`, pine `#A38C7C`, birch `#E2DDD6` | 6743 |
 | `AUTUMN` foliage choices | `#D9A441`, `#C8763F`, `#E3B94A`, `#D98B3C` | 6765 |
-| Foliage by phase | pine `#8FBF9B` (winter `#8FB6A4`); blossom `#F4CBD8` / `#F8DCE4` (birch `#CFE4A6`); bud and leafing `#C4E2B4` (birch `#CBE3A9`); summer `#A5CF97`; spring leaf `#B9DEAE` | 6766–6775 |
+| Foliage by phase | pine `#8FBF9B` (winter `#8FB6A4`); blossom `#F4CBD8` / `#F8DCE4` (birch `#CFE4A6`); bud and leafing `#C4E2B4` (birch `#CBE3A9`); summer `#A5CF97`; spring leaf `#B9DEAE` | 6766–6774 |
 | Heart particle | `#EDA9C4` (the `--berry` token) | 8622 |
 | Lit lantern pane, flame | `#F0BE6A`; `rgba(255,246,216,0.95)` | 8000, 8004 |
 | Weather dot `WCOLD` | clear `#F3D9A8`, fair `#DCE9F2`, cloudy `#C8CCDA`, rain `#9FBCD4`, mist `#DDE2E8`, snow `#EFF4FA`, breeze `#CDE3D8`, storm `#6E7A9A` | 10774 |
@@ -194,7 +194,7 @@ GV type sizes are 8.5 to 11.5 px (review §13). Section 5.2 raises them.
 
 All three share the locked items of section 5 (projection, HUD paper, fonts, layout). They differ only in the scene: palette, line, shading, edges, texture, figures, trees, water, mood. Each direction is a `StyleSpec` (section 4.5). The owner picks one; the pick is recorded in the register §4 and in `profile.stylePick`.
 
-### 3.1 Palette tokens (16 per direction)
+### 3.1 Palette tokens (16 primary per direction, plus the secondary set)
 | Token | A Storybook | B Pastel Postcard | C Line and Wash | Used for |
 |---|---|---|---|---|
 | `lawn` | `#9CCB92` (GV `C.grass` 6445) | `#A8D8A2` | `#D3E3BC` | `KIND` lawn base |
@@ -202,7 +202,7 @@ All three share the locked items of section 5 (projection, HUD paper, fonts, lay
 | `flagstone` | `#CBC4B6` (GV `C.pave` 6448) | `#DDD6C8` | `#E6E0D3` | `KIND` flagstone, quay coping |
 | `bedEarth` | `#BE9C7C` (GV `C.prep` 6448) | `#CFA883` | `#DAB890` | `KIND` bed and mulch earth |
 | `water` | `#6FB8DC` (GV `C.water` 6447) | `#9DD4E9` | `#BFDDE7` | pond, canal, river base |
-| `foliageSpring` | `#B9DEAE` (GV 6775) | `#C2E5AC` | `#DAE8AE` | leafing crowns |
+| `foliageSpring` | `#B9DEAE` (GV 6773) | `#C2E5AC` | `#DAE8AE` | leafing crowns |
 | `foliageSummer` | `#A5CF97` (GV 6774) | `#7DBD79` | `#A3CB92` | full crowns |
 | `foliageAutumn` | `#D9A441` (GV `AUTUMN[0]` 6765) | `#E9A43F` | `#EAA74C` | autumn crowns and leaves |
 | `stone` | `#EADFCB` | `#F5EBD8` | `#F2DFBB` | Haussmann walls, fountain, gate pillars, bandstand base |
@@ -214,7 +214,54 @@ All three share the locked items of section 5 (projection, HUD paper, fonts, lay
 | `sky` | `#A9CEE7` (GV `SKYR` f 0.50 top, 6483) | `#C2E2F3` | `#D2E5EF` | midday sky top; water sheen |
 | `lamp` | `#F0BE6A` (GV pane 8000) | `#F6C96A` | `#F2C66E` | lit globes, lit windows |
 
-Secondary autumn colour for leaves in every direction: teal `#86BBB3` on 30 % of leaves (ref3).
+The 16 tokens above are the **primary** tokens; the board's palette strip (4.2 tile 1) shows them. The `Palette` type (4.5) also carries the **secondary** tokens below, so that `src/render/ambient.ts` is the one home of every scene colour this document quotes. Where sections 6 to 10 quote a hex for one of these, that hex is the direction A value and the code reads the key (`style().palette.bedLavender`, never the hex). B lifts value and cleans saturation; C pales toward its `paper`.
+
+Secondary tokens that vary by direction:
+
+| Token | A Storybook | B Pastel Postcard | C Line and Wash | Used for |
+|---|---|---|---|---|
+| `fog` | `#E2E8EE` (GV `FOGC` 6449) | `#EAF1F6` | `#F1EEE6` | per-cell fog mix, the fog wash (section 8), far bank (6.4) |
+| `night` | `#2C3252` (GV `NIGHTC` 6494) | `#34405E` | `#3A3A4C` | water at night (3.2 row Water, 6.4 river) |
+| `ice` | `#DCE9F1` (GV `C.ice`, 1.2) | `#E4F0F7` | `#E9EEF0` | frozen pond and fountain disc (6.1, 6.5), poop splat edge (8) |
+| `iceHi` | `#EEF5F9` (GV `C.iceL`, 1.2) | `#F3F9FC` | `#F5F6F4` | ice highlights (6.5) |
+| `snow` | `#EEF2F6` (GV `C.snow`, 1.2) | `#F4F7FA` | `#F7F6F2` | snow cover on lawn, paths, crowns, roofs (10.3) |
+| `winterLawn` | `#C6CCC4` | `#CFD6CD` | `#DCDFD3` | winter lawn mix (10.3) |
+| `lawnAutumn` | `#C9CB8E` (GV `C.autumn`, 1.2) | `#D4D18F` | `#DCD9A6` | autumn lawn mix (10.3) |
+| `bedLavender` | `#B9A6E0` | `#C3B0E8` | `#C6B6E0` | bed dots, florist basket (6.1, 7.4) |
+| `bedMarigold` | `#F2C14E` (ref1) | `#F6C85A` | `#EFBE57` | bed dots, peel, florist basket (6.1, 7.4) |
+| `trunk` | `['#C9B9A3', '#9A8470', '#A99683']` | `['#D2C3AE', '#A58F7A', '#B3A08D']` | `['#D8CCB8', '#A89584', '#B8A894']` | plane, chestnut, lime trunks, in that order (6.3) |
+| `trunkPatch` | `#E2D8C8` | `#EAE2D4` | `#EFE8DB` | plane bark patches (6.3) |
+| `limeSpring` | `#DAE8AE` | `#DFEDB2` | `#E4EEC0` | lime spring crown (6.3) |
+| `chestnutAutumn` | `#C8763F` (GV `AUTUMN[1]` 6765) | `#D97E42` | `#CF7A45` | chestnut autumn crown (6.3) |
+| `limeAutumn` | `#E3B94A` (GV `AUTUMN[2]` 6765) | `#EDC24F` | `#E6BC55` | lime autumn crown (6.3) |
+| `halo` | `#FFD696` (GV 7995 `rgba(255,214,150)`) | `#FFDCA0` | `#FBD79A` | lamp halo and ground pool through `GC(hex, alpha)` (6.1, 10.2) |
+| `rain` | `#CEE0F0` (GV `drawWeather` 10062–10105) | `#D6E6F4` | `#D5DEE6` | rain dashes through `GC` (1.9, 8) |
+| `snowflake` | `#F8FAFF` (GV `drawWeather` 10062–10105) | `#FAFCFF` | `#FAF9F6` | snow discs (1.9, 8) |
+
+Secondary tokens that are the same in every direction (the directions differ in line, shading and texture, not in what a person, a pigeon or a baguette is coloured):
+
+| Token | Value | Used for |
+|---|---|---|
+| `teal` | `#86BBB3` | 30 % of autumn leaves (8, 10.4; ref3) |
+| `crumbs` | `#E7D7B0` | crumb dots (6.1) |
+| `skin` | `['#F0DCCB', '#E8C9A8', '#C9A07C', '#8E6B4E']` (the first is GV `SKIN` 8046) | skin by seed (7.1 rule 8) |
+| `hair` | `['#3A3440', '#5C4634', '#8B6748', '#C2703E', '#E0BE7C', '#B7AFA3']` | the 6 hair tones (7.1 rule 8); `#C2703E` is the matchmaker's ponytail (7.4) |
+| `elderHair` | `#E4E1EA` (GV 8399) | elder hair (7.2) |
+| `eye` | `#5A5468` (GV 8407) | eye dots (7.5) |
+| `coat` | `['#B9B7C6', '#C7B8A6', '#A6B4C2', '#B5C2A8', '#C9B2B8', '#9E9AAE', '#D1C3A2', '#8F9AA8']` | the crowd coat palette (7.1 rule 8) |
+| `signature` | `['#E25B5F', '#F2C14E', '#5FA8D3', '#7DBF7A', '#EDA9C4', '#B9A6E0', '#F08A4B', '#4A4458']` | the 8 signature colours (7.3) |
+| `dust` | `#CFC6C0` (GV 8611) | dust puff (8) |
+| `splash` | `#A9D3E6` (GV 8618) | splash drops (8) |
+| `waspStripe` | `#E8C64A` (GV 8617) | wasp stripe (7.4, 8) |
+| `pigeon` | `#8E8AA0` | pigeon body and head (7.4) |
+| `beak` | `#E7B97A` | pigeon beak and feet (7.4) |
+| `pomeranian` | `['#F2C98A', '#F7DFB0', '#E8B06C']` | body, chest, ears, in that order (7.4) |
+| `matchmakerBlue` | `#3F7FC4` | the matchmaker's stripes (7.4) |
+| `baguette` | `#E0A85C` | baguettes (7.4) |
+| `straw` | `#E9D7AE` (GV `C.sand`, 1.2) | the florist's straw hat (7.4) |
+| `wicker` | `#C98F4C` | baskets (7.4) |
+
+The sky keyframes of 10.1 and the weather-dot colours of 10.5 are exported constant tables in `ambient.ts`, not `Palette` keys. Every value of B and C in both tables is an assumption (section 13 item 3).
 
 ### 3.2 Treatment per direction
 | Aspect | A Storybook | B Pastel Postcard | C Line and Wash |
@@ -224,7 +271,7 @@ Secondary autumn colour for leaves in every direction: teal `#86BBB3` on 30 % of
 | Edges | soft: blob crowns, feathered banks at 3.2·z px (GV `strokeBanks` 9260) | hard and crisp; corners rounded by 0.08 tile | ink hard, wash soft: wash alpha 0.85 with a 1.5·z px feather |
 | Texture | GV grain ±7.5 % and meadow mottle (1.3 rule 4) | none | screen-space paper grain: a cached 256×256 value-noise tile drawn with `globalCompositeOperation = 'multiply'` at alpha 0.06 over the whole scene (not the HUD) once per frame; plus mottle inside washes (grain ±5 %) |
 | Figures | GV stick rig with the new proportions (7.1), clothes as a tunic stroke, face dots | capsule bodies (rounded rectangles) in solid colour, dot eyes, no contour; hair as one flat shape | ink contour rig with washes inside, misregistered; blush dot; hair as a scribble |
-| Trees | GV blob crowns with per-tree tint (`treeTint` 6776) and sprite cache | 3–5 flat discs in two greens (`foliage` and `shade(foliage, 0.82)`), flat trunk rectangle | ink trunk and branch skeleton always visible; crown as 2–3 wash blobs with a scribbled ink outline; autumn leaves ink-veined |
+| Trees | GV blob crowns with per-tree tint (`treeTint` 6775) and sprite cache | 3–5 flat discs in two greens (`foliage` and `shade(foliage, 0.82)`), flat trunk rectangle | ink trunk and branch skeleton always visible; crown as 2–3 wash blobs with a scribbled ink outline; autumn leaves ink-veined |
 | Water | GV still water: depth colour, sky sheen, feathered rim, slow ripples at `z > 0.7` (9981), night mix toward `NIGHTC` | flat `water` fill, one lighter wavy stroke per tile in `paper` at alpha 0.6, no sheen; night tint by `AM` only | paper left pale: `water` wash at alpha 0.5, a darker wash band 0.3 tile wide along the bank, 3–4 horizontal ink ticks per 2×2 tiles |
 | Sky | GV ramp (1.8) | ramp with the B `sky` at midday, flat clouds as 3-disc shapes | ramp mostly `paper`; clouds as unpainted paper with an ink underline |
 | Mood | GV's lavender pastel storybook, dusky and soft, with French props | a cheerful tourist map in daylight; the postcard you buy at the kiosk | a sketchbook from a Paris café in autumn |
@@ -233,7 +280,7 @@ Secondary autumn colour for leaves in every direction: teal `#86BBB3` on 30 % of
 ### 3.3 Rules for all three
 1. Zero image assets. Grain and paper textures are generated once from the visual RNG into an offscreen canvas.
 2. All three use the same rig skeleton, the same prop footprints and the same particle kinds; only the drawing of each differs. All three must keep 60 fps with the full scene (brief 9.3); direction C's ink jitter is computed per segment from `nzAt`, never from `Math.random`.
-3. Do not: mix treatments (an ink-outlined tree in direction B); add a fourth direction; use any colour outside the 16 tokens plus `lit()` transforms, except the HUD tokens.
+3. Do not: mix treatments (an ink-outlined tree in direction B); add a fourth direction; use any colour outside the `Palette` keys (3.1, primary and secondary) plus `lit()`, `shade()` and `mix()` transforms, except the HUD tokens.
 
 ---
 
@@ -241,13 +288,13 @@ Secondary autumn colour for leaves in every direction: teal `#86BBB3` on 30 % of
 
 ### 4.1 Purpose and placement
 1. One HTML page that renders the three directions with the real primitives from `src/render/*`, so the pick is made on what the game will draw, not a mock-up.
-2. Source: `style-board.html` at the app root with its script in `src/debug/style-board.ts`; built by Vite as a second entry to `dist/style-board.html`, single file. (The module map does not name a board module; `07-Build-Plan.md` confirms the path. Section 13.)
+2. Source: `style-board.html` at the app root with its script in `src/debug/style-board.ts`; built by Vite as a second entry to `dist/style-board.html`, single file. (03 §2.10 lists `debug/style-board.ts`; 07 S1.5 names the files. Section 13.)
 3. It is built in Slice 1 and blocks all art work from Slice 2 on (register §4).
 
 ### 4.2 Tiles to render, per direction (the same list, the same order)
 | # | Tile | Content | Canvas size (CSS px) | Zoom |
 |---|---|---|---|---|
-| 1 | Palette strip | 16 swatches with token names and hex, 2 rows of 8 | 320×72 | none |
+| 1 | Palette strip | the 16 primary swatches with token names and hex, 2 rows of 8 | 320×72 | none |
 | 2 | Ground sampler | a 6×6 tile patch: lawn with a worn desire path (`WEAR` 1.6 and 2.6 ribbons), a 2-wide gravel path, a flagstone ring, a 2×2 rose bed, one wet puddle | 300×180 | 1.0 |
 | 3 | Tree, three seasons | one plane tree at spring blossom, summer, autumn, side by side; a small winter one at half size | 320×160 | 1.2 |
 | 4 | Bench | one bench facing the camera with a sitter | 160×160 | 1.6 |
@@ -257,7 +304,7 @@ Secondary autumn colour for leaves in every direction: teal `#86BBB3` on 30 % of
 | 8 | Two lovers close | the same pair at close zoom | 200×160 | 2.4 |
 | 9 | Pigeon | one walking, one flying | 160×120 | 2.0 |
 | 10 | Pomeranian | running with a snatched hat | 160×120 | 2.0 |
-| 11 | Facade | one Haussmann bay with a café awning and two bistro tables, at f = 0.50 and f = 0.90 | 320×200 | 1.0 |
+| 11 | Facade | one Haussmann bay with a café awning and two bistro tables, at f = 0.50 and f = 0.90, plus the same bay as a near-side cutaway | 320×200 | 1.0 |
 | 12 | Sky strip | the sky gradient at f = 0.30, 0.76, 0.90 as three bands | 320×60 | none |
 | 13 | HUD sample | the clock chip, the Visitors chip, one pressed tool pill, the cooldown chip and a single card, styled with the direction's theme colour behind | 320×200 | none |
 
@@ -272,20 +319,33 @@ Done when: every tile renders in all three columns with no console error, each t
 1. Under each column (desktop) or under the switch (phone) sits a button **Choose A** / **Choose B** / **Choose C** in the Begin-button recipe.
 2. Tapping it writes `profile.stylePick = 'A' | 'B' | 'C'` into `parque:profile-v1` through `src/save/store.ts` (register 3.11 names the field "style pick"; the TypeScript name is `stylePick`, section 13), shows a toast "Picked: Storybook" (through `t()`), and marks the button pressed.
 3. The owner also tells the model which letter was picked; the model records the pick and the date in the register §4 row (brief 10.2 rule 4). The profile field alone is not the record.
-4. Until a pick exists, the game runs direction A (brief 4.2 names GV's look as the default).
+4. Until a pick exists, the game runs direction A (register row 1 and brief 3.2 keep GV's look until the gate).
 
 ### 4.5 One source of truth for colour
-1. `src/render/ambient.ts` exports `PALETTES: Record<'A'|'B'|'C', Palette>`, `STYLES: Record<'A'|'B'|'C', StyleSpec>`, and `style(): StyleSpec` which returns the entry named by `profile.stylePick` (default `'A'`). Every scene colour in `src/render/*` is read as `style().palette.lawn` and passed through `lit()`.
+1. `src/render/ambient.ts` exports `PALETTES: Record<'A'|'B'|'C', Palette>`, `STYLES: Record<'A'|'B'|'C', StyleSpec>`, and `style(): StyleSpec` which returns the entry named by `profile.stylePick` (default `'A'`). Every scene colour in `src/render/*` is read as `style().palette.lawn` and passed through `lit()`. `ambient.ts` is the one home of every scene colour, primary and secondary (3.1); `tests/palette.test.ts` (07 S1.8) checks every key of `Palette` in all three palettes (a string value is a 7-character hex; an array value holds only such strings), not a fixed count of 16.
 2. `src/styles/tokens.css` holds every HUD colour as a custom property. `shell.css` uses only `var(--...)`.
 3. No other file in `src/` may contain a colour literal (hex, `rgb(`, `rgba(`, `hsl(`). `08-Test-Plan.md` adds a grep test for this; GV's ~180 scattered literals are the reason (review §7.2).
 4. Type signatures:
 
 ```ts
 export interface Palette {
+  // primary (3.1, first table): the board's palette strip
   lawn: string; gravel: string; flagstone: string; bedEarth: string; water: string;
   foliageSpring: string; foliageSummer: string; foliageAutumn: string;
   stone: string; zinc: string; awningRed: string; ink: string; paper: string;
   rose: string; sky: string; lamp: string;
+  // secondary (3.1, second table): vary by direction
+  fog: string; night: string; ice: string; iceHi: string; snow: string;
+  winterLawn: string; lawnAutumn: string; bedLavender: string; bedMarigold: string;
+  trunk: [string, string, string]; trunkPatch: string;
+  limeSpring: string; chestnutAutumn: string; limeAutumn: string;
+  halo: string; rain: string; snowflake: string;
+  // secondary (3.1, third table): the same in every direction
+  teal: string; crumbs: string; skin: string[]; hair: string[]; elderHair: string; eye: string;
+  coat: string[]; signature: string[];
+  dust: string; splash: string; waspStripe: string;
+  pigeon: string; beak: string; pomeranian: [string, string, string];
+  matchmakerBlue: string; baguette: string; straw: string; wicker: string;
 }
 export interface StyleSpec {
   id: 'A' | 'B' | 'C';
@@ -344,18 +404,18 @@ export interface StyleSpec {
 | canvas | 0 | `#cv` |
 | HUD, feed | 5 | `.hud` chips, `#feed` |
 | rail, perf | 6 | `#rail`, `#perf` |
-| card, contextual bar | 7 | `#card`, row-2 ghost bar `#gbar` |
+| card | 7 | `#card` |
 | sheets, toast | 8 | Census, Romances, Progress, Events, Avatar picker, Options, `#hint` |
 | intro | 20 | `#intro` |
 | photo close | 30 | `#photoX` |
 
-`layoutOverlays` (GV 10689) measures the rail height every 0.35 s and sets `bottom` on card, ghost bar and sheets to rail height + 8 px; the toast sits 10 px above whichever of card or ghost bar is open. Photo mode hides layers 5 to 8 (GV CSS 164–168).
+`layoutOverlays` (GV 10689) measures the rail height every 0.35 s and sets `bottom` on card and sheets to rail height + 8 px; the toast sits 10 px above the card when it is open. Photo mode hides layers 5 to 8 (GV CSS 164–168).
 
 ### 5.4 Rail layout with the three-group switch (register 3.9)
 1. Row 1: a `.grp` segmented switch with three `.gb` buttons **Park | Cupid | Mischief** at the left, then the `#tools` scroll-snap strip of that group (GV 80–92 recipe, with the edge fade masks `.more/.before`). The switch stays visible while the strip scrolls.
 2. Tool pill swatch border colour by group: `--moss`, `--berry`, `--ember`. The pressed switch button takes the ink background; its group colour shows as a 3 px bottom bar on the button.
 3. Locked abilities: pill at opacity 0.45 with the swatch replaced by the tier badge text "T2" in 11 px; tap toasts "Unlocks at Cupid T2".
-4. Row 2 (contextual): Park: brush size slider 1–3 in `#sizewrap` (GV 110–117) and **Undo**; big stamps and runs: the ghost bar with name, reason line (italic Fraunces, `#A94A5A` when refused, GV CSS 191) and **Place / Cancel** (GV `#gbar` 184–195). Cupid or Mischief: the **cooldown chip**: a glass chip with the ability name, an SVG ring (circle, `stroke-dasharray`, stroke `--berry` or `--ember`) that empties over the cooldown, the seconds left in tabular numerals, and "1/1" for charged abilities.
+4. Row 2 (contextual): Park: brush size slider 1–3 in `#sizewrap` (GV 110–117) and **Undo**; big stamps and runs: row 2 (`#row2`) showing the tool name, the reason line (italic Fraunces, `--ember` ink when refused; GV `#gbar` 184–195 is the recipe) and **Place / Cancel** (`#bPlace`, `#bCancel`). Cupid or Mischief: the **cooldown chip**: a glass chip with the ability name, an SVG ring (circle, `stroke-dasharray`, stroke `--berry` or `--ember`) that empties over the cooldown, the seconds left in tabular numerals, and "1/1" for charged abilities.
 5. Row 3: `.grp` pause + speed slider 1–8× + label; `.grp` rotate left, rotate right, Fit, Sound, **Be someone**, Photo, New. Row 3 wraps to two lines below 400 px width; `layoutOverlays` measures the result.
 6. Avatar mode (`body.avatar`): row 1 shows three glass chips with the avatar's hints (02 §10.2); the Park strip, size row, Undo and the ability strips are hidden (GV CSS 169 pattern); the mode button reads **Creator**.
 7. Hit targets: every button at least 36×36 px CSS; pills at least 44 px tall.
@@ -459,13 +519,13 @@ Units: footprint in tiles; height in EH units (1 EH = 26 px at zoom 1; a grown v
 | chestnut | 2.2 | broad umbrella; forms umbrella / dome / split | `#9A8470` | `foliageSpring` with 6–10 white "candles" (`paper` upright ovals) in blossom | `foliageSummer` darkened 0.92 | `#C8763F` (rust, GV `AUTUMN[1]`) | bare; thick twigs |
 | lime | 2.0 | tall oval; forms oval / tuft / tall wisp | `#A99683` | `#DAE8AE` (pale lime) | `foliageSummer` lightened 1.08 | `#E3B94A` (gold, GV `AUTUMN[2]`) | bare; fine twigs |
 
-1. Phase machine as GV `crownPhase` (6749): spring bud days 1–2 (f 0–0.9 d bud, 0.9–1.9 blossom), leafing day 3; autumn thins from day 2.0; winter bare (02 §3.4).
-2. Crowns are blob lists (GV 1703–1728) painted into the sprite cache (GV 6782) with a per-tree tint ±10 % (GV `treeTint` 6776). Mulch disc (`bedEarth`) under every tree on its own tile (02 §2.3).
+1. Phase machine as GV `crownPhase` (6749): spring: bud 0 to 0.9 d, blossom 0.9 to 2.0 d, leafing 2.0 to 3.0 d (02 §3.4: blossom days 1 to 2, leafing day 3); autumn thins from day 2.0; winter bare (02 §3.4).
+2. Crowns are blob lists (GV 1703–1728) painted into the sprite cache (GV 6782) with a per-tree tint ±10 % (GV `treeTint` 6775). Mulch disc (`bedEarth`) under every tree on its own tile (02 §2.3).
 3. Snow: crowns whiten in thirds as `snow` rises (GV 6786). Tiles adjacent to a tree are shelter tiles (02 §5.2); the drawing need not show it.
 4. Do not: add a fourth species; draw leaves individually (crowns are blobs; leaves are particles).
 
 ### 6.4 Backdrop props (apron and skyline; `src/render/backdrop.ts`)
-All are world-space props outside the 48×48 interior so they turn with the camera (register 2.4). **Near-side rule:** the two apron sides nearest the camera draw only railings and pavement; facades, the café and the quay wall draw on the far sides only, as GV draws its far shore (review §7.3). When the camera turns through a quarter, the sides swap over 0.4 s with alpha.
+All are world-space props outside the 48×48 interior so they turn with the camera (register 2.4). **Near-side rule:** a facade, café or quay bay whose depth is greater than the park centre's depth (it stands between the camera and the park) is drawn as a cutaway: ground-floor band only, 0.6 EH high, alpha 0.35, no roof (03 §7.4 item 4, A7); far-side bays draw in full; the change over a quarter turn fades over 0.4 s.
 
 | Prop | Where | Height | Parts | Variants | Animation |
 |---|---|---|---|---|---|
@@ -498,13 +558,13 @@ Puddles (`WET`): an ellipse 0.6×0.3 tile per tile with `WET > 0.3`, filled with
 ## 7. Characters
 
 ### 7.1 The visitor rig (`src/render/figures.ts`)
-1. Base height `VH = 22` px at zoom 1 for a grown visitor (0.85 EH). Child 0.65·VH = 14.3 px (GV's gnome height, 8047); elder 0.95·VH. Drawn height `h = VH·z·scale`.
+1. Base height `FH = 22` px at zoom 1 for a grown visitor (0.85 EH). Child 0.65·FH = 14.3 px (GV's gnome height, 8047); elder 0.95·FH. Drawn height `h = FH·z·scale`.
 2. Proportions (fractions of `h`, up from the feet, after ref2): hip −0.38, shoulder −0.66, head centre −0.82, head radius 0.10, neck 0.04, upper arm 0.16 and forearm 0.14 (arm 0.30), leg 0.38, shoulder width 0.16, line width `max(0.9, 0.06h)`. Compare GV 8240: hip −0.30, shoulder −0.56, head −0.72, head r 0.135. The Parque figure is longer in the leg and smaller in the head.
 3. Walk: leg swing `sin(walkPh)·0.15h`; `walkPh += dt·speed·2.1` (one stride every 0.46 s at 3.0 tiles/s); arms counter-swing ±0.55 rad (GV default idle arm −1.18 ± 0.55, review notes 15 line 123); bob 0.02h at twice the stride.
 4. Idle: breathing ±0.07 rad on the arms at 0.5 Hz (GV 8331 pattern); a glance (head turn ±0.2 rad) every 4–7 s on the visual RNG.
 5. LOD tiers (drawn height `h`):
 
-| h | Zoom at VH 22 | Drawn |
+| h | Zoom at FH 22 | Drawn |
 |---|---|---|
 | < 3 | < 0.14 | nothing |
 | ≥ 3 | 0.14 | body stroke, head disc, coat colour |
@@ -547,13 +607,13 @@ At the default zoom 1.3, `h = 28.6`: every tier shows. At Fit (0.30), `h = 6.6`:
 ### 7.4 The avatars and the creatures
 | Actor | Scale | Drawing | Notes |
 |---|---|---|---|
-| `a_matchmaker` | 1.0 VH | ref2 exactly: black beret, orange ponytail with a red ribbon, blue `#3F7FC4` and white stripes, white trousers, black flat shoes, wicker basket with two baguettes (`#E0A85C`) | the only figure with a ponytail; stripes horizontal |
-| `a_florist` | 1.0 VH | straw hat (`#E9D7AE`), green apron, a wicker basket (`#C98F4C`) of flowers (3 dots in rose, marigold, lavender; the same basket is the `c_bouquet` cameo's); petals scatter from the hand | none |
-| `a_busker` | 1.0 VH | as the busker archetype, flat cap | none |
-| `a_mime` | 1.0 VH | white face (`paper` disc over the skin), black beret, black and white horizontal stripes, red scarf, white gloves | differs from the matchmaker by the white face, the black stripes and no hair showing |
+| `a_matchmaker` | 1.0 FH | ref2 exactly: black beret, orange ponytail with a red ribbon, blue `#3F7FC4` and white stripes, white trousers, black flat shoes, wicker basket with two baguettes (`#E0A85C`) | the only figure with a ponytail; stripes horizontal |
+| `a_florist` | 1.0 FH | straw hat (`#E9D7AE`), green apron, a wicker basket (`#C98F4C`) of flowers (3 dots in rose, marigold, lavender; the same basket is the `c_bouquet` cameo's); petals scatter from the hand | none |
+| `a_busker` | 1.0 FH | as the busker archetype, flat cap | none |
+| `a_mime` | 1.0 FH | white face (`paper` disc over the skin), black beret, black and white horizontal stripes, red scarf, white gloves | differs from the matchmaker by the white face, the black stripes and no hair showing |
 | `a_pigeon`, pigeons | 0.18 EH (4.7 px at zoom 1) | GV bird recipe (8575–8598): body ellipse `#8E8AA0`, head disc, beak `#E7B97A`, a neck sheen ellipse `#8CBE85` at alpha 0.6, tail stroke; walking: bob 0.08·s at 3 Hz and a head peck; flying: two-stroke wings flapping at 5 Hz, arc height 46·z px (GV 8591–8592) | culled below 1.6 px; `m_flock` adds 20 visual pigeons |
 | `a_pomeranian` | 0.3 EH | three overlapping fluff ellipses (`#F2C98A` body, `#F7DFB0` chest, `#E8B06C` ears), a curled tail, black dot eyes and nose, a tiny red collar; running: body stretches 1.15× along the heading, legs as 4 short strokes at 8 Hz; the snatched item drawn in the mouth | never drawn outside the park |
-| dogs (walkers') | 0.45 EH | GV fox/dog recipe (8506) at 9.5·z: trotting body, collar `awningRed`, lead to the walker | on a lead 1 tile behind |
+| dogs (walkers') | 0.45 EH | GV fox/dog recipe (8506) at 11.7·z (0.45 EH): trotting body, collar `awningRed`, lead to the walker | on a lead 1 tile behind |
 | wasp | particle | GV bee recipe (8617): jittering `ink` ellipse with a `#E8C64A` stripe | none |
 
 ### 7.5 Expressions readable at the default zoom
@@ -603,7 +663,7 @@ Cap 220 particles (register 3.3), spawned on the visual RNG only; the simulation
 | fireworks | Happily, `c_fireworks` | 1 shell per 0.8 s for 10 s (30 s for the ability) | a `paper` dot rising 4 EH over 0.8 s, then 24 sparks in `rose`, `lamp`, `sky` fanning r 1.2 EH, fading 1.2 s; a soft flash alpha 0.10 on burst | 80 |
 | poop splat (tasteful) | `m_pigeon`, `a_pigeon` swoop | 1 | a `paper` blob r 0.3·hr with a `#DCE9F1` edge on the hat or hair, no brown, no drip; gone at the end of `wipe` | 1 per victim |
 | sprinkler | `m_sprinkler` | 3 arcs rotating | `sky` drops r 0.12·s on 3 arcs r 1.5 tiles, 1 rev/s; tiles inside shimmer with `WET` | 24 |
-| fog | `m_fog`, mist weather | none | per-cell fog mix (1.7 rule 5) plus 44 mist blobs (GV mist 8614: radial gradient `rgba(240,244,250)`) drifting 0.1 tile/s | 44 |
+| fog | `m_fog`, mist weather | none | the per-cell fog mix (1.7 rule 5) plus the full-canvas wash of `PAL.fog` at `FOGA * 0.55` after the entity pass (03 §7.8.2); no mist particles | 0 |
 | dust puff | stumble, dig | 2–3 | GV dust (8611) `#CFC6C0` | none |
 | splash | soaked, drenched, paddling | 5 | GV drop (8618) `#A9D3E6` | none |
 | wasp | `m_wasp` | 1 | GV bee (8617) circling the table r 0.4 tile at 2 Hz | 1 |
@@ -724,7 +784,7 @@ Gravel and flagstone take snow at ×0.7 cover; paths show through (GV sand ×0.4
 | breeze | sway on trees, hedges, awnings, hats (02 §3.3) | `#CDE3D8` |
 | rain | GV rain; wet darkening; puddles; umbrellas on the pair with `c_umbrella` | `#9FBCD4` |
 | shower | rain at half density, 30–60 s | `#B7CCDE` |
-| mist | per-cell fog 0.30·mist; mist blobs; facades at 60 % | `#DDE2E8` |
+| mist | per-cell fog 0.30·mist; the fog wash (section 8); facades at 60 % | `#DDE2E8` |
 | snow | GV snow; cover as 10.3; crowns whiten | `#EFF4FA` |
 
 Seven dots are GV `WCOLD` (10774); `shower` is new (section 13).
@@ -771,10 +831,10 @@ Do not: start a prop with a photo-realistic goal; draw text into the canvas exce
 ## 13. Assumptions and open points
 
 Values this document defines that the register does not (the owner may object to any):
-1. The visitor base height `VH = 22` px at zoom 1 (0.85 EH), child 0.65, elder 0.95; the rig proportions of 7.1 rule 2; the LOD tiers at `h` 3 / 4 / 8 / 12 / 18 (7.1). GV uses 14.3 px and tiers 4 / 7 / 10 / 18 (GV 8047, 8341–8428).
+1. The visitor base height `FH = 22` px at zoom 1 (0.85 EH), child 0.65, elder 0.95; the rig proportions of 7.1 rule 2; the LOD tiers at `h` 3 / 4 / 8 / 12 / 18 (7.1). GV uses 14.3 px and tiers 4 / 7 / 10 / 18 (GV 8047, 8341–8428).
 2. The default zoom 1.3 for a new park, centred on the fountain (5.1).
-3. All hex values of the three direction palettes (3.1), the treatment table (3.2) and the per-direction theme colours. Direction A reuses GV constants where a GV constant exists.
-4. The 13 board tiles, their sizes and zooms, the phone and desktop layouts, and the board's file paths `style-board.html` and `src/debug/style-board.ts` (4.1–4.3). The module map does not list a board module; `07-Build-Plan.md` decides.
+3. All hex values of the three direction palettes (3.1, primary and secondary), the treatment table (3.2) and the per-direction theme colours. Direction A reuses GV constants where a GV constant exists.
+4. The 13 board tiles, their sizes and zooms, the phone and desktop layouts, and the board's file paths `style-board.html` and `src/debug/style-board.ts` (4.1–4.3).
 5. The profile field name `stylePick` with values `'A' | 'B' | 'C'`, and direction A as the default until a pick exists (4.4).
 6. The `Palette` and `StyleSpec` types and the "no colour literal outside two files" rule with its grep test (4.5); `ambient.ts` holds all three palettes rather than only the chosen one (brief 3.4 item 4 says the chosen palette is written once; keeping all three lets the board and the game share one file and a later second style needs no migration, register 3.11).
 7. The full type scale of 5.2 (the brief fixes only the 11 px minimum); the bar colours and low-state thresholds of 5.5; the gate tick on the Heart bar.
@@ -791,9 +851,6 @@ Values this document defines that the register does not (the owner may object to
 Open points for the owner:
 1. Is 22 px (0.85 EH) the right figure height? It makes faces readable at zoom 1.0 and above but makes people larger relative to tiles than GV's gnomes (0.55 EH). The board tile 7 shows it.
 2. The brief (11 item 4) assumes the gate may not retint the five HUD accent tokens; this document keeps them fixed in every direction. Confirm.
-3. Register row 15 names a statue in the folly set but §3.7 has no `statue` tool (brief 11 item 13). No statue is in section 6; if the owner adds the tool, a statue (1×1, 1.2 EH, `stone`, plinth and figure) is the obvious addition.
-4. Direction C's screen-space paper grain is drawn over the whole scene every frame (one `drawImage` of a 256×256 tile, multiply). If the perf overlay shows it costing more than 1 ms on a mid phone, the fallback is grain baked into tile colours as in A.
-5. Whether the featured pair's rose ring should also show in avatar mode (this document says yes).
-6. The 40 % lit-window rate on facades at night, and whether the Eiffel Tower should sparkle (a 5-minute real-time cycle would not be deterministic in sim time; this document gives it only a 4 s beacon).
-
-Register inconsistencies seen, not resolved here (brief 11 items 12 and 13 already report them): row 16 "18 abilities" versus 19 ids in §3.8; row 15 "statue".
+3. Direction C's screen-space paper grain is drawn over the whole scene every frame (one `drawImage` of a 256×256 tile, multiply). If the perf overlay shows it costing more than 1 ms on a mid phone, the fallback is grain baked into tile colours as in A.
+4. Whether the featured pair's rose ring should also show in avatar mode (this document says yes).
+5. The 40 % lit-window rate on facades at night, and whether the Eiffel Tower should sparkle (a 5-minute real-time cycle would not be deterministic in sim time; this document gives it only a 4 s beacon).

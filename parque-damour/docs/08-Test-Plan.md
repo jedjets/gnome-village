@@ -87,7 +87,7 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `commands.test.ts` | a command for a future tick waits | `tick === 11` command is not applied at `applyPending(10)` and is applied at 11 |
 | `commands.test.ts` | the log keeps the last 600 | 650 applied commands: `log().length === 600` and the first logged is the 51st |
 | `commands.test.ts` | a rejected command is not logged and emits rejected | `tool` on a gate tile: `Result.ok === false`, `reason === 'reason.gateway'`, `log()` unchanged, one `rejected` event |
-| `commands.test.ts` | side rules of 03 §5.3 | `tool` with side cupid → `reason.not_in_avatar` is wrong: it is rejected as not allowed; `ability c_petals` with side mischief rejected; `avatar.tap` in creator mode rejected; `speed` allowed in avatar mode |
+| `commands.test.ts` | side rules of 03 §5.3 | `tool` with side cupid and `ability c_petals` with side mischief are each rejected with `reason.wrong_side` (03 §5.3, §5.4) and not logged; `avatar.tap` in creator mode is rejected and not logged (03 §5.3 allows it only in avatar mode and defines no dedicated key, so the test asserts `Result.ok === false` only); `speed` with side park is allowed in avatar mode |
 | `commands.test.ts` | tool and ability in avatar mode are rejected | after `avatar.enter a_pigeon`: `tool` → `reason.not_in_avatar`, `ability` → `reason.not_in_avatar` |
 | `commands.test.ts` | replay reproduces the log | snapshot, 1000 ticks with 6 commands, `stateHash()` A; `restore`, `replay(log, 1000)`; `stateHash()` equals A (design §14.5) |
 | `events.test.ts` | on delivers at once and watch after drain | an `on` listener runs inside `emit`; a `watch` listener runs only at `drain` |
@@ -534,7 +534,6 @@ Values this document defines that the register, the design, 03 and 06 do not (th
 Open points for the owner:
 
 1. 05 §8.2 names the limiter function `gate`; 03 §2.8 names it `aOK`. This document uses `aOK`. One of the two documents should change.
-2. Register row 16 says 18 abilities; the §3.8 table has 19. The tests follow the table (brief §11 item 12).
-3. Whether the production build should keep a minimal `__PD` (hash and tick only) so the release smoke run could assert determinism on `dist/index.html` itself. This document says no: 03 §13 is dev-only, and `tools/det.mjs` runs on the dev build of the same commit.
-4. Whether the 2.0 % tolerance for scenes C and E is acceptable to the owner's eye, or whether those two scenes should be reviewed by hand instead of pixel-diffed.
-5. Whether `npm run perf` should be a CI gate from S9 on (effects and light) or stay a hand-back report until release. This document makes it a release gate only (brief §9 row 3 is a success criterion, not a slice gate).
+2. Whether the production build should keep a minimal `__PD` (hash and tick only) so the release smoke run could assert determinism on `dist/index.html` itself. This document says no: 03 §13 is dev-only, and `tools/det.mjs` runs on the dev build of the same commit.
+3. Whether the 2.0 % tolerance for scenes C and E is acceptable to the owner's eye, or whether those two scenes should be reviewed by hand instead of pixel-diffed.
+4. Whether `npm run perf` should be a CI gate from S9 on (effects and light) or stay a hand-back report until release. This document makes it a release gate only (brief §9 row 3 is a success criterion, not a slice gate).

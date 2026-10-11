@@ -54,7 +54,7 @@ Imports flow downward only. A module may import from its own row or any row abov
 
 ### 2.2 `src/main.ts` (NEW; wiring pattern GV `boot` 12127–12222)
 
-Responsibility: boot order and wiring only; no rules. Order: `installStyles` → `i18n.init(profile.settings.lang)` → `intro.show(hasPark)` → on Begin or Continue: `audio.init()` (the autoplay unlock, GV 12216–12217), `newPark(seed)` or `loadPark(save)`, `render.init`, `camera.setupInput`, `rail.build`, `hud.init`, `loop.start()`. Wires every DOM control to `enqueue(cmd)` or to a UI-only function (rotate, Fit, photo, sheets, language, mute). Registers `visibilitychange` and `pagehide` for autosave and audio suspend (GV 12199). Reads `#s=<seed>&halt` from the hash (GV 12097, 814) and writes `#s=<seed>` on a new park (GV 12115). Installs `debug/harness.ts` only when `import.meta.env.DEV`.
+Responsibility: boot order and wiring only; no rules. Order: `installStyles` → `i18n.init(profile.settings.lang)` → `intro.show(hasPark)` → on Begin or Continue: `audio.init()` (the autoplay unlock, GV 12216–12217), `newPark(seed)` or `loadPark(save)` (on a new park `camera.centreOn(23.5, 23.5); cam.z = ZOOM_START (1.3)` (04 §5.1); on Continue `fitCam()` (section 11)), `render.init`, `camera.setupInput`, `rail.build`, `hud.init`, `loop.start()`. Wires every DOM control to `enqueue(cmd)` or to a UI-only function (rotate, Fit, photo, sheets, language, mute). Registers `visibilitychange` and `pagehide` for autosave and audio suspend (GV 12199). Reads `#s=<seed>&halt` from the hash (GV 12097, 814) and writes `#s=<seed>` on a new park (GV 12115). Installs `debug/harness.ts` only when `import.meta.env.DEV`.
 
 ### 2.3 `src/core/`
 
@@ -65,9 +65,9 @@ Responsibility: boot order and wiring only; no rules. Order: `installStyles` →
 | `ids.ts` | NEW | (GV holds references, review §11) | One allocator per record type. Counters start at 1; 0 is "none". `PropId` is recycled through a free list so it always fits `OCC` (Uint16, max 65535). Counters are part of the park save. | `nextVisitorId(): VisitorId; nextPairId(): PairId; nextCreatureId(): CreatureId; nextPropId(): PropId; freePropId(id): void; nextEffectId(): EffectId; idsState(): IdsState; setIdsState(s): void` |
 | `clock.ts` | ADAPT | 814–828 | `T` and the day bands of the register 3.2. `T.abs` is recomputed from the integer `tick` every step (no float drift). `light` is the piecewise-linear table of design §3.2, not GV's cosine. No `cold`, `thaw`, `ds`. | `const DAYLEN = 360; const SEASON_DAYS = 3; const START_ABS = 0.30; type Phase = 'night'\|'dawn'\|'morning'\|'midday'\|'afternoon'\|'golden'\|'dusk'\|'evening'; const T: { abs: number; f: number; day: number; season: 0\|1\|2\|3; light: number; speed: number; phase: Phase; lamps: boolean }; stepClock(tick: number): void; phaseOf(f: number): Phase; isNewDay(): boolean` |
 | `weather.ts` | ADAPT | 829–881 | Global weather state machine with eased targets, plus the override list of design §3.5. Kinds exactly `clear, fair, cloudy, breeze, rain, shower, mist, snow`. Picks on the sim RNG by the per-season weight table of design §3.3. No storm front, no spate, no `tookBridge`. | `type WeatherKind = ...; const W: { kind: WeatherKind; next: number; cloud: number; rain: number; mist: number; snow: number; wind: number; windP: number; drift: number; wet: number }; stepWeather(dt: number): void; weatherAt(x: number, y: number): Readonly<{ kind: WeatherKind; cloud; rain; mist; snow; wind; light: number }>; addOverride(o: Override): EffectId; removeOverride(id): void; overrides(): readonly Override[]` |
-| `events.ts` | NEW | (GV `logEv` 10717 is the nearest thing) | The event bus. `emit` delivers at once to sim listeners (`on`) and queues for frame listeners (`watch`); `drain(lite)` delivers the queue after the frame's sim steps. Event payloads carry ids and i18n params, never records. | `type GameEvent = { kind: EventKind; tick: number; x?: number; y?: number; params?: Params; ids?: number[] }; on(kind, fn): void; watch(kind, fn): void; emit(ev): void; drain(lite: number): void` |
+| `events.ts` | NEW | (GV `logEv` 10717 is the nearest thing) | The event bus. `emit` delivers at once to sim listeners (`on`) and queues for frame listeners (`watch`); `drain(lite)` delivers the queue after the frame's sim steps. Event payloads carry ids and i18n params, never records. | `type EventKind = 'newday'\|'season'\|'formed'\|'stage'\|'happily'\|'parted'\|'embarrassed'\|'backfired'\|'cast'\|'unlock'\|'fx'\|'cue'\|'rejected'\|'applied'\|'avatarStatus'\|'mode'\|'warn'\|'step'\|'sit'\|'stand'\|'chat'\|'laugh'\|'linger'\|'watch'\|'proposal'\|'bouquet'\|'peck'\|'scatter'\|'fly'\|'swoop'\|'bark'\|'snatch'\|'wall'\|'eat'\|'arrive'\|'leave'\|'lampsLit'\|'sing'` (the triggers of 05 §3.2, §4 and 06 §17 are drawn from these and use these spellings); `type GameEvent = { kind: EventKind; tick: number; x?: number; y?: number; params?: Params; ids?: number[] }; on(kind, fn): void; watch(kind, fn): void; emit(ev): void; drain(lite: number): void` |
 | `commands.ts` | NEW | (GV applies from the UI directly; review §4) | The `Command` union (section 5), `enqueue`, `applyCommand`, the log, rejection reasons, replay. | `enqueue(c: CommandInput): void; applyPending(tick): void; applyCommand(c: Command): Result; log(): readonly Command[]; replay(cmds: Command[], upToTick): void; type Result = { ok: true } \| { ok: false; reason: ReasonKey }` |
-| `loop.ts` | PORT | 12013–12096 | `frame` and `simulate`: fixed step, speed dial, `nsMax`, wall budget, lite bits, perf laps. Section 4. | `const SIM_DT = 1/60; start(): void; simulate(dt: number, lite: number): void; tick(): number; setSpeed(v: number): void; onFrame(fn): void; SP: Record<string, number>` |
+| `loop.ts` | PORT | 12013–12096 | `frame` and `simulate`: fixed step, speed dial, `nsMax`, wall budget, lite bits, perf laps. Section 4. Stores the rAF timestamp once per frame as `now()` for `audio/limiter.ts` and `debug/perf.ts`; it is the only file that reads `performance.now()`, `Date.now()` or the rAF `ts`. | `const SIM_DT = 1/60; start(): void; simulate(dt: number, lite: number): void; tick(): number; now(): number; setSpeed(v: number): void; onFrame(fn): void; SP: Record<string, number>` |
 
 ### 2.4 `src/world/`
 
@@ -111,7 +111,7 @@ Responsibility: boot order and wiring only; no rules. Order: `installStyles` →
 
 | Module | Status | GV lines | Responsibility | Public API |
 |---|---|---|---|---|
-| `camera.ts` | PORT | 6331–6358 (`cam`, `resize`, `setAngle`, `rotXY`, `turnStep`), 6400–6416 (`fitCam`, `clampCam`), 11168–11230 (`setupInput`), 11280–11322 (follow, `focusY`, `keepCentre`, `centreOn`), 12142–12154 (quarter turns, Fit) | Camera state, gestures, follow. Taps and paints are delegated to handlers, never interpreted here. Section 8. | `cam: Cam; resize(): void; fitCam(): void; clampCam(): void; turn(dir: -1\|1): void; setupInput(canvas, h: InputHandlers): void; followStep(dt): void; turnStep(dt): void; keepCentre(): void; centreOn(x, y): void; follow(target: FollowTarget \| null): void` |
+| `camera.ts` | PORT | 6331–6358 (`cam`, `resize`, `setAngle`, `rotXY`, `turnStep`), 6400–6416 (`fitCam`, `clampCam`), 11168–11230 (`setupInput`), 11280–11322 (follow, `focusY`, `keepCentre`, `centreOn`), 12142–12154 (quarter turns, Fit) | Camera state, gestures, follow. Taps and paints are delegated to handlers, never interpreted here. Section 8. | `cam: Cam; resize(): void; fitCam(): void; clampCam(): void; turn(dir: -1\|1): void; setupInput(canvas, h: InputHandlers): void; followStep(dt): void; turnStep(dt): void; keepCentre(): void; centreOn(x, y): void; follow(target: FollowTarget \| null): void; viewCentreTile(): XY` (the tile under screen point `(cw/2, 0.45 * chh)`; GV `midG` 10785; 05 §2.6 item 3) |
 | `project.ts` | PORT | 6382–6384 (`sxOf`, `syOf`, `screenOf`), 6423–6443 (`screenToTile`, `ptInQuad` without allocation), 11231–11250 (`tapSelect` hit test) | World to screen, screen to tile, the hit test with priority people > creatures > props > tile. | `screenOf(x, y, e?): { x: number; y: number }; screenToTile(sx, sy): XY \| null; pickAt(sx, sy): Hit; type Hit = { kind: 'visitor'\|'creature'\|'prop'\|'tile'\|'none'; id: number; tile: XY \| null }` |
 | `order.ts` | PORT | 6359–6381 (`orderBy` counting sort) | Depth sort of the entity list each frame (ground needs no sort: it is flat). | `sortByDepth(items: Drawable[]): void; depthOf(x, y): number` |
 | `ambient.ts` | PORT | 6445–6478 | Palette constants (the Style Gate writes them here and nowhere else), `computeAmbient`, `lit`, `GC` memo (900 keys), season tint. | `PAL: Palette; computeAmbient(): void; lit(c: RGB): RGB; GC(hex: string, alpha?: number): string; AM, AA, AT, FOGA` |
@@ -130,12 +130,12 @@ Responsibility: boot order and wiring only; no rules. Order: `installStyles` →
 
 | Module | Status | GV lines | Responsibility | Public API |
 |---|---|---|---|---|
-| `engine.ts` | PORT | 6056–6120 | Master chain, synthetic reverb, `tone`, `panOf`, `audibleGain`, `gtone` (audibility first). Context on first gesture; suspend on hidden. | `initAudio(): void; tone(freq, dur, o?: ToneOpts): void; cueAt(kind: CueKind, x, y, play: () => void, baseMs: number, soft?: boolean): boolean; setMuted(m): void; isMuted(): boolean; suspend(): void; resume(): void` |
-| `limiter.ts` | PORT | 6130–6137 | `aOK(kind, baseMs, soft)` per-kind real-time gap scaled by `T.speed` (1–8). | `aOK(kind: string, baseMs: number, soft?: boolean): boolean; resetGaps(): void` |
-| `cues.ts` | NEW | 6139–6207 (shape of a cue: two or three `tone` calls) | The cue vocabulary of `05-Audio-and-Music-Design.md`; subscribes to events with `watch`. | `playCue(kind: CueKind, x, y): void; CUES: readonly CueDef[]` |
+| `engine.ts` | PORT | 6056–6120 | Master chain and the three buses of 05 §7.1, synthetic reverb, `tone`, `grain`, `panOf`, `audibleGain`, `toneAt` (GV `gtone`, audibility first), `duck`. Context on first gesture; suspend on hidden. Names as 05 §2. | `initAudio(): void; tone(freq, dur, o?: ToneOpts): void; toneAt(x, y, freq, dur, o?): boolean; grain(dur, o): void; duck(db, holdS): void; setMuted(m): void; isMuted(): boolean; suspend(): void; resume(): void` |
+| `limiter.ts` | PORT | 6130–6137 | `gate(key, baseMs, soft, unscaled)` (GV `aOK`): per-key real-time gap scaled by `T.speed` (1–8), read from `loop.now()`. | `gate(key: string, baseMs: number, soft?: boolean, unscaled?: boolean): boolean; resetGaps(): void` |
+| `cues.ts` | NEW | 6139–6207 (shape of a cue: two or three `tone` calls) | The cue vocabulary of `05-Audio-and-Music-Design.md`; `bindCues(bus)` subscribes to events with `watch`. | `cue(id: CueId, x, y, p?: CueParams): boolean; bindCues(bus): void; CUES: Record<CueId, CueDef>` |
 | `ambience.ts` | ADAPT | 6292–6329 (`updateAudio` scheduler), 6273–6279 (rain plips, crickets, owl idiom) | Fountain point source, kiosk chatter, distant bells and traffic, rain on gravel, pigeon wings; real-time intervals. | `updateAmbience(dtr: number): void` |
 | `birds.ts` | PORT | 6212–6269 | `noteRun`, six voices, `singFrom` from a tree near the view, dawn and dusk windows. | `updateBirds(dtr): void` |
-| `music.ts` | NEW | 6195 (`sfxTune` as a 12-note example only) | Procedural musette waltz: scheduler, voices, state-driven variants (section 9.3). | `startMusic(): void; stopMusic(): void; updateMusic(dtr): void; setMotif(pick: 'A'\|'B'\|'C'): void` |
+| `music.ts` | NEW | 6195 (`sfxTune` as a 12-note example only) | Procedural musette waltz (motif A) per 05 §5; motifs B and C live in `src/debug/motifs.ts` (05 §6.1) until a pick moves one here (05 §6.5 item 3). Section 9.3. | `startMusic(): void; stopMusic(): void; updateMusic(dtr): void; musicState(): MusicState` |
 
 ### 2.9 `src/ui/`
 
@@ -151,7 +151,7 @@ Responsibility: boot order and wiring only; no rules. Order: `installStyles` →
 | `i18n.ts` | NEW | (GV has `langs` for the intro only, 12200–12213) | `t`, `plural`, `gender`, language switch, `<html lang>`. Section 12. | `t(key: string, params?: Params): string; plural(key, n: number, params?): string; gender(key, sex: 'f'\|'m', params?): string; setLang(l: 'en'\|'es'): void; lang(): 'en'\|'es'; hasKey(key): boolean` |
 | `strings/en.ts`, `strings/es.ts` | NEW | | `export const en: Record<string, string>` and `es` with identical key sets. | as named |
 
-### 2.10 `src/save/`, `src/debug/`, `src/styles/`
+### 2.10 `src/save/`, `src/debug/`, `src/styles/`, `src/fonts/`
 
 | Module | Status | GV lines | Responsibility | Public API |
 |---|---|---|---|---|
@@ -160,8 +160,12 @@ Responsibility: boot order and wiring only; no rules. Order: `installStyles` →
 | `save/migrate.ts` | NEW | | `migrateProfile(raw: unknown): ProfileV1 \| null`, `migratePark(raw: unknown): ParkSaveV1 \| null`; one function per version step. | as named |
 | `debug/harness.ts` | ADAPT | 12223–12241 (`window.__GV`) | `window.__PD` (section 13); installed only in DEV. | `installHarness(): void` |
 | `debug/perf.ts` | PORT | 12056–12069 (`FT`, `ftNote`), 259 and CSS 157 (`#perf`) | Frame, sim and draw EMA with one-second peaks; auto quality step-down; the overlay text. | `ftNote(sim, draw, total, ts): void; FT; qualityLevel(): 0\|1\|2` |
+| `debug/style-board.ts` | NEW | | Script of `style-board.html` (04 §4): renders the 13 tiles of the three directions with the real `render/*` primitives; second Vite entry; never imported by `main.ts` | `renderTile(n, spec, canvas): void` |
+| `debug/music-board.ts` | NEW | | Script of `music-board.html` (05 §6); third Vite entry; never imported by `main.ts` | as 05 §6.4 |
+| `debug/motifs.ts` | NEW | | Motifs B and C implementing 05 §6.2 `Motif`; imported only by `music-board.ts` | `MOTIFS: Record<'B'\|'C', Motif>` |
 | `styles/tokens.css` | PORT | CSS 16–23 | The tokens of brief §3.2, exactly. | |
 | `styles/shell.css` | PORT | CSS 24–230 | HUD, chips, rail, tools, size row, card (and strip variant 173–178), sheets, toast, feed, photo mode, intro, perf, safe areas, reduced motion; minimum font 11 px (brief §3.1 item 5). | |
+| `fonts/*.woff2` | NEW | | Fraunces and Figtree subsets (Latin plus Latin Extended), under 400 KB together, referenced by `@font-face` in `shell.css` and inlined by the build (07 S0.6 row 19) | |
 
 ---
 
@@ -316,7 +320,7 @@ Excluded from the save: the undo stack (register 3.11 "undo-irrelevant"), camera
 5. `if (ns >= nsMax || simAcc > SIM_DT * nsMax) simAcc = 0` (drop the backlog, GV 12086).
 6. `events.drain(lite)` delivers the steps' events to frame listeners (ui, audio, effects).
 7. `effects.stepParticles(min(0.05, dtr) * T.speed)` (visual stream; replaces GV `updateParts` inside `simulate`, which is moved out because particles are not sim state).
-8. `if (T.speed > 0 || ns > 0) { audio.updateAmbience(dtr); audio.updateBirds(dtr); audio.updateMusic(dtr); }` in real seconds (GV 12088).
+8. `audio.updateAmbience(dtr); audio.updateBirds(dtr); audio.updateMusic(dtr)` every frame in real seconds, paused or not (05 §4.1 item 1; GV 12088 gated on speed, not ported).
 9. `camera.turnStep(dtr); camera.keepCentre(); camera.followStep(dtr); effects.ambientFx(dtr)`.
 10. `draw()`.
 11. `hud.updateHud(dtr); rail.updateRail(dtr); feed.ageFeed(dtr); store.stepAutosave(ns * SIM_DT)`.
@@ -385,6 +389,7 @@ type Command = { tick: number; seq: number } & (
   | { side: 'park'; kind: 'speed';        payload: { speed: 0|1|2|3|4|5|6|7|8 } }
   | { side: 'park'; kind: 'park.new';     payload: { seed: number } }
   | { side: 'park'; kind: 'visitor.call'; payload: { gate: GateId | null } }
+  | { side: 'park'; kind: 'debug.weather'; payload: { kind: WeatherKind } }   // DEV builds and tests only; sets W.kind and W.next = 0
 );
 type ToolPayload =
   | { tool: 'path'|'lawn'|'pond'; at: XY; size: 1|2|3; stroke: number }          // one command per painted centre; stroke groups them for undo
@@ -413,6 +418,9 @@ type Target = { kind: 'tile'; x: number; y: number } | { kind: 'visitor'; id: Vi
 | `avatar.enter` | the avatar's side | rejected if already in avatar mode |
 | `avatar.leave`, `avatar.tap` | `PLAYER`'s side | only in avatar mode |
 | `speed`, `park.new`, `visitor.call` | `park` | allowed |
+| `debug.weather` | `park` | allowed; rejected in a production build |
+
+A command whose `side` is not in the Allowed column is rejected with `reason.wrong_side` (section 5.4).
 
 ### 5.4 Validation and rejection reasons
 
@@ -435,10 +443,12 @@ Every reason is an i18n key under `reason.`; the shell toasts `t(reason)`. Tools
 | `reason.cooldown`, `reason.no_charges` | | design §9.1 |
 | `reason.not_children` | child target | design §13 T3 |
 | `reason.enough_today` | `embToday >= 3` | design §6.4 rule 2 |
-| `reason.not_courting`, `reason.apart`, `reason.on_the_water`, `reason.no_lamp`, `reason.not_raining`, `reason.not_evening`, `reason.pond_small`, `reason.iced`, `reason.slippery`, `reason.busker_near`, `reason.dog_saw_it`, `reason.no_wasps_rain`, `reason.in_sunbeam`, `reason.already_misty`, `reason.nobody_inside`, `reason.not_at_picnic`, `reason.no_item`, `reason.peel_here` | per-ability failures of design §9.2–9.3, one key each | |
+| `reason.not_courting`, `reason.apart`, `reason.on_the_water`, `reason.no_lamp`, `reason.not_raining`, `reason.raining`, `reason.not_evening`, `reason.pond_small`, `reason.iced`, `reason.slippery`, `reason.busker_near`, `reason.dog_saw_it`, `reason.no_wasps_rain`, `reason.in_sunbeam`, `reason.already_misty`, `reason.nobody_inside`, `reason.not_at_picnic`, `reason.no_item`, `reason.peel_here` | per-ability failures of design §9.2–9.3, one key each | |
 | `reason.park_full` | `visitor.call` at 30 (GV 4489) | design §12.2 |
 | `reason.park_full_props` | 600 props | section 3.11 |
 | `reason.not_in_avatar`, `reason.busy` | mode and hold | |
+| `reason.startled`, `reason.big_dog`, `reason.basket_empty`, `reason.nobody_for_them`, `reason.had_to_go` | avatar cascade refusals of design §10.4–10.9 | 06 §12 |
+| `reason.wrong_side` | a command whose `side` is not allowed for its kind (section 5.3) | |
 
 Do not: do not toast from inside `applyCommand`; emit `rejected` and let `ui/hud.ts` toast it. Do not spend a cooldown or a charge before validation passes.
 
@@ -478,7 +488,7 @@ Do not: do not toast from inside `applyCommand`; emit `rejected` and let `ui/hud
 ### 6.3 Visitors (`entities/visitor.ts`, `needs.ts`, `brain.ts`, `act.ts`, `move.ts`, `astar.ts`)
 
 1. Arrivals (design §4.2): the scheduler keeps `nextArrivalT`; when `people < target && people < 30` and the timer expires, pick an archetype by weight, a gate by weight, create the record on the gate's `outside` tile, path to the gate tile. Regulars replace generated singles by `names.stepRegularReturns()`.
-2. Needs: port the easing idiom of GV 5578 for comfort; rates per sim day from design §4.4 (`hunger += 0.5 * dt / DAYLEN`, and so on).
+2. Needs: port the easing idiom of GV 5579 for comfort; rates per sim day from design §4.4 (`hunger += 0.5 * dt / DAYLEN`, and so on).
 3. Brain: port the shape of GV `decide` 4809 (each rung returns on dispatch); rungs exactly design §5.2; routines exactly design §4.3. Weights are picked with `rng()`.
 4. Act: port the idiom of GV `act` 4968: `switch (v.st)` with `goX` states that arrive and switch to `X`, `X` states that count `v.t` down and finish. Add a `default` branch that sets `idle` and emits one `warn` event (GV has none, review §6.3).
 5. Move and A*: port GV 1569–1673 and 1412–1510 minus terrain terms; costs from design §5.5; speeds from design §5.4. `spaceOut` uses `TW/2` and `TH/2` constants, not `cam.z`, so the sim stays camera-free (GV 5599 uses screen-space ellipses; here the ellipse is in world units equivalent to 10 × 8 px at zoom 1: `rx = 10 / (TW/2) = 0.77`, `ry = 8 / (TH/2) = 1.23` tiles along the two iso axes at angle 0; rotation is ignored, assumption A5).
@@ -536,10 +546,10 @@ Done when: a unit test places one player bed and one gen fountain and reads `cha
 ### 7.3 Ambient light (`render/ambient.ts`; PORT of GV 6450–6478)
 
 1. `AM = mixc([0.46, 0.50, 0.72], [1, 1, 1], light^0.7)`; cloud dim `W.cloud * 0.12` evenly across channels (blue ×0.92 of the dim) (GV 6456–6459 without the storm cover).
-2. Golden hour: `warm = clamp01(1 - |f - 0.76| / 0.05) + clamp01(1 - |f - 0.24| / 0.04)`; `AA = warm * 0.22 * max(0.25, light)`; `AT = f < 0.5 ? [255, 204, 162] : [255, 186, 158]`. The window centres and half-widths follow the register's golden hour 0.72–0.80 instead of GV's 0.74 ± 0.11 (GV 6460–6462).
+2. Golden hour: `warm = clamp01(1 - |f - 0.76| / 0.10) + clamp01(1 - |f - 0.24| / 0.08)` (04 §10.1 item 1); `AA = warm * 0.22 * max(0.25, light)`; `AT = f < 0.5 ? [255, 204, 162] : [255, 186, 158]`. The window centres and half-widths follow the register's golden hour 0.72–0.80 instead of GV's 0.74 ± 0.11 (GV 6460–6462).
 3. `FOGA = clamp01(mist * 0.30 + rain * 0.03 + snow * 0.14)` (GV 6463). A `c_sunbeam` adds `light + 0.15` only for drawables inside its square (the renderer asks `weatherAt`).
 4. `lit(c)` and `GC(hex, alpha)` exactly as GV 6465–6478 (memo flushed at 900 keys).
-5. Lamp light is local and new: for each lit lamp the entity pass draws a radial halo (radius 3 tiles, alpha 0.18 at the centre) in the ground pass after tiles, and `figures.ts` mixes a figure's colours toward `AT` by `0.18 * (1 - d/3)` for the nearest lit lamp within 3 tiles.
+5. Lamp light is local and new: for each lit lamp the entity pass draws the 04 §6.1 lamp glow: a head halo r 0.9 tile and a ground pool ellipse 1.6 × 0.8 tiles at alpha 0.16 fading to 0 at 3 tiles, in the ground pass after tiles, and `figures.ts` mixes a figure's colours toward `AT` by `0.18 * (1 - d/3)` for the nearest lit lamp within 3 tiles.
 6. Season tint: the palette has per-season lawn and foliage triples (the Style Gate decides values); `ground.ts` picks by `T.season` and blends 0.5 day across a season change.
 
 ### 7.4 Backdrop (`render/backdrop.ts`)
@@ -560,9 +570,9 @@ Done when: a unit test places one player bed and one gen fountain and reads `cha
 
 ### 7.6 Figures (`render/figures.ts`; ADAPT of GV 8169–8442)
 
-1. `FH = 22` px adult height at zoom 1 (GV `GH = 14.3`, 8047; raised because 1 tile is 1 m here, assumption A8); child `0.72 * FH`, elder `0.95 * FH`. The Style Gate may retune `FH` and the proportions; nothing else may.
-2. LOD by drawn height `h = FH * z * scale` (GV 8182–8186): not drawn below 3 px; hand item at `h > 4`; eyes at `h > 10`; face and clothing detail at `h > 18`.
-3. Rig anchors as GV: hip −0.30h, shoulder −0.56h, head −0.72h with radius 0.135h, arm 0.27h; walk swing 0.15h; hop arc 0.22h (GV ~8212–8237). Sitting, kneeling (proposal), lying (none), leaning (chat), ducking (flock) from the body-language table keyed by `st`.
+1. `FH = 22` px at zoom 1 for a grown visitor (0.85 EH); child 0.65 FH, elder 0.95 FH; drawn `h = FH * z * scale` (assumption A8).
+2. LOD by `h`: < 3 nothing; ≥ 3 body; ≥ 4 signifier; ≥ 8 eyes; ≥ 12 expression; ≥ 18 close detail (04 §7.1 item 5).
+3. Proportions after ref2 as 04 §7.1 item 2 (hip −0.38h, shoulder −0.66h, head −0.82h, head radius 0.10h); GV's anchors at 8240 are the shape to port, not the numbers.
 4. `itemFor(v)` (GV `toolFor` 8050): book (`read`), baguette (`items.baguette` or `shares > 0`), bouquet (`basket > 0` florist; `hand` state), umbrella (pair with `umbrellaUntil > tick`), camera (`photo`), brush (`paint`), ice cream (`items.iceCream`), lead (dog walker), hat in hand (`duck`, `wipe`).
 5. Colours from `lookSeed` through the palette's coat, hair and hat sets; the `a_matchmaker` look is fixed (beret, red ribbon, striped top, white trousers, basket with two baguettes; brief §3.3 ref2).
 6. Facing: `v.face` is set by the sim from movement; the renderer may flip the face toward a partner during `chat`, `kiss`, `proposal` using screen positions (GV 8172 comment: a drawing choice never written back).
@@ -574,12 +584,12 @@ Done when: a unit test places one player bed and one gen fountain and reads `cha
 2. Trees: species shapes from GV `buildTreeShape` 1692–1728 (plane, chestnut, lime replacing GV's three), crown phase by design §3.4, sprite cache keyed `species|zoomBucket|season|phase|round(light*8)|round(AA*8)|snow` (GV 6782–6790), cleared at 1400 entries, culled below 2.5 px.
 3. Lamps: GV `drawLantern` 7978 silhouette replaced by the three-globe Paris lamp (brief §3.3 ref3); lit when `T.lamps` or `data.litUntil > tick`.
 4. Fountain: iso basin from the box kit with spray particles spawned by `effects.ambientFx`, never by `drawProp` (review §2.5 flags GV `drawSpring` 8602 as the thing not to repeat).
-5. Creatures: pigeon 4.2 × z px body (GV birds 8569), dog 9.5 × z (GV fox/dog 8506), pomeranian 7 × z.
+5. Creatures: pigeon 0.18 EH (4.7·z px), pomeranian 0.3 EH (7.8·z), dog 0.45 EH (11.7·z), per 04 §7.4; GV's bird at 8569 and fox at 8506 are the shapes.
 
 ### 7.8 Effects, ghost, overlays (`render/effects.ts`, `ghost.ts`)
 
-1. Particles: `P(o)` with the 220 cap (GV 2386), fields `{ k, x, y, z, vx, vy, vz, l, m, ph }`, gravity −2.6/s², wind lean from `W.wind` (GV `updateParts` 2396). Kinds: `heart, petal, leaf, drop, splash, ring, dust, spark, note, flash, firework, snow, wasp, poopDot, bubble`. Spawners subscribe to `fx` events.
-2. Weather overlay: screen-space rain (95 drops per unit of rain normalised to 390 × 800, two layers, none above the horizon) and snow (120 flakes) from GV 10062–10105; no lightning. Fog: a full-canvas wash of `PAL.fog` at `FOGA * 0.55` after the entity pass.
+1. Particles: `P(o)` with the 220 cap (GV 2386), fields `{ k, x, y, z, vx, vy, vz, l, m, ph }`, gravity −2.6/s², wind lean from `W.wind` (GV `updateParts` 2396). Kinds: `heart, petal, leaf, drop, splash, ring, dust, spark, note, flash, firework, wasp, poopDot, bubble, hat` (04 §8; rain, snow, fog, the rain-cloud sprite and the sunbeam pool are screen- or world-space overlays, not particles). Spawners subscribe to `fx` events.
+2. Weather overlay: screen-space rain (95 drops per unit of rain normalised to 390 × 800, two layers, none above the horizon) and snow (120 flakes) from GV 10062–10105; no lightning. Fog: a full-canvas wash of `PAL.fog` at `FOGA * 0.55` after the entity pass. The time term is sim time, `T.abs * DAYLEN`, never `performance.now()` or `loop.now()` (GV 10072 used wall time; 08 §4.5 item 1).
 3. Ghost: GV `drawGhost` 6037 panes (green `ok`, red otherwise) for armed stamps and runs; an armed area ability shows its square at alpha 0.25 in the side's accent.
 4. Selection ring (GV 8435) under the selected figure; focus pin (GV `drawFocusMark` 10764) for 5.2 s after `goToEvent`.
 
@@ -634,7 +644,7 @@ The hit test allocates nothing per call (GV `ptInQuad` allocated two arrays, 643
 
 ### 8.3 Other gestures (PORT)
 
-Clock chip single tap after 400 ms opens Events, double tap under 380 ms toggles the perf overlay in dev (GV 12181); Sound button long press 600 ms opens the sound check in dev (GV 12158); `#bAdd` uses `stopPropagation` (GV 12171); New opens a confirm (register Q21; GV 12169 had none).
+Clock chip single tap after 400 ms opens Events, double tap under 380 ms toggles the perf overlay in dev (GV 12181); `#bAdd` uses `stopPropagation` (GV 12171); New opens a confirm (register Q21; GV 12169 had none). The sound check is opened from the Options sheet under the dev flag (05 §2.6); GV's 600 ms long press at 12158 is not ported.
 
 ---
 
@@ -642,27 +652,24 @@ Clock chip single tap after 400 ms opens Events, double tap under 380 ms toggles
 
 ### 9.1 Engine (`audio/engine.ts`; PORT of GV 6056–6120)
 
-1. Graph exactly GV 6061–6072: master 0.84 → lowpass 2100 Hz Q 0.3 → highshelf −6 dB above 1100 Hz → compressor (−24 dB, knee 28, 3:1, 30/450 ms) → destination; convolver with `makeIR(2.2, 2.8)` → lowpass 1600 → return 0.36. `makeIR` uses `vrnd` instead of `Math.random` (GV 6077 violates P10).
+1. Graph exactly GV 6061–6072: master 0.84 → lowpass 2100 Hz Q 0.3 → highshelf −6 dB above 1100 Hz → compressor (−24 dB, knee 28, 3:1, 30/450 ms) → destination; convolver with `makeIR(2.2, 2.8)` → lowpass 1600 → return 0.36. `makeIR` and the `grain()` buffer are filled once from a private `mulberry32(0xA0D10)` inside `engine.ts` (05 §1 item 6), so neither `rng` nor `vrng` moves (GV 6077 used `Math.random`).
 2. `tone(freq, dur, o)` as GV 6090–6113 (envelope, glide to 92 %, LFO, panner, `dry`).
 3. `panOf(x, y)` and `audibleGain(x, y)` as GV 6081–6089 using `screenOf(x, y, 0)`.
-4. **Audibility before the gate**: `cueAt(kind, x, y, play, baseMs, soft)`: `a = audibleGain(x, y); if (a <= 0.02) return false; if (!aOK(kind, baseMs, soft)) return false; play(a); return true`. GV `aOK` 6131 ran first, so an off-screen cue consumed the gap (review §8).
+4. **Audibility before the gate**: `toneAt(x, y, freq, dur, o)` returns `false` and plays nothing when `audibleGain(x, y) <= 0.02`, else multiplies `gain` by the audibility, sets `pan = panOf(x, y)` and returns `true` (05 §2.3 item 3). `cue(id, x, y, p)` in `cues.ts` runs in the order of 05 §2.4 item 3: (a) `!audioOn || muted` → return `false` without stamping; (b) `a = audibleGain(x, y)`; `a < def.thresh` → return `false` without stamping (unpositioned cues use `a = 1`); (c) `!gate(key, def.gap, def.soft, def.unscaled)` → return `false`; (d) `def.play(x, y, a, panOf(x, y), p)`; return `true`. GV `aOK` 6131 ran first, so an off-screen cue consumed the gap (review §8).
 5. Context created on Begin or Continue; `suspend()` on `visibilitychange` hidden, `resume()` when visible and not muted (GV 12199).
 
 ### 9.2 Limiter (`audio/limiter.ts`; PORT of GV 6130–6137)
 
-`aOK(kind, baseMs, soft)`: `sp = clamp(T.speed || 1, 1, 8)`; `gap = baseMs * (soft ? 1 + (sp - 1) * 0.45 : sp)`; compare against `performance.now()` per kind in `AGAP`. Real time by design (register 3.2).
+`gate(key, baseMs, soft, unscaled = false)`: `sp = clamp(T.speed || 1, 1, 8)`; `scale = unscaled ? 1 : soft ? 1 + (sp - 1) * 0.45 : sp`; `gap = baseMs * scale`; compare against `loop.now()` per key in `GAP: Map<string, number>`; return `false` while `now - (GAP.get(key) ?? -1e9) < gap`, else stamp `now` and return `true` (05 §2.4 items 1–2). `src/audio/` never calls `performance.now()` or `Date.now()`. Real time by design (register 3.2).
 
 ### 9.3 Music (`audio/music.ts`, NEW)
 
-1. Scheduler: a real-time `updateMusic(dtr)` keeps `nextNoteTime` 0.12 s ahead of `AC.currentTime`, scheduling one beat at a time (the standard look-ahead pattern); tempo and pitch never depend on the frame rate.
-2. Voices: `bass` (sine, beat 1 of each bar), `chord` (two triangle tones on beats 2 and 3), `melody` (sine with `wob` 5.5 Hz vibrato, phrase tables), `counter` (optional). Gains 0.02–0.05. All through the master chain and the reverb.
-3. The musette waltz: 3/4, 112 bpm by default, eight-bar phrases from a phrase table per motif (A waltz default; B lullaby; C swing are Music Gate alternatives, `setMotif`).
-4. State-driven variants, evaluated at bar boundaries only: `neutral`; `rising` when the featured pair's stage ≥ 4 or its affinity rose in the last 30 s (melody up an octave fragment, brighter chord); `parted` for 24 s after a `parted` event (minor third, slower by 8 %); `happily` for 16 s after a `happily` event (a cadence then `rising`); night: `melody` muted, `bass` and `chord` only.
-5. Music reads `romance.featured()` and events; it writes nothing. Randomness is `vrng`.
+1. The waltz is specified in 05 §5 (form, chord loop, bass, melody generator, accordion voice, state table, ducking, scheduler). This document fixes only the contract: real-time look-ahead scheduling on `AC.currentTime`, tempo and pitch never depend on the frame rate or `T.speed`, state read once per bar from `romance.featured()` and the bus, nothing written to the sim, `vrng` only.
+2. Music reads `romance.featured()` and events; it writes nothing. Randomness is `vrng`.
 
 ### 9.4 Cues, ambience, birds
 
-`cues.ts` subscribes with `watch` to `fx`, `stage`, `embarrassed`, `happily`, `parted`, `cast`, `unlock`; each cue is two or three `tone` calls as GV 6139–6207; gains 0.014–0.060. `ambience.ts` replaces `villagePos()` centring with point sources (fountains, kiosks) and the screen centre (GV 6292 skeleton). `birds.ts` is GV 6212–6269 as is, sampling trees from `props` with `kind == 'tree'` near the view.
+`cues.ts` (`bindCues(bus)`) subscribes with `watch` to `fx`, `stage`, `embarrassed`, `happily`, `parted`, `cast`, `unlock`; each cue is two or three `tone` calls as GV 6139–6207; gains 0.014–0.060. `ambience.ts` replaces `villagePos()` centring with point sources (fountains, kiosks) and the screen centre (GV 6292 skeleton). `birds.ts` is GV 6212–6269 as is, sampling trees from `props` with `kind == 'tree'` near the view.
 
 ---
 
@@ -673,7 +680,7 @@ Clock chip single tap after 400 ms opens Events, double tap under 380 ms toggles
 | Area | Ids |
 |---|---|
 | Stage | `#stage`, `#cv` |
-| HUD chips | `#hudClock` (`#wdot`, `#tPhase`, `#tDay`), `#hudVisitors` (`#tPop`, `#bAdd`), `#hudRomance` (`#tRom`), `#hudPoints` (`#tCP`, `#tMP`) |
+| HUD chips | `#hudClock` (`#wdot`, `#tPhase`, `#tDay`), `#hudVisitorsWrap` holding the `<button id="hudVisitors">` (`#tPop`) and its sibling `<button id="bAdd">`, `#hudRomance` (`#tRom`), `#hudPoints` (`#tCP`, `#tMP`) |
 | Card | `#card` (`#cName`, `#cSub`, `#cRel`, `#cBars` with `.bar[data-need]`, `#cDo`, `#cPin`), `#card.pair` variant |
 | Rail | `#rail`; row 1 `#groups` (`button[data-group]` × 3), `#tools` (`.tool[data-id]`); row 2 `#row2` (`#sizewrap`, `#size`, `#depth`, `#bPlace`, `#bCancel`, `#bUndo`, `#cdChip`); row 3 `#row3` (`#bHalt`, `#spdR`, `#spdLbl`, `#bRotL`, `#bRotR`, `#bFit`, `#bMute`, `#bMode`, `#bPhoto`, `#bNew`) |
 | Sheets | `#census`, `#romances`, `#progress`, `#evlog`, `#picker`, `#options`; `#snd` and `#perf` (dev) |
@@ -681,6 +688,8 @@ Clock chip single tap after 400 ms opens Events, double tap under 380 ms toggles
 | Intro | `#intro` (`#iTitle`, `#iP`, `#begin`, `#bContinue`, `#lang button[data-l]`) |
 | Photo | `#photoX` |
 | Confirm | `#confirm` (`#confirmText`, `#confirmYes`, `#confirmNo`) |
+
+`#depth` is the row-2 text line: the active tool's `tool.<id>.label` and, for a refused ghost, the ranked reason through `t()` (04 §5.4 item 4); it never shows a depth.
 
 ### 10.2 Body classes
 
@@ -723,7 +732,7 @@ Static elements carry `data-t="key"` (text) or `data-t-aria="key"` (aria-label).
 | Failure handling | every `localStorage` access in `try/catch`; a parse or migration failure logs a `warn` event, discards the park and shows Begin without Continue; the profile falls back to defaults |
 | Migration | `migrate.ts` holds `profileV0toV1`, `parkV0toV1` placeholders now; each future version adds one function and a test fixture |
 | State hash | `stateHash()`: FNV-1a over `tick`, `rng.sim`, `rng.simN`, the full `weather` block, the nine saved layers' bytes, and the canonical JSON of `props`, `visitors`, `pairs`, `creatures`, `effects`, `sides`, `regulars`, `alumni`, `tally`, `mode` and the profile's `cp`/`mp`, each array sorted by id. Excluded: `feed`, `log`, `pinnedPair`, `rng.vis`, `T.speed`. |
-| Size estimate | layers 46 KB raw → 62 KB base64; 30 visitors ≈ 12 KB; 150 props ≈ 18 KB; pairs and creatures ≈ 4 KB; feed 40 × 100 B = 4 KB; log 600 × 80 B = 48 KB; total ≈ 150 KB, under the brief's 1 MB (brief §9 row 6) |
+| Size estimate | layers 53 KB raw → 71 KB base64; 30 visitors ≈ 12 KB; 150 props ≈ 18 KB; pairs and creatures ≈ 4 KB; feed 40 × 100 B = 4 KB; log 600 × 80 B = 48 KB; total ≈ 160 KB, under the brief's 1 MB (brief §9 row 6) |
 
 Do not: do not save object references; do not save the undo stack; do not write to `localStorage` from any module but `store.ts`.
 
@@ -744,18 +753,20 @@ Do not: do not save object references; do not save the undo stack; do not write 
 
 ## 13. Debug harness (`debug/harness.ts`, `perf.ts`)
 
-`window.__PD` is installed only when `import.meta.env.DEV` is true (Vite removes the call from the production bundle). It exposes, and nothing more:
+`window.__PD` is installed only when `import.meta.env.DEV` is true (Vite removes the call from the production bundle). It exposes these ten groups, and nothing more (this table is the single list; 05 §8.3, 08 §3.1 and 09 §5.2 follow it):
 
 | Group | Members | Why |
 |---|---|---|
-| State (read) | `T, W, layers { KIND, WEAR, OCC, WATER, ICE, WET, PETALS, BEDC }, visitors, pairs, creatures, props, effects, cam` | inspection in the console and in tests |
-| Stepping | `simulate(n = 1)`, `tick()`, `rngN()`, `hash()`, `setSpeed(v)` | determinism runs like GV's `det.js` (GV 12022, 12232) |
+| State (read) | `T, W, layers { KIND, WEAR, OCC, WATER, ICE, WET, PETALS, BEDC }, visitors, pairs, creatures, props, effects, cam, feed()` | inspection in the console and in tests |
+| Stepping | `simulate(n = 1)`, `tick()`, `rngN()`, `hash()`, `worldHash()`, `setSpeed(v)`, `SP` | determinism runs like GV's `det.js` (GV 12022, 12232); `worldHash()` hashes the nine layers and `props` only (07 S2.6 item 14); `SP` is the per-phase lap table of section 4.2 |
 | Commands | `enqueue(cmd)`, `apply(cmd)`, `log()`, `replay(cmds)` | scripted play |
 | Picking | `tap(sx, sy)`, `pick(sx, sy)`, `screenOf(x, y)`, `screenToTile(sx, sy)` | input tests |
 | Save | `snapshot()`, `restore(s)`, `savePark()`, `loadPark()`, `clearAll()` | round-trip tests |
-| Park | `newPark(seed)`, `callVisitor()`, `setWeather(kind)` (writes `W.kind` and `W.next`, sim-side, logged as a `debug` command so the log stays complete) | reproducing scenes |
-| Render | `draw()`, `pix(x, y, w, h)`, `dpr()`, `FT`, `DBG` (quality flags) | screenshot assertions (GV `pix` 12235) |
-| Audio | `cues()`, `playCue(kind)`, `getAC()` | the sound check |
+| Park | `newPark(seed)`, `callVisitor()`, `setWeather(kind)` (enqueues the `debug.weather` command of section 5.1, which writes `W.kind` and `W.next = 0` sim-side, so the log stays complete) | reproducing scenes |
+| Render | `draw()`, `pix(x, y, w, h)`, `dpr()`, `FT`, `DBG` (quality flags), `qualityLevel()` | screenshot assertions (GV `pix` 12227) |
+| Audio | `audio` object of 05 §8.3 (`cues`, `play`, `log`, `dryRun`, `state`, `music`, `ambience`) | the sound check and the dry-run determinism check |
+| Screenshots | `seedVisual(seed)`, `fxStep(dt, n)` | reproducible particles for `tools/shot.mjs` (08 §4.1); visual stream only |
+| Meta | `version`, `schemaVersion` | fixtures |
 
 The perf overlay `#perf` (`perf.ts`, GV 12057–12069) shows frame, sim and draw EMA with one-second peaks and the entity counts; toggled by the clock chip double tap under `body.dev`. The auto quality step-down (GV `DBG.smooth`) becomes `qualityLevel()` 0 → 1 → 2: level 1 drops lamp halos and ribbons, level 2 drops tree sway and petals; it steps when draw EMA > 22 ms for 180 frames and never steps up in a session, disabled under WebDriver (GV 12064).
 
@@ -765,14 +776,14 @@ The perf overlay `#perf` (`perf.ts`, GV 12057–12069) shows frame, sim and draw
 
 | Item | Decision |
 |---|---|
-| `package.json` scripts | `dev` (vite), `build` (vite build), `preview`, `test` (vitest run), `test:watch`, `lint` (oxlint src tests tools), `typecheck` (tsc --noEmit), `shot` (node tools/shot.mjs), `check` (typecheck && lint && test && build) |
+| `package.json` scripts | `dev` (vite), `build` (vite build), `preview`, `test` (vitest run), `test:watch`, `lint` (oxlint src tests tools), `typecheck` (tsc --noEmit), `shot` (node tools/shot.mjs), `check` (typecheck && lint && test && build), `det` (node tools/det.mjs), `perf` (node tools/perf.mjs); both take `--url <dev server url>`, default `http://localhost:5173/` |
 | Runtime dependencies | none |
 | Dev dependencies | `vite`, `typescript`, `vitest`, `oxlint`, `vite-plugin-singlefile`, `puppeteer-core`, `jsdom` (for `ui/` tests) |
 | `vite.config.ts` | `plugins: [viteSingleFile()]`; `base: '/'` now, `'/parque-damour/'` after the move (register §7); `build.target: 'es2020'`; `build.assetsInlineLimit: 1_000_000` so the woff2 fonts inline; `build.cssCodeSplit: false`; the harness and dev UI are gated by `import.meta.env.DEV` alone, no extra `define` |
 | `tsconfig.json` | `strict: true`, `target: ES2020`, `module: ESNext`, `moduleResolution: bundler`, `noUnusedLocals`, `noUnusedParameters`, `noFallthroughCasesInSwitch`, `noImplicitOverride`, `isolatedModules`, `types: ['vite/client']` |
 | oxlint | default rules plus `no-restricted-imports` for the layer rule of section 2.1 (`render/*`, `audio/*`, `ui/*`, `debug/*` forbidden in `core/`, `world/`, `entities/`, `play/`, `save/`), `no-restricted-globals` for `Math.random` (allowed only in `core/rng.ts` tests' fixtures: none) |
-| Single-file build | `dist/index.html` with all JS, CSS and fonts inline; no `dist/assets/` directory left over; verified by the `check` script (`ls dist` must show one file) |
-| Tests (`tests/`) | `determinism.test.ts` (3 days, two runs, one extra command), `save.test.ts` (round trip and migration fixture), `strings.test.ts` (key parity, no literals), `tone.test.ts` (child refusal, cap 3, kinds), `content.test.ts` (16 tools, 19 abilities, 6 avatars, 7 stages, 10 kinds, 8 weather kinds, 11 archetypes with exact spellings), `charm.test.ts`, `astar.test.ts`, `commands.test.ts` (rejection reasons) |
+| Single-file build | `dist/index.html` with all JS, CSS and fonts inline, plus `dist/style-board.html` and `dist/music-board.html`, each one file (07 §0.5 row 4); no `dist/assets/` directory left over; verified by the `check` script (`ls dist` must show only these files: `index.html` alone before S1, the three from S1 on) |
+| Tests (`tests/`) | `tests/` holds the Vitest files of 08 §2 (one per module plus `determinism`, `save`, `migrate`, `strings`, `content`, `colour-literals` and the jsdom files under `tests/ui/`); 07 names the slice that creates each |
 | Screenshot script | `tools/shot.mjs`: launches `/opt/pw-browsers/chromium` with `puppeteer-core`, viewport 390 × 844, `deviceScaleFactor: 3`, opens `dist/index.html` (or the preview URL), clicks `#begin`, sets `#spdR` to 8, waits 3 sim days by polling `document.title` suffix or a `data-day` attribute on `body` (the harness is absent in production), captures `shots/<slice>-<name>.png`, fails on any console error |
 | Pages deploy (later) | `.github/workflows/pages.yml` in the new repository: `npm ci`, `npm run check`, upload `dist/` as the Pages artifact (register §7 and `07-Build-Plan.md` Slice 0) |
 | Capacitor readiness checklist | (1) no runtime fetch; (2) fonts bundled; (3) `env(safe-area-inset-*)` on every fixed overlay (GV 32, 77, 157–165); (4) `viewport-fit=cover`, `maximum-scale=1` (GV 5); (5) `localStorage` only through `store.ts` so a native storage plugin can replace it in one file; (6) audio context created on a user gesture and resumed on `visibilitychange`; (7) 60 fps at the caps on a mid phone with the quality step-down; (8) no `window.open`, no external links; (9) `theme-color` meta present; (10) a `dist/index.html` that works from `file://` (relative `base`) |
@@ -790,7 +801,7 @@ The perf overlay `#perf` (`perf.ts`, GV 12057–12069) shows frame, sim and draw
 | HUD DOM | ≤ 0.4 ms per 0.35 s refresh | `FT.frame - FT.sim - FT.draw` |
 | Frame at 1× | ≤ 12 ms sim + draw (brief §9 row 3), EMA ≤ 16.7 ms | `#perf` |
 | Frame at 8× | 8 steps (≤ 20 ms sim) under the 26 ms budget; the loop runs behind the dial rather than dropping frames (GV 12076–12086) | `#perf` |
-| Memory | layers 55 KB; caches: tree sprites ≤ 1400 canvases (cleared), `GC` memo 900, tile colours 2304 strings | DevTools |
+| Memory | layers 64 KB; caches: tree sprites ≤ 1400 canvases (cleared), `GC` memo 900, tile colours 2304 strings | DevTools |
 
 ### 15.2 GV tricks to keep (review §13)
 
@@ -823,10 +834,10 @@ The coarse 2 × 2 lattice and shore promotion (6364, 9937–9944); per-frame ver
 | 3 | A weaker model ports terrain, water flow or construction code because it is next to what it was asked to port | the Do-not lists in sections 1, 7.9, 11; `09-Porting-Map-from-Gnome-Village.md` names drop ranges; the module map says PORT ranges exactly |
 | 4 | Strings leak into code | `strings.test.ts` greps `src/` for quoted sentences outside `strings/`; review rule P7 |
 | 5 | `OCC` overflow at 65535 prop ids | recycled `PropId` free list; soft cap 600 with a reason key |
-| 6 | Save bloat or quota errors in private mode | 150 KB estimate; `try/catch`; the game runs without storage and says so once |
+| 6 | Save bloat or quota errors in private mode | 160 KB estimate; `try/catch`; the game runs without storage and says so once |
 | 7 | The 2304-tile pass too slow on a weak phone at zoom 0.3 (every tile visible) | colour runs grouped per `fillStyle`; epoch cache; quality step-down; measured in Slice 2 before any prop work |
 | 8 | Painter errors: a figure drawn under a bench or behind a facade | the near-side cutaway rule (7.4); stable tie order; a screenshot test with a pair on a bench at four quarter turns |
-| 9 | Audio autoplay refused or the context lost on iOS | create on Begin/Continue; resume on every pointerdown while `state == 'suspended'`; mute is a soft gate (GV 6055) |
+| 9 | Audio autoplay refused or the context lost on iOS | create on Begin/Continue; resume on every pointerdown while `state == 'suspended'`; mute is a hard cut on `master.gain` followed by a scheduling gate and a 2 s `suspend()` (05 §7.3) |
 | 10 | GV line numbers drift when someone re-saves the HTML | all citations are to the uploaded file named in the review §1; the review §16 lists known drift; never re-format the GV file |
 | 11 | The Style Gate and Music Gate block Slices 2+ | the engine skeleton, loop, commands, save, i18n, tests and the boards themselves need no gate; schedule them first (`07-Build-Plan.md`) |
 | 12 | Events delivered twice (sim listener and frame listener both toast) | only `ui/hud.ts` toasts; sim listeners never touch the DOM; `drain` runs once per frame |
@@ -850,17 +861,17 @@ Values this document defines that the register does not (the owner may object; o
 | A6 | Fit clamps to the register's zoom floor 0.30, cropping the apron's side corners on a 390 px phone at quarter turns | 7.1 |
 | A7 | Near-side facades (between the camera and the park) are drawn as a 0.6-unit cutaway at alpha 0.35 so they never hide the park | 7.4 |
 | A8 | Figure height `FH = 22` px at zoom 1 (GV 14.3) and the LOD thresholds; the Style Gate may retune | 7.6 |
-| A9 | Lamp light is local: a halo of radius 3 tiles and an 18 % warm mix on figures within 3 tiles | 7.3 |
+| A9 | Lamp light is local: the 04 §6.1 halo and pool (full alpha to 1.6 tiles, 0 at 3) and an 18 % warm mix on figures within 3 tiles | 7.3 |
 | A10 | The sun arc is corrected to left-to-right across the top (review §16 flags GV's path) | 7.4 |
-| A11 | Particles step on the frame with `dtr × speed`, not inside `simulate` (GV 12035 had them in the sim) | 4.1 |
+| A11 | Particles step on the frame with `dtr × speed`, not inside `simulate` (GV 12037 had them in the sim) | 4.1 |
 | A12 | Lite bits are redefined to drop fx and cue events only, never sim work | 4.5 |
 | A13 | `T.abs` is derived from the integer `tick` (no float accumulation) | 6.1 |
 | A14 | Commands carry a `seq` field beyond the register's four (`tick, side, kind, payload`); they are stamped `tick + 1`; sides order park < cupid < mischief within a tick | 5.1, 5.2 |
 | A15 | `speed` is a command (so a hot-seat or online mode can agree on it) but is excluded from the state hash and stored in the profile | 4.6 |
 | A16 | `pinnedPair` is saved in the park but excluded from the state hash (design §14.3 calls it client state) | 3.10, 11 |
-| A17 | Music scheduler numbers (0.12 s look-ahead, 112 bpm, variant windows 24 s and 16 s) pending the Music Gate | 9.3 |
+| A17 | Music numbers live in 05 §5 and §9 item 7, pending the Music Gate | 9.3 |
 | A18 | The weather `WET` rise and fall per tile are applied every step across all tiles (cheap) rather than per visitor tile | 6.2 |
-| A19 | `makeIR` uses `vrnd` instead of `Math.random` so P10 holds even for the reverb | 9.1 |
+| A19 | `makeIR` and the `grain()` buffer are filled once from a private `mulberry32(0xA0D10)` inside `engine.ts` (05 §1 item 6), so neither `rng` nor `vrng` moves (GV 6077 used `Math.random`) | 9.1 |
 | A20 | The perf overlay and sound check are revealed by `body.dev`, set from `#dev` in the hash or a dev build; the `__PD` harness is dev-build only | 10.2, 13 |
 | A21 | Build details: `vite-plugin-singlefile`, `es2020`, inline limit 1 MB, `jsdom` for UI tests, the screenshot script's wait strategy (`data-day` on `body`) | 14 |
 | A22 | Phase budgets of section 7.9 and 15.1 are targets to measure against, not gates until the brief's success criteria apply (brief §9 rows 3–4) | 7.9, 15.1 |
@@ -868,8 +879,6 @@ Values this document defines that the register does not (the owner may object; o
 | A24 | An extra autosave of the park on `park.new` (after the confirm, before the old park is cleared) so Continue never finds a half-written key | 11 |
 
 Open points for the owner:
-1. Register row 16 says 18 abilities; the §3.8 table has 19. This document follows the table (brief §11 item 12).
-2. Register row 15 names a statue in the folly set; §3.7 has no `statue` tool. This document follows §3.7 (brief §11 item 13); a `statue` 1 × 1 stamp would be a one-row addition to `TOOLS` and `drawProp`.
-3. Whether a two-player mode should stamp commands with a fixed `LEAD` or use a lockstep "wait for the peer" rule is left to the transport slice; both work with section 5.
-4. Whether `#s=<seed>` in the URL should survive a Continue (GV wrote it on every new island) or be dropped once a save exists. This document writes it only on `park.new`.
-5. Whether the apron cutaway rule (A7) is acceptable visually belongs to the Style Gate board: the board should show one near-side facade in cutaway.
+1. Whether a two-player mode should stamp commands with a fixed `LEAD` or use a lockstep "wait for the peer" rule is left to the transport slice; both work with section 5.
+2. Whether `#s=<seed>` in the URL should survive a Continue (GV wrote it on every new island) or be dropped once a save exists. This document writes it only on `park.new`.
+3. Whether the apron cutaway rule (A7) is acceptable visually belongs to the Style Gate board: the board should show one near-side facade in cutaway.

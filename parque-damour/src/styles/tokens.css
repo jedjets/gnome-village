@@ -1,0 +1,59 @@
+/* src/styles/tokens.css
+   The HUD paper tokens of brief 3.2 (GV CSS 16-23), exactly; the derived shades shell.css needs; the self-hosted fonts.
+   Ported from GV CSS 16-23. PORT. The only file besides src/render/ambient.ts allowed a colour literal (04 4.5).
+   TODO(S1): the Style Gate sets the TBD placeholders and may change --body-bg and the theme colour. */
+
+/* ---------- fonts: Latin and Latin Extended subsets, variable weight, bundled (brief 2) ---------- */
+@font-face{font-family:"Figtree";font-style:normal;font-weight:400 700;font-display:swap;
+  src:url("../fonts/figtree-latin.woff2") format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Figtree";font-style:normal;font-weight:400 700;font-display:swap;
+  src:url("../fonts/figtree-latin-ext.woff2") format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"Fraunces";font-style:normal;font-weight:500 700;font-display:swap;
+  src:url("../fonts/fraunces-latin.woff2") format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Fraunces";font-style:normal;font-weight:500 700;font-display:swap;
+  src:url("../fonts/fraunces-latin-ext.woff2") format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF}
+
+:root{
+  /* ---------- the 14 tokens of brief 3.2 (one per line; exact) ---------- */
+  --paper:#F1EDF5;
+  --paper-2:#E6E0EF;
+  --ink:#4A4458;
+  --ink-soft:#6E6680;
+  --moss:#8CBE85;
+  --sky:#A6CDE6;
+  --berry:#EDA9C4;
+  --ember:#F2B67E;
+  --stone:#B9B7C6;
+  --glass:rgba(250,248,253,.82);
+  --glass-line:rgba(74,68,88,.13);
+  --shadow:0 2px 10px rgba(74,68,88,.13);
+  --ui:"Figtree",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --display:"Fraunces",Georgia,serif;
+
+  /* ---------- derived shades GV wrote as literals in its shell CSS ---------- */
+  --page:#FAF8FD;                      /* the lightest paper */
+  --on-ink:#FBF9FE;                    /* text on an ink pill (GV 93, 108) */
+  --on-ink-soft:rgba(251,249,254,.8);  /* secondary text on an ink row (GV 61) */
+  --on-ink-line:rgba(255,255,255,.55); /* a swatch border on a pressed pill (GV 94) */
+  --well:rgba(255,255,255,.62);        /* a row inside a sheet (GV 55) */
+  --well-2:rgba(255,255,255,.7);       /* a button inside a sheet (GV 69) */
+  --toast:rgba(74,68,88,.86);          /* the toast background (GV 158) */
+  --swatch-line:rgba(74,68,88,.22);    /* a tool swatch border (GV 88) */
+  --thumb-shadow:0 1px 3px rgba(74,68,88,.3);
+  --shadow-lift:0 4px 14px rgba(74,68,88,.24); /* Begin (GV 150) */
+  --intro-0:#F7F2FA;
+  --intro-1:#E4E9F0;
+  --intro-2:#D6E1E6;
+  --body-bg:#F1EDF5;                   /* behind the canvas and the pre-paint; the theme colour matches */
+
+  /* ---------- TBD Style Gate (register section 4): placeholders, not yet used by shell.css ---------- */
+  --rose:#EDA9C4;    /* TBD Style Gate */
+  --lawn:#9CCB92;    /* TBD Style Gate */
+  --gravel:#D9CBB0;  /* TBD Style Gate */
+  --water:#6FB8DC;   /* TBD Style Gate */
+  --awning:#C9524E;  /* TBD Style Gate */
+}

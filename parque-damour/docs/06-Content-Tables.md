@@ -38,7 +38,7 @@ Version 1 · 2026-10-10 · Owner: Jeduthun Oosthuis · Author: Claude (design se
 | `SIM_DT` | 1/60 | s | fixed step (GV `SIM_DT` 12054) | design §14.2 |
 | `STEPS_PER_DAY` | 21600 | steps | `60 * DAYLEN` | 03 §6.1 |
 | `SPEED_MIN`, `SPEED_MAX` | 1, 8 | x | speed dial; 0 is pause | register 3.2 |
-| `NS_MAX` | `clamp(ceil(speed * 2.2) + 4, 8, 48)` | steps | steps per frame cap (GV 12076) | 03 §4.1 |
+| `NS_MAX` | `clamp(ceil(speed * 2.2) + 4, 8, 48)` | steps | steps per frame cap (GV 12082) | 03 §4.1 |
 | `WALL_BUDGET` | 9 / 13 / 26 | ms | speed <= 3 / <= 6 / > 6 (GV 12082) | 03 §4.1 |
 | `LITE` | 1 / 3 | bits | speed <= 6 / > 6 (GV 12083) | 03 §4.5 |
 | `PLAN_T` | 1.2 | sim s | planning tick (GV 12038) | 03 §4.3 |
@@ -89,7 +89,7 @@ Lamps lit when `f >= 0.80 || f < 0.28`. Warm tint peaks at `f = 0.76`. `light` i
 | `CAP_PAVING_RUNS_DAY` | 3 | `staff.ts` | design §11.1 |
 | `CAP_PIGEONS_PER_CRUMBS` | 5 | `creatures.ts` | design §11.2 |
 | `CAP_BLOCKED_MEMORY` | 8 | `move.ts` per visitor | design §5.5 |
-| `ASTAR_NODES` | 2600 | `astar.ts` per call (GV 1466) | design §5.5 |
+| `ASTAR_NODES` | 2600 | `astar.ts` per call (GV 1475, `2600*S2`) | design §5.5 |
 | `CAP_FLOCK_VISUAL` | 20 | `effects.ts` extra pigeons for `m_flock` | design §9.3 |
 
 ### 1.5 Speeds (`src/entities/move.ts`; tiles per sim second)
@@ -430,45 +430,46 @@ Static sources rebuild on a prop epoch (`markCharmDirty`); dynamic and pair sour
 
 | id | Trigger ability | Trigger avatar | Base cost | Cost at stage 1-2 / 3-4 / 5-7 | Comfort | Reaction state, length | Cue id | Feed key | Backfire key | Backfire scene (15 %) |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `poop` | `m_pigeon` | `a_pigeon` swoop | 0.08 | 0.08 / 0.10 / 0.12 | -0.3 | `wipe` 4 s | `cue.splat` | `feed.emb.poop` | `feed.emb.backfire.poop` | partner wipes it off, both `laugh` 4 s |
-| `soaked` | `m_sprinkler` | - | 0.07 | 0.07 / 0.0875 / 0.105 | -0.3 | `shake` 3 s | `cue.splash` | `feed.emb.soaked` | `feed.emb.backfire.soaked` | they dance in the spray 4 s |
-| `trip` | `m_peel` | - | 0.06 | 0.06 / 0.075 / 0.09 | -0.3 | `stumble` 3 s | `cue.slip` | `feed.emb.trip` | `feed.emb.backfire.trip` | partner catches them 4 s |
-| `snatched` | `m_pomeranian` | `a_pomeranian` snatch | 0.08 | 0.08 / 0.10 / 0.12 | -0.3 | `chase` 8 s at 4.0, then `huff` 3 s | `cue.bark` | `feed.emb.snatched` | `feed.emb.backfire.snatched` | both chase laughing 8 s; item returned |
-| `wasp` | `m_wasp` | - | 0.09 | 0.09 / 0.1125 / 0.135 | -0.3 | `flap` 6 s (flee 3 tiles) | `cue.wasp` | `feed.emb.wasp` | `feed.emb.backfire.wasp` | they shoo it off 4 s; picnic continues |
-| `drenched` | `m_raincloud` | - | 0.07 | 0.07 / 0.0875 / 0.105 | -0.3 | `huddle` 5 s | `cue.splash` | `feed.emb.drenched` | `feed.emb.backfire.drenched` | share a newspaper 5 s; counts as umbrella charm for 30 s |
-| `rival` | `m_rival` | - | 0.10 | 0.10 / 0.125 / 0.15 | -0.3 | `distracted` 30 s | `cue.gasp` | `feed.emb.rival` | `feed.emb.backfire.rival` | the stranger is laughed off at once |
-| `mime` | `m_mime` | `a_mime` wall or mimic | 0.06 | 0.06 / 0.075 / 0.09 | -0.3 | `baffled` 4 s, then reroute | `cue.baffled` | `feed.emb.mime` | `feed.emb.backfire.mime` | they applaud the mime 4 s |
-| `fog` | `m_fog` | - | 0.06 | 0.06 / 0.075 / 0.09 | -0.3 | `lost` up to 60 s | `cue.foghorn` | `feed.emb.fog` | `feed.emb.backfire.fog` | they bump into each other, `laugh` 4 s |
-| `flock` | `m_flock` | - | 0.09 | 0.09 / 0.1125 / 0.135 | -0.3 | `duck` 5 s; hat flies 2 tiles | `cue.flutter` | `feed.emb.flock` | `feed.emb.backfire.flock` | they duck together laughing 5 s |
+| `poop` | `m_pigeon` | `a_pigeon` swoop | 0.08 | 0.08 / 0.10 / 0.12 | -0.3 | `wipe` 4 s | `splat` | `feed.emb.poop` | `feed.emb.backfire.poop` | partner wipes it off, both `laugh` 4 s |
+| `soaked` | `m_sprinkler` | - | 0.07 | 0.07 / 0.0875 / 0.105 | -0.3 | `shake` 3 s | `sprinkler` | `feed.emb.soaked` | `feed.emb.backfire.soaked` | they dance in the spray 4 s |
+| `trip` | `m_peel` | - | 0.06 | 0.06 / 0.075 / 0.09 | -0.3 | `stumble` 3 s | `slip` | `feed.emb.trip` | `feed.emb.backfire.trip` | partner catches them 4 s |
+| `snatched` | `m_pomeranian` | `a_pomeranian` snatch | 0.08 | 0.08 / 0.10 / 0.12 | -0.3 | `chase` 8 s at 4.0, then `huff` 3 s | `snatch` (and `yap` from the dog) | `feed.emb.snatched` | `feed.emb.backfire.snatched` | both chase laughing 8 s; item returned |
+| `wasp` | `m_wasp` | - | 0.09 | 0.09 / 0.1125 / 0.135 | -0.3 | `flap` 6 s (flee 3 tiles) | `wasp` | `feed.emb.wasp` | `feed.emb.backfire.wasp` | they shoo it off 4 s; picnic continues |
+| `drenched` | `m_raincloud` | - | 0.07 | 0.07 / 0.0875 / 0.105 | -0.3 | `huddle` 5 s | `plip` x 6 | `feed.emb.drenched` | `feed.emb.backfire.drenched` | share a newspaper 5 s; counts as umbrella charm for 30 s |
+| `rival` | `m_rival` | - | 0.10 | 0.10 / 0.125 / 0.15 | -0.3 | `distracted` 30 s | `rival_hmm` | `feed.emb.rival` | `feed.emb.backfire.rival` | the stranger is laughed off at once |
+| `mime` | `m_mime` | `a_mime` wall or mimic | 0.06 | 0.06 / 0.075 / 0.09 | -0.3 | `baffled` 4 s, then reroute | `mime` | `feed.emb.mime` | `feed.emb.backfire.mime` | they applaud the mime 4 s |
+| `fog` | `m_fog` | - | 0.06 | 0.06 / 0.075 / 0.09 | -0.3 | `lost` up to 60 s | `foghorn` | `feed.emb.fog` | `feed.emb.backfire.fog` | they bump into each other, `laugh` 4 s |
+| `flock` | `m_flock` | - | 0.09 | 0.09 / 0.1125 / 0.135 | -0.3 | `duck` 5 s; hat flies 2 tiles | `flutter` x 4 | `feed.emb.flock` | `feed.emb.backfire.flock` | they duck together laughing 5 s |
 
-Rules (design §6.4): cost = base x stage factor, capped at 0.15; applied once per event to the pair's one affinity number; backfire is rolled on the sim RNG only when the victim is in a `Pair` and the partner is within 4 tiles, and then plays the `laugh` scene instead, affinity +0.04, no comfort loss, no MP, no `embToday`; the 4th attempt on a person in a day fails with `reason.enough_today` before anything is spent; children fail with `reason.not_children`; staff and scenery couples can be targets but score 0; `rival` lands only on a `Pair` member; reaction states are `BUSY` and `NO_SPACE`; MP +1 only when the victim is in a `Pair`. Do not add an eleventh kind.
+Rules (design §6.4): cost = base x stage factor, capped at 0.15; applied once per event to the pair's one affinity number; backfire is rolled on the sim RNG only when the victim is in a `Pair` and the partner is within 4 tiles, and then plays the `laugh` scene instead, affinity +0.04, no comfort loss, no MP, no `embToday`; the 4th attempt on a person in a day fails with `reason.enough_today` before anything is spent; children fail with `reason.not_children`; staff and scenery couples can be targets but score 0; `rival` lands only on a `Pair` member; reaction states are `BUSY` and `NO_SPACE`; MP +1 only when the victim is in a `Pair`; every landing also emits `gasp` on the victim; a backfire emits `laugh` on both and no `gasp` (05 §3.3 items 4 and 5). Do not add an eleventh kind.
 
 ---
 
 ## 11. Abilities (`src/play/abilities.ts`; name and hint keys `ability.<id>.name`, `ability.<id>.hint`; feed key on cast `feed.cast.<id>`; cooldown and charges are per side; cooldowns in sim seconds; charges reset at `f = 0`)
 
 ### 11.1 Registry
-| id | Side | Tier | Cooldown | Charges | Target type | Area | Duration | Cue on cast |
+The Cue column: every id emits `place` at its target on a cast that passes validation (05 §3.2 row 37), plus the effect's own cue where 05 names one (05 §3.3 item 7); no model adds a cue for an ability.
+| id | Side | Tier | Cooldown | Charges | Target type | Area | Duration | Cue |
 |---|---|---|---|---|---|---|---|---|
-| `c_petals` | cupid | T0 | 30 | - | `area` | 3 x 3 | 20 s charm, then `PETALS` fades | `cue.petals` |
-| `c_bouquet` | cupid | T0 | 60 | - | `pair` | the pair | about 7 s cameo | `cue.bouquet` |
-| `c_musician` | cupid | T1 | 120 | - | `tile` | radius 8 | 90 s playing | `cue.notes` |
-| `c_sunbeam` | cupid | T1 | 90 | - | `area` | 7 x 7 (override r 3) | 60 s | `cue.sunbeam` |
-| `c_umbrella` | cupid | T2 | 90 | - | `pair` | the pair | while rain > 0.3, max 120 s | `cue.umbrella` |
-| `c_lamplight` | cupid | T2 | 60 | - | `tile` | lamps within 6 | 60 s | `cue.lamp` |
-| `c_picnic` | cupid | T3 | 180 | - | `tile` (north-west of 2 x 2) | 2 x 2 lawn | basket 300 s | `cue.basket` |
-| `c_rowboat` | cupid | T3 | 240 | - | `tile` (pond) | pond of >= 12 tiles | 60 s ride (+ about 5 s boarding) | `cue.oars` |
-| `c_fireworks` | cupid | T4 | 360 | 1 | `park` | every pair | 30 s | `cue.fireworks` |
-| `m_pigeon` | mischief | T0 | 25 | - | `visitor` | one person | flight at 6.0, then `wipe` 4 s | `cue.flutter` |
-| `m_sprinkler` | mischief | T0 | 45 | - | `tile` (lawn) | 3 x 3 | 10 s | `cue.sprinkler` |
-| `m_peel` | mischief | T1 | 40 | - | `tile` (gravel or flagstone) | one tile | peel lives 120 s | `cue.peel` |
-| `m_pomeranian` | mischief | T1 | 60 | - | `visitor` | one person | run, 8 s chase, 60 s wait outside | `cue.bark` |
-| `m_wasp` | mischief | T2 | 60 | - | `pair` at Picnic, or `tile` with a table in use | the table | `wasp` lands at t+2 | `cue.wasp` |
-| `m_raincloud` | mischief | T2 | 90 | - | `area` | 5 x 5 (override r 2) | 30 s | `cue.cloud` |
-| `m_rival` | mischief | T3 | 150 | - | `pair` | one member | 30 s | `cue.gasp` |
-| `m_mime` | mischief | T3 | 120 | - | `tile` (gravel or flagstone) or `pair` | one tile, or the pair | wall 20 s; mimic 30 s | `cue.baffled` |
-| `m_fog` | mischief | T4 | 240 | - | `park` | whole park (override r 99) | 60 s | `cue.foghorn` |
-| `m_flock` | mischief | T4 | 180 | 1 | `area` | 7 x 7 | 8 s storm; `duck` 5 s | `cue.flutter` |
+| `c_petals` | cupid | T0 | 30 | - | `area` | 3 x 3 | 20 s charm, then `PETALS` fades | `place`; `petals` |
+| `c_bouquet` | cupid | T0 | 60 | - | `pair` | the pair | about 7 s cameo | `place`; `bouquet` |
+| `c_musician` | cupid | T1 | 120 | - | `tile` | radius 8 | 90 s playing | `place`; the music itself (busker rule, 05 §5.6) |
+| `c_sunbeam` | cupid | T1 | 90 | - | `area` | 7 x 7 (override r 3) | 60 s | `place`; `sunbeam` |
+| `c_umbrella` | cupid | T2 | 90 | - | `pair` | the pair | while rain > 0.3, max 120 s | `place` only |
+| `c_lamplight` | cupid | T2 | 60 | - | `tile` | lamps within 6 | 60 s | `place`; `lamp_hum` |
+| `c_picnic` | cupid | T3 | 180 | - | `tile` (north-west of 2 x 2) | 2 x 2 lawn | basket 300 s | `place` only |
+| `c_rowboat` | cupid | T3 | 240 | - | `tile` (pond) | pond of >= 12 tiles | 60 s ride (+ about 5 s boarding) | `place`; `fountain` x 0.5 at the boat |
+| `c_fireworks` | cupid | T4 | 360 | 1 | `park` | every pair | 30 s | `place`; `fireworks` |
+| `m_pigeon` | mischief | T0 | 25 | - | `visitor` | one person | flight at 6.0, then `wipe` 4 s | `place`; `flutter`, `splat` |
+| `m_sprinkler` | mischief | T0 | 45 | - | `tile` (lawn) | 3 x 3 | 10 s | `place`; `sprinkler` |
+| `m_peel` | mischief | T1 | 40 | - | `tile` (gravel or flagstone) | one tile | peel lives 120 s | `place`; `slip` |
+| `m_pomeranian` | mischief | T1 | 60 | - | `visitor` | one person | run, 8 s chase, 60 s wait outside | `place`; `yap`, `snatch` |
+| `m_wasp` | mischief | T2 | 60 | - | `pair` at Picnic, or `tile` with a table in use | the table | `wasp` lands at t+2 | `place`; `wasp` |
+| `m_raincloud` | mischief | T2 | 90 | - | `area` | 5 x 5 (override r 2) | 30 s | `place`; `plip` |
+| `m_rival` | mischief | T3 | 150 | - | `pair` | one member | 30 s | `place`; `rival_hmm` |
+| `m_mime` | mischief | T3 | 120 | - | `tile` (gravel or flagstone) or `pair` | one tile, or the pair | wall 20 s; mimic 30 s | `place`; `mime` |
+| `m_fog` | mischief | T4 | 240 | - | `park` | whole park (override r 99) | 60 s | `place`; `foghorn` |
+| `m_flock` | mischief | T4 | 180 | 1 | `area` | 7 x 7 | 8 s storm; `duck` 5 s | `place`; `flutter`, `gasp` |
 
 ### 11.2 Effect numbers and failure keys
 | id | Effect numbers | Fails when (reason key) |
@@ -508,7 +509,7 @@ Common rules (design §9.1): arm by tapping the chip, the next world tap targets
 | `a_busker` | cupid | T2 | the AI busker if present, else new | 3.0 | no | enters by the nearest gate | `setUp, pack` | paired person: `serenade` 30 s following (charm +3 within 8) · bandstand: `setUp` 3 s then `play` · any walkable tile: `setUp` 3 s then `play` until the next tap | none; `pack` 2 s + `setUp` 3 s to move | Cupid action as `c_musician` |
 | `a_matchmaker` | cupid | T3 | Marguerite | 3.0 | no | enters by `g_north` | `lead, encourage, buy` | unpaired single: `lead` to the nearest compatible single within 12 (<= 20 s); pair forms without the roll · paired person: `encourage` 3 s (`retryT = 0`) · kiosk: `buy` 4 s (shares = 3) · pair at Picnic: share bread (hunger 0.1, shares -1) · bench: sit · tile: walk | introduce 45 s; encourage 30 s | Cupid action on the pair |
 
-Refusal keys used by cascades: `reason.not_children`, `reason.enough_today`, `reason.startled` (pigeon with a dog within 2, 2 s), `reason.dog_saw_it` (pomeranian with a walker's dog within 3), `reason.basket_empty`, `reason.not_courting`, `reason.nobody_for_them`, `reason.had_to_go`, `reason.busy`. Entering: `setMode('avatar', id)` zooms to 1.5 if below 1.3, toasts `avatar.<id>.hint1` for 6 s (GV 11257-11259); leaving returns the actor to AI and toasts `avatar.goes_on`. An avatar is never a `Pair` member and can be a victim (design §10.10).
+Refusal keys used by cascades: `reason.not_children`, `reason.enough_today`, `reason.startled` (pigeon with a dog within 2, 2 s), `reason.big_dog` (pomeranian with a walker's dog within 3), `reason.basket_empty`, `reason.not_courting`, `reason.nobody_for_them`, `reason.had_to_go`, `reason.busy`. Entering: `setMode('avatar', id)` zooms to 1.5 if below 1.3, toasts `avatar.<id>.hint1` for 6 s (GV 11257-11259); leaving returns the actor to AI and toasts `avatar.goes_on`. An avatar is never a `Pair` member and can be a victim (design §10.10).
 
 ---
 
@@ -894,6 +895,26 @@ Conventions (03 §12): keys are lowercase, dot-separated, `area.item[.detail]`. 
 | `doing.perch` | perched | TODO |
 | `doing.peck` | pecking | TODO |
 | `doing.scatter` | scattering | TODO |
+| `doing.goPicnic` | off to a picnic | TODO |
+| `doing.swoop` | swooping | TODO |
+| `doing.poop` | a direct hit | TODO |
+| `doing.startled` | startled | TODO |
+| `doing.drink` | drinking | TODO |
+| `doing.snatch` | snatching | TODO |
+| `doing.carry` | running off with it | TODO |
+| `doing.shakeOff` | shaking it off | TODO |
+| `doing.paddle` | paddling | TODO |
+| `doing.dig` | digging | TODO |
+| `doing.hand` | handing over a bouquet | TODO |
+| `doing.pick` | picking flowers | TODO |
+| `doing.wall` | an invisible wall | TODO |
+| `doing.mimicStart` | mimicking | TODO |
+| `doing.statue` | a statue | TODO |
+| `doing.serenade` | a serenade | TODO |
+| `doing.setUp` | setting up | TODO |
+| `doing.pack` | packing up | TODO |
+| `doing.encourage` | a word of encouragement | TODO |
+| `doing.buy` | buying a baguette | TODO |
 
 ### 16.10 Sheets
 | Key | EN | ES |
@@ -1119,54 +1140,75 @@ Conventions (03 §12): keys are lowercase, dot-separated, `area.item[.detail]`. 
 | `word.bonjour` | Bonjour! | Bonjour! |
 | `word.ooh_la_la` | Ooh là là | Ooh là là |
 
-Rules for this table: `Object.keys(en)` equals `Object.keys(es)` (test); no key may be added in code without a row here; a `.one` key always has a `.other`; a `.f` key always has a `.m`; numbers are formatted by `t()` with the locale's decimal rules; never build a sentence by concatenation. Count: 16.1 to 16.15 define 9 + 24 + 18 + 37 + 32 + 38 + 55 + 19 + 47 + 30 + 72 + 14 + 49 + 26 + 9 = 479 keys; the test asserts the count against the data file, not against this number.
+### 16.16 Boards (`style-board.html` and `music-board.html`; 04 §4.4, 05 §6.1, §6.4, §6.5; 07 S1.5, S1.6 item 5)
+| Key | EN | ES |
+|---|---|---|
+| `gate.style.title` | Style Gate | TODO |
+| `gate.music.title` | Music Gate | TODO |
+| `gate.dir.A` | A Storybook | TODO |
+| `gate.dir.B` | B Pastel Postcard | TODO |
+| `gate.dir.C` | C Line and Wash | TODO |
+| `gate.motif.A` | A Musette waltz | TODO |
+| `gate.motif.B` | B Music-box lullaby | TODO |
+| `gate.motif.C` | C Café swing | TODO |
+| `gate.choose` | Choose {letter} | TODO |
+| `gate.picked.style` | Picked: {name} | TODO |
+| `gate.picked.music` | Picked: {name} | TODO |
+| `gate.enable_sound` | Tap to enable sound | TODO |
+| `gate.play_rising` | Play rising | TODO |
+| `gate.play_parted` | Play parted | TODO |
+| `gate.stop` | Stop | TODO |
+| `gate.stop_all` | Stop all | TODO |
+| `gate.cue_bed` | Cue bed | TODO |
+
+Rules for this table: `Object.keys(en)` equals `Object.keys(es)` (test); no key may be added in code without a row here; a `.one` key always has a `.other`; a `.f` key always has a `.m`; numbers are formatted by `t()` with the locale's decimal rules; never build a sentence by concatenation. Count: 16.1 to 16.16 define 9 + 24 + 18 + 37 + 32 + 38 + 55 + 19 + 67 + 30 + 72 + 14 + 49 + 26 + 9 + 17 = 516 keys; the test asserts the count against the data file, not against this number.
 
 ---
 
-## 17. Cues (`src/audio/cues.ts`; ids only; gains, tones and envelopes are defined in `05-Audio-and-Music-Design.md`, which must adopt this id list or change it here first; every cue is two or three `tone` calls as GV 6139-6207, through `cueAt` with audibility before the gate as 03 §9.1)
+## 17. Cues (`src/audio/cues.ts`; the 38 ids of `05-Audio-and-Music-Design.md` §3.2 in its order, copied here as 05 §9 item 1 requires; 05 owns the recipes, gains, gaps and soft flags, and a cue not in 05 §3.2 does not exist: change 05 first, then this table; ids are code identifiers with no `cue.` prefix (05 §9 item 12); every cue goes through `cueAt` with audibility before the gate as 03 §9.1)
 
-| Cue id | Fired by (event) | Positioned | Soft (voice-like gap) | Base gap (ms, proposed) |
-|---|---|---|---|---|
-| `cue.steps` | `fx` footsteps on gravel (sampled, not per step) | yes | no | 120 |
-| `cue.creak` | `fx` someone sits on a bench | yes | no | 450 |
-| `cue.sigh` | `stage` notice, lingering | yes | yes | 600 |
-| `cue.murmur` | `stage` chat bubbles | yes | yes | 700 |
-| `cue.heart` | `fx` heart particles (notice, bench, picnic) | yes | no | 300 |
-| `cue.laugh` | `embarrassed` backfire; `fx` laugh | yes | yes | 450 |
-| `cue.gasp` | `embarrassed` rival; proposal at 12 s | yes | yes | 420 |
-| `cue.kiss` | `stage` kiss | yes | no | 500 |
-| `cue.ring` | `stage` proposal sparkle at 8 s | yes | no | 500 |
-| `cue.happily` | `happily` (a chord, then fireworks) | no | no | 2000 |
-| `cue.parted` | `parted` (a falling phrase) | no | no | 2000 |
-| `cue.bouquet` | `cast` c_bouquet; florist hand | yes | no | 500 |
-| `cue.petals` | `cast` c_petals; florist scatter | yes | no | 500 |
-| `cue.notes` | `cast` c_musician; busker play; serenade | yes | no | 600 |
-| `cue.sunbeam` | `cast` c_sunbeam | yes | no | 900 |
-| `cue.umbrella` | `cast` c_umbrella | yes | no | 500 |
-| `cue.lamp` | `cast` c_lamplight; lamps lighting at dusk (one cue) | yes | no | 900 |
-| `cue.basket` | `cast` c_picnic | yes | no | 500 |
-| `cue.oars` | `cast` c_rowboat; boat strokes | yes | no | 600 |
-| `cue.fireworks` | `cast` c_fireworks; Happily shells | yes | no | 300 |
-| `cue.flutter` | `cast` m_pigeon, m_flock; pigeon scatter; swoop | yes | no | 150 |
-| `cue.splat` | `embarrassed` poop | yes | no | 300 |
-| `cue.sprinkler` | `cast` m_sprinkler | yes | no | 900 |
-| `cue.splash` | `embarrassed` soaked, drenched; paddling | yes | no | 150 |
-| `cue.peel` | `cast` m_peel | yes | no | 500 |
-| `cue.slip` | `embarrassed` trip | yes | no | 300 |
-| `cue.bark` | `cast` m_pomeranian; dog barks the pomeranian off | yes | yes | 900 |
-| `cue.wasp` | `cast` m_wasp; `embarrassed` wasp | yes | no | 600 |
-| `cue.cloud` | `cast` m_raincloud | yes | no | 900 |
-| `cue.baffled` | `embarrassed` mime; mime wall | yes | yes | 450 |
-| `cue.foghorn` | `cast` m_fog | no | no | 2500 |
-| `cue.flash` | `fx` tourist photo | yes | no | 300 |
-| `cue.coo` | pigeons pecking at crumbs (ambience) | yes | no | 900 |
-| `cue.unlock` | `unlock` | no | no | 2000 |
-| `cue.place` | `applied` tool command | no | no | 90 |
-| `cue.undo` | `applied` undo | no | no | 300 |
-| `cue.newday` | `newday` (distant bell) | no | no | 2000 |
-| `cue.huff` | `parted`; snatched huff | yes | yes | 450 |
+| # | id | Trigger: event (emitting module) | Positioned | Soft | Scope | Base gap (ms) |
+|---|---|---|---|---|---|---|
+| 1 | `step_gravel` | `step` every 0.55 tile of travel on gravel or flagstone (`move.ts`) | yes, the walker | no | actor | 70 |
+| 2 | `step_lawn` | `step` on lawn, mulch or bridge (`move.ts`) | yes, the walker | no | actor | 70 |
+| 3 | `bench_creak` | `sit`, `stand` (`act.ts`) | yes, the bench | no | kind | 450 |
+| 4 | `murmur` | `chat` every 3 s at stage 2, speaker alternates (`romance.ts`) | yes, the speaker | yes | actor | 700 |
+| 5 | `laugh` | `laugh`: backfire scene, Picnic hearts 30 %, family play, `a_pomeranian` play (`embarrass.ts`, `romance.ts`, `brain.ts`) | yes, the laugher | yes | actor | 450 |
+| 6 | `sigh` | `stage` Notice complete; `linger` every 20 s (`romance.ts`) | yes, the sigher | yes | actor | 600 |
+| 7 | `gasp` | `embarrass` landed, on the victim; `watch` start at fireworks (`embarrass.ts`, `abilities.ts`) | yes, the victim | yes | actor | 500 |
+| 8 | `kiss` | `stage` Kiss complete (`romance.ts`) | yes, pair midpoint | yes | kind | 2000 |
+| 9 | `ring` | `proposal` sparkle at t+8 s (`romance.ts`) | yes, the kneeler | yes | kind | 3000 |
+| 10 | `happily` | `ending` Happily (`romance.ts`) | yes, pair midpoint | yes | kind | 4000 |
+| 11 | `parted` | `ending` Parted (`romance.ts`) | yes, pair midpoint | yes | kind | 4000 |
+| 12 | `bouquet` | `bouquet` handed: `c_bouquet` cameo, `a_florist` hand (`abilities.ts`, `avatar.ts`) | yes, the receiver | yes | kind | 900 |
+| 13 | `coo` | ambience 05 §4.4; `peck` start (`creatures.ts`) | yes, the pigeon | no | kind | 900 |
+| 14 | `flutter` | `scatter`, `fly`, `swoop` start (`creatures.ts`) | yes, the pigeon | no | kind | 180 |
+| 15 | `splat` | `embarrass` poop landed (`embarrass.ts`) | yes, the victim | no | kind | 300 |
+| 16 | `yap` | `bark` dog sees the pomeranian; pomeranian `snatch` start at x 1.25 pitch (`creatures.ts`) | yes, the dog | no | actor | 900 |
+| 17 | `snatch` | `embarrass` snatched landed (`embarrass.ts`) | yes, the victim | no | kind | 600 |
+| 18 | `wasp` | `m_wasp` t0 to t2, one event per 0.5 s (`abilities.ts`) | yes, the table | no | kind | 400 |
+| 19 | `sprinkler` | `m_sprinkler` t0 and every 1 s while up (`abilities.ts`) | yes, the sprinkler | no | kind | 900 |
+| 20 | `slip` | `embarrass` trip landed (`embarrass.ts`) | yes, the victim | no | kind | 450 |
+| 21 | `mime` | `embarrass` mime landed; `wall` start (`embarrass.ts`, `avatar.ts`) | yes, the mime | yes | kind | 1200 |
+| 22 | `rival_hmm` | `m_rival` arrival; every 10 s of `distracted` (`abilities.ts`) | yes, the stranger | yes | kind | 1500 |
+| 23 | `foghorn` | ambience 05 §4.11 | yes, fixed `panOf(24, -4)`, `a` floor 0.6 | no | kind | 20000 unscaled |
+| 24 | `fireworks` | `c_fireworks` launches paced by 05 §4.9; Happily burst x 3 (`ambience.ts`) | yes, fountain or park centre, pan +-0.5 random | no | kind | 350 |
+| 25 | `clink` | ambience 05 §4.6; `eat` start at a café table (`act.ts`) | yes, the table | no | kind | 700 |
+| 26 | `bell_bike` | ambience 05 §4.7 | yes, beyond the south railings, pan -0.7 to 0.7 sweep | no | kind | 6000 |
+| 27 | `gate_hinge` | `arrive`, `leave` through a gate (`visitor.ts`) | yes, the gate tile | no | kind | 1200 |
+| 28 | `fountain` | ambience point source 05 §4.5 | yes, each fountain | no | kind | none (rate 05 §4.5) |
+| 29 | `plip` | ambience rain 05 §4.8 | yes, random pan +-0.8 | no | kind | none (rate 05 §4.8) |
+| 30 | `hush` | ambience state 05 §4.10, snow > 0.5 (no tone: a master lowpass and reverb move) | n/a | n/a | n/a | n/a |
+| 31 | `lamp_hum` | `lampsLit` when `f` crosses 0.80; `c_lamplight` t0; per lamp in view, stagger 0.3 to 1.5 s, max 6 (`ambience.ts` watching `clock.ts`) | yes, each lamp | no | kind | 3000 |
+| 32 | `petals` | `c_petals` t0; `a_florist` scatter (`abilities.ts`, `avatar.ts`) | yes, area centre | yes | kind | 1500 |
+| 33 | `sunbeam` | `c_sunbeam` t0 (`abilities.ts`) | yes, area centre | yes | kind | 3000 |
+| 34 | `ready` | a cooldown reaches 0; charges reset at `f = 0` (`abilities.ts`) | no | no | kind | 500 |
+| 35 | `unlock` | a tier is reached (`progression.ts`) | no | yes | kind | 4000 |
+| 36 | `ui_tap` | any rail or sheet button press (`dom.ts`) | no | no | kind | 60 |
+| 37 | `place` | tool commit: stamp, run Place, brush stroke end (`tools.ts`); any ability cast that passes validation, at its target (`abilities.ts`) | yes, the tile | no | kind | 120 |
+| 38 | `refuse` | tool or ability validation fails with a toast (`tools.ts`, `abilities.ts`) | no | no | kind | 400 |
 
-Ambience beds (not cues; `ambience.ts`): `amb.fountain`, `amb.cafe`, `amb.bells`, `amb.traffic`, `amb.rain`, `amb.wings`, `amb.crickets`; birdsong voices as GV 6212-6269: `robin, warbler, thrush, chiffchaff, blackbird, wren`. The dev sound check lists every `cue.*` id.
+Ambience layers (not cues; `ambience.ts`, 05 §4): songbirds, owl, pigeons, fountains, café, boulevard, rain, fireworks pacing, crickets and hush, mist and foghorn, bells.
 
 ---
 
@@ -1179,15 +1221,13 @@ Values this document defines that neither the register nor `02-Game-Design.md` d
 4. The 40 generated first names per sex (6.1), the eight regulars' `ageWord` and personality lines (6.2), the lovers' example pair Amélie & Théo (6.2), and the fixed actor names Gustave, Marguerite, Violette, Pierrot, Pompon (6.3). The register and the design give only the regulars' names and `seeks`.
 5. `basket` is the `picnic` prop with `placedBy = 'sim'` and a life, not a separate kind (section 4); `rowboat` life is about 65 s (boarding plus the 60 s ride).
 6. The reason key `reason.raining` for `c_picnic` in rain (11.2); 03 §5.4 has no key for it. `reason.startled`, `reason.big_dog`, `reason.basket_empty`, `reason.nobody_for_them`, `reason.had_to_go` for the avatar refusals of design §10.4-10.9, which 03 does not list.
-7. The `feed.cast.<id>` feed line per ability, `feed.left_alone`, `feed.alumni_return`, `feed.ice`, `feed.thaw`, `item.*`, `spot.*`, `word.*`, and every English wording in section 16; the design fixes the wording of the New confirm, "The park is full", "has had enough for one day", "goes on by themselves" (rendered here as `avatar.goes_on` "{name} goes on alone"; open point 3), and the ranked reasons, which are copied.
+7. The `feed.cast.<id>` feed line per ability, `feed.left_alone`, `feed.alumni_return`, `feed.ice`, `feed.thaw`, `item.*`, `spot.*`, `word.*`, and every English wording in section 16; the design fixes the wording of the New confirm, "The park is full", "has had enough for one day", "goes on by themselves" (rendered here as `avatar.goes_on` "{name} goes on alone"; open point 1), and the ranked reasons, which are copied.
 8. `ending.happily` and `ending.parted` keys for the two endings as words (register §5).
-9. The cue id list, the "soft" flags and the proposed base gaps in section 17 (GV's gap family 90-2500 ms, review §8). `05-Audio-and-Music-Design.md` owns gains and tones and must either adopt these ids or change them here first.
-10. The key count 479 (16.15) is a hand count for the reader; the test compares the two data files, not this number.
+9. Section 17 copies the 38 cue ids, soft flags, scopes and gaps of `05-Audio-and-Music-Design.md` §3.2 (05 §9 item 1); 05 owns them, and a change starts there.
+10. The key count 516 (16.16) is a hand count for the reader; the test compares the two data files, not this number.
 
 Open points for the owner:
-1. Register row 16 says 18 abilities; the register's §3.8 table and section 11 here have 19. This document follows the table (brief §11 item 12).
-2. Register row 15 names a statue in the folly set; §3.7 and section 3 here have no `statue` tool (brief §11 item 13). Adding one is one row in 3.1, one in 4 and two keys in 16.5.
-3. Design §10.1 toasts "X goes on by themselves" when leaving avatar mode; `avatar.goes_on` here reads "{name} goes on alone" to avoid a gendered pronoun in both languages. Confirm the wording or switch to a `gender` key pair.
-4. Whether `c_rowboat` should be refused during `m_fog` (design §15 open point 5): this document allows it (no `reason` row).
-5. Whether the park should have special days (a festival on summer day 2, a market on autumn day 2 as GV's midsummer and harvest, review §6.7): section 15 has none because the design defines none.
-6. Whether the Options sheet shows the seed (`sheet.options.seed`): brief §11 item 11 assumed yes; the register lists language, sound and speed only.
+1. Design §10.1 toasts "X goes on by themselves" when leaving avatar mode; `avatar.goes_on` here reads "{name} goes on alone" to avoid a gendered pronoun in both languages. Confirm the wording or switch to a `gender` key pair.
+2. Whether `c_rowboat` should be refused during `m_fog` (design §15 open point 5): this document allows it (no `reason` row).
+3. Whether the park should have special days (a festival on summer day 2, a market on autumn day 2 as GV's midsummer and harvest, review §6.7): section 15 has none because the design defines none.
+4. Whether the Options sheet shows the seed (`sheet.options.seed`): brief §11 item 11 assumed yes; the register lists language, sound and speed only.
