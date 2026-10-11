@@ -13,7 +13,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "shot": "node tools/shot.mjs",
-    "check": "npm run typecheck && npm run lint && npm test && npm run build"
+    "shot:style": "node tools/shot-style.mjs",
+    "check": "npm run typecheck && npm run lint && npm test && npm run build",
+    "audio-smoke": "node tools/audio-smoke.mjs",
+    "shot:board": "node tools/shot-board.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
