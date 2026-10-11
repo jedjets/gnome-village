@@ -235,7 +235,7 @@ export function audibleGain(x: number, y: number): number {
 
 /** The GV envelope (6099–6102): floor → peak over att, optional hold, → floor at dur. Shared by tone(), grain() and the music voices. */
 export function envelope(g: AudioParam, t: number, vol: number, att: number, dur: number, hold = 0): void {
-  const a = Math.min(att, Math.max(0.002, dur * 0.5));
+  const a = Math.max(0.002, Math.min(att, dur * 0.5)); // never 0: an instant jump clicks (05 2.3 item 2)
   g.setValueAtTime(FLOOR, t);
   g.exponentialRampToValueAtTime(vol, t + a);
   if (hold > 0) g.setValueAtTime(vol, Math.min(t + a + hold, t + dur - 0.005));

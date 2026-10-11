@@ -35,6 +35,7 @@ const ARGS = ['--no-sandbox', '--autoplay-policy=no-user-gesture-required', '--d
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2' };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const dbfs = (x) => +(20 * Math.log10(Math.max(1e-9, x))).toFixed(1);
 
 function serve(dir) {
   const srv = http.createServer((req, res) => {
@@ -112,7 +113,6 @@ async function main() {
           if (after < RMS_OFF) break;
         }
         check(after < RMS_OFF, `${m} ${v}: rms ${after.toFixed(5)} still >= ${RMS_OFF} ${ms} ms after Stop`);
-        const dbfs = (x) => +(20 * Math.log10(Math.max(1e-9, x))).toFixed(1);
         rows.push({ motif: m, variant: v, meanRms: +mean.toFixed(4), rmsDbfs: dbfs(mean), minRms: +Math.min(...samples).toFixed(4), maxRms: +Math.max(...samples).toFixed(4), peak: +peak.toFixed(3), peakDbfs: dbfs(peak), stopMs: ms, stopRms: +after.toFixed(5), state: m === 'A' ? `${music.music.state} ${music.music.tempo}bpm ${music.music.key}` : '' });
         await sleep(400);
       }
@@ -142,6 +142,30 @@ async function main() {
     }
     const peakAll = await peakHold();
     check(peakAll < PEAK_MAX, `cue bed over music: peak ${peakAll.toFixed(3)} >= ${PEAK_MAX}`);
+
+    // a knob must change its motif audibly (05 6.5 item 4): level 0.8 against 0.2 on the playing waltz
+    const setKnob = (motif, knob, value) => page.evaluate((m, k, v) => {
+      const input = document.querySelector(`#panel-${m} input[aria-label="${k}"]`);
+      input.value = String(v);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }, motif, knob, value);
+    const loudest = async (ms) => {
+      let mx = 0;
+      const t0 = Date.now();
+      while (Date.now() - t0 < ms) { await sleep(100); mx = Math.max(mx, await rms()); }
+      return mx;
+    };
+    await setKnob('A', 'level', 0.8);
+    await sleep(400);
+    const loud = await loudest(1500);
+    await setKnob('A', 'level', 0.2);
+    await sleep(400);
+    const soft = await loudest(1500);
+    await setKnob('A', 'level', 0.5);
+    check(loud > soft * 2, `level knob: rms at 0.8 (${loud.toFixed(4)}) is not clearly above rms at 0.2 (${soft.toFixed(4)})`);
+    const readout = await page.evaluate(() => JSON.parse(document.getElementById('readout-A').textContent));
+    check(readout.knobs && readout.knobs.level === 0.5, `readout-A does not parse to the knob values: ${JSON.stringify(readout.knobs)}`);
+    console.log('level knob: rms at 0.8 =', loud.toFixed(4), ' at 0.2 =', soft.toFixed(4), ' readout parses:', !!readout.knobs);
     await sleep(2500); // let the cue reverb tails die before the silence test
     await page.click('#stopAll');
     await sleep(STOP_MS);
