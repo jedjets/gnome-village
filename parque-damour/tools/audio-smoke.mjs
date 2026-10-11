@@ -16,13 +16,16 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
 const CHROMIUM = '/opt/pw-browsers/chromium';
 const PAGE = 'music-board.html';
-// Rounds 1-2 measured the designed levels at master (05 7.2: quiet by design): waltz rising 0.007 rms / 0.023 peak, parted 0.002 / 0.024,
-// box 0.004 / 0.034, swing 0.005 / 0.024. The brief's 0.01 mean rms sits above them, and the parted variants are sparse by design
-// (bass on beat 1 only, density 0.45), so a 170 ms rms window regularly lands in a rest. "Playing" is therefore: the time-domain
-// peak at master reaches PEAK_ON (silence peaks under 0.0002) AND the loudest rms sample reaches RMS_ON (twice the silence
-// criterion). The mean rms is printed for the hand-back.
-const RMS_ON = 0.004; // the loudest of the rms samples while playing must exceed this (the silence criterion is 0.002)
-const PEAK_ON = 0.008; // and the time-domain peak at master must reach this (-42 dBFS)
+// Presence while playing. Rising variants: the mean of the rms samples above RMS_MEAN_ON (the brief's 0.01). Parted variants are
+// sparse by design (bass on beat 1 only, density 0.45, 05 5.6), so a 170 ms rms window regularly lands in a rest and the mean is
+// not a presence test for them: they must reach PEAK_ON at master and RMS_ON in their loudest sample instead. Motif A rising at
+// default knobs must also peak between -22 and -18 dBFS at master (05 5.5 item 5, MUSIC_MAKEUP in src/audio/music.ts), and the
+// compressor output must stay under -10 dBFS with the cue bed over the music (05 7.2).
+const RMS_MEAN_ON = 0.01; // rising: mean rms over the samples
+const RMS_ON = 0.004; // parted: the loudest rms sample (the silence criterion is 0.002)
+const PEAK_ON = 0.008; // parted: the time-domain peak at master (-42 dBFS; silence peaks under 0.0002)
+const A_PEAK_LO = Math.pow(10, -22 / 20), A_PEAK_HI = Math.pow(10, -18 / 20); // 0.079 .. 0.126
+const OUT_MAX = Math.pow(10, -10 / 20); // 0.316 at the compressor output
 const RMS_OFF = 0.002; // rms falls under this within STOP_MS after Stop
 const SAMPLES = 8; // rms samples, 250 ms apart: two seconds, more than a bar of the slowest variant
 const STOP_MS = 500;
@@ -36,6 +39,7 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dbfs = (x) => +(20 * Math.log10(Math.max(1e-9, x))).toFixed(1);
+const peakRatio = (a, b) => (20 * Math.log10(a / b)).toFixed(1);
 
 function serve(dir) {
   const srv = http.createServer((req, res) => {
@@ -99,8 +103,15 @@ async function main() {
         const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
         const peak = await peakHold();
         const music = await page.evaluate(() => globalThis['__PDAUDIO'].state());
-        check(Math.max(...samples) > RMS_ON, `${m} ${v}: loudest rms sample ${Math.max(...samples).toFixed(5)} <= ${RMS_ON}`);
-        check(peak > PEAK_ON, `${m} ${v}: peak ${peak.toFixed(4)} <= ${PEAK_ON}`);
+        if (v === 'rising') check(mean > RMS_MEAN_ON, `${m} ${v}: mean rms ${mean.toFixed(5)} <= ${RMS_MEAN_ON}`);
+        else {
+          check(Math.max(...samples) > RMS_ON, `${m} ${v}: loudest rms sample ${Math.max(...samples).toFixed(5)} <= ${RMS_ON}`);
+          check(peak > PEAK_ON, `${m} ${v}: peak ${peak.toFixed(4)} <= ${PEAK_ON}`);
+        }
+        if (m === 'A' && v === 'rising') {
+          check(peak >= A_PEAK_LO && peak <= A_PEAK_HI, `A rising: master peak ${peak.toFixed(4)} (${dbfs(peak)} dBFS) outside -22..-18 dBFS`);
+          check(Math.max(...samples) > 0.02, `A rising: loudest rms sample ${Math.max(...samples).toFixed(4)} <= 0.02`);
+        }
         check(peak < PEAK_MAX, `${m} ${v}: peak ${peak.toFixed(3)} >= ${PEAK_MAX} (-6 dBFS)`);
         check(music.playing[m] === v, `${m} ${v}: board reports playing=${JSON.stringify(music.playing)}`);
         await page.click(`#stop-${m}`);
@@ -141,7 +152,9 @@ async function main() {
       await sleep(1300);
     }
     const peakAll = await peakHold();
+    const outPeak = await page.evaluate(() => globalThis['__PDAUDIO'].outPeakHold());
     check(peakAll < PEAK_MAX, `cue bed over music: peak ${peakAll.toFixed(3)} >= ${PEAK_MAX}`);
+    check(outPeak < OUT_MAX, `cue bed over music: compressor output peak ${outPeak.toFixed(3)} (${dbfs(outPeak)} dBFS) >= -10 dBFS`);
 
     // a knob must change its motif audibly (05 6.5 item 4): level 0.8 against 0.2 on the playing waltz
     const setKnob = (motif, knob, value) => page.evaluate((m, k, v) => {
@@ -174,7 +187,12 @@ async function main() {
 
     console.table(rows);
     console.table(cueRows);
-    console.log('peak at master over the cue bed:', peakAll.toFixed(3), '(limit 0.5 = -6 dBFS)');
+    console.log('peak at master over the cue bed:', peakAll.toFixed(3), `(${dbfs(peakAll)} dBFS, limit 0.5 = -6 dBFS)`);
+    console.log('peak at the compressor output over the cue bed:', outPeak.toFixed(3), `(${dbfs(outPeak)} dBFS, limit -10 dBFS)`);
+    const byMotif = Object.fromEntries(rows.map((r) => [r.motif + ' ' + r.variant, r.peak]));
+    console.log('peak relative to A rising (dB): B rising', peakRatio(byMotif['B rising'], byMotif['A rising']), ' C rising', peakRatio(byMotif['C rising'], byMotif['A rising']), ' A parted', peakRatio(byMotif['A parted'], byMotif['A rising']), ' B parted', peakRatio(byMotif['B parted'], byMotif['A rising']), ' C parted', peakRatio(byMotif['C parted'], byMotif['A rising']));
+    check(Math.abs(20 * Math.log10(byMotif['C rising'] / byMotif['A rising'])) <= 2, `C rising peak is not within 2 dB of A rising`);
+    check(Math.abs(20 * Math.log10(byMotif['B rising'] / byMotif['A rising'])) <= 2, `B rising peak is not within 2 dB of A rising`);
     if (keep) await sleep(60_000);
   } finally {
     await browser.close();

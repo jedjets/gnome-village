@@ -5,7 +5,7 @@
 // Randomness: vrng only (05 1 item 6). Scheduling: the same look-ahead pattern as audio/music.ts 5.8 on AC.currentTime.
 import { vrng } from '../core/rng.ts';
 import { busOf, connectVoice, envelope, fadeMusic, getAC, isMuted, isOn, setMusicLevel, setVerb } from '../audio/engine.ts';
-import { freqOf, LOOKAHEAD } from '../audio/music.ts';
+import { freqOf, LOOKAHEAD, MUSIC_MAKEUP } from '../audio/music.ts';
 
 export type Variant = 'rising' | 'parted';
 export type Knob = { min: number; max: number; value: number };
@@ -76,12 +76,13 @@ class BarSeq {
 /* ---------- voices ---------- */
 type Partial = { mul: number; amp: number; type: OscillatorType; detune?: number; decay?: number };
 type Vib = { hz: number; pct: number; from: number; to: number };
-/** Additive voice: partials into one enveloped gain, a lowpass, the music bus (dry: the music has its own room). */
+/** Additive voice: partials into one enveloped gain, a lowpass, the music bus (dry: the music has its own room).
+ *  `gain` is the recipe's value; MUSIC_MAKEUP (music.ts) applies at this stage for B and C exactly as for A. */
 function voice(f: number, t: number, dur: number, gain: number, att: number, hold: number, lp: number, pan: number, parts: readonly Partial[], vib?: Vib): void {
   const AC = getAC();
   if (!AC || !busOf('music') || gain <= 0) return;
   const g = AC.createGain();
-  envelope(g.gain, t, gain, att, dur, hold);
+  envelope(g.gain, t, gain * MUSIC_MAKEUP, att, dur, hold);
   const flt = AC.createBiquadFilter();
   flt.type = 'lowpass';
   flt.frequency.value = lp;
@@ -153,9 +154,10 @@ const PENT_C = [72, 74, 76, 79, 81, 84, 86, 88, 91, 93]; // C D E G A over octav
 const GV_PHRASE = [72, 76, 79, 81, 79, 76, 74, 72, 74, 76, 79, 84]; // GV 6196: 523 659 784 880 784 659 587 523 587 659 784 1047
 const TINE_GAIN = 0.016; // 05 6.2: "gains 0.016 as GV"
 /** GV played sfxTune straight into master at a ~ 1; here a tine passes the 0.50 musicBus and the GV envelope's exponential decay
- *  leaves it at ~0.17 of its peak in RMS, so at 0.016 the box measured 0.001 rms against the waltz's 0.007 (tools/audio-smoke.mjs,
- *  round 1). ×3 peak-matches the box to the waltz on the board; every B voice carries it, the knob values keep the GV meaning. */
-const TINE_MAKEUP = 3;
+ *  leaves it at ~0.17 of its peak in RMS, so at 0.016 the box measured 0.001 rms / 0.014 peak against the waltz's 0.007 / 0.023
+ *  (tools/audio-smoke.mjs, round 1). ×2 peak-matches the box to the waltz on the board (measured 0.034 at ×3 against 0.023);
+ *  every B voice carries it on top of MUSIC_MAKEUP, the knob values keep the GV meaning. */
+const TINE_MAKEUP = 2;
 const TINE_PARTS = (cents: number): Partial[] => {
   const p: Partial[] = [{ mul: 1, amp: 1, type: 'sine' }, { mul: 2.76, amp: 0.25, type: 'sine', decay: 0.25 }];
   if (cents > 0) p.push({ mul: 1, amp: 0.5, type: 'sine', detune: cents }); // the detune knob: a second tine, chorused

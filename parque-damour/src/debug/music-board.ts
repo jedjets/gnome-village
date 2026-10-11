@@ -5,7 +5,7 @@
 import { vrng } from '../core/rng.ts';
 import { setViewport } from '../render/camera.ts';
 import {
-  busOf, ctxState, getAC, initAudio, masterNode, resume, isOn,
+  busOf, ctxState, getAC, initAudio, masterNode, outputNode, resume, isOn,
 } from '../audio/engine.ts';
 import { setNow } from '../audio/limiter.ts';
 import { cue, CUE_IDS, type CueId } from '../audio/cues.ts';
@@ -221,23 +221,27 @@ function fitView(): void {
 
 /* ---------- the measuring hook (tools/audio-smoke.mjs) ---------- */
 type Hook = {
-  rms(): number; cueRms(): number; peak(): number; peakHold(): number; resetPeak(): void;
+  rms(): number; cueRms(): number; peak(): number; peakHold(): number; outPeakHold(): number; resetPeak(): void;
   state(): { ctx: AudioContextState | 'none'; on: boolean; music: ReturnType<typeof musicState>; playing: Record<Letter, Variant | null> };
 };
 let hookTick: (() => void) | null = null;
 function installHook(): void {
   if (hookTick) return;
   if (!(import.meta.env.DEV || /debug/.test(location.hash))) return;
-  const AC = getAC(), m = masterNode(), cb = busOf('cue');
-  if (!AC || !m || !cb) return;
+  const AC = getAC(), m = masterNode(), cb = busOf('cue'), out = outputNode();
+  if (!AC || !m || !cb || !out) return;
   const an = AC.createAnalyser();
   an.fftSize = 8192;
   m.connect(an);
   const can = AC.createAnalyser();
   can.fftSize = 8192;
   cb.connect(can);
+  const oan = AC.createAnalyser(); // the compressor output: what reaches the speaker (05 7.2: under -10 dBFS)
+  oan.fftSize = 8192;
+  out.connect(oan);
   const buf = new Float32Array(an.fftSize);
   let hold = 0;
+  let outHold = 0;
   const read = (a: AnalyserNode): { rms: number; peak: number } => {
     a.getFloatTimeDomainData(buf);
     let s = 0, pk = 0;
@@ -248,13 +252,14 @@ function installHook(): void {
     }
     return { rms: Math.sqrt(s / buf.length), peak: pk };
   };
-  hookTick = () => { hold = Math.max(hold, read(an).peak); };
+  hookTick = () => { hold = Math.max(hold, read(an).peak); outHold = Math.max(outHold, read(oan).peak); };
   const hook: Hook = {
     rms: () => read(an).rms,
     cueRms: () => read(can).rms,
     peak: () => read(an).peak,
     peakHold: () => hold,
-    resetPeak: () => { hold = 0; },
+    outPeakHold: () => outHold,
+    resetPeak: () => { hold = 0; outHold = 0; },
     state: () => ({
       ctx: ctxState(), on: isOn(), music: musicState(),
       playing: { A: motifs.A.variant(), B: motifs.B.variant(), C: motifs.C.variant() },

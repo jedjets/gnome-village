@@ -308,6 +308,15 @@ export function setMusicKnob(k: KnobName, v: number): void {
 }
 const MELODY_GAIN = 0.04; // 5.5 item 5
 const COUNTER_GAIN = 0.02;
+/**
+ * Voice-stage makeup applied to every music voice (A here, B and C in debug/motifs.ts), knobs and musicBus untouched.
+ * 05 5.5 item 5 lists the voice peaks and says their sum lands near -20 dBFS at the compressor input: 0.04 x 2.35 (three reed
+ * oscillators) + 0.02 x 2.35 + 3 x 0.012 + 0.034 x 1.4 = 0.225, x 0.50 bus x 0.84 master = 0.094 = -20.5 dBFS. That is the
+ * arithmetic sum; a measured peak of the real mix sat 12 dB under it (-33 dBFS, tools/audio-smoke.mjs round 3) because the
+ * envelopes and phases never coincide. x4.5 brings the MEASURED master peak of motif A rising to -20 dBFS (owner's phone
+ * round, S1b); the cue table of 05 3.2 was balanced against the unscaled voices, so S8 revisits this with the gate's `level`.
+ */
+export const MUSIC_MAKEUP = 4.5;
 
 /* ---------- 5.5 the voices ---------- */
 /** The accordion reed: two sawtooths ±detune cents, a piccolo an octave up ×0.35, the held GV envelope, a lowpass, vibrato. */
@@ -442,14 +451,14 @@ function buildBar(row: StateRow): void {
   if (row.bass) {
     const even = (bar + 1) % 2 === 0;
     const f = freqOf(even ? midiOf(tones[2] as number, 3) : midiOf(tones[0] as number, 2));
-    const g = MUSIC_KNOBS.bass.value;
+    const g = MUSIC_KNOBS.bass.value * MUSIC_MAKEUP;
     events.push({ t: b0, fn: (t) => { filtered('triangle', f, t, 0.55 * beat, g, 0.01, 600); filtered('triangle', f * 2, t, 0.55 * beat, g * 0.4, 0.01, 600); } });
   }
   if (row.chords && !row.bassBeat1Only) {
     const root = midiOf(tones[0] as number, 4);
     const third = root + ((((tones[1] as number) - (tones[0] as number)) % 12) + 12) % 12;
     const fifth = root + ((((tones[2] as number) - (tones[0] as number)) % 12) + 12) % 12;
-    const g = MUSIC_KNOBS.chords.value;
+    const g = MUSIC_KNOBS.chords.value * MUSIC_MAKEUP;
     for (const k of [1, 2]) {
       events.push({ t: b0 + k * beat, fn: (t) => { for (const m of [root, third, fifth]) filtered('sawtooth', freqOf(m), t, 0.42 * beat, g, 0.012, 1400 * brightnessScale()); } });
     }
@@ -461,8 +470,9 @@ function buildBar(row: StateRow): void {
       const t = b0 + n.beat * beat;
       const dur = n.dur * beat + (n.tie ? 60 / stepTempo(tempo, row.tempo * MUSIC_KNOBS.tempo.value) : 0);
       const midi = n.midi, vib = n.vib, grace = n.grace, pan = panCur;
-      if (grace !== null) events.push({ t: t - 0.06, fn: (tt) => reed(grace, tt, 0.06, MELODY_GAIN * 0.7, false, pan, lp) });
-      events.push({ t, fn: (tt) => reed(midi, tt, dur, MELODY_GAIN, vib, pan, lp) });
+      const mg = MELODY_GAIN * MUSIC_MAKEUP;
+      if (grace !== null) events.push({ t: t - 0.06, fn: (tt) => reed(grace, tt, 0.06, mg * 0.7, false, pan, lp) });
+      events.push({ t, fn: (tt) => reed(midi, tt, dur, mg, vib, pan, lp) });
     }
   }
   const phraseIx = Math.floor(bar / 4);
@@ -474,7 +484,7 @@ function buildBar(row: StateRow): void {
       const i = nearestIndex(scale, n.midi) - 5; // a diatonic sixth below (5.4 item 8)
       const midi = scale[Math.max(0, i)] as number;
       const t = b0 + n.beat * beat, dur = n.dur * beat + (n.tie ? beat : 0), pan = panCur;
-      events.push({ t, fn: (tt) => reed(midi, tt, dur, COUNTER_GAIN, false, pan, lp) });
+      events.push({ t, fn: (tt) => reed(midi, tt, dur, COUNTER_GAIN * MUSIC_MAKEUP, false, pan, lp) });
     }
   }
   events.sort((a, b) => a.t - b.t);
