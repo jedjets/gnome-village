@@ -474,10 +474,18 @@ export function fillPoly(pen: Pen, pts: Pt[], hex: string, o: ShapeOpts = {}): v
   } else ctx.fillStyle = shade(hex, light, alpha);
   ctx.fill();
   if (spec.shading === 'flat') {
-    // B: the same colour over the edge rounds the corners (0.08 tile) and hides the seams
+    // B: the same colour over the edge rounds the corners (0.08 tile) and hides the seams; a small shape (a beak, an eye)
+    // takes a thinner edge so the rounding never inflates it
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of pts) {
+      if (p.x < x0) x0 = p.x;
+      if (p.x > x1) x1 = p.x;
+      if (p.y < y0) y0 = p.y;
+      if (p.y > y1) y1 = p.y;
+    }
     ctx.strokeStyle = shade(hex, light, alpha);
     ctx.lineJoin = 'round';
-    ctx.lineWidth = Math.max(0.8, 2 * z);
+    ctx.lineWidth = Math.max(0.8, Math.min(2 * z, 0.2 * Math.min(x1 - x0, y1 - y0)));
     ctx.stroke();
     if (o.rim && z >= 1.3) {
       ctx.strokeStyle = shade(hex, light * 0.82, alpha);
