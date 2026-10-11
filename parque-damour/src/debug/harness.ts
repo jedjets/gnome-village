@@ -1,6 +1,7 @@
 // src/debug/harness.ts
 // window.__PD for the console, the determinism runner and screenshot assertions (03 section 13).
-// Ported from GV 12223-12241 (window.__GV). ADAPT: installed only in DEV or under a #debug hash, and only what section 13 lists.
+// Ported from GV 12223-12241 (window.__GV). ADAPT: installed only in a DEV build (`import.meta.env.DEV`), never in dist/ (03 section 13, A20);
+// `#dev` in the hash sets `body.dev` (03 10.2) and does not install it. Only what section 13 lists.
 // TODO(S2): hash(), commands, save, weather, audio groups.
 import { T } from '../core/clock.ts';
 import { rngN } from '../core/rng.ts';
