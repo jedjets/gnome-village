@@ -36,7 +36,7 @@ a screen, a cue, a motif), render two or three small variants on a scratch page,
 them, and show them before building the final one. Never start art or music work before the
 matching gate is recorded as passed in the register section 4.
 Touch only the files named under "<Sx>.5 Files". Create no file outside src/, tests/, tools/,
-docs/, scratch/, shots/ and the app root. Do not edit docs/01-Decision-Register.md unless the task says you are
+docs/, scratch/, shots/, .github/ and the app root (S12 adds resources/). Do not edit docs/01-Decision-Register.md unless the task says you are
 recording a gate pick. Do not edit another slice's documents.
 Hard rules: no Math.random, no Date.now in src/ outside core/loop.ts; no object references in
 saved fields; no user-facing string outside src/ui/strings/; no colour literal outside
@@ -131,12 +131,12 @@ Run every check from the app root. Record PASS or MISSING per row in the hand-ba
 
 | # | Must exist | How to check |
 |---|---|---|
-| 1 | `package.json` scripts `dev, build, preview, test, test:watch, lint, typecheck, shot, check` (03 section 14) | `node -e "console.log(Object.keys(require('./package.json').scripts).join(' '))"` |
+| 1 | `package.json` scripts `dev, build, preview, test, test:watch, lint, typecheck, shot, check, det, perf` (03 section 14) | `node -e "console.log(Object.keys(require('./package.json').scripts).join(' '))"` |
 | 2 | devDependencies `vite, typescript, vitest, oxlint, vite-plugin-singlefile, puppeteer-core, jsdom`; no `dependencies` | `node -e "const p=require('./package.json');console.log(p.dependencies||'none',Object.keys(p.devDependencies).join(' '))"` |
 | 3 | `vite.config.ts`: `viteSingleFile()`, `base: '/'`, `build.target: 'es2020'`, `assetsInlineLimit: 1_000_000`, `cssCodeSplit: false` | `grep -n -e viteSingleFile -e base -e es2020 -e assetsInlineLimit -e cssCodeSplit vite.config.ts` |
 | 4 | `tsconfig.json`: `strict`, `ES2020`, `ESNext`, `bundler`, `noUnusedLocals`, `noUnusedParameters`, `noFallthroughCasesInSwitch`, `noImplicitOverride`, `isolatedModules`, `types: ["vite/client"]` | `grep -c -e strict -e noUnusedLocals -e noUnusedParameters -e noFallthroughCasesInSwitch -e noImplicitOverride -e isolatedModules -e vite/client tsconfig.json` prints 7 |
 | 5 | `.oxlintrc.json` with `no-restricted-globals` for `Math.random` and `no-restricted-imports` for the layer rule (03 section 14) | `cat .oxlintrc.json` |
-| 6 | `index.html` holds every DOM id of 03 section 10.1 | `for id in stage cv hudClock wdot tPhase tDay hudVisitors tPop bAdd hudRomance tRom hudPoints tCP tMP card cName cSub cRel cBars cDo cPin rail groups tools row2 sizewrap size depth bPlace bCancel bUndo cdChip row3 bHalt spdR spdLbl bRotL bRotR bFit bMute bMode bPhoto bNew census romances progress evlog picker options snd perf hint feed intro iTitle iP begin bContinue lang photoX confirm confirmText confirmYes confirmNo; do if ! grep -q "id=\"$id\"" index.html; then echo "MISSING $id"; fi; done` prints nothing |
+| 6 | `index.html` holds every DOM id of 03 section 10.1 | `for id in stage cv hudClock wdot tPhase tDay hudVisitorsWrap hudVisitors tPop bAdd hudRomance tRom hudPoints tCP tMP card cName cSub cRel cBars cDo cPin rail groups tools row2 sizewrap size depth bPlace bCancel bUndo cdChip row3 bHalt spdR spdLbl bRotL bRotR bFit bMute bMode bPhoto bNew census romances progress evlog picker options snd perf hint feed intro iTitle iP begin bContinue lang photoX confirm confirmText confirmYes confirmNo; do if ! grep -q "id=\"$id\"" index.html; then echo "MISSING $id"; fi; done` prints nothing |
 | 7 | `index.html` head: `viewport-fit=cover, maximum-scale=1`, `theme-color #DCE6EC`, inline SVG favicon, no `<link>` to any network host | `grep -n -e viewport -e theme-color -e googleapis -e "<link" index.html` |
 | 8 | `src/styles/tokens.css` holds the 14 tokens of brief section 3.2 with the exact values | `grep -c -e "--paper:" -e "--paper-2:" -e "--ink:" -e "--ink-soft:" -e "--moss:" -e "--sky:" -e "--berry:" -e "--ember:" -e "--stone:" -e "--glass:" -e "--glass-line:" -e "--shadow:" -e "--ui:" -e "--display:" src/styles/tokens.css` prints 14 (one token per line) |
 | 9 | `src/styles/shell.css` uses only `var(--...)` colours; minimum font size 11 px | `grep -n -e "#[0-9A-Fa-f]\{3,6\}" -e "rgba\?(" src/styles/shell.css` prints nothing; `grep -n "font-size" src/styles/shell.css` shows no value under 11px |
@@ -144,7 +144,7 @@ Run every check from the app root. Record PASS or MISSING per row in the hand-ba
 | 11 | `src/core/rng.ts`: two mulberry32 streams with a draw counter (GV 583-598), API of 03 section 2.3 | `tests/rng.test.ts` passes: same seed gives the same 1000 draws; `rngN()` counts |
 | 12 | `src/core/loop.ts`: fixed step `SIM_DT = 1/60`, `nsMax`, wall budget, lite bits, backlog drop (GV 12070-12096) | read the file against 03 section 4.1 items 1 to 5 |
 | 13 | `src/main.ts` boot order of 03 section 2.2: intro, Begin, loop | open `dist/index.html`; Begin hides the intro and the canvas animates |
-| 14 | A flat 48x48 iso lawn with an 8-tile apron is drawn at `fitCam()` zoom with `TW 26, TH 13, VANCH 0.46` (03 section 7.1) | `shots/s0-lawn.png` |
+| 14 | A flat 48x48 iso lawn with an 8-tile apron is drawn at `fitCam()` zoom with `TW 26, TH 13, VANCH 0.46` (03 section 7.1) | `shots/s0-phone.png` and `shots/s0-desktop.png` |
 | 15 | `tools/shot.mjs` per 03 section 14: `/opt/pw-browsers/chromium`, 390x844, dpr 3, clicks `#begin`, writes `shots/<slice>-<name>.png`, fails on console errors | `npm run shot -- s0` |
 | 16 | `npm run build` leaves exactly `dist/index.html` | `ls dist` |
 | 17 | `tests/` with Vitest configured in `vite.config.ts` (`test: { environment: 'node' }`, jsdom per file where needed) | `npm test` |
@@ -189,7 +189,7 @@ jobs:
 ### S0.8 Done when
 1. Every row of S0.6 is PASS.
 2. The common gate (0.5) passes; `npm run check` exits 0.
-3. `shots/s0-lawn.png` shows: a green diamond filling about 60 % of the height with a paler apron around it; the four HUD chips at the top left and right with placeholder text from `t()`; a three-row rail at the bottom with the Park | Cupid | Mischief switch, an empty strip, and row 3 buttons; nothing under the top or bottom safe areas; no horizontal scroll bar.
+3. `shots/s0-phone.png` (390x844) shows: a green diamond filling about 60 % of the height with a paler apron around it; the four HUD chips at the top left and right with placeholder text from `t()`; a three-row rail at the bottom with the Park | Cupid | Mischief switch, an empty strip, and row 3 buttons; nothing under the top or bottom safe areas; no horizontal scroll bar.
 4. The intro at 390x844 shows the mark, the title "Parque D'Amour", Begin, and the EN / ES toggle (04 section 5.7); Continue is hidden (no save yet).
 
 ### S0.9 Tests to add
@@ -256,7 +256,7 @@ Recording the picks (one model, after both letters):
 5. The common gate; `ls dist` shows `index.html style-board.html music-board.html`.
 
 ### S1.8 Tests to add
-`tests/palette.test.ts` (each of the three palettes has the 16 keys; every value is a 7-character hex); `tests/limiter.test.ts` (05 section 8.2 item 1); `tests/melody.test.ts` (05 section 8.2 item 3); `tests/colour-literals.test.ts` (the grep of S1.7 item 3 as a test).
+`tests/palette.test.ts` (every key of `Palette` exists in all three palettes; a string value is a 7-character hex, an array value holds only such strings; 04 section 4.5 item 1); `tests/limiter.test.ts` (05 section 8.2 item 1); `tests/melody.test.ts` (05 section 8.2 item 3); `tests/colour-literals.test.ts` (the grep of S1.7 item 3 as a test).
 
 ### S1.9 Out of scope
 The park, the pipeline, any prop beyond the 13 tiles, cues beyond the five of the cue bed, ambience, birds, the Sound check sheet, the Options sheet.
@@ -284,8 +284,8 @@ Register sections 3.1, 3.2, 6. 02 sections 2 (the park, gates, starter park, pro
 S0 shell and loop skeleton; S1 primitives in `render/*` drawn with `style()`; `ambient.ts` palettes; the register's pick.
 
 ### S2.5 Files to create or change
-Part A: `src/core/rng.ts`, `math.ts`, `ids.ts`, `clock.ts`, `weather.ts`, `events.ts`, `commands.ts`, `loop.ts`; `src/world/grid.ts`, `park.ts`, `gen.ts`, `water.ts`, `wear.ts`, `charm.ts` (empty field API only); `src/save/schema.ts`, `src/save/store.ts` (`snapshot`, `restore`, `stateHash`, no localStorage yet); `src/debug/harness.ts`, `src/debug/perf.ts`; `tests/determinism.test.ts`, `tests/clock.test.ts`, `tests/weather.test.ts`, `tests/gen.test.ts`, `tests/water.test.ts`, `tests/commands.test.ts`.
-Part B: `src/render/camera.ts`, `project.ts`, `order.ts`, `ambient.ts`, `backdrop.ts`, `ground.ts`, `water.ts`, `props.ts`, `flora.ts`, `effects.ts` (particle system), `ghost.ts` (stub), `draw.ts`; `src/main.ts` (wiring); `src/ui/hud.ts` (clock chip only); `tools/shot.mjs` (day wait).
+Part A: `src/core/rng.ts`, `math.ts`, `ids.ts`, `clock.ts`, `weather.ts`, `events.ts`, `commands.ts`, `loop.ts`; `src/world/grid.ts`, `park.ts`, `gen.ts`, `water.ts`, `wear.ts`, `charm.ts` (empty field API only); `src/save/schema.ts`, `src/save/store.ts` (`snapshot`, `restore`, `stateHash`, no localStorage yet); `src/debug/harness.ts`, `src/debug/perf.ts`; `tools/det.mjs` (08 section 3.4); `tests/determinism.test.ts`, `tests/clock.test.ts`, `tests/weather.test.ts`, `tests/events.test.ts`, `tests/loop.test.ts`, `tests/gen.test.ts`, `tests/park.test.ts`, `tests/water.test.ts`, `tests/commands.test.ts`.
+Part B: `src/render/camera.ts`, `project.ts`, `order.ts`, `ambient.ts`, `backdrop.ts`, `ground.ts`, `water.ts`, `props.ts`, `flora.ts`, `effects.ts` (particle system), `ghost.ts` (stub), `draw.ts`; `src/main.ts` (wiring); `src/ui/hud.ts` (clock chip only); `tools/shot.mjs` (day wait); `tests/project.test.ts`, `tests/order.test.ts`, `tests/pick.test.ts`.
 
 ### S2.6 Steps
 Part A, engine (Tier B):
@@ -303,7 +303,7 @@ Part A, engine (Tier B):
 12. `water.ts`: `waterBodies` by flood fill over `KIND` 5 and 6, `bodyAt`, `findCrossing` (02 section 8.3 bridge rule: shortest straight N-S or E-W crossing through the tile, land both ends, at most 4 water tiles), `stepIce` (02 section 3.3 snow row: `ICE = 1` after 60 s of snow, 0 after 120 s without).
 13. `wear.ts`: `wearAt` and `decayWear` as GV 1674-1687 with the formula of 02 section 11.1 items 1 and 2; `findPavingRun` per item 4; `markPaved` writes `PAVEDAY`.
 14. `store.ts` (in-memory only): `snapshot()` and `restore()` over `ParkSaveV1` (03 section 3.10), `stateHash()` exactly as 03 section 11; `harness.ts` installs `window.__PD` per 03 section 13 under `import.meta.env.DEV`; add `worldHash()` (hash of the nine layers and `props` only) for tool tests.
-15. `tests/determinism.test.ts`: seed 101, run 64,800 steps (3 days) with a scripted log of 12 commands (`speed` changes and `debug setWeather`), record `stateHash` and `rngN`; run again, assert equal; run a third time with one extra `setWeather` at step 30,000, assert different. Also 03 section 4.5 "Done when": 1x and 8x paths give the same hash (drive `simulate` with `lite` 1 and 3).
+15. `tests/determinism.test.ts`: seed 101, run 64,800 steps (3 days) with a scripted log of 12 commands (`speed` changes and `debug setWeather`), record `stateHash` and `rngN`; run again, assert equal; run a third time with one extra `setWeather` at step 30,000, assert different. Also 03 section 4.5 "Done when": 1x and 8x paths give the same hash (drive `simulate` with `lite` 1 and 3). `tools/det.mjs`: write the script per 08 section 3.4 (the same fixture through `__PD` in Chromium) and run it once in the hand-back.
 Part B, renderer (Tier A, after the Style Gate):
 16. `camera.ts`: port GV 6331-6358 (`cam`, `resize` with dpr cap 2, `setAngle`, `rotXY`, `rotVec`, `turnStep`), 6400-6416 (`fitCam` over the 64x64 box, `clampCam` with the register's floor 0.30), 11168-11230 (`setupInput`: pan, pinch, twist with the 0.06 rad dead zone, tap under 9 px and 420 ms, wheel x1.12 / x0.89, drag-paint throttle), 11280-11322 (`followStep`, `focusY`, `keepCentre`, `centreOn`), 12142-12154 (quarter turns, Fit).
 17. `project.ts`: `screenOf` (GV 6382-6384 without the `SEAS` term), the closed-form `screenToTile` of 03 section 7.1 item 6 (GV 6423-6443 is not ported), `pickAt` priority of 03 section 8.2 (people, creatures, props, tile).
@@ -341,7 +341,7 @@ Port list for part B (cite in comments):
 6. `pickAt` unit test: a tap on the fountain's screen point returns `{ kind: 'prop' }` with the fountain id at all four angles.
 
 ### S2.8 Tests to add
-`determinism.test.ts`, `clock.test.ts` (band edges, lamps rule, `newday`), `weather.test.ts` (weights sum to 100 per season; `weatherAt` inside and outside an override), `gen.test.ts` (fixed skeleton tiles; seed-varied items; `inB` gates), `water.test.ts` (`findCrossing` cases: 1 to 4 tiles, too wide, no land), `commands.test.ts` (ordering, `tick + 1` stamping, log cap 600, rejection reasons), `project.test.ts` (`screenToTile(screenOf(x, y))` round trip at four angles and three zooms), `order.test.ts` (stable ties).
+`determinism.test.ts`, `clock.test.ts` (band edges, lamps rule, `newday`), `weather.test.ts` (weights sum to 100 per season; `weatherAt` inside and outside an override), `gen.test.ts` (fixed skeleton tiles; seed-varied items; `inB` gates), `water.test.ts` (`findCrossing` cases: 1 to 4 tiles, too wide, no land), `commands.test.ts` (ordering, `tick + 1` stamping, log cap 600, rejection reasons), `project.test.ts` (`screenToTile(screenOf(x, y))` round trip at four angles and three zooms), `order.test.ts` (stable ties), `loop.test.ts` (`nsMax`, lite bits and budgets of GV 12082-12083), `park.test.ts` (gate tiles, `inB`, `isBoundary`, `nearestGate`), `pick.test.ts` (`pickAt` priority; the fountain at all four angles), `events.test.ts` (`on` at once, `watch` after `drain`; lite bits drop only `fx` and `cue`).
 
 ### S2.9 Out of scope
 Visitors and creatures (S4), tools and ghosts (S3), localStorage (S3), weather visuals, lamp halos and season tints (S9), gestures for painting (S3 wires them), any sound.
@@ -369,7 +369,7 @@ Register 3.7, 3.11. 02 sections 2.2, 2.3, 2.6, 8 (creator mode: rail rows, tool 
 S2 engine and renderer; `ghost.ts` stub; `commands.ts` with `tool` and `undo` kinds reserved; `store.ts` snapshot and hash.
 
 ### S3.5 Files to create or change
-`src/play/tools.ts`, `src/play/undo.ts`, `src/render/ghost.ts`, `src/ui/rail.ts` (Park group, row 2 with Undo, row 3 New), `src/ui/dom.ts` (`toast`, `layoutOverlays`, confirm dialog), `src/ui/intro.ts` (Continue), `src/save/store.ts` (keys, autosave, load), `src/save/migrate.ts`, `src/core/commands.ts` (`tool`, `undo`, `park.new` finish), `src/world/grid.ts` (`rebuildBlock`), `src/main.ts`, strings (tool labels, reasons, Undone, confirm), `tests/tools.test.ts`, `tests/undo.test.ts`, `tests/save.test.ts`.
+`src/play/tools.ts`, `src/play/undo.ts`, `src/render/ghost.ts`, `src/ui/rail.ts` (Park group, row 2 with Undo, row 3 New), `src/ui/dom.ts` (`toast`, `layoutOverlays`, confirm dialog), `src/ui/intro.ts` (Continue), `src/save/store.ts` (keys, autosave, load), `src/save/migrate.ts`, `src/core/commands.ts` (`tool`, `undo`, `park.new` finish), `src/world/grid.ts` (`rebuildBlock`), `src/main.ts`, strings (tool labels, reasons, Undone, confirm), `tests/tools.test.ts`, `tests/undo.test.ts`, `tests/save.test.ts`, `tests/migrate.test.ts`, `tests/ui/overlays.test.ts`, `tests/ui/intro.test.ts`.
 
 ### S3.6 Steps
 1. `TOOLS`: sixteen entries with the ids of register 3.7 in that order, class per 02 section 8.2 (`brush`, `stamp1`, `stampBig`, `run`, or none for `hand`), footprint, label key, icon (inline 17x17 SVG as GV 11029-11037), swatch colour from `tokens.css` `--moss`.
@@ -394,7 +394,7 @@ S2 engine and renderer; `ghost.ts` stub; `commands.ts` with `tool` and `undo` ki
 6. By hand in Chromium: paint a path, reload, tap Continue: the path is there and the toast count is zero; tap New: the confirm appears; Yes gives a fresh park and the hash `#s=` changes.
 
 ### S3.8 Tests to add
-`tools.test.ts`, `undo.test.ts`, `save.test.ts` (with `tests/fixtures/park-v0.json`), `strings.test.ts` extended with the reason keys.
+`tools.test.ts`, `undo.test.ts`, `save.test.ts` (with `tests/fixtures/park-v0.json`), `migrate.test.ts`, `tests/ui/overlays.test.ts`, `tests/ui/intro.test.ts`, `strings.test.ts` extended with the reason keys.
 
 ### S3.9 Out of scope
 Visitors reacting to tools (S4), the gardener (S4), abilities (S6), the Cupid and Mischief strips (S6), the Options sheet (S11).
@@ -453,7 +453,7 @@ S2 engine, S3 tools and save; `pickAt` with the people branch stubbed; S1 figure
 7. `pickAt` on a figure's head point returns its id at zoom 1.3 and 2.4.
 
 ### S4.8 Tests to add
-`arrivals.test.ts`, `archetypes.test.ts`, `astar.test.ts`, `wear.test.ts`, `names.test.ts` (regulars' names and `seeks` exact; no duplicate active names), `caps.test.ts` (30 people, 12 pigeons, 4 dogs).
+`arrivals.test.ts`, `archetypes.test.ts`, `astar.test.ts`, `wear.test.ts`, `names.test.ts` (regulars' names and `seeks` exact; no duplicate active names), `caps.test.ts` (30 people, 12 pigeons, 4 dogs), `needs.test.ts`, `brain.test.ts`, `act.test.ts`, `move.test.ts`, `creatures.test.ts` (08 section 2.3).
 
 ### S4.9 Out of scope
 Pairs and anything romantic (S5), embarrassments (S5, S6), the pomeranian in the park (S6), the cameo archetype in action (S6), weather effects on the scene (S9), sound.
@@ -503,7 +503,7 @@ S4 visitors, brain rung 6 hook, `act.ts`, feed pipe, card, sheets; `charm.ts` AP
 5. `shots/s5-pair-card.png` shows a pair card at stage Bench with both names, the Heart bar with a gate tick, the stage chip and Pin; `shots/s5-chip.png` shows the Romance chip naming the featured pair; `shots/s5-romances.png` shows the Romances sheet with two pairs; `shots/s5-kiss.png` at f = 0.76 shows a pair at Kiss with six hearts.
 
 ### S5.8 Tests to add
-`romance.test.ts`, `tone.test.ts`, `charm.test.ts`, `events.test.ts` (feed cap 40, nested key resolution after a language switch).
+`romance.test.ts`, `tone.test.ts`, `charm.test.ts`, `feed.test.ts` (feed cap 40, nested key resolution after a language switch).
 
 ### S5.9 Out of scope
 Abilities and avatars (S6, S7, S10), points and tiers (S6; S5 only emits the events), weather overrides (S9), sound.
@@ -531,7 +531,7 @@ Register 3.6, 3.8 (rows `c_petals, c_bouquet, c_musician, c_sunbeam, m_pigeon, m
 S5 romance, `embarrass.land`, `charm.addSource`, `weather.addOverride`, creatures with the pomeranian record, the cameo archetype slot, the rail with the Park group.
 
 ### S6.5 Files to create or change
-`src/play/abilities.ts`, `src/play/progression.ts`, `src/entities/creatures.ts` (pomeranian, pigeon `swoop`), `src/entities/visitor.ts` (cameo spawn, summoned busker), `src/entities/act.ts` (cameo states), `src/ui/rail.ts` (Cupid and Mischief groups, arming, cooldown chip, locked pills), `src/ui/hud.ts` (Points chip, unlock toast), `src/ui/sheets.ts` (Progress), `src/render/ghost.ts` (ability target square), `src/render/effects.ts` (petals, sprinkler spray, splat, slip dust), `src/render/props.ts` (sprinkler, peel, basket, crumbs), `src/core/commands.ts` (`ability`), `src/save/store.ts` (effects, sides, tally; profile points), strings, `tests/abilities.test.ts`, `tests/progression.test.ts`, `tests/content.test.ts`.
+`src/play/abilities.ts`, `src/play/progression.ts`, `src/entities/creatures.ts` (pomeranian, pigeon `swoop`), `src/entities/visitor.ts` (cameo spawn, summoned busker), `src/entities/act.ts` (cameo states), `src/ui/rail.ts` (Cupid and Mischief groups, arming, cooldown chip, locked pills), `src/ui/hud.ts` (Points chip, unlock toast), `src/ui/sheets.ts` (Progress), `src/render/ghost.ts` (ability target square), `src/render/effects.ts` (petals, sprinkler spray, splat, slip dust), `src/render/props.ts` (sprinkler, peel, basket, crumbs), `src/core/commands.ts` (`ability`), `src/save/store.ts` (effects, sides, tally; profile points), strings, `tests/abilities.test.ts`, `tests/progression.test.ts`, `tests/content.test.ts`, `tests/ui/rail.test.ts`.
 
 ### S6.6 Steps
 1. `ABILITIES`: all 19 ids of register 3.8 with side, tier, cooldown, charges, target type; only the eight of this slice have an `apply`; the other eleven return `reason.not_here` until S10 (the registry is complete so the content test and the rail can show them dimmed).
@@ -554,7 +554,7 @@ S5 romance, `embarrass.land`, `charm.addSource`, `weather.addOverride`, creature
 5. `shots/s6-cupid-strip.png` shows the Cupid group with `c_petals` and `c_bouquet` active and the T1 to T4 pills dimmed with tier badges; `shots/s6-cooldown.png` shows the armed `m_pigeon` chip with its ring; `shots/s6-progress.png` shows the Progress sheet with both ladders; `shots/s6-petals.png` shows petals on a 3x3 and the `PETALS` tint.
 
 ### S6.8 Tests to add
-`abilities.test.ts`, `progression.test.ts`, `content.test.ts`, `tone.test.ts` extended (no ability can target a child; `m_sprinkler` skips children inside).
+`abilities.test.ts`, `progression.test.ts`, `content.test.ts`, `tests/ui/rail.test.ts` (08 section 2.9), `tone.test.ts` extended (no ability can target a child; `m_sprinkler` skips children inside).
 
 ### S6.9 Out of scope
 Tier 2 to 4 abilities (S10), avatars (S7), the weather overlay drawing of `c_sunbeam` (S9 draws the light pool; S6 applies the data), sound.
@@ -582,11 +582,11 @@ Register rows 12, 13, 14, sections 3.8 (avatars), 3.9, 6. 02 section 10 (all of 
 S6 abilities and scoring, creatures with `swoop` and `snatch`, `charm.addSource`, `PETALS`, the florist cameo drawing from S6's `c_bouquet`, `setAvatarDecide` hook, `camera.follow`.
 
 ### S7.5 Files to create or change
-`src/play/mode.ts`, `src/play/avatar.ts`, `src/entities/visitor.ts` (`spawnedForPlayer`, `leaveAt = +Infinity` while possessed), `src/entities/creatures.ts` (possessed pigeon and pomeranian states), `src/entities/act.ts` (`swoop, poop, startled, peck, perch, drink, snatch, carry, shakeOff, chase, play, paddle, dig, hand, pick, scatter`), `src/ui/rail.ts` (avatar row 1 hints, mode button text), `src/ui/sheets.ts` (Avatar picker), `src/ui/card.ts` (avatar strip), `src/ui/hud.ts` (`body.avatar` from the `mode` event, status toasts), `src/render/figures.ts` (florist with basket), `src/render/ghost.ts` (player ring GV 9529), `src/core/commands.ts` (`avatar.enter`, `avatar.leave`, `avatar.tap`), `src/save/store.ts` (`mode` block), `src/main.ts` (tap routing item 1), strings, `tests/avatar.test.ts`.
+`src/play/mode.ts`, `src/play/avatar.ts`, `src/entities/visitor.ts` (`spawnedForPlayer`, `leaveAt = +Infinity` while possessed), `src/entities/creatures.ts` (possessed pigeon and pomeranian states), `src/entities/act.ts` (`swoop, poop, startled, peck, perch, drink, snatch, carry, shakeOff, chase, play, paddle, dig, hand, pick, scatter`), `src/ui/rail.ts` (avatar row 1 hints, mode button text), `src/ui/sheets.ts` (Avatar picker), `src/ui/card.ts` (avatar strip), `src/ui/hud.ts` (`body.avatar` from the `mode` event, status toasts), `src/render/figures.ts` (florist with basket), `src/render/ghost.ts` (player ring GV 9529), `src/core/commands.ts` (`avatar.enter`, `avatar.leave`, `avatar.tap`), `src/save/store.ts` (`mode` block), `src/main.ts` (tap routing item 1), strings, `tests/avatar.test.ts`, `tests/mode.test.ts`.
 
 ### S7.6 Steps
 1. `mode.ts`: a leaf with `MODE`, `PLAYER` (0 is none), `getAvatar`, `setMode` called only from `applyCommand`, `PLAYER_HOLD` per avatar from 02 section 10.2 (GV 5630, 5631, 11252-11269 pattern).
-2. `avatar.ts`: `AVATARS` with the six ids, side, tier, actor rule, spawn gate, speed and the three hint keys of 02 section 10.2; `enterAvatar` (find or spawn the actor, `PLAYER`, select, follow, zoom to 1.5 if below 1.3 (GV 11257), the 6 s hint toast (GV 11259), `clearUndo`); `leaveAvatar` (actor back to AI at once, toast "X goes on by themselves"); `avatarDecide` injected at boot (GV 5642-5651 shape: orders are never pre-empted, 02 section 10.3 item 6).
+2. `avatar.ts`: `AVATARS` with the six ids, side, tier, actor rule, spawn gate, speed and the three hint keys of 02 section 10.2; `enterAvatar` (find or spawn the actor, `PLAYER`, select, follow, zoom to 1.5 if below 1.3 (GV 11257), the 6 s hint toast (GV 11259), `clearUndo`); `leaveAvatar` (actor back to AI at once, toast `t('avatar.goes_on', { name })` (06 section 16.7)); `avatarDecide` injected at boot (GV 5642-5651 shape: orders are never pre-empted, 02 section 10.3 item 6).
 3. The cascade per 02 section 10.3 (GV 5653-5688 order): hold check, clear intent, nearest interactable by the avatar's candidate list and radius, tile fallback, default walk or fly; returns a status key; `a_busker`, `a_mime`, `a_matchmaker` return `reason.not_here` until S10.
 4. `a_pigeon` steps 3a to 5 of 02 section 10.4 with the refusals; `a_pomeranian` 02 section 10.5; `a_florist` 02 section 10.7 (basket of 3, `hand` as `c_bouquet`, `pick` 4 s, `scatter` as `c_petals`, cooldowns 60 s and 30 s, the two refusals).
 5. `commands.ts`: `avatar.enter` (rejected when already in avatar mode or locked), `avatar.leave`, `avatar.tap` with the hit re-validation of 03 section 5.2 item 4; side rules of 03 section 5.3 (tools, undo and abilities rejected with `reason.not_in_avatar`).
@@ -602,7 +602,7 @@ S6 abilities and scoring, creatures with `swoop` and `snatch`, `charm.addSource`
 4. By hand: tap the lawn, the pigeon flies there; tap a visitor, the toast reads the status; tap Creator, the pigeon walks off on its own within 2 s.
 
 ### S7.8 Tests to add
-`avatar.test.ts`, `commands.test.ts` extended with the side rules.
+`avatar.test.ts`, `mode.test.ts` (08 section 2.5), `commands.test.ts` extended with the side rules.
 
 ### S7.9 Out of scope
 `a_busker`, `a_mime`, `a_matchmaker` (S10); the avatar music mix (S8); the matchmaker's fixed look (S10).
@@ -669,7 +669,7 @@ Format 0.6 plus the 05 section 8.1 results table and the peak value.
 The scene shows the four seasons on trees and lawn, the eight weather kinds and the three castable overrides, the eight day bands with golden hour and lit lamps, winter ice and snow, puddles, petals and leaves, with the weather overlay and particles within budget.
 
 ### S9.2 Model tier
-Tier A for the renderer and effects (steps 2 to 9); Tier B for the simulation ties (steps 1 and 10).
+Tier A for the renderer and effects (steps 2 to 9); Tier B for the simulation ties and tooling (steps 1, 10 and 11).
 
 ### S9.3 Read first
 Register 3.2. 02 sections 3 (time, light, weather, seasons, overrides), 2.2 (`WET`, `PETALS`, `ICE`), 4.4 (comfort terms), 5.2 rung 2 (shelter). 03 sections 6.2, 7.3, 7.5, 7.7 items 2 and 3, 7.8 items 1 and 2, 15.1. 04 sections 6.3, 6.5, 8 (effects and particles), 10 (light and seasons), 11 (accessibility: flash limit, reduced motion). Review 7.2, 7.3, 7.7 (`drawWeather`, `ambientFx`), 6.1. Notes `13-notes.md` (6450-6620), `18-notes.md` (10057-10105), `15-notes.md` (8820-8847). 08 sections 4.5, 5; 09 section 2.6 `effects.ts`.
@@ -678,24 +678,25 @@ Register 3.2. 02 sections 3 (time, light, weather, seasons, overrides), 2.2 (`WE
 S2 `weather.ts` with overrides and `WET`, `water.stepIce`, `ambient.ts`, `effects.ts` particles, `flora.crownPhase`; S6 `c_sunbeam` data; S4 shelter rung reading `weatherAt`.
 
 ### S9.5 Files to create or change
-`src/render/ambient.ts` (season tints, lamp warmth), `src/render/backdrop.ts` (night sky, lit windows, snow on roofs), `src/render/ground.ts` (season lawn, puddles, ice, snow cover, petals), `src/render/flora.ts` (four-season crowns, blossom, bare), `src/render/props.ts` (lamp glow, umbrella), `src/render/effects.ts` (rain, snow, fog wash, leaves, petals, blossom, lamp halos, sunbeam pool, rain cloud, fireworks kinds), `src/render/draw.ts` (phase 8), `src/core/weather.ts` (snow only in winter check, `ICE` timing), `src/entities/needs.ts` (season comfort term), `src/debug/perf.ts` (`qualityLevel` step-down), strings (weather words), tests.
+`src/render/ambient.ts` (season tints, lamp warmth), `src/render/backdrop.ts` (night sky, lit windows, snow on roofs), `src/render/ground.ts` (season lawn, puddles, ice, snow cover, petals), `src/render/flora.ts` (four-season crowns, blossom, bare), `src/render/props.ts` (lamp glow, umbrella), `src/render/effects.ts` (rain, snow, fog wash, leaves, petals, blossom, lamp halos, sunbeam pool, rain cloud, fireworks kinds), `src/render/draw.ts` (phase 8), `src/core/weather.ts` (snow only in winter check, `ICE` timing), `src/entities/needs.ts` (season comfort term), `src/debug/perf.ts` (`qualityLevel` step-down), `tools/perf.mjs` (08 section 5.2), strings (weather words), tests.
 
 ### S9.6 Steps
 1. Verify the data side: per-season weights of 02 section 3.3 on the sim RNG; the season effects of 02 section 3.4 on arrivals and comfort; `ICE` timing; `WET` rates; overrides expire; `weatherAt` drives comfort and shelter.
 2. `ambient.ts`: the day curve of 04 section 10.1 over the eight bands; the season tint formulas of 04 section 10.3 with the 0.5-day blend; lamp warmth on figures within 3 tiles (03 section 7.3 item 5).
-3. `backdrop.ts`: night sky with stars below `light 0.42`, the moon, lit facade windows at night (04 section 13 item 6 rate), snow caps in winter, the skyline tint by band.
+3. `backdrop.ts`: night sky with stars below `light 0.42`, the moon, lit facade windows at night (40 % per bay by `h01`, 04 section 6.4 and 10.2 item 3), snow caps in winter, the skyline tint by band.
 4. `ground.ts`: season lawn and mulch, `WET` sheen 14 % darkening, `ICE` whitening of pond and canal tiles, snow cover by `snowCover` of 04 section 10.3, `PETALS` dots; `flora.ts`: crown phases of 02 section 3.4 (spring blossom days 1 to 2, leafing day 3, summer full, autumn thinning, winter bare) for the three species (04 section 6.3).
 5. `props.ts`: the lamp pool of 04 section 6.2 and 10.2 (radius 1.6 tiles, the 24-pool cap), lit by `T.lamps` or `litUntil`; the shared umbrella drawn over a pair with `umbrellaUntil` (S10 sets it; draw it now from a harness flag).
 6. `effects.ts`: screen-space rain (95 drops per unit rain normalised to 390x800, two layers, none above the horizon) and snow (120 flakes) from GV 10062-10105 batched into one path per layer; the fog wash at `FOGA * 0.55`; leaf particles in autumn with 30 % teal (04 section 10.4); blossom petals under blossoming trees in spring (visual only); `ambientFx` reshaped (GV 8820-8847: no fireflies, no lightning) for fountain spray, café steam, breeze petal drift; the sunbeam light pool and the rain-cloud sprite for the two overrides; the particle budget of 04 section 8.
 7. `draw.ts`: phase 8 overlay and fog after the entity pass; the 2 Hz flash limit and halved particles under `prefers-reduced-motion` (04 section 11).
 8. `perf.ts`: `qualityLevel()` 0 to 2 per 03 section 13 (level 1 drops halos and ribbons, level 2 drops sway and petals), stepping when draw EMA > 22 ms for 180 frames, never up, disabled under WebDriver.
 9. Present options first (0.4): two variants of the rain look and two of the golden-hour tint on a scratch page; build the picked ones.
-10. Strings: the eight weather words and `shower` dot colour key in both tables.
+10. Strings: the eight `weather.<id>` words in both tables; the eight dot colours, including `shower` `#B7CCDE`, go into the constant table in `ambient.ts` (04 section 10.5).
+11. `tools/perf.mjs`: write the script per 08 section 5.2 (the caps scene through `__PD`, 60 s at 1x and 8x, zoom 1 and 0.30) and run it once in the hand-back.
 
 ### S9.7 Done when
 1. The common gate; determinism green at 1x and 8x across all four seasons (12 days, seed 101): identical `stateHash` whatever the quality level or the reduced-motion flag.
 2. `tests/weather.test.ts` extended: over 2,000 picks per season the kind frequencies are within 3 points of 02 section 3.3; snow never outside winter; `ICE` reaches 1 after 60 s of snow and 0 after 120 s without.
-3. The screenshot matrix of 04 section 12 item 8: f = 0.30, 0.76 and 0.90 at zoom 0.30, 1.3 and 2.4 at 390x844 (`shots/s9-f30-z13.png` and so on, nine files) plus `shots/s9-rain.png`, `s9-snow.png` (winter with ice on the pond and bare trees), `s9-autumn.png` (thinning crowns and leaves), `s9-fog.png` (`m_fog` wash via the harness override), `s9-sunbeam.png`. At f = 0.90 every lamp is lit with a pool and the facades show lit windows; at f = 0.76 the warm tint is visible on figures and stone.
+3. The screenshot matrix of 04 section 12 item 8: f = 0.30, 0.76 and 0.90 at zoom 0.30, 1.3 and 2.4 at 390x844 and 1280x800 (`shots/s9-f30-z13-phone.png`, `s9-f30-z13-desktop.png` and so on, eighteen files) plus `shots/s9-rain.png`, `s9-snow.png` (winter with ice on the pond and bare trees), `s9-autumn.png` (thinning crowns and leaves), `s9-fog.png` (`m_fog` wash via the harness override), `s9-sunbeam.png`. At f = 0.90 every lamp is lit with a pool and the facades show lit windows; at f = 0.76 the warm tint is visible on figures and stone.
 4. Perf overlay on desktop Chromium at zoom 1 with 30 visitors, 12 pigeons, 4 dogs and 220 particles in rain: frame EMA at or under 16.7 ms and sim + draw at or under 12 ms (brief section 9 row 3); the numbers are in the hand-back.
 5. The accessibility checks of 04 section 11: contrast over the darkest screenshot, no flash above 2 Hz, particles halved under reduced motion.
 
@@ -947,8 +948,8 @@ Values this document defines that the register does not (the owner may object to
 9. `worldHash()` (layers and props only) on the harness for the tool and undo tests (S2 step 14, S3.7).
 10. The determinism fixture: seed 101, 64,800 steps, 12 scripted commands, extended by each later slice; the `S_HAPPILY` and `S_PARTED` seeds found by scanning 1 to 200 (S5.7).
 11. Abilities and avatars outside a slice return `reason.not_here` so the registries are complete from S6 and S7 (content test and dimmed pills).
-12. The fourteen cross-slice hooks named in hand-backs (vendor spawn, sitter eviction, `openNear` on undo, the music state object, the umbrella harness flag) are listed per slice rather than owned by a shared document.
-13. The screenshot names `shots/<slice>-<name>.png` and the nine-file matrix of S9 (04 section 12 item 8).
+12. The cross-slice hooks named in hand-backs (vendor spawn, sitter eviction, `openNear` on undo, the music state object, the umbrella harness flag) are listed per slice rather than owned by a shared document.
+13. The screenshot names `shots/<slice>-<name>.png` and the eighteen-file matrix of S9 (04 section 12 item 8, two viewports).
 14. S12's config choices (`webDir dist`, `androidScheme https`, icons under `resources/`).
 
 Open points for the owner:

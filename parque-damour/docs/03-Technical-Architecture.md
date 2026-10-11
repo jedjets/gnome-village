@@ -50,11 +50,11 @@ Imports flow downward only. A module may import from its own row or any row abov
 | L7 | `ui/` | L0–L6 read only, plus `core/commands.ts: enqueue` |
 | L8 | `debug/`, `main.ts` | everything |
 
-`styles/` is CSS, imported by `main.ts` only.
+`styles/` is CSS, linked from `index.html` and inlined by the build.
 
 ### 2.2 `src/main.ts` (NEW; wiring pattern GV `boot` 12127–12222)
 
-Responsibility: boot order and wiring only; no rules. Order: `installStyles` → `i18n.init(profile.settings.lang)` → `intro.show(hasPark)` → on Begin or Continue: `audio.init()` (the autoplay unlock, GV 12216–12217), `newPark(seed)` or `loadPark(save)` (on a new park `camera.centreOn(23.5, 23.5); cam.z = ZOOM_START (1.3)` (04 §5.1); on Continue `fitCam()` (section 11)), `render.init`, `camera.setupInput`, `rail.build`, `hud.init`, `loop.start()`. Wires every DOM control to `enqueue(cmd)` or to a UI-only function (rotate, Fit, photo, sheets, language, mute). Registers `visibilitychange` and `pagehide` for autosave and audio suspend (GV 12199). Reads `#s=<seed>&halt` from the hash (GV 12097, 814) and writes `#s=<seed>` on a new park (GV 12115). Installs `debug/harness.ts` only when `import.meta.env.DEV`.
+Responsibility: boot order and wiring only; no rules. Order: `setLang(profile.settings.lang)` → `applyDom()` → `showIntro(hasPark, onBegin, onContinue)` → on Begin: `initAudio()` (the autoplay unlock, GV 12216–12217), `genPark(seed)` through the `park.new` command, `centreOn(23.5, 23.5); cam.z = ZOOM_START (1.3)` (04 §5.1); on Continue: `initAudio()`, `restore(migratePark(loadPark()))`, `fitCam()` (section 11); then `initRender(canvas)`, `setupInput(canvas, handlers)`, `buildRail()`, `initHud()`, `start()`. Wires every DOM control to `enqueue(cmd)` or to a UI-only function (rotate, Fit, photo, sheets, language, mute). Registers `visibilitychange` and `pagehide` for autosave and audio suspend (GV 12199). Reads `#s=<seed>&halt` from the hash (GV 12097, 814) and writes `#s=<seed>` on a new park (GV 12115). Installs `debug/harness.ts` only when `import.meta.env.DEV`.
 
 ### 2.3 `src/core/`
 
@@ -141,7 +141,7 @@ Responsibility: boot order and wiring only; no rules. Order: `installStyles` →
 
 | Module | Status | GV lines | Responsibility | Public API |
 |---|---|---|---|---|
-| `dom.ts` | PORT | 10684–10699 (`$`, `toast`, `layoutOverlays`), 10866 (`esc`) | DOM helpers, toast (3.4 s, 6 s option), overlay stacking from the measured rail height, body classes. | `$(id): HTMLElement; toast(key: string, params?, secs?): void; layoutOverlays(): void; setBodyClass(cls: 'avatar'\|'photo'\|'sheet'\|'dev', on: boolean): void; applyDom(root?: ParentNode): void` |
+| `dom.ts` | PORT | 10684–10699 (`$`, `toast`, `layoutOverlays`), 10865 (`esc`) | DOM helpers, toast (3.4 s, 6 s option), overlay stacking from the measured rail height, body classes. | `$(id): HTMLElement; toast(key: string, params?, secs?): void; layoutOverlays(): void; setBodyClass(cls: 'avatar'\|'photo'\|'sheet'\|'dev', on: boolean): void; applyDom(root?: ParentNode): void` |
 | `hud.ts` | ADAPT | 10839–10866 (`updateHUD` 0.35 s cadence), 12181 (clock double tap) | The four chips, photo mode, the mode button text and body class from the `mode` event. | `initHud(): void; updateHud(dtr): void` |
 | `rail.ts` | ADAPT | 11029–11072 (`TOOL_ICON`, `TOOLS`, `buildTools`, `setTool`, `showDepth`), 10995–11033 (`updateGrow` contextual row) | Three groups, scrolling strip, row 2 context, row 3 controls, locked items dimmed with tier, cooldown chips. | `buildRail(): void; setGroup(g: 'park'\|'cupid'\|'mischief'): void; setTool(id: ToolId): void; armAbility(id: AbilityId \| null): void; updateRail(dtr): void; activeTool(): ToolId; armedAbility(): AbilityId \| null; brushSize(): 1\|2\|3` |
 | `card.ts` | ADAPT | 10809–10838 (`relText`, `updateCard`), 10867–10880 (`selectGnome`, `clearSel`) | Single card, pair card, avatar strip; selection and follow. | `select(hit: Hit): void; clearSel(): void; selected(): Hit; updateCard(): void` |
@@ -165,7 +165,7 @@ Responsibility: boot order and wiring only; no rules. Order: `installStyles` →
 | `debug/motifs.ts` | NEW | | Motifs B and C implementing 05 §6.2 `Motif`; imported only by `music-board.ts` | `MOTIFS: Record<'B'\|'C', Motif>` |
 | `styles/tokens.css` | PORT | CSS 16–23 | The tokens of brief §3.2, exactly. | |
 | `styles/shell.css` | PORT | CSS 24–230 | HUD, chips, rail, tools, size row, card (and strip variant 173–178), sheets, toast, feed, photo mode, intro, perf, safe areas, reduced motion; minimum font 11 px (brief §3.1 item 5). | |
-| `fonts/*.woff2` | NEW | | Fraunces and Figtree subsets (Latin plus Latin Extended), under 400 KB together, referenced by `@font-face` in `shell.css` and inlined by the build (07 S0.6 row 19) | |
+| `fonts/*.woff2` | NEW | | Fraunces and Figtree subsets (Latin plus Latin Extended), under 400 KB together, referenced by `@font-face` in `tokens.css` and inlined by the build (07 S0.6 row 19) | |
 
 ---
 
@@ -415,8 +415,8 @@ type Target = { kind: 'tile'; x: number; y: number } | { kind: 'visitor'; id: Vi
 |---|---|---|
 | `tool`, `undo` | `park` | rejected `reason.not_in_avatar` (the strip is hidden anyway) |
 | `ability` | the ability's own side (`c_*` cupid, `m_*` mischief) | rejected `reason.not_in_avatar` |
-| `avatar.enter` | the avatar's side | rejected if already in avatar mode |
-| `avatar.leave`, `avatar.tap` | `PLAYER`'s side | only in avatar mode |
+| `avatar.enter` | the avatar's side | rejected `reason.wrong_mode` if already in avatar mode |
+| `avatar.leave`, `avatar.tap` | `PLAYER`'s side | only in avatar mode, else rejected `reason.wrong_mode` |
 | `speed`, `park.new`, `visitor.call` | `park` | allowed |
 | `debug.weather` | `park` | allowed; rejected in a production build |
 
@@ -446,9 +446,11 @@ Every reason is an i18n key under `reason.`; the shell toasts `t(reason)`. Tools
 | `reason.not_courting`, `reason.apart`, `reason.on_the_water`, `reason.no_lamp`, `reason.not_raining`, `reason.raining`, `reason.not_evening`, `reason.pond_small`, `reason.iced`, `reason.slippery`, `reason.busker_near`, `reason.dog_saw_it`, `reason.no_wasps_rain`, `reason.in_sunbeam`, `reason.already_misty`, `reason.nobody_inside`, `reason.not_at_picnic`, `reason.no_item`, `reason.peel_here` | per-ability failures of design §9.2–9.3, one key each | |
 | `reason.park_full` | `visitor.call` at 30 (GV 4489) | design §12.2 |
 | `reason.park_full_props` | 600 props | section 3.11 |
+| `reason.too_many_effects` | a cast while 64 effects are active (section 3.11) | 08 §2.5 |
 | `reason.not_in_avatar`, `reason.busy` | mode and hold | |
 | `reason.startled`, `reason.big_dog`, `reason.basket_empty`, `reason.nobody_for_them`, `reason.had_to_go` | avatar cascade refusals of design §10.4–10.9 | 06 §12 |
 | `reason.wrong_side` | a command whose `side` is not allowed for its kind (section 5.3) | |
+| `reason.wrong_mode` | `avatar.enter` while already in avatar mode; `avatar.leave` or `avatar.tap` in creator mode | section 5.3 |
 
 Do not: do not toast from inside `applyCommand`; emit `rejected` and let `ui/hud.ts` toast it. Do not spend a cooldown or a charge before validation passes.
 
@@ -555,7 +557,7 @@ Done when: a unit test places one player bed and one gen fountain and reads `cha
 ### 7.4 Backdrop (`render/backdrop.ts`)
 
 1. Sky: GV `SKYR` ramp, stars, sun or moon, clouds, painted to an offscreen canvas at most every 260 ms or on resize (GV 6525–6534). The sun path is corrected: an arc across the top from left at f = 0.25 to right at f = 0.80 (review §16 notes GV's path is off).
-2. Skyline band: painted into the same offscreen canvas under the sky key plus `round(cam.ang / 0.02)`; a strip of rooftop silhouettes and the Eiffel Tower whose horizontal offset is `-(cam.ang / TAU) * stripWidth`, so it turns with the camera like GV's far shore bands (6511–6516).
+2. Skyline band: painted into the same offscreen canvas under the sky key plus `round(cam.ang / 0.02)`; a strip of rooftop silhouettes and the Eiffel Tower whose horizontal offset is `-(cam.ang / TAU) * stripWidth`, so it turns with the camera like GV's far shore bands (6574–6579, inside the sea block 6565–6581 of `paintSky`).
 3. Apron ground: four flat polygons in world space (pavement E/S/W, quay y = −1, river y = −2…−8, far bank y < −8), projected with `screenOf` and painted before the tiles.
 4. Apron drawables, generated once by `park.ts: BACKDROP`: railings (one piece per boundary tile, 1.2 units high, from GV `fencePieces` 7509–7547 idea), five gates, facade blocks (2 × 3 footprint, 4–6 units high, iso boxes from GV 6953–7035 with windows and balconies), quay wall, café awnings. Near-side rule: a facade whose depth is greater than the park centre's depth (it stands between the camera and the park) is drawn as a cutaway: ground floor band only, 0.6 units high, alpha 0.35, no roof (assumption A7). Far-side facades draw in full.
 
@@ -669,7 +671,7 @@ Clock chip single tap after 400 ms opens Events, double tap under 380 ms toggles
 
 ### 9.4 Cues, ambience, birds
 
-`cues.ts` (`bindCues(bus)`) subscribes with `watch` to `fx`, `stage`, `embarrassed`, `happily`, `parted`, `cast`, `unlock`; each cue is two or three `tone` calls as GV 6139–6207; gains 0.014–0.060. `ambience.ts` replaces `villagePos()` centring with point sources (fountains, kiosks) and the screen centre (GV 6292 skeleton). `birds.ts` is GV 6212–6269 as is, sampling trees from `props` with `kind == 'tree'` near the view.
+`cues.ts` (`bindCues(bus)`) subscribes with `watch` to every event kind named in the Trigger column of 05 §3.2 (copied in 06 §17): `step`, `sit`, `stand`, `chat`, `laugh`, `stage`, `linger`, `embarrassed`, `backfired`, `watch`, `proposal`, `happily`, `parted`, `bouquet`, `peck`, `scatter`, `fly`, `swoop`, `bark`, `snatch`, `wall`, `eat`, `arrive`, `leave`, `lampsLit`, `cast`, `unlock`, `applied`, `rejected`, `cue`; each cue is two or three `tone` calls as GV 6139–6207; gains 0.014–0.060. `ambience.ts` replaces `villagePos()` centring with point sources (fountains, kiosks) and the screen centre (GV 6292 skeleton). `birds.ts` is GV 6212–6269 as is, sampling trees from `props` with `kind == 'tree'` near the view.
 
 ---
 
@@ -757,7 +759,7 @@ Do not: do not save object references; do not save the undo stack; do not write 
 
 | Group | Members | Why |
 |---|---|---|
-| State (read) | `T, W, layers { KIND, WEAR, OCC, WATER, ICE, WET, PETALS, BEDC }, visitors, pairs, creatures, props, effects, cam, feed()` | inspection in the console and in tests |
+| State (read) | `T, W, layers { KIND, WEAR, OCC, WATER, ICE, WET, PETALS, BEDC, PAVEDAY }, visitors, pairs, creatures, props, effects, cam, feed()` | inspection in the console and in tests |
 | Stepping | `simulate(n = 1)`, `tick()`, `rngN()`, `hash()`, `worldHash()`, `setSpeed(v)`, `SP` | determinism runs like GV's `det.js` (GV 12022, 12232); `worldHash()` hashes the nine layers and `props` only (07 S2.6 item 14); `SP` is the per-phase lap table of section 4.2 |
 | Commands | `enqueue(cmd)`, `apply(cmd)`, `log()`, `replay(cmds)` | scripted play |
 | Picking | `tap(sx, sy)`, `pick(sx, sy)`, `screenOf(x, y)`, `screenToTile(sx, sy)` | input tests |
@@ -776,11 +778,11 @@ The perf overlay `#perf` (`perf.ts`, GV 12057–12069) shows frame, sim and draw
 
 | Item | Decision |
 |---|---|
-| `package.json` scripts | `dev` (vite), `build` (vite build), `preview`, `test` (vitest run), `test:watch`, `lint` (oxlint src tests tools), `typecheck` (tsc --noEmit), `shot` (node tools/shot.mjs), `check` (typecheck && lint && test && build), `det` (node tools/det.mjs), `perf` (node tools/perf.mjs); both take `--url <dev server url>`, default `http://localhost:5173/` |
+| `package.json` scripts | `dev` (vite), `build` (tsc -b && vite build), `preview`, `test` (vitest run), `test:watch`, `lint` (oxlint src tests tools vite.config.ts), `typecheck` (tsc -b; every tsconfig sets noEmit), `shot` (node tools/shot.mjs), `check` (typecheck && lint && test && build), `det` (node tools/det.mjs), `perf` (node tools/perf.mjs); both take `--url <dev server url>`, default `http://localhost:5173/` |
 | Runtime dependencies | none |
 | Dev dependencies | `vite`, `typescript`, `vitest`, `oxlint`, `vite-plugin-singlefile`, `puppeteer-core`, `jsdom` (for `ui/` tests) |
-| `vite.config.ts` | `plugins: [viteSingleFile()]`; `base: '/'` now, `'/parque-damour/'` after the move (register §7); `build.target: 'es2020'`; `build.assetsInlineLimit: 1_000_000` so the woff2 fonts inline; `build.cssCodeSplit: false`; the harness and dev UI are gated by `import.meta.env.DEV` alone, no extra `define` |
-| `tsconfig.json` | `strict: true`, `target: ES2020`, `module: ESNext`, `moduleResolution: bundler`, `noUnusedLocals`, `noUnusedParameters`, `noFallthroughCasesInSwitch`, `noImplicitOverride`, `isolatedModules`, `types: ['vite/client']` |
+| `vite.config.ts` | `plugins: [viteSingleFile()]`; `base: './'` (relative, so `dist/index.html` opens from `file://`; `'/parque-damour/'` after the move, register §7); `build.target: 'es2022'`; `build.assetsInlineLimit: 1_000_000` so the woff2 fonts inline; `build.cssCodeSplit: false`; the harness and dev UI are gated by `import.meta.env.DEV` alone, no extra `define` |
+| `tsconfig.json` | project references to `tsconfig.app.json` (src), `tsconfig.test.json` (tests) and `tsconfig.node.json` (vite.config.ts, tools); `tsconfig.app.json` holds `strict: true`, `noUncheckedIndexedAccess`, `target: es2022`, `module: esnext`, `moduleResolution: bundler`, `allowImportingTsExtensions`, `verbatimModuleSyntax`, `noUnusedLocals`, `noUnusedParameters`, `noFallthroughCasesInSwitch`, `noImplicitOverride`, `isolatedModules`, `noEmit`, `types: ['vite/client']` |
 | oxlint | default rules plus `no-restricted-imports` for the layer rule of section 2.1 (`render/*`, `audio/*`, `ui/*`, `debug/*` forbidden in `core/`, `world/`, `entities/`, `play/`, `save/`), `no-restricted-globals` for `Math.random` (allowed only in `core/rng.ts` tests' fixtures: none) |
 | Single-file build | `dist/index.html` with all JS, CSS and fonts inline, plus `dist/style-board.html` and `dist/music-board.html`, each one file (07 §0.5 row 4); no `dist/assets/` directory left over; verified by the `check` script (`ls dist` must show only these files: `index.html` alone before S1, the three from S1 on) |
 | Tests (`tests/`) | `tests/` holds the Vitest files of 08 §2 (one per module plus `determinism`, `save`, `migrate`, `strings`, `content`, `colour-literals` and the jsdom files under `tests/ui/`); 07 names the slice that creates each |
@@ -873,7 +875,7 @@ Values this document defines that the register does not (the owner may object; o
 | A18 | The weather `WET` rise and fall per tile are applied every step across all tiles (cheap) rather than per visitor tile | 6.2 |
 | A19 | `makeIR` and the `grain()` buffer are filled once from a private `mulberry32(0xA0D10)` inside `engine.ts` (05 §1 item 6), so neither `rng` nor `vrng` moves (GV 6077 used `Math.random`) | 9.1 |
 | A20 | The perf overlay and sound check are revealed by `body.dev`, set from `#dev` in the hash or a dev build; the `__PD` harness is dev-build only | 10.2, 13 |
-| A21 | Build details: `vite-plugin-singlefile`, `es2020`, inline limit 1 MB, `jsdom` for UI tests, the screenshot script's wait strategy (`data-day` on `body`) | 14 |
+| A21 | Build details: `vite-plugin-singlefile`, `es2022`, inline limit 1 MB, `jsdom` for UI tests, the screenshot script's wait strategy (`data-day` on `body`) | 14 |
 | A22 | Phase budgets of section 7.9 and 15.1 are targets to measure against, not gates until the brief's success criteria apply (brief §9 rows 3–4) | 7.9, 15.1 |
 | A23 | Prop kinds beyond design §2.6: `umbrella` (the shared umbrella of `c_umbrella`, drawn over the pair) and the apron kinds `railing`, `gate`, `facade`, `quay`, which are regenerated and never saved | 3.6 |
 | A24 | An extra autosave of the park on `park.new` (after the confirm, before the old park is cleared) so Continue never finds a half-written key | 11 |

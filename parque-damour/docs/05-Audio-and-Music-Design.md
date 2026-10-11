@@ -31,12 +31,12 @@ Do not: add a noise generator for wind, rain or traffic; scale music tempo with 
 | `src/audio/engine.ts` | `makeIR(sec, decay)` | 6073–6080 | port (2.2 s, decay 2.8, one-pole 0.74/0.26, ×0.9); replace `Math.random()` at 6077 with the private stream of 1 item 6 |
 | `src/audio/engine.ts` | `panOf(x, y)` | 6081–6084 | port; `screenOf` comes from `src/render/project.ts`; constant 0.55 kept |
 | `src/audio/engine.ts` | `audibleGain(x, y)` | 6085–6089 | port; constant 0.85 kept; square falloff kept |
-| `src/audio/engine.ts` | `tone(freq, dur, o)` | 6090–6114 | port; add `type` values `triangle`, `sawtooth`, `square` (sawtooth and square only for `music.ts`), add `bus`, keep `hold` and make it work (review note 12 §11 item 4) |
-| `src/audio/engine.ts` | `gtone(g, freq, dur, o)` | 6115–6120 | port as `toneAt(x, y, freq, dur, o)`; never mutate the caller's options (review note 12 §11 item 7): copy `o` first |
+| `src/audio/engine.ts` | `tone(freq, dur, o)` | 6090–6113 | port; add `type` values `triangle`, `sawtooth`, `square` (sawtooth and square only for `music.ts`), add `bus`, keep `hold` and make it work (review note 12 §11 item 4) |
+| `src/audio/engine.ts` | `gtone(g, freq, dur, o)` | 6114–6119 | port as `toneAt(x, y, freq, dur, o)`; never mutate the caller's options (review note 12 §11 item 7): copy `o` first |
 | `src/audio/limiter.ts` | `AGAP`, `aOK(k, base, soft)` | 6130–6137 | port with the speed clamp changed from 1–20 to 1–8 and the audibility-first order of 2.4 |
 | `src/audio/cues.ts` | the 27 `sfx*` cues | 6139–6207 | **replace** with section 3; keep as recipes: creak 6162, giggle 6163, murmur 6165, built chord 6188–6191, yip 6192, leave 6197, dove 6203–6207 |
-| `src/audio/birds.ts` | `noteRun`, `VOICES`, `singFrom`, `aTreeNearView` | 6212–6269 | port verbatim; trees come from the `Prop` list (`kind == 'tree'`) instead of `trees` |
-| `src/audio/ambience.ts` | `sfxCricket`, `burble`, `plip`, `updateAudio` | 6270–6329 | reshape as section 4; drop `scanWater` 6282–6290, `firePop` 6279 and `FLOW/DAM/WD` |
+| `src/audio/birds.ts` | `noteRun`, `VOICES`, `singFrom`, `aTreeNearView` | 6212–6270 | port verbatim; trees come from the `Prop` list (`kind == 'tree'`) instead of `trees` |
+| `src/audio/ambience.ts` | `sfxCricket`, `burble`, `plip`, `updateAudio` | 6270–6329 | reshape as section 4; drop `scanWater` 6283–6291, `firePop` 6280 and `FLOW/DAM/WD` |
 | `src/audio/cues.ts` | `sfxTune` music box | 6195–6196 | not ported into the game; its recipe seeds motif B on the board (6.3) |
 | `src/ui/sheets.ts` | `SND_CUES`, `midG`, `openSoundCheck` | 10777–10790 | port as the Sound check sheet of 2.6; `midG` becomes `viewCentreTile()` in `src/render/camera.ts` |
 | `src/ui/rail.ts` | `#bMute` tap toggles mute | 12155–12167 | port the tap; **do not port the 600 ms long-press** (the sheet is reached from Options, 02 §12.4) |
@@ -62,8 +62,8 @@ export interface ToneOpts {
   bus?: 'cue' | 'amb' | 'music';
 }
 ```
-2. Envelope exactly GV 6099–6102: 0.0001 → gain over `att` (exponential), optional hold, → 0.0001 at `dur`. Oscillator stops at `t + dur + 0.05` (GV 6113).
-3. `toneAt(x, y, freq, dur, o)` returns `false` and plays nothing when `audibleGain(x, y) <= 0.02` (GV 6118), else multiplies `gain` by the audibility, sets `pan = panOf(x, y)`, and returns `true`.
+2. Envelope exactly GV 6099–6102: 0.0001 → gain over `att` (exponential), optional hold, → 0.0001 at `dur`. Oscillator stops at `t + dur + 0.05` (GV 6112).
+3. `toneAt(x, y, freq, dur, o)` returns `false` and plays nothing when `audibleGain(x, y) <= 0.02` (GV 6116), else multiplies `gain` by the audibility, sets `pan = panOf(x, y)`, and returns `true`.
 4. Guard: `tone()` returns at once when `!audioOn || muted || !AC` (GV 6092).
 5. `grain(dur, o: { f0: number; f1: number; gain: number; pan?: number; delay?: number; bus?: ToneOpts['bus'] })`: one `AudioBufferSourceNode` over a 0.12 s buffer of noise made once at `initAudio` from the private stream of 1 item 6, through a bandpass whose centre glides `f0 → f1` over `dur` (Q 1.2), the GV envelope with `att = 0.004`, always `dry`. `dur` is clamped to 0.12 s. This is the only noise path; it exists for gravel, splat, flutter and fireworks bursts.
 6. A `tone()` or `grain()` call allocates nodes and nothing is pooled (review note 12 §3). Budget: at most 40 `tone()` calls per real second from cues and ambience together; the limiter guarantees it when the gaps in section 3 are respected.
@@ -134,8 +134,8 @@ Do not: port `sfxThud`, `sfxRumble`, `sfxFall`, `sfxCrash`, `sfxBurner`; port th
 | 25 | `clink` | ambience 4.6; `eat` start at a café table (`act.ts`) | tri 2637 ·0.12 a=0.003 dry; tri 3520 ·0.08 d=0.02 ×0.5 | 0.010 | 700 | no | kind | the table |
 | 26 | `bell_bike` | ambience 4.7 | tri 2093 ·0.25 a=0.004 w=9/0.008; same d=0.18 ×0.8 | 0.012 | 6000 | no | kind | beyond the south railings, pan −0.7→0.7 sweep |
 | 27 | `gate_hinge` | `arrive`, `leave` through a gate (`visitor.ts`) | tri 392→330 ·0.35 a=0.15 w=6/0.03; 294 ·0.2 d=0.3 ×0.6 | 0.010 | 1200 | no | kind | the gate tile |
-| 28 | `fountain` | ambience point source 4.5 | one burble: f = 300–700 ·0.10–0.18 →f×(0.72–0.92) toAt=0.9 a=0.03 (GV 6274–6277) | 0.0045 | none (rate 4.5) | no | kind | each fountain |
-| 29 | `plip` | ambience rain 4.8 | f = 420–840 ·0.07 a=0.012 →f×0.8 (GV 6278) | 0.0032 | none (rate 4.8) | no | kind | random pan ±0.8 |
+| 28 | `fountain` | ambience point source 4.5 | one burble: f = 300–700 ·0.10–0.18 →f×(0.72–0.92) toAt=0.9 a=0.03 (GV 6275–6278) | 0.0045 | none (rate 4.5) | no | kind | each fountain |
+| 29 | `plip` | ambience rain 4.8 | f = 420–840 ·0.07 a=0.012 →f×0.8 (GV 6279) | 0.0032 | none (rate 4.8) | no | kind | random pan ±0.8 |
 | 30 | `hush` | ambience state 4.10, snow > 0.5 | no tone: master lowpass 2100→1500 Hz, `verbGain` 0.36→0.46, 2 s time constant | n/a | n/a | n/a | n/a | n/a |
 | 31 | `lamp_hum` | `lampsLit` when `f` crosses 0.80; `c_lamplight` t0; per lamp in view, stagger 0.3–1.5 s, max 6 (`ambience.ts` watching `clock.ts`) | 200 ·1.0 a=0.4 w=0.8/0.01; 400 ·1.0 ×0.25 | 0.010 | 3000 | no | kind | each lamp |
 | 32 | `petals` | `c_petals` t0; `a_florist` scatter (`abilities.ts`, `avatar.ts`) | tri 1568, 1760, 2093, 2349, 2637 each ·0.35 a=0.01 d=i×0.07, gain 1.0→0.5 | 0.012 | 1500 | yes | kind | area centre |
@@ -164,7 +164,7 @@ Do not: add a cue without adding a row here and in `06-Content-Tables.md`; emit 
 
 ### 4.1 Entry point and centre
 1. `updateAmbience(dt: number)` is called once per frame by `src/core/loop.ts` with **real** seconds capped at 0.05 (GV 12073, 12088). Parque calls it whether the sim is paused or not (section 9 item 4); GV's silence on pause (review note 12 §11 item 8) is not ported. It returns at once when `!audioOn || muted`.
-2. `centre()` replaces GV `villagePos()` (2493; used at 6303, 6321, 6324): if a featured pair exists and `audibleGain(midpoint) >= 0.2`, the pair's midpoint; else `viewCentreTile()` (2.6 item 3). Crickets and the owl are placed around `centre()`.
+2. `centre()` replaces GV `villagePos()` (2493; used at 6301, 6319, 6324): if a featured pair exists and `audibleGain(midpoint) >= 0.2`, the pair's midpoint; else `viewCentreTile()` (2.6 item 3). Crickets and the owl are placed around `centre()`.
 3. Every timer below is a countdown in real seconds held in module state, reset on `initAudio()` and on New.
 
 ### 4.2 Songbirds (`src/audio/birds.ts`, GV 6292–6308)
@@ -173,8 +173,8 @@ Do not: add a cue without adding a row here and in `06-Content-Tables.md`; emit 
 | Windows (day fraction `f`, 02 §3.2) | chorus `[0.20, 0.32)`; vespers `[0.76, 0.87)`; `day = T.light > 0.22`; night otherwise |
 | Interval to the next song | night `vrnd(20, 40)`; chorus `vrnd(0.9, 2.2)`; vespers `vrnd(1.6, 3.4)`; day `vrnd(2.2, 5.0)` (GV 6299) |
 | Probability a song happens | `(1 − 0.7·rain)(1 − 0.6·snow)(1 − 0.4·mist)(winter ? 0.55 : 1)` (GV 6296 plus the mist factor) |
-| Where | `aTreeNearView()` (GV 6258–6269) over the tree props; none → `centre()` |
-| Voice | one of `VOICES` 6220–6250 picked on the visual RNG; `singFrom` 6251–6257 volumes 0.024 near, 0.011 far |
+| Where | `aTreeNearView()` (GV 6259–6270) over the tree props; none → `centre()` |
+| Voice | one of `VOICES` 6220–6250 picked on the visual RNG; `singFrom` 6252–6258 volumes 0.024 near, 0.011 far |
 | Reply | chance 0.6 in chorus, 0.35 otherwise; a second tree sings after `len + vrnd(0.4, 1.3)` s, 50 % far (GV 6305–6307); schedule it on the ambience timer, not `setTimeout` (review note 12 §11 item 9) |
 | Perch | `birds.ts` emits `sing { treeId, len }`; `src/render/effects.ts` may draw a decorative songbird perched (an `fx` event, 09 §6 item 5) for `len + vrnd(2.5, 5.5)` s on the visual RNG (GV `landBird` 2293) |
 | Romance colour (review §15 J59) | while the featured pair is at stage ≥ 5, the interval is ×0.8 and `blackbird` (voice 4) is picked twice as often |
@@ -201,7 +201,7 @@ When `viewCentreTile().y >= 36` and `T.light > 0.22`: every `vrnd(7, 15)` s a pa
 While `c_fireworks` is active (an `Effect` with `ability === 'c_fireworks'` is present in `abilities.effects()`, 03 §2.6), launch `fireworks` every `vrnd(1.2, 2.0)` **real** seconds at the fountain (or park centre (23.5, 23.5)) with pan `vrnd(−0.5, 0.5)`. Happily plays 3 launches at d=0, 0.9, 1.7 at the pair.
 
 ### 4.10 Crickets and the snow hush
-1. Crickets: every `vrnd(2.5, 6)` s when `T.light < 0.2`, season is summer (1) or autumn (2), rain < 0.3 and snow < 0.3: GV `sfxCricket` 6270–6273 at `centre() ± 8` tiles.
+1. Crickets: every `vrnd(2.5, 6)` s when `T.light < 0.2`, season is summer (1) or autumn (2), rain < 0.3 and snow < 0.3: GV `sfxCricket` 6271–6274 at `centre() ± 8` tiles.
 2. Hush (3.2 row 30): when `W.snow > 0.5` ease the master lowpass to 1500 Hz and `verbGain` to 0.46; when snow ≤ 0.5 ease back to 2100 Hz and 0.36. Birds are already thinned by the probability; fountains on ice are silent (4.5).
 
 ### 4.11 Mist and the foghorn

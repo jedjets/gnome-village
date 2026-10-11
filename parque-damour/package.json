@@ -8,11 +8,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "oxlint src tests scripts vite.config.ts",
+    "lint": "oxlint src tests tools vite.config.ts",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
-    "shot": "node scripts/screenshot.mjs",
+    "shot": "node tools/shot.mjs",
     "check": "npm run typecheck && npm run lint && npm test && npm run build"
   },
   "devDependencies": {

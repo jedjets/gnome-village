@@ -4,7 +4,7 @@
 // TODO(S2): weather dot colour; TODO(S4): the visitor count and "+"; TODO(S5): the Romance chip; TODO(S6): the Points chip; TODO(S7): body.avatar from the `mode` event.
 import { T, SEASON_KEYS } from '../core/clock.ts';
 import { $, ageToast, layoutOverlays } from './dom.ts';
-import { t, plural, onLang } from './i18n.ts';
+import { t, onLang } from './i18n.ts';
 import { toggleSheet } from './sheets.ts';
 
 let hudT = 0;
@@ -12,8 +12,8 @@ let hudT = 0;
 function paint(): void {
   $('tPhase').textContent = t('hud.phase.' + T.phase);
   $('tDay').textContent = t('hud.day', { n: T.day, season: '@hud.season.' + SEASON_KEYS[T.season] });
-  $('tPop').textContent = plural('hud.visitors', 0);
-  $('tRom').textContent = t('hud.rom.none');
+  $('tPop').textContent = t('hud.visitors', { n: 0 });
+  $('tRom').textContent = t('hud.romance.none');
   $('tCP').textContent = '0';
   $('tMP').textContent = '0';
   document.body.dataset.day = String(T.day);
@@ -24,8 +24,7 @@ export function initHud(): void {
   $('hudVisitors').addEventListener('click', () => toggleSheet('census'));
   $('hudRomance').addEventListener('click', () => toggleSheet('romances'));
   $('hudPoints').addEventListener('click', () => toggleSheet('progress'));
-  $('bAdd').addEventListener('click', (e) => e.stopPropagation()); // TODO(S4): visitor.call
-  ($('bAdd') as HTMLButtonElement).disabled = true;
+  ($('bAdd') as HTMLButtonElement).disabled = true; // TODO(S4): visitor.call; a sibling of #hudVisitors, so no bubbling to the census
   onLang(paint);
   paint();
   layoutOverlays();

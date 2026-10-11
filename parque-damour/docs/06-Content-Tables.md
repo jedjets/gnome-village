@@ -383,7 +383,7 @@ The lovers' example pair used in every string and test example: **Amélie & Thé
 |---|---|---|---|---|
 | `hunger` | +0.5/day | eat rung at `> 0.6`; Picnic needs both `< 0.6` | kiosk eat 12 s to 0.1; picnic to 0.1; bench snack -0.4 when no kiosk exists; `c_picnic` and matchmaker bread to 0.1 | **Full** = `1 - hunger`; `--ember` below 0.3 |
 | `energy` | -0.6/day awake; +0.4/day sitting on a bench | rest rung at `< 0.25` with a free bench within 15; sit until `>= 0.45` or 90 s | bench | **Rested**; `--ember` below 0.25 |
-| `comfort` | eases toward `target` at 0.2/s (GV 5578); -0.3 at once on an embarrassment | shelter rung at rain `> 0.6` and comfort `< 0.3`; leave rung at `< 0.1`; stage start needs `>= 0.35` on both | the target formula below | **Mood**; `--ember` below 0.3 |
+| `comfort` | eases toward `target` at 0.2/s (GV 5579); -0.3 at once on an embarrassment | shelter rung at rain `> 0.6` and comfort `< 0.3`; leave rung at `< 0.1`; stage start needs `>= 0.35` on both | the target formula below | **Mood**; `--ember` below 0.3 |
 | `social` | +0.3/day while a single is not in a `Pair` | stroll weight 70 instead of 35 at `> 0.6` | Chat sets 0; stays 0 while paired; 0.5 when a partner leaves alone | not shown |
 
 Comfort target: `0.7 + 0.15 (lit lamp within 3 at night) - 0.35 * rain - 0.30 * snow - 0.10 * mist - 0.15 (night and no lit lamp within 3) + 0.10 (inside a c_sunbeam) + season term (section 15) + weather term (section 14)`, clamped to [0, 1], using `weatherAt(v)`; `SHELTERED` states ignore rain (design §4.4, §5.3).
@@ -566,7 +566,7 @@ Arrivals use the global weather only; the HUD dot shows the global kind. Easing 
 
 | id | Days | Lawn tint (04 §10.3) | Tree state (04 §6.3) | Beds | Arrivals x | Comfort term | Other |
 |---|---|---|---|---|---|---|---|
-| `spring` | 1-3 | `mix(lawn, foliageSpring, 0.20)` | bud day 1 (f 0-0.9), blossom to day 2.9, leafing day 3; chestnut candles in blossom | full | 1.0 | 0 | petal particles under blossoming trees (visual only, no charm) |
+| `spring` | 1-3 | `mix(lawn, foliageSpring, 0.20)` | bud f 0 to 0.9 of day 1, blossom from 0.9 to 2.0 days elapsed (days 1 to 2), leafing day 3; chestnut candles in blossom | full | 1.0 | 0 | petal particles under blossoming trees (visual only, no charm) |
 | `summer` | 4-6 | `lawn x [0.94, 1.0, 0.90]` | full `foliageSummer` | full | 1.1 | -0.05 at `midday` | couple picnic weight x 1.5; midday haze `FOGA + 0.03` |
 | `autumn` | 7-9 | `mix(lawn, #C9CB8E, 0.28)` | crowns to `foliageAutumn` by species from day 7 (0 %) to day 8 (100 %), thinning to day 9; leaf particles 0.3/s per tree, x 3 in breeze, 30 % teal `#86BBB3` | 50 % dots | 1.0 | 0 | `c_umbrella` scenes most likely (rain 12 %) |
 | `winter` | 10-12 | `mix(lawn, #C6CCC4, 0.35)` then snow cover to `#EEF2F6` | bare; twigs; plane seed balls | earth only | 0.7 | -0.15 | snow possible; pond `ICE`; rowboat refused on ice; kiosk steam; hedges dusted |
@@ -577,7 +577,7 @@ Season changes log `feed.season.<id>` from day 2 on (GV 818 pattern). Special da
 
 ## 16. Strings (`src/ui/strings/en.ts`, `es.ts`; identical key sets; `t(key, params)`; `{name}` placeholders; a param starting with `@` is itself a key; `plural` picks `.one` / `.other`; `gender` picks `.f` / `.m`)
 
-Conventions (03 §12): keys are lowercase, dot-separated, `area.item[.detail]`. Names of people, French flavour words and the game title are the same in both languages. Nothing in `src/` outside `strings/` may contain a sentence a player can see. Every key below exists in both tables; the ES column is TODO for the translation task (brief §11 item 10 leaves the ES wording of Be someone, Creator, Cupid, Mischief, Happily and Parted to that task).
+Conventions (03 §12): keys are lowercase, dot-separated, `area.item[.detail]`. Names of people, French flavour words and the game title are the same in both languages. Nothing in `src/` outside `strings/` may contain a sentence a player can see. Every key below exists in both tables; the ES column is TODO for the translation task (brief §11 item 9 leaves the ES wording of Be someone, Creator, Cupid, Mischief, Happily and Parted to that task). Any `{stage}` or `{phase}` param is passed as a key (`stage: "@stage.bench"`, `phase: "@hud.phase.golden"`) so a stored line re-renders after a language switch (03 §12 item 6); this applies to `hud.romance.pair`, `card.rel.courting`, `card.pair.stage`, `stage.of` and `sheet.events.when`.
 
 ### 16.1 Intro
 | Key | EN | ES |
@@ -636,11 +636,14 @@ Conventions (03 §12): keys are lowercase, dot-separated, `area.item[.detail]`. 
 | `hud.season.summer` | Summer | TODO |
 | `hud.season.autumn` | Autumn | TODO |
 | `hud.season.winter` | Winter | TODO |
-| `hud.visitors` | {n} | {n} |
+| `hud.visitors` | {n} visitors | {n} visitantes |
 | `hud.romance.pair` | {a} & {b} · {stage} | {a} & {b} · {stage} |
 | `hud.romance.none` | No one courting yet | TODO |
-| `hud.points` | Cupid {cp} · Mischief {mp} | TODO |
+| `hud.cupid` | Cupid | TODO |
+| `hud.mischief` | Mischief | TODO |
 | `hud.title` | Parque D'Amour | Parque D'Amour |
+
+The Points chip is `t('hud.cupid')` `#tCP` · `t('hud.mischief')` `#tMP`; the numbers are written to the two `<b>` elements of 03 §10.1, never through a string.
 
 ### 16.4 Sides, stages, archetypes, ages, weather, endings
 | Key | EN | ES |
@@ -949,8 +952,10 @@ Conventions (03 §12): keys are lowercase, dot-separated, `area.item[.detail]`. 
 | `sheet.options.perf` | Performance overlay | TODO |
 | `sheet.options.on` | On | TODO |
 | `sheet.options.off` | Off | TODO |
+| `sheet.sound.title` | Sound check | TODO |
+| `sheet.sound.muted` | Sound is muted | TODO |
 
-### 16.11 Feed lines (stored as `{ key, params }` and rendered at display time; `stage` params are `@stage.<id>`)
+### 16.11 Feed lines (stored as `{ key, params }` and rendered at display time)
 | Key | EN | ES |
 |---|---|---|
 | `feed.pair.formed` | {a} and {b} noticed each other | TODO |
@@ -1091,6 +1096,7 @@ Conventions (03 §12): keys are lowercase, dot-separated, `area.item[.detail]`. 
 | `reason.peel_here` | there is a peel here already | TODO |
 | `reason.not_in_avatar` | not while being someone | TODO |
 | `reason.busy` | busy | TODO |
+| `reason.wrong_side` | not for this side | TODO |
 | `reason.startled` | startled by a dog | TODO |
 | `reason.big_dog` | the big dog is watching | TODO |
 | `reason.basket_empty` | the basket is empty: pick some flowers | TODO |
@@ -1126,6 +1132,14 @@ Conventions (03 §12): keys are lowercase, dot-separated, `area.item[.detail]`. 
 | `aria.lang` | Language | TODO |
 | `aria.photo_close` | Leave photo mode | TODO |
 | `aria.feed` | Latest event | TODO |
+| `aria.sheet_census` | Census | TODO |
+| `aria.sheet_romances` | Romances | TODO |
+| `aria.sheet_progress` | Progress | TODO |
+| `aria.sheet_events` | Events | TODO |
+| `aria.sheet_picker` | Be someone | TODO |
+| `aria.sheet_options` | Options | TODO |
+| `aria.sheet_sound` | Sound check | TODO |
+| `aria.confirm` | Confirm | TODO |
 
 ### 16.15 Fixed names and words
 | Key | EN | ES |
@@ -1161,11 +1175,11 @@ Conventions (03 §12): keys are lowercase, dot-separated, `area.item[.detail]`. 
 | `gate.stop_all` | Stop all | TODO |
 | `gate.cue_bed` | Cue bed | TODO |
 
-Rules for this table: `Object.keys(en)` equals `Object.keys(es)` (test); no key may be added in code without a row here; a `.one` key always has a `.other`; a `.f` key always has a `.m`; numbers are formatted by `t()` with the locale's decimal rules; never build a sentence by concatenation. Count: 16.1 to 16.16 define 9 + 24 + 18 + 37 + 32 + 38 + 55 + 19 + 67 + 30 + 72 + 14 + 49 + 26 + 9 + 17 = 516 keys; the test asserts the count against the data file, not against this number.
+Rules for this table: `Object.keys(en)` equals `Object.keys(es)` (test); no key may be added in code without a row here; a `.one` key always has a `.other`; a `.f` key always has a `.m`; numbers are formatted by `t()` with the locale's decimal rules; never build a sentence by concatenation. Count: 16.1 to 16.16 define 9 + 24 + 19 + 37 + 32 + 38 + 55 + 19 + 67 + 32 + 72 + 14 + 50 + 34 + 9 + 17 = 528 keys; the test asserts the count against the data file, not against this number.
 
 ---
 
-## 17. Cues (`src/audio/cues.ts`; the 38 ids of `05-Audio-and-Music-Design.md` §3.2 in its order, copied here as 05 §9 item 1 requires; 05 owns the recipes, gains, gaps and soft flags, and a cue not in 05 §3.2 does not exist: change 05 first, then this table; ids are code identifiers with no `cue.` prefix (05 §9 item 12); every cue goes through `cueAt` with audibility before the gate as 03 §9.1)
+## 17. Cues (`src/audio/cues.ts`; the 38 ids of `05-Audio-and-Music-Design.md` §3.2 in its order, copied here as 05 §9 item 1 requires; 05 owns the recipes, gains, gaps and soft flags, and a cue not in 05 §3.2 does not exist: change 05 first, then this table; ids are code identifiers with no `cue.` prefix (05 §9 item 12); every cue goes through `cues.cue()`, which tests audibility before `limiter.gate()` as 03 §9.1 item 4)
 
 | # | id | Trigger: event (emitting module) | Positioned | Soft | Scope | Base gap (ms) |
 |---|---|---|---|---|---|---|
@@ -1175,21 +1189,21 @@ Rules for this table: `Object.keys(en)` equals `Object.keys(es)` (test); no key 
 | 4 | `murmur` | `chat` every 3 s at stage 2, speaker alternates (`romance.ts`) | yes, the speaker | yes | actor | 700 |
 | 5 | `laugh` | `laugh`: backfire scene, Picnic hearts 30 %, family play, `a_pomeranian` play (`embarrass.ts`, `romance.ts`, `brain.ts`) | yes, the laugher | yes | actor | 450 |
 | 6 | `sigh` | `stage` Notice complete; `linger` every 20 s (`romance.ts`) | yes, the sigher | yes | actor | 600 |
-| 7 | `gasp` | `embarrass` landed, on the victim; `watch` start at fireworks (`embarrass.ts`, `abilities.ts`) | yes, the victim | yes | actor | 500 |
+| 7 | `gasp` | `embarrassed` landed, on the victim; `watch` start at fireworks (`embarrass.ts`, `abilities.ts`) | yes, the victim | yes | actor | 500 |
 | 8 | `kiss` | `stage` Kiss complete (`romance.ts`) | yes, pair midpoint | yes | kind | 2000 |
 | 9 | `ring` | `proposal` sparkle at t+8 s (`romance.ts`) | yes, the kneeler | yes | kind | 3000 |
-| 10 | `happily` | `ending` Happily (`romance.ts`) | yes, pair midpoint | yes | kind | 4000 |
-| 11 | `parted` | `ending` Parted (`romance.ts`) | yes, pair midpoint | yes | kind | 4000 |
+| 10 | `happily` | `happily` (`romance.ts`) | yes, pair midpoint | yes | kind | 4000 |
+| 11 | `parted` | `parted` (`romance.ts`) | yes, pair midpoint | yes | kind | 4000 |
 | 12 | `bouquet` | `bouquet` handed: `c_bouquet` cameo, `a_florist` hand (`abilities.ts`, `avatar.ts`) | yes, the receiver | yes | kind | 900 |
 | 13 | `coo` | ambience 05 §4.4; `peck` start (`creatures.ts`) | yes, the pigeon | no | kind | 900 |
 | 14 | `flutter` | `scatter`, `fly`, `swoop` start (`creatures.ts`) | yes, the pigeon | no | kind | 180 |
-| 15 | `splat` | `embarrass` poop landed (`embarrass.ts`) | yes, the victim | no | kind | 300 |
+| 15 | `splat` | `embarrassed` poop landed (`embarrass.ts`) | yes, the victim | no | kind | 300 |
 | 16 | `yap` | `bark` dog sees the pomeranian; pomeranian `snatch` start at x 1.25 pitch (`creatures.ts`) | yes, the dog | no | actor | 900 |
-| 17 | `snatch` | `embarrass` snatched landed (`embarrass.ts`) | yes, the victim | no | kind | 600 |
+| 17 | `snatch` | `embarrassed` snatched landed (`embarrass.ts`) | yes, the victim | no | kind | 600 |
 | 18 | `wasp` | `m_wasp` t0 to t2, one event per 0.5 s (`abilities.ts`) | yes, the table | no | kind | 400 |
 | 19 | `sprinkler` | `m_sprinkler` t0 and every 1 s while up (`abilities.ts`) | yes, the sprinkler | no | kind | 900 |
-| 20 | `slip` | `embarrass` trip landed (`embarrass.ts`) | yes, the victim | no | kind | 450 |
-| 21 | `mime` | `embarrass` mime landed; `wall` start (`embarrass.ts`, `avatar.ts`) | yes, the mime | yes | kind | 1200 |
+| 20 | `slip` | `embarrassed` trip landed (`embarrass.ts`) | yes, the victim | no | kind | 450 |
+| 21 | `mime` | `embarrassed` mime landed; `wall` start (`embarrass.ts`, `avatar.ts`) | yes, the mime | yes | kind | 1200 |
 | 22 | `rival_hmm` | `m_rival` arrival; every 10 s of `distracted` (`abilities.ts`) | yes, the stranger | yes | kind | 1500 |
 | 23 | `foghorn` | ambience 05 §4.11 | yes, fixed `panOf(24, -4)`, `a` floor 0.6 | no | kind | 20000 unscaled |
 | 24 | `fireworks` | `c_fireworks` launches paced by 05 §4.9; Happily burst x 3 (`ambience.ts`) | yes, fountain or park centre, pan +-0.5 random | no | kind | 350 |
@@ -1220,14 +1234,13 @@ Values this document defines that neither the register nor `02-Game-Design.md` d
 3. `ARRIVAL_MOD[phase][archetype]` exists as a tuning hook with every entry 1.0 (5.1); the brief for this document asked for weights by season and phase, the design fixes one weight set, so the hook is neutral.
 4. The 40 generated first names per sex (6.1), the eight regulars' `ageWord` and personality lines (6.2), the lovers' example pair Amélie & Théo (6.2), and the fixed actor names Gustave, Marguerite, Violette, Pierrot, Pompon (6.3). The register and the design give only the regulars' names and `seeks`.
 5. `basket` is the `picnic` prop with `placedBy = 'sim'` and a life, not a separate kind (section 4); `rowboat` life is about 65 s (boarding plus the 60 s ride).
-6. The reason key `reason.raining` for `c_picnic` in rain (11.2); 03 §5.4 has no key for it. `reason.startled`, `reason.big_dog`, `reason.basket_empty`, `reason.nobody_for_them`, `reason.had_to_go` for the avatar refusals of design §10.4-10.9, which 03 does not list.
-7. The `feed.cast.<id>` feed line per ability, `feed.left_alone`, `feed.alumni_return`, `feed.ice`, `feed.thaw`, `item.*`, `spot.*`, `word.*`, and every English wording in section 16; the design fixes the wording of the New confirm, "The park is full", "has had enough for one day", "goes on by themselves" (rendered here as `avatar.goes_on` "{name} goes on alone"; open point 1), and the ranked reasons, which are copied.
+6. The English wording of the per-ability and avatar refusal keys of 03 §5.4 (`reason.raining`, `reason.startled`, `reason.big_dog`, `reason.basket_empty`, `reason.nobody_for_them`, `reason.had_to_go` and the rest of 16.13); 03 owns the key names.
+7. The `feed.cast.<id>` feed line per ability, `feed.left_alone`, `feed.alumni_return`, `feed.ice`, `feed.thaw`, `item.*`, `spot.*`, `word.*`, and every English wording in section 16; the design fixes the wording of the New confirm, "The park is full", "has had enough for one day", and the ranked reasons, which are copied.
 8. `ending.happily` and `ending.parted` keys for the two endings as words (register §5).
 9. Section 17 copies the 38 cue ids, soft flags, scopes and gaps of `05-Audio-and-Music-Design.md` §3.2 (05 §9 item 1); 05 owns them, and a change starts there.
-10. The key count 516 (16.16) is a hand count for the reader; the test compares the two data files, not this number.
+10. The key count 528 (16.16) is a hand count for the reader; the test compares the two data files, not this number.
 
 Open points for the owner:
-1. Design §10.1 toasts "X goes on by themselves" when leaving avatar mode; `avatar.goes_on` here reads "{name} goes on alone" to avoid a gendered pronoun in both languages. Confirm the wording or switch to a `gender` key pair.
-2. Whether `c_rowboat` should be refused during `m_fog` (design §15 open point 5): this document allows it (no `reason` row).
-3. Whether the park should have special days (a festival on summer day 2, a market on autumn day 2 as GV's midsummer and harvest, review §6.7): section 15 has none because the design defines none.
-4. Whether the Options sheet shows the seed (`sheet.options.seed`): brief §11 item 11 assumed yes; the register lists language, sound and speed only.
+1. Whether `c_rowboat` should be refused during `m_fog` (design §15 open point 5): this document allows it (no `reason` row).
+2. Whether the park should have special days (a festival on summer day 2, a market on autumn day 2 as GV's midsummer and harvest, review §6.7): section 15 has none because the design defines none.
+3. Whether the Options sheet shows the seed (`sheet.options.seed`): brief §11 item 10 assumed yes; the register lists language, sound and speed only.

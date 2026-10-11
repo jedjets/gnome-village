@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#F1EDF5">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#DCE6EC">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Parque D'Amour</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='92' height='76' viewBox='0 0 92 76'><rect x='18' y='46' width='56' height='6' rx='3' fill='%238C7B6B'/><rect x='20' y='36' width='52' height='5' rx='2.5' fill='%238C7B6B'/><path d='M24 52 V66 M68 52 V66 M26 41 V46 M66 41 V46' stroke='%236E6680' stroke-width='3' stroke-linecap='round' fill='none'/><path d='M36 34 C31 29 26 26 28 21 C30 17 35 18 36 21 C37 18 42 17 44 21 C46 26 41 29 36 34 Z' fill='%23EDA9C4'/><path d='M56 32 C51 27 46 24 48 19 C50 15 55 16 56 19 C57 16 62 15 64 19 C66 24 61 27 56 32 Z' fill='%23F2B67E'/></svg>">
-<!-- pre-paint: the paper colour before the stylesheets arrive (GV 8) -->
-<style>html,body{margin:0;padding:0;background:#F1EDF5;color-scheme:light}[hidden]{display:none!important}</style>
+<!-- pre-paint: GV's body colour before the stylesheets arrive (GV 6, 8, 26; brief 3.2, 04 5.7 item 4: #DCE6EC until the Style Gate) -->
+<style>html,body{margin:0;padding:0;background:#DCE6EC;color-scheme:light}[hidden]{display:none!important}</style>
 <link rel="stylesheet" href="./src/styles/tokens.css">
 <link rel="stylesheet" href="./src/styles/shell.css">
 </head>
@@ -19,7 +19,8 @@
 <header class="hud">
   <button class="chip" id="hudClock" type="button" data-t-aria="aria.clock"><span class="dotm" id="wdot"></span><span id="tPhase">Morning</span><span class="sep"></span><span id="tDay">Day 1 · Spring</span></button>
   <div id="hudR">
-    <div class="chip" id="hudVisitors" role="button" tabindex="0" data-t-aria="aria.visitors"><b id="tPop">0 visitors</b><button id="bAdd" type="button" data-t-aria="aria.add">+</button></div>
+    <!-- 03 10.1: the wrap holds the visitors button and its sibling "+" (GV 238 nested #bAdd in a div) -->
+    <div class="chip" id="hudVisitorsWrap"><button id="hudVisitors" type="button" data-t-aria="aria.visitors"><b id="tPop">0</b></button><button id="bAdd" type="button" data-t-aria="aria.add_visitor">+</button></div>
     <button class="chip" id="hudRomance" type="button" data-t-aria="aria.romance"><span id="tRom">No one courting yet</span></button>
     <button class="chip" id="hudPoints" type="button" data-t-aria="aria.points"><span data-t="hud.cupid">Cupid</span><b id="tCP">0</b><span class="sep"></span><span data-t="hud.mischief">Mischief</span><b id="tMP">0</b></button>
   </div>
@@ -31,7 +32,7 @@
   <div class="rel" id="cRel" hidden></div>
   <div class="bars" id="cBars">
     <div class="bar" data-need="mood"><span data-t="card.bar.mood">Mood</span><i><u></u></i></div>
-    <div class="bar" data-need="rest"><span data-t="card.bar.rest">Rested</span><i><u></u></i></div>
+    <div class="bar" data-need="rest"><span data-t="card.bar.rested">Rested</span><i><u></u></i></div>
     <div class="bar" data-need="full"><span data-t="card.bar.full">Full</span><i><u></u></i></div>
     <div class="bar" data-need="heart" hidden><span data-t="card.bar.heart">Heart</span><i><u></u></i></div>
   </div>
@@ -42,27 +43,27 @@
 <div id="hint" aria-live="polite"></div>
 <div id="feed" aria-live="polite"></div>
 
-<div class="sheet" id="census" role="dialog" data-t-aria="aria.census"><button class="x" type="button" data-t-aria="aria.close">&times;</button><h4 data-t="sheet.census.title">Census</h4><div class="sum" id="censusSum" data-t="sheet.soon"></div><div class="list" id="censusList"></div></div>
-<div class="sheet" id="romances" role="dialog" data-t-aria="aria.romances"><button class="x" type="button" data-t-aria="aria.close">&times;</button><h4 data-t="sheet.romances.title">Romances</h4><div class="sum" id="romancesSum" data-t="sheet.soon"></div><div class="list" id="romancesList"></div></div>
-<div class="sheet" id="progress" role="dialog" data-t-aria="aria.progress"><button class="x" type="button" data-t-aria="aria.close">&times;</button><h4 data-t="sheet.progress.title">Progress</h4><div class="sum" id="progressSum" data-t="sheet.soon"></div><div class="list" id="progressList"></div></div>
-<div class="sheet" id="evlog" role="dialog" data-t-aria="aria.evlog"><button class="x" type="button" data-t-aria="aria.close">&times;</button><h4 data-t="sheet.evlog.title">Events</h4><div class="sum" id="evlogSum" data-t="sheet.soon"></div><div class="list" id="evList"></div></div>
-<div class="sheet" id="picker" role="dialog" data-t-aria="aria.picker"><button class="x" type="button" data-t-aria="aria.close">&times;</button><h4 data-t="sheet.picker.title">Be someone</h4><div class="sum" id="pickerSum" data-t="sheet.soon"></div><div class="list" id="pickerList"></div></div>
-<div class="sheet" id="options" role="dialog" data-t-aria="aria.options"><button class="x" type="button" data-t-aria="aria.close">&times;</button><h4 data-t="sheet.options.title">Options</h4><div class="sum" id="optionsSum" data-t="sheet.soon"></div><div class="list" id="optionsList"></div></div>
-<div class="sheet" id="snd" role="dialog" data-t-aria="aria.snd"><button class="x" type="button" data-t-aria="aria.close">&times;</button><h4 data-t="sheet.snd.title">Sound check</h4><div class="row" id="sndRow"></div></div>
+<div class="sheet" id="census" role="dialog" data-t-aria="aria.sheet_census"><button class="x" type="button" data-t-aria="aria.close">&times;</button><h4 data-t="sheet.census.title">Census</h4><div class="sum" id="censusSum"></div><div class="list" id="censusList"></div></div>
+<div class="sheet" id="romances" role="dialog" data-t-aria="aria.sheet_romances"><button class="x" type="button" data-t-aria="aria.close">&times;</button><h4 data-t="sheet.romances.title">Romances</h4><div class="sum" id="romancesSum"></div><div class="list" id="romancesList"></div></div>
+<div class="sheet" id="progress" role="dialog" data-t-aria="aria.sheet_progress"><button class="x" type="button" data-t-aria="aria.close">&times;</button><h4 data-t="sheet.progress.title">Progress</h4><div class="sum" id="progressSum"></div><div class="list" id="progressList"></div></div>
+<div class="sheet" id="evlog" role="dialog" data-t-aria="aria.sheet_events"><button class="x" type="button" data-t-aria="aria.close">&times;</button><h4 data-t="sheet.events.title">Events</h4><div class="sum" id="evlogSum"></div><div class="list" id="evList"></div></div>
+<div class="sheet" id="picker" role="dialog" data-t-aria="aria.sheet_picker"><button class="x" type="button" data-t-aria="aria.close">&times;</button><h4 data-t="sheet.picker.title">Be someone</h4><div class="sum" id="pickerSum"></div><div class="list" id="pickerList"></div></div>
+<div class="sheet" id="options" role="dialog" data-t-aria="aria.sheet_options"><button class="x" type="button" data-t-aria="aria.close">&times;</button><h4 data-t="sheet.options.title">Options</h4><div class="sum" id="optionsSum"></div><div class="list" id="optionsList"></div></div>
+<div class="sheet" id="snd" role="dialog" data-t-aria="aria.sheet_sound"><button class="x" type="button" data-t-aria="aria.close">&times;</button><h4 data-t="sheet.sound.title">Sound check</h4><div class="row" id="sndRow"></div></div>
 <div id="perf" hidden aria-live="off"></div>
 <button id="photoX" type="button" data-t-aria="aria.photo_close">&times;</button>
 
 <div id="rail">
   <div id="row1">
-    <div class="grp" id="groups" role="group" data-t-aria="aria.groups">
-      <button class="gb" type="button" data-group="park" aria-pressed="true" data-t="rail.park">Park</button>
-      <button class="gb" type="button" data-group="cupid" aria-pressed="false" data-t="rail.cupid">Cupid</button>
-      <button class="gb" type="button" data-group="mischief" aria-pressed="false" data-t="rail.mischief">Mischief</button>
+    <div class="grp" id="groups" role="group">
+      <button class="gb" type="button" data-group="park" aria-pressed="true" data-t="rail.park" data-t-aria="aria.group_park">Park</button>
+      <button class="gb" type="button" data-group="cupid" aria-pressed="false" data-t="rail.cupid" data-t-aria="aria.group_cupid">Cupid</button>
+      <button class="gb" type="button" data-group="mischief" aria-pressed="false" data-t="rail.mischief" data-t-aria="aria.group_mischief">Mischief</button>
     </div>
     <div id="tools"></div>
   </div>
   <div id="row2">
-    <div id="sizewrap"><span id="sizelbl" data-t="rail.brush">Brush</span><input id="size" type="range" min="1" max="3" value="1" step="1" data-t-aria="aria.brush"><span id="depth"></span></div>
+    <div id="sizewrap"><span id="sizelbl" data-t="rail.size">Brush</span><input id="size" type="range" min="1" max="3" value="1" step="1" data-t-aria="aria.size"><span id="depth"></span></div>
     <button class="gb glass" id="bPlace" type="button" data-t="rail.place" data-t-aria="aria.place" hidden>Place</button>
     <button class="gb glass" id="bCancel" type="button" data-t="rail.cancel" data-t-aria="aria.cancel" hidden>Cancel</button>
     <button class="gb glass" id="bUndo" type="button" data-t="rail.undo" data-t-aria="aria.undo" disabled>Undo</button>
@@ -70,7 +71,7 @@
   </div>
   <div id="row3">
     <div class="grp" id="spd">
-      <button class="gb" id="bHalt" type="button" aria-pressed="false" data-t-aria="aria.halt">||</button>
+      <button class="gb" id="bHalt" type="button" aria-pressed="false" data-t-aria="aria.pause">||</button>
       <input id="spdR" type="range" min="1" max="8" value="1" step="1" data-t-aria="aria.speed">
       <span id="spdLbl">1&times;</span>
     </div>
@@ -78,7 +79,7 @@
       <button class="gb" id="bRotL" type="button" data-t-aria="aria.rotate_left">&#9664;</button>
       <button class="gb" id="bRotR" type="button" data-t-aria="aria.rotate_right">&#9654;</button>
       <button class="gb" id="bFit" type="button" data-t="rail.fit" data-t-aria="aria.fit">Fit</button>
-      <button class="gb" id="bMute" type="button" aria-pressed="false" data-t-aria="aria.mute">Sound</button>
+      <button class="gb" id="bMute" type="button" aria-pressed="false" data-t-aria="aria.sound">Sound</button>
       <button class="gb" id="bMode" type="button" aria-pressed="false" data-t-aria="aria.mode">Be someone</button>
       <button class="gb" id="bPhoto" type="button" data-t="rail.photo" data-t-aria="aria.photo">Photo</button>
       <button class="gb" id="bNew" type="button" data-t="rail.new" data-t-aria="aria.new">New</button>
@@ -96,7 +97,7 @@
       <path d="M36 34 C31 29 26 26 28 21 C30 17 35 18 36 21 C37 18 42 17 44 21 C46 26 41 29 36 34 Z" fill="#EDA9C4"/>
       <path d="M56 32 C51 27 46 24 48 19 C50 15 55 16 56 19 C57 16 62 15 64 19 C66 24 61 27 56 32 Z" fill="#F2B67E"/>
     </svg>
-    <h1 id="iTitle" data-t="app.title">Parque D'Amour</h1>
+    <h1 id="iTitle" data-t="intro.title">Parque D'Amour</h1>
     <div id="iP"></div>
     <button id="bContinue" type="button" data-t="intro.continue" hidden>Continue</button>
     <button id="begin" type="button" data-t="intro.begin">Begin</button>

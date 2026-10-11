@@ -21,6 +21,21 @@
   },
   "overrides": [
     {
+      "files": ["src/**"],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          { "object": "Math", "property": "random", "message": "Use rng() or vrng() (03 P10)" },
+          { "object": "Date", "property": "now", "message": "Only core/loop.ts reads the wall clock (03 P3)" },
+          { "object": "performance", "property": "now", "message": "Only core/loop.ts reads the wall clock (03 P3)" }
+        ]
+      }
+    },
+    {
+      "files": ["src/core/loop.ts"],
+      "rules": { "no-restricted-properties": "off" }
+    },
+    {
       "files": ["src/core/**", "src/world/**", "src/entities/**", "src/play/**", "src/save/**"],
       "rules": {
         "no-restricted-imports": [
@@ -37,7 +52,7 @@
       }
     },
     {
-      "files": ["scripts/**", "tooling/**", "vite.config.ts"],
+      "files": ["tools/**", "vite.config.ts"],
       "env": { "node": true, "browser": false },
       "rules": { "no-console": "off" }
     },

@@ -30,7 +30,7 @@ export function activeGroup(): Group {
 }
 
 function showSpeed(): void {
-  $('spdLbl').textContent = T.speed > 0 ? t('rail.speed', { n: want }) : t('rail.paused');
+  $('spdLbl').textContent = T.speed > 0 ? t('rail.speed', { n: want }) : t('rail.pause');
   $('bHalt').setAttribute('aria-pressed', T.speed > 0 ? 'false' : 'true');
 }
 
@@ -43,7 +43,7 @@ export function syncSpeed(): void {
 }
 
 function paintLabels(): void {
-  $('bMute').textContent = t(muted ? 'rail.muted' : 'rail.sound');
+  $('bMute').textContent = t(muted ? 'rail.sound_off' : 'rail.sound_on');
   const avatar = document.body.classList.contains('avatar');
   $('bMode').textContent = t(avatar ? 'rail.creator' : 'rail.be_someone');
   showSpeed();
@@ -88,7 +88,7 @@ export function buildRail(h: RailHandlers): void {
     cam.follow = 0;
     cam.free = false;
     fitCam();
-    toast('toast.whole_park');
+    toast('toast.fit');
   });
 
   const bm = $('bMute');

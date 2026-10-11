@@ -485,7 +485,7 @@ Land stamps and runs, checked over every footprint tile:
 6. the tool's margin rule (fountain, kiosk, bandstand) → "too near the railings"
 7. the tool's kind rule (e.g. picnic on lawn) → "only on the lawn" / "not here"
 8. the tool's cap rule → "the park has its bandstand" / "three kiosks is enough"
-Water stamps (`bridge`): 1 outside → 2 "not on the water" → 3 "someone is on it" → 4 "the water is too wide here (4 at most)".
+Water stamps (`bridge`): 1 outside → 2 "tap the water" (`reason.not_on_water`, a land tile was tapped) → 3 "someone is on it" → 4 "the water is too wide here (4 at most)".
 Brushes report the centre tile's reason only when the whole stroke changed nothing.
 
 ### 8.5 Undo (`src/play/undo.ts`)

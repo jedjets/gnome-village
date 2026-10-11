@@ -126,7 +126,7 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `needs.test.ts` | hunger rises 0.5 per day | one visitor idle for 21,600 steps: `hunger` rose by 0.5 ± 0.001 |
 | `needs.test.ts` | energy falls 0.6 per day awake and rises 0.4 on a bench | awake one day: −0.6; sitting one day: +0.4 (clamped to 1) |
 | `needs.test.ts` | social rises 0.3 per day for an unpaired single and stays 0 while paired | single: +0.3; with `pairId` set: unchanged at 0 |
-| `needs.test.ts` | comfort eases at 0.2 per s toward the target | comfort 0.2, target 0.7: after 1 s ≈ 0.36 (GV 5578 idiom) |
+| `needs.test.ts` | comfort eases at 0.2 per s toward the target | comfort 0.2, target 0.7: after 1 s ≈ 0.29 (0.7 − 0.5 × 0.9967^60; GV 5579 idiom) |
 | `needs.test.ts` | comfortTarget follows design §4.4 | clear day, no lamp: 0.7; rain 0.8: 0.42; night without a lit lamp within 3: 0.55; inside a sunbeam: +0.10 |
 | `brain.test.ts` | rung 0 busy returns without deciding | `st = 'eat'`: `decide` leaves `st` and `job` unchanged |
 | `brain.test.ts` | rung 1 reaction beats shelter | `pendingEmb = 'poop'` and rain 0.9, comfort 0.1: `st === 'wipe'`, `pendingEmb === null` |
@@ -221,7 +221,7 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `abilities.test.ts` | a locked id spends nothing | tier 0 profile: `c_musician` → `reason.locked`; cooldowns and charges unchanged |
 | `abilities.test.ts` | failure keys per ability | one case per `fails when` cell of design §9.2-9.3 returns its 03 §5.4 key: `c_bouquet` unpaired → `reason.not_courting`; `c_umbrella` dry → `reason.not_raining`; `c_lamplight` no lamp → `reason.no_lamp`; `c_fireworks` at f 0.50 → `reason.not_evening`; `c_rowboat` on 11 tiles → `reason.pond_small`, on ice → `reason.iced`; `m_pigeon` child → `reason.not_children`; `m_peel` on lawn → `reason.not_here`, on snow → `reason.slippery`; `m_pomeranian` no item → `reason.no_item`; `m_wasp` not at Picnic → `reason.not_at_picnic`, rain → `reason.no_wasps_rain`; `m_raincloud` in a sunbeam → `reason.in_sunbeam`; `m_fog` at mist 0.7 → `reason.already_misty`; `m_flock` empty → `reason.nobody_inside` |
 | `abilities.test.ts` | validation happens again inside apply | a target that became invalid between `enqueue` and `applyPending` (the visitor left) is rejected and spends nothing |
-| `abilities.test.ts` | effects cap at 64 and clean up at until | the 65th cast fails; a `c_petals` effect removes its charm source at t 20 and `PETALS` fades at 1/40 per s |
+| `abilities.test.ts` | effects cap at 64 and clean up at until | the 65th cast returns `reason.too_many_effects`; a `c_petals` effect removes its charm source at t 20 and `PETALS` fades at 1/40 per s |
 | `abilities.test.ts` | cupid casts stamp lastCupidAt within 6 tiles | a pair 5 tiles from a `c_petals` centre has `lastCupidAt === T.abs`; at 7 tiles unchanged |
 | `tools.test.ts` | the 16 ids exist and each places | `TOOLS` ids equal register §3.7 in order; for each id except `hand` one valid command changes `stateHash()` |
 | `tools.test.ts` | ranked reasons in order | one case per key of 03 §5.4's tools block: outside, gateway, on_water, taken, on_flowers, near_railings, lawn_only or not_here, has_bandstand, enough_kiosks; a tile failing two checks reports the earlier one (GV 5972-5975 idiom) |
@@ -263,36 +263,38 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `migrate.test.ts` | garbage is refused, not thrown | `migratePark('{bad')`, `migratePark({ v: 99 })`, `migratePark(null)` return null without throwing |
 | `migrate.test.ts` | the profile falls back to defaults | a missing profile gives `cp 0, mp 0, tierC 0, tierM 0, settings.lang 'en', speed 1, muted false, stylePick null, musicPick null` |
 
-### 2.7 i18n and content (files `strings.test.ts`, `content.test.ts`, `colour-literals.test.ts`)
+### 2.7 i18n and content (files `strings.test.ts`, `content.test.ts`, `colour-literals.test.ts`, `palette.test.ts`)
 
 | File | Test | Assertion |
 |---|---|---|
 | `strings.test.ts` | key parity | `Object.keys(en)` equals `Object.keys(es)` as sets and both are non-empty |
 | `strings.test.ts` | suffix pairs | every `.one` has `.other`; every `.f` has `.m`, in both tables |
-| `strings.test.ts` | every t() literal exists | grep `src/` for `t('...')`, `plural('...')`, `gender('...')`, `data-t="..."`, `data-t-aria="..."` and every `reason.*`, `feed.*`, `doing.*`, `avatar.status.*`, `cue.*` id used in code: each key is in `en` |
+| `strings.test.ts` | every t() literal exists | grep `src/` for `t('...')`, `plural('...')`, `gender('...')`, `data-t="..."`, `data-t-aria="..."` and every `reason.*`, `feed.*`, `doing.*`, `avatar.status.*` id used in code: each key is in `en` |
 | `strings.test.ts` | no user-facing literal outside strings | no `textContent =`, `innerText =`, `toast(`, `pushFeed(` call in `src/` outside `src/ui/strings/` receives a quoted string with a space in it |
 | `strings.test.ts` | doing covers every act state | for each state in `act.ts: DOING`, `en['doing.' + st]` exists |
 | `strings.test.ts` | ability, avatar, tool, stage, weather, archetype keys | for each id: `ability.<id>.name` and `.hint`; `avatar.<id>.name`, `.hint1`, `.hint2`, `.hint3`; `tool.<id>.label`, `.hint`; `stage.<id>`; `weather.<id>`; `archetype.<id>` |
-| `strings.test.ts` | nested keys resolve after a language switch | a feed entry `{ key: 'feed.stage', params: { stage: '@stage.bench' } }` renders the ES stage word after `setLang('es')` |
+| `strings.test.ts` | nested keys resolve after a language switch | a stored `{ key, params }` entry `{ key: 'hud.romance.pair', params: { a: 'Amélie', b: 'Théo', stage: '@stage.bench' } }` renders the ES stage word after `setLang('es')` |
 | `strings.test.ts` | plural and gender helpers | `plural('sheet.census.room', 1)` uses `.one`; `2` uses `.other`; `gender('card.rel.single', 'f')` uses `.f` |
 | `strings.test.ts` | a missing key returns the key and warns once | `t('no.such.key')` returns `'no.such.key'`; two calls emit one `warn` |
 | `strings.test.ts` | no TODO in ES at release | no value in `es` equals `'TODO'` (skipped until the translation task; enabled in section 8) |
 | `content.test.ts` | the register's spellings | 16 tool ids, 19 ability ids, 6 avatar ids, 7 stage names (`Notice, Chat, Bench, Stroll, Picnic, Kiss, Proposal` via `t('stage.*')` in EN), 10 embarrassment kinds, 8 weather kinds, 11 displayed archetype names in EN, exactly the register §3 and §5 spellings (brief §9 row 11) |
 | `content.test.ts` | tiers and caps | `TIERS` equals `[0, 8, 20, 40, 70]`; the cap constants of 06 §1.4 equal their values |
 | `colour-literals.test.ts` | no colour literal outside two files | grep `src/` for `#[0-9a-fA-F]{3,8}\b`, `rgb(`, `rgba(`, `hsl(`: hits only in `src/render/ambient.ts` and `src/styles/tokens.css` (04 §4.5 item 3) |
-| `colour-literals.test.ts` | no Math.random or Date.now | grep `src/` for `Math.random`, `Date.now`, `performance.now`: hits only in `src/core/loop.ts`, `src/audio/limiter.ts`, `src/audio/engine.ts`, `src/debug/perf.ts` |
+| `colour-literals.test.ts` | no Math.random or Date.now | grep `src/` for `Math.random`, `Date.now`, `performance.now`: hits only in `src/core/loop.ts` |
+| `palette.test.ts` | every Palette key in all three palettes | every key of `Palette` exists in `PALETTES.A`, `.B` and `.C`; a string value matches `#[0-9A-Fa-f]{6}`; an array value holds only such strings (04 §4.5 item 1; 07 S1.8) |
 
-### 2.8 Audio (files `limiter.test.ts`, `cues.test.ts`, `melody.test.ts`, `musicState.test.ts`, `scheduler.test.ts`; 05 §8.2 owns the details)
+### 2.8 Audio (files `limiter.test.ts`, `cues.test.ts`, `melody.test.ts`, `musicState.test.ts`, `scheduler.test.ts`, `mute.test.ts`; 05 §8.2 owns the details)
 
 | File | Test | Assertion |
 |---|---|---|
-| `limiter.test.ts` | the gap scales by speed | `aOK('x', 100)` at speed 8 refuses until 800 ms; soft refuses until 415 ms (GV 6131-6137) |
+| `limiter.test.ts` | the gap scales by speed | `gate('x', 100, false)` at speed 8 refuses until 800 ms; `gate('x', 100, true)` until 415 ms (GV 6131-6137) |
 | `limiter.test.ts` | audibility before the gate | a cue with gain ≤ 0.02 leaves the kind's gap unchanged (review §8 fix) |
 | `cues.test.ts` | the 38 ids in order, gains ≤ 0.060 | `Object.keys(CUES)` equals 06 §17 in order; no gain above 0.060 |
 | `cues.test.ts` | every trigger fires in a 3-day run | each event kind named in 06 §17 is emitted at least once by the determinism fixture |
 | `melody.test.ts`, `musicState.test.ts`, `scheduler.test.ts` | as 05 §8.2 items 3 to 5 | reproducible phrases on a seeded `vrng`; the state priority table; `rngN` unchanged by the audio scheduler |
+| `mute.test.ts` | muted survives a reload and silences tone | `settings.muted` saved as true is true again after the profile is reloaded; while `isMuted()` is true, `tone()` schedules nothing (07 S8.8; 05 §7.3) |
 
-### 2.9 Render and UI (files `project.test.ts`, `order.test.ts`, `pick.test.ts`, `tests/ui/overlays.test.ts`, `tests/ui/rail.test.ts`, `tests/ui/intro.test.ts`; the last three under jsdom)
+### 2.9 Render, UI and build (files `project.test.ts`, `order.test.ts`, `pick.test.ts`, `seasons.test.ts`, `perf.test.ts`, `bundle.test.ts`, `tests/ui/overlays.test.ts`, `tests/ui/rail.test.ts`, `tests/ui/intro.test.ts`, `tests/ui/a11y.test.ts`; the four under `tests/ui/` run under jsdom)
 
 | File | Test | Assertion |
 |---|---|---|
@@ -304,6 +306,10 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `rail.test.ts` | the rail is data driven | `buildRail` renders 16 Park, 9 Cupid, 10 Mischief pills from `RAIL`; locked pills have `.locked` and the tier word; `#size` max is 3 |
 | `rail.test.ts` | avatar body class hides the park strip | `body.avatar`: `#tools`, `#sizewrap`, `#bUndo` hidden; the hint strip shown (GV 169) |
 | `intro.test.ts` | Continue only with a save; language persists | `showIntro(false)` hides `#bContinue`; `showIntro(true)` shows it; tapping ES sets `<html lang="es">` and `profile().settings.lang === 'es'` |
+| `seasons.test.ts` | crown phase by day and the season tint blend | spring at 0.5 d elapsed: `crownPhase` is `bud`; 1.5 d: `blossom`; 2.5 d: `leafing`; autumn 2.5 d: `thin`; winter: `bare` (04 §6.3 item 1); the lawn tint is the old season's triple at the season change, the midpoint 0.25 day later and the new triple at 0.5 day (03 §7.3 item 6) |
+| `perf.test.ts` | quality steps down after 180 frames over 22 ms and never up | `ftNote` with draw EMA 23 ms for 179 frames: `qualityLevel() === 0`; the 180th: 1; 180 more: 2; then 1000 frames at 8 ms: still 2 (03 §13) |
+| `a11y.test.ts` | every button has a name and no text under 11 px | every `button` in `index.html` has non-empty text or an `aria-label`; no `font-size` in the built CSS is below 11 px (brief §3.1 item 5; 07 S11.8) |
+| `bundle.test.ts` | the production bundle is self-contained | `dist/index.html` contains no `__PD` and no `http` URL (07 S11.8; section 8 item 3) |
 
 ---
 
@@ -311,7 +317,7 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 
 ### 3.1 What the harness exposes
 
-`window.__PD` is installed only in a dev build (03 §13; GV `window.__GV` 12223-12241). The tests in this section use: `simulate(n)`, `tick()`, `rngN()`, `hash()`, `setSpeed(v)`, `enqueue(cmd)`, `log()`, `replay(cmds)`, `snapshot()`, `restore(s)`, `newPark(seed)`, `setWeather(kind)`, `callVisitor()`, `draw()`, `pix(x, y, w, h)`, `FT`, `SP`, `audio.dryRun(on)`. This document adds two members (section 9 item 4): `seedVisual(seed)` and `fxStep(dt, n)`, both for screenshots only; neither touches sim state.
+`window.__PD` is installed only in a dev build (03 §13; GV `window.__GV` 12223-12241). The tests in this section use: `simulate(n)`, `tick()`, `rngN()`, `hash()`, `setSpeed(v)`, `enqueue(cmd)`, `log()`, `replay(cmds)`, `snapshot()`, `restore(s)`, `newPark(seed)`, `setWeather(kind)`, `callVisitor()`, `draw()`, `pix(x, y, w, h)`, `FT`, `SP`, `audio.dryRun(on)`. The screenshot members `seedVisual(seed)` and `fxStep(dt, n)` of 03 §13 (Screenshots group) touch the visual stream and particles only.
 
 `hash()` is `store.stateHash()`: FNV-1a over `tick`, the sim RNG state and draw count, the weather block, the nine saved layers and the canonical JSON of props, visitors, pairs, creatures, effects, sides, regulars, alumni, tally, mode and the profile's `cp`/`mp`, arrays sorted by id. Excluded: feed, log, pinned pair, visual RNG, speed (03 §11). A test that needs the excluded parts asserts on them by name.
 
@@ -363,11 +369,11 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | D | a bench date | seed `S_HAPPILY` of `romance.test.ts`; `simulate` until `pairs[0].stage === 3` and both in `sit`; `setSpeed(0)`; select pair member `a` (pair card) | phone at angles 0, 1, 2, 3; desktop at angle 0 | the pair side by side on one bench at every quarter turn with neither figure drawn behind the bench (03 §16 risk 8), hearts, the pair card with the Heart bar and Pin, the Romance chip naming them |
 | E | fireworks | profile `cp 70`; `simulate` to day 1 f 0.90; `enqueue` `c_fireworks` on `park`; `simulate(180)` (3 s); `fxStep` as 4.1 item 4 | phone, desktop | lamps lit with halos, fireworks particles over the fountain, every pair's hearts, the Points chip, the feed line `feed.cast.c_fireworks` |
 
-Baselines: `tests/baseline/<id>-<viewport>[-a<angle>].png`, 15 files. Each slice that changes the look regenerates only the baselines its "Done when" names and says so in the hand-back.
+Baselines: `tests/baseline/<id>-<viewport>[-a<angle>].png`, 13 files. Each slice that changes the look regenerates only the baselines its "Done when" names and says so in the hand-back.
 
 ### 4.3 Pixel diff
 
-1. The diff runs inside Chromium: the script loads the new PNG (base64 from `page.screenshot`) and the baseline PNG into two `<img>` in a blank page, draws both to canvases and compares `getImageData` arrays. No PNG library is needed; `pixelmatch` plus `pngjs` as dev dependencies is an allowed alternative (section 9 item 7).
+1. The diff runs inside Chromium: the script loads the new PNG (base64 from `page.screenshot`) and the baseline PNG into two `<img>` in a blank page, draws both to canvases and compares `getImageData` arrays. No PNG library is needed; `pixelmatch` plus `pngjs` as dev dependencies is an allowed alternative (section 9 item 6).
 2. A pixel differs when any channel differs by more than 24 of 255.
 3. A scene fails when more than 0.5 % of pixels differ; scenes C and E (weather overlay, particles) fail above 2.0 %.
 4. A size mismatch is a failure (the viewport or `deviceScaleFactor` changed).
@@ -375,14 +381,14 @@ Baselines: `tests/baseline/<id>-<viewport>[-a<angle>].png`, 15 files. Each slice
 
 ### 4.4 When a baseline may change
 
-1. After the Style Gate pick is recorded in the register §4: regenerate all 15 once, in the S2 hand-back.
+1. After the Style Gate pick is recorded in the register §4: regenerate all 13 once, in the S2 hand-back.
 2. When a slice's "Done when" names a new or changed look for a scene (a new prop, the rig, the lamp halo): regenerate those scenes only, attach before and after to the hand-back.
 3. Never because a test is red for an unknown reason. Find the cause first (section 3.3 for sim causes; a changed `vrng` draw order for visual causes).
 4. `npm run shot -- --update <id>` overwrites a baseline; the command is listed in the hand-back item 2.
 
 ### 4.5 What makes screenshots deterministic (requirements on the code)
 
-1. The weather overlay's time term is sim time (`T.abs × DAYLEN`), never `performance.now()` (GV `drawWeather` 10072 uses `now`; Parque does not; section 9 item 5).
+1. The weather overlay's time term is sim time (`T.abs × DAYLEN`), never `performance.now()` (GV `drawWeather` 10072 uses `now`; Parque does not; section 9 item 4).
 2. `ambientFx` runs only when `T.speed > 0`, so a paused scene spawns nothing (GV 8820 runs every frame).
 3. The sky cache key includes `T.abs` rounded to 1/60 day, not wall time.
 4. Particles step on `fxStep` from the script, never on a wall-clock `dtr` while paused (03 §4.1 item 7 multiplies by `T.speed`, which is 0 when paused).
@@ -403,23 +409,23 @@ Baselines: `tests/baseline/<id>-<viewport>[-a<angle>].png`, 15 files. Each slice
 | Frame at 8× | ≤ 20 ms sim for 8 steps; the loop stays under the 26 ms budget and runs behind the dial rather than dropping frames (GV 12076-12086) | `FT`, `tick()` versus wall time |
 | Phone (mid range) | 60 fps target, 50 fps floor; a report, not a gate, until the Capacitor slice (brief §9 row 4) | `#perf` on the device |
 | Quality step-down | `qualityLevel()` stays 0 on desktop through the 60 s run; on the phone it may reach 1 (halos and ribbons off) but not 2 | `__PD.FT.stepped` |
-| Memory | layers 55 KB; tree sprite cache ≤ 1400 canvases; `GC` memo ≤ 900 keys; no growth over 12 sim days at 8× | DevTools Memory, `__PD.DBG` counters |
+| Memory | layers 64 KB (nine saved layers 53 KB plus `E` and `BLOCK`); tree sprite cache ≤ 1400 canvases; `GC` memo ≤ 900 keys; no growth over 12 sim days at 8× | DevTools Memory, `__PD.DBG` counters |
 | Save size | `parque:park-v1` < 1 MB (150 KB expected) | `localStorage.getItem(key).length` |
-| Build size | `dist/index.html` ≤ 1.2 MB with fonts ≤ 400 KB (brief §11 item 1; section 9 item 8) | `ls -l dist` |
+| Build size | `dist/index.html` ≤ 1.2 MB with fonts ≤ 400 KB (brief §11 item 1; section 9 item 7) | `ls -l dist` |
 
 ### 5.2 The caps scene and `tools/perf.mjs`
 
 1. Dev build, `#s=101&halt&dev`, Begin, `audio.dryRun(true)`.
-2. `simulate` to day 1 f 0.90 (evening: lamps lit, halos on). `callVisitor()` until 30 people. Pigeons reach 12 by top-up on the way. Cast `m_pomeranian` once and keep two dog walkers in the park (3 dogs; 4 is the cap, 3 is the most the arrival rules produce, section 9 item 9). `setWeather('rain')` for the overlay. Profile `cp 70`; cast `c_fireworks` for 30 s of particles at the 220 cap.
+2. `simulate` to day 1 f 0.90 (evening: lamps lit, halos on). `callVisitor()` until 30 people. Pigeons reach 12 by top-up on the way. Cast `m_pomeranian` once and keep two dog walkers in the park (3 dogs; 4 is the cap, 3 is the most the arrival rules produce, section 9 item 8). `setWeather('rain')` for the overlay. Profile `cp 70`; cast `c_fireworks` for 30 s of particles at the 220 cap.
 3. `setSpeed(1)`, zoom 1, angle 0, Fit off; run 60 s of wall time by the real loop; read `FT.frame`, `FT.sim`, `FT.draw`, the one-second peaks and `FT.stepped` (GV `ftNote` 12057-12069).
 4. Repeat at zoom 0.30 (every tile visible; 03 §16 risk 7) and at `setSpeed(8)` for 60 s.
-5. Print a table; exit non-zero when a desktop budget is exceeded. The script runs on the dev machine and in CI if the CI machine is at least as fast as a 2020 laptop (section 9 item 10).
+5. Print a table; exit non-zero when a desktop budget is exceeded. The script runs on the dev machine and in CI if the CI machine is at least as fast as a 2020 laptop (section 9 item 9).
 
 ### 5.3 Phone measurement
 
 1. Serve the dev build on the LAN; open it on the phone in Chrome; connect by USB; `chrome://inspect` on the desktop to read the console and run `__PD` calls (the perf overlay is also readable on screen: double tap the clock chip under `body.dev`, GV 12181).
 2. Build the caps scene as 5.2 and read `FT` after 60 s at 1×, zoom 1 and 0.30.
-3. Record the device model, OS version, Chrome version and the readings in the hand-back. Two devices: a mid-range Android of about 2021 and an iPhone of about 2020 (section 9 item 10).
+3. Record the device model, OS version, Chrome version and the readings in the hand-back. Two devices: a mid-range Android of about 2021 and an iPhone of about 2020 (section 9 item 9).
 
 ---
 
@@ -466,8 +472,8 @@ Each item: do, then expect. Run on a phone in portrait with the dev build, then 
 ### 7.2 String tables
 
 1. `strings.test.ts` of 2.7 is green: parity, suffix pairs, every used key present, no literal outside `strings/`, doing coverage, id key sets.
-2. The key count of the data file equals the count of rows in 06 §16 (06 says 479 by hand; the test compares the two data files to each other and to the rows, not to 479).
-3. Before release: no `TODO` value in `es`; a Spanish reader checks the six words of brief §11 item 10 (Be someone, Creator, Cupid, Mischief, Happily, Parted) and the gendered pairs.
+2. The key count of the data file equals the count of rows in 06 §16 (06 §16.16 gives a hand count; the test compares the two data files to each other and to the rows, not to that number).
+3. Before release: no `TODO` value in `es`; a Spanish reader checks the six words of brief §11 item 9 (Be someone, Creator, Cupid, Mischief, Happily, Parted) and the gendered pairs.
 4. Both languages rendered in every screenshot scene of 4.2 at the phone viewport (scene A and D in ES as extra, non-baselined shots for the hand-back): no overflow, no clipped pill, no wrapped chip.
 
 ### 7.3 Every ability reachable
@@ -517,23 +523,22 @@ Manual: possess each avatar and perform every row once; the toast reads the stat
 
 Values this document defines that the register, the design, 03 and 06 do not (the owner may object; on change edit this file first):
 
-1. Test file names beyond those in 03 §14 and 07: `rng, clock, weather, events, loop, gen, park, water, wear, charm, needs, brain, act, astar, move, arrivals, archetypes, names, caps, creatures, romance, tone, progression, abilities, tools, undo, avatar, mode, save, migrate, strings, content, colour-literals, limiter, cues, melody, musicState, scheduler, project, order, pick`, and `tests/ui/overlays, rail, intro` under jsdom.
-2. The scripts `tools/det.mjs` (`npm run det`) and `tools/perf.mjs` (`npm run perf`) and their `--url` argument; 03 §14 lists only `shot`.
+1. Test file names beyond those in 03 §14 and 07: `rng, clock, weather, events, loop, gen, park, water, wear, charm, needs, brain, act, astar, move, arrivals, archetypes, names, caps, creatures, romance, tone, progression, abilities, tools, undo, avatar, mode, save, migrate, strings, content, colour-literals, limiter, cues, melody, musicState, scheduler, mute, project, order, pick, palette, seasons, perf, bundle`, and `tests/ui/overlays, rail, intro, a11y` under jsdom.
+2. The contents of `tools/det.mjs` and `tools/perf.mjs` (03 §14 names the scripts; this document specifies them in 3.4 and 5.2).
 3. The determinism file's run time budget of 90 s and the 600-step bisect window (3.2 item 8, 3.3).
-4. Two harness members not in 03 §13: `seedVisual(seed)` and `fxStep(dt, n)`, used only by the screenshot script; they touch the visual stream and particles, never sim state. 03 §13 says the harness exposes "and nothing more"; this is a proposal to add two rows there.
-5. Screenshot determinism requirements of 4.5: the weather overlay and sky cache use sim time, `ambientFx` is skipped while paused. 03 §7.8 says "index + time" without naming the source; GV 10072 used wall time. Proposal: 03 §7.8 names `T.abs`.
-6. The five scenes, their seeds and capture ticks (4.2), 15 baseline files under `tests/baseline/` (committed, unlike `shots/`), the four quarter turns for scene D only.
-7. The pixel-diff rule: channel delta > 24, 0.5 % of pixels, 2.0 % for scenes C and E; the in-browser diff so that 03 §14's dev-dependency list stays unchanged; `pixelmatch` and `pngjs` allowed as an alternative.
-8. Build size cap 1.2 MB for `dist/index.html` (the brief gives 400 KB for fonts only).
-9. The caps scene of 5.2 uses 3 dogs: two walkers' dogs plus the pomeranian is the most the arrival rules allow at once (design §4.2 item 4 caps dog walkers at 2), although the creature cap is 4. Open: whether the brief's "4 dogs" needs a third dog walker allowed, or the cap text should read 3.
-10. Device classes for the phone report: a mid-range Android of about 2021 and an iPhone of about 2020; the CI machine for `npm run perf` is at least a 2020 laptop. The register fixes only "60 fps on a mid phone".
-11. The ES forbidden-word list for `tone.test.ts`: herido, herida, hospital, sangre, muerto, muerta, murió.
-12. Scenes A and D rendered in ES as extra non-baselined shots (7.2 item 4).
-13. Test naming and the `describe` comment rule (1.3 items 4 and 5).
+4. Screenshot determinism requirements of 4.5: the weather overlay and sky cache use sim time, `ambientFx` is skipped while paused. 03 §7.8 says "index + time" without naming the source; GV 10072 used wall time. Proposal: 03 §7.8 names `T.abs`.
+5. The five scenes, their seeds and capture ticks (4.2), 13 baseline files under `tests/baseline/` (committed, unlike `shots/`), the four quarter turns for scene D only.
+6. The pixel-diff rule: channel delta > 24, 0.5 % of pixels, 2.0 % for scenes C and E; the in-browser diff so that 03 §14's dev-dependency list stays unchanged; `pixelmatch` and `pngjs` allowed as an alternative.
+7. Build size cap 1.2 MB for `dist/index.html` (the brief gives 400 KB for fonts only).
+8. The caps scene of 5.2 uses 3 dogs: two walkers' dogs plus the pomeranian is the most the arrival rules allow at once (design §4.2 item 4 caps dog walkers at 2), although the creature cap is 4. Open: whether the brief's "4 dogs" needs a third dog walker allowed, or the cap text should read 3.
+9. Device classes for the phone report: a mid-range Android of about 2021 and an iPhone of about 2020; the CI machine for `npm run perf` is at least a 2020 laptop. The register fixes only "60 fps on a mid phone".
+10. The ES forbidden-word list for `tone.test.ts`: herido, herida, hospital, sangre, muerto, muerta, murió.
+11. Scenes A and D rendered in ES as extra non-baselined shots (7.2 item 4).
+12. Test naming and the `describe` comment rule (1.3 items 4 and 5).
+13. The refusal key `reason.too_many_effects` (EN "too much going on already") returned by the 65th cast while 64 effects are active (2.5 `abilities.test.ts`): 03 §3.11 caps active effects at 64, but 03 §5.4 and 06 §16.13 name no key for it. Proposal: add the row to both.
 
 Open points for the owner:
 
-1. 05 §8.2 names the limiter function `gate`; 03 §2.8 names it `aOK`. This document uses `aOK`. One of the two documents should change.
-2. Whether the production build should keep a minimal `__PD` (hash and tick only) so the release smoke run could assert determinism on `dist/index.html` itself. This document says no: 03 §13 is dev-only, and `tools/det.mjs` runs on the dev build of the same commit.
-3. Whether the 2.0 % tolerance for scenes C and E is acceptable to the owner's eye, or whether those two scenes should be reviewed by hand instead of pixel-diffed.
-4. Whether `npm run perf` should be a CI gate from S9 on (effects and light) or stay a hand-back report until release. This document makes it a release gate only (brief §9 row 3 is a success criterion, not a slice gate).
+1. Whether the production build should keep a minimal `__PD` (hash and tick only) so the release smoke run could assert determinism on `dist/index.html` itself. This document says no: 03 §13 is dev-only, and `tools/det.mjs` runs on the dev build of the same commit.
+2. Whether the 2.0 % tolerance for scenes C and E is acceptable to the owner's eye, or whether those two scenes should be reviewed by hand instead of pixel-diffed.
+3. Whether `npm run perf` should be a CI gate from S9 on (effects and light) or stay a hand-back report until release. This document makes it a release gate only (brief §9 row 3 is a success criterion, not a slice gate).

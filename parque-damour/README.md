@@ -12,21 +12,21 @@ npm run dev        # Vite dev server at http://localhost:5173/
 npm run build      # single-file production build: dist/index.html
 npm run preview    # serve the production build
 npm run test       # Vitest
-npm run shot       # screenshots of the built app into shots/ (needs npm run build first)
+npm run shot -- s0 # screenshots of the built app into shots/s0-phone.png and shots/s0-desktop.png (needs npm run build first)
 ```
 
 | Script | Does |
 |---|---|
-| `dev` | Vite dev server; `window.__PD` harness installed (also in production under `#debug`) |
+| `dev` | Vite dev server; `window.__PD` harness installed |
 | `build` | `tsc -b` then `vite build`; leaves exactly `dist/index.html` |
 | `preview` | serves `dist/` |
-| `lint` | oxlint over `src tests scripts vite.config.ts`; 0 errors |
+| `lint` | oxlint over `src tests tools vite.config.ts`; 0 errors |
 | `typecheck` | `tsc -b`, strict, `noUncheckedIndexedAccess` |
 | `test` / `test:watch` | Vitest (`tests/*.test.ts`, node environment) |
-| `shot` | `node scripts/screenshot.mjs [name]`: serves `dist/`, drives `/opt/pw-browsers/chromium` through puppeteer-core, clicks Begin, writes `shots/<name>-390x844.png` (dpr 2) and `shots/<name>-1280x800.png`; exits 1 on any console error |
+| `shot` | `node tools/shot.mjs <slice> [--url <url>] [--days <n>]` (default slice `s0`): opens `dist/index.html` from `file://` in `/opt/pw-browsers/chromium` through puppeteer-core, clicks Begin, writes `shots/<slice>-phone.png` (390 x 844, dpr 3) and `shots/<slice>-desktop.png` (1280 x 800, dpr 2); `--days n` sets the dial to 8x and waits n sim days on `body[data-day]`; exits 1 on any console error (03 section 14, 08 section 4.1) |
 | `check` | typecheck, lint, test and build in one go |
 
-Hash options: `#s=<seed>` fixes the park seed, `&halt` starts paused, `&debug` installs the harness in a production build.
+Hash options: `#s=<seed>` fixes the park seed, `&halt` starts paused, `&dev` reveals the dev entries (sound check, perf overlay) through `body.dev`; `window.__PD` exists only in the dev build (`npm run dev`), never in `dist/`.
 
 ## 2. The single-file build
 
@@ -48,8 +48,8 @@ src/save/               schema, store, migrate                                  
 src/debug/              harness (window.__PD), perf
 src/styles/             tokens.css (the paper tokens, fonts), shell.css (HUD, rail, card, sheets, intro)
 src/fonts/              the four woff2 subsets
-tests/                  Vitest: rng, clock, grid and gen, camera and projection, order, strings, source rules
-scripts/screenshot.mjs  the screenshot script
+tests/                  Vitest: rng, clock, gen, project, order, strings, colour-literals (08 section 2 file names)
+tools/shot.mjs          the screenshot script (03 section 14)
 docs/                   the design pack (see below)
 ```
 
@@ -66,4 +66,4 @@ Every file under `src/` starts with a header comment: its path, its responsibili
 | Style Gate (register section 4) | not passed | every scene colour in `src/render/ambient.ts` and the `--rose/--lawn/--gravel/--water/--awning` tokens are placeholders marked "TBD Style Gate"; no final prop, figure, ground or sky is drawn before the owner's pick |
 | Music Gate (register section 4) | not passed | no cue or music work; `src/audio/` is stubs |
 
-The theme colour and body background use the paper token `#F1EDF5` until the Style Gate (the product brief names GV's `#DCE6EC` for the interim; either is a one-line change in `index.html` and `tokens.css`).
+The theme colour (`<meta name="theme-color">`), the pre-paint body background in `index.html` and `--body-bg` in `tokens.css` stay GV's `#DCE6EC` until the Style Gate (brief section 3.2, 04 section 5.7 item 4). The 14 paper tokens of brief 3.2 are unchanged.

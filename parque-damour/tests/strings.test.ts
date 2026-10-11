@@ -42,8 +42,8 @@ describe('string tables', () => {
   it('t fills params, formats numbers per language, resolves @keys, returns the key when missing', () => {
     setLang('en');
     expect(t('hud.day', { n: 3, season: '@hud.season.autumn' })).toBe('Day 3 · Autumn');
-    expect(plural('hud.visitors', 1)).toBe('1 visitor');
-    expect(plural('hud.visitors', 4)).toBe('4 visitors');
+    expect(plural('sheet.census.room', 1)).toBe('room for 1 more');
+    expect(plural('sheet.census.room', 2)).toBe('room for 2 more');
     expect(t('nope.missing')).toBe('nope.missing');
     setLang('es');
     expect(t('hud.day', { n: 3, season: '@hud.season.autumn' })).toBe('Día 3 · Otoño');

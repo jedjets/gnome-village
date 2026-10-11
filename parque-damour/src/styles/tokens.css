@@ -1,6 +1,7 @@
 /* src/styles/tokens.css
    The HUD paper tokens of brief 3.2 (GV CSS 16-23), exactly; the derived shades shell.css needs; the self-hosted fonts.
    Ported from GV CSS 16-23. PORT. The only file besides src/render/ambient.ts allowed a colour literal (04 4.5).
+   --body-bg and the theme colour stay GV's #DCE6EC (GV 6, 8, 26) until the Style Gate (brief 3.2, 04 5.7 item 4).
    TODO(S1): the Style Gate sets the TBD placeholders and may change --body-bg and the theme colour. */
 
 /* ---------- fonts: Latin and Latin Extended subsets, variable weight, bundled (brief 2) ---------- */
@@ -48,7 +49,7 @@
   --intro-0:#F7F2FA;
   --intro-1:#E4E9F0;
   --intro-2:#D6E1E6;
-  --body-bg:#F1EDF5;                   /* behind the canvas and the pre-paint; the theme colour matches */
+  --body-bg:#DCE6EC;                   /* behind the canvas; GV 26; the pre-paint and theme-color in index.html match */
 
   /* ---------- TBD Style Gate (register section 4): placeholders, not yet used by shell.css ---------- */
   --rose:#EDA9C4;    /* TBD Style Gate */
