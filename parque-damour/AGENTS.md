@@ -87,7 +87,7 @@ Precedence: register > brief > the numbered documents 02 to 09 > code comments a
 | Design pack and its index | `docs/`, `docs/README.md` |
 | The register, the brief, the build plan | `docs/01-Decision-Register.md`, `docs/00-Product-Brief.md`, `docs/07-Build-Plan.md` |
 | GV review and the 21 per-section notes | `docs/10-Gnome-Village-HTML-Architecture-Review.md`, `docs/gv-review-notes/NN-notes.md` |
-| GV source (owner's upload on this machine; read with `sed -n`, never whole) | `/root/.claude/uploads/7b9497e6-6ad3-50a2-ab24-653e6edd687e/38de409f-gnomevillage09-10.html` |
+| GV source (owner's upload on this machine; read with `sed -n`, never whole) | `docs/reference/gnome-village-2026-10-09.html` |
 | Reference art | `docs/reference-art/ref1-paris-park-map-flat-vector.jpg`, `ref2-girl-baguette-watercolour.jpg`, `ref3-arc-de-triomphe-line-and-wash.jpg` |
 | Chromium for screenshots | `/opt/pw-browsers/chromium` |
 | Save keys | `localStorage` `parque:profile-v1`, `parque:park-v1` |

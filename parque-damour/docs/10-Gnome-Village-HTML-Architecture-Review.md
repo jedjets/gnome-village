@@ -1,6 +1,6 @@
 # Gnome Village — consolidated architecture review
 
-Source: `/root/.claude/uploads/7b9497e6-6ad3-50a2-ab24-653e6edd687e/38de409f-gnomevillage09-10.html` (12,246 lines; one HTML file, one `<script>`).
+Source: `docs/reference/gnome-village-2026-10-09.html` (12,246 lines; one HTML file, one `<script>`).
 Consolidated from 21 section reviews (`01-notes.md` … `21-notes.md` in this directory). Every line number below is an absolute line in the HTML file. Function-definition lines, DOM ids, CSS anchors and the contested facts in §16 were re-verified against the source with grep; inner-line numbers are the readers' and are marked `~` where the reader's range was found to drift (see §16).
 
 ---
