@@ -1,6 +1,6 @@
 # Parque D'Amour — Decision Register
 
-Version 1 · 2026-10-10 · Owner: Jeduthun Oosthuis · Author: Claude (design session)
+Version 1.1 · 2026-10-11 · Owner: Jeduthun Oosthuis · Author: Claude (design session)
 
 This file is the **spine** of the design pack. Every other document in `docs/` must agree with the numbers, names and ids here. If a document and this register disagree, the register wins and the document is wrong. Change a decision here first, then propagate.
 
@@ -16,7 +16,7 @@ Status legend: **LOCKED** = the owner decided · **ADVISED** = Claude's recommen
 | 1 | Look | "The gnome village view and close to its aesthetic, with inspiration taken from my images." | Soft-isometric rotatable camera exactly as Gnome Village (GV). Painterly code-drawn look (zero image assets). French park restyle. Three style directions are rendered for the owner to pick at the **Style Gate** (Slice 1). | LOCKED + GATE |
 | 2 | Terrain, water | "You advise, but I think simply placing ponds and waterways is sufficient." | Flat ground. Static placed water (pond brush, canal run) with constant depth. No raise/lower, no erosion, no flow sim. A river runs along the park's north edge **outside** the railings as scenery. | ADVISED |
 | 3 | Code shape | "You tell me." | Multi-file TypeScript modules under `src/`, bundled by Vite; `npm run build` also emits one self-contained `dist/index.html` (vite-plugin-singlefile) so the game can be opened or shared as one file like the GV HTML. No React. | ADVISED |
-| 4 | Repository | "You advise." | A **new repository `parque-damour`** owned by the owner. Until it exists, the app and docs live in `parque-damour/` on branch `claude/parque-damour-game-design-oqc8zm` of `gnome-village`; moving is a folder copy (section 7). | ADVISED |
+| 4 | Repository | "You advise." | Keep building in `gnome-village`: the app and docs live in `parque-damour/` on branch `claude/parque-damour-game-design-oqc8zm` (owner, 2026-10-11). A separate repository is optional and not planned; section 7 keeps the recipe. | LOCKED |
 | 5 | Grid, surroundings | "Default. Surrounding area can be french buildings or whatever. (River on one side, buildings on either.)" | 48×48 tiles, single scale. North edge: river and quay. East, south, west: railings, gates, pavement, Haussmann facades. Distant skyline with the Eiffel Tower silhouette. | LOCKED |
 | 6 | Romances | "Advise. But I think multiple through day and night cycle? Season cycle." | Many visitors; several romances run at once; one **featured romance** in the HUD (highest stage, or pinned). Day/night cycle and four seasons. | LOCKED |
 | 7 | Stages, endings | "Advise." | Seven stages: Notice, Chat, Bench, Stroll, Picnic, Kiss, Proposal. Endings: **Happily** (proposal accepted) or **Parted** (they leave by different gates). Numbers in section 3.5. | ADVISED |
@@ -50,8 +50,8 @@ GV spends roughly 40 % of its engine on terrain: heightfield, erosion, bridges t
 ### 2.2 Vite + TypeScript modules, single-file build (Q3)
 The GV HTML is 12,246 lines in one file; a less advanced model cannot hold it, and every edit risks the whole. Modules with narrow contracts let a weaker model work on one file with a clear brief. The single-file build keeps the owner's workflow: one HTML to open in Chrome or send to a phone. No React: GV's shell is plain DOM and the game loop owns the canvas; React adds nothing here and costs bundle size and a second rendering model.
 
-### 2.3 A new repository (Q4)
-A different game with its own Pages URL, app id and store listing should not share `gnome-village`'s history, workflow or `base` path. The current branch is a staging area only.
+### 2.3 Repository (Q4)
+Claude advised a separate repository: a different game with its own Pages URL, app id and store listing would not share `gnome-village`'s history, workflow or `base` path. The owner chose otherwise (row 4, 2026-10-11): the game keeps building in `gnome-village`, the single-file build with `base: './'` needs no repository of its own, and Pages deployment is deferred. Section 7 keeps the recipe in case a separate repository is ever wanted.
 
 ### 2.4 The park's edges (Q5, Q15)
 Facades and the river are drawn as props in world space just outside the 48×48 interior, so the GV rotatable camera keeps working and the park reads as a real square in a city. Landmarks inside a 48-metre park would be out of scale; the Eiffel Tower lives on the skyline band, which turns with the camera like GV's far shore.
@@ -98,7 +98,7 @@ Everything the player does is a **Command** `{tick, side, kind, payload}` applie
 | Archetype | Arrives as | Routine | Notes |
 |---|---|---|---|
 | single | alone | stroll, bench, café, feed pigeons, read | romance candidate; has `seeks` f/m/any (weights 45/45/10) |
-| couple | pair, already together | stroll, bench, picnic | not a romance; scenery and bench competition; a Happily ending creates one |
+| couple | pair, already together | stroll, bench, picnic | arrives already paired: a `Pair` at stage 3 (Bench) with affinity rnd(0.55, 0.70); continues the ladder from Stroll and can reach Happily or be Parted like any pair; counts for the HUD, the featured pair and points (owner: as many romances as possible, 2026-10-11) |
 | family | parent + child | play on lawn, kiosk, pond edge | child never a mischief target; child chases pigeons and the pomeranian |
 | elder | alone | bench, feed pigeons, chess at a table | slow; crumbs attract pigeons |
 | tourist | alone or pair | photos of fountain, skyline, bandstand | |
@@ -115,7 +115,7 @@ Everything the player does is a **Command** `{tick, side, kind, payload}` applie
 - Movement: adult 3.0 tiles/s, child 2.6, elder 2.0, jogger 5.0; pair strolling 2.4 as one unit. A* over tiles: lawn 1.0, gravel 0.75, flagstone 0.7, bed blocked, water blocked (bridge 0.8), occupied blocked, railings blocked except gates.
 
 ### 3.5 Romance
-- A `Pair` forms when two singles are within 4 tiles with line of sight, both idle or strolling, mutually compatible by `seeks`, and a 50 % roll passes on their first encounter. Starting affinity `rnd(0.2, 0.4)`.
+- A `Pair` forms when two singles are within 4 tiles with line of sight, both idle or strolling, mutually compatible by `seeks`, and a 50 % roll passes on their first encounter. Starting affinity `rnd(0.2, 0.4)`. A couple archetype arrives already paired (3.4). Alumni (a Happily pair that returns, 3.5 Happily) return as the couple archetype at stage 3 with affinity 0.70 and may reach Happily again; the feed says they renewed their vows.
 - Stages, prerequisites, durations (sim seconds) and the affinity gate to attempt them:
 
 | Stage | Name | Needs | Duration | Gate |
@@ -209,7 +209,7 @@ No multiplayer transport, no monetisation, no store build, no terrain heights, n
 |---|---|---|
 | **Style Gate** (Slice 1) | `style-board.html`: three directions rendered with the real primitives, side by side: A "Storybook" (GV palette and brushwork with French props), B "Pastel Postcard" (flat vector like ref1), C "Line and Wash" (ink line and watercolour like ref2/ref3). Each shows palette, ground + path + bed, a tree in three seasons, bench, lamp, fountain, two lovers, a pigeon, the pomeranian, a facade, HUD chips. | All art work from Slice 2 on |
 | **Music Gate** (Slice 1) | `music-board.html`: three playable motifs: A musette waltz, B music-box lullaby (GV kin), C café swing; each with a romance-rising and a parted variant. | Music and cue work from Slice 8 on |
-| Repository | The owner creates `parque-damour` on GitHub | Moving the folder (section 7) |
+| Repository | Closed: the owner keeps building in gnome-village (2026-10-11) | Nothing. Pages deployment for this app is deferred and `.github/workflows/pages.yml` stays inert; section 7 keeps the optional recipe |
 
 ---
 
@@ -232,10 +232,11 @@ No multiplayer transport, no monetisation, no store build, no terrain heights, n
 - Deterministic twin-RNG loop with speed and lite bits (GV 583–598, 12024–12096). Reused; required by the command model.
 - GV has no save, no unlocks, no string table and ships a dev harness (review §10–§12). All four are new work and are in the build plan.
 
-## 7. Moving to the new repository
+## 7. Moving to a separate repository (optional, not planned)
+Not planned: row 4 keeps the app in `gnome-village` (2026-10-11). If the owner ever wants a separate repository:
 1. Create `parque-damour` on GitHub (empty, no README).
 2. In this branch: `git subtree split --prefix=parque-damour -b parque-damour-split`, then push that branch to the new repo's `main`; or simply copy the folder and commit.
-3. Set `base: '/parque-damour/'` in `vite.config.ts` and add the Pages workflow from `07-Build-Plan.md` Slice 0.
+3. Set `base: '/parque-damour/'` in `vite.config.ts` (today `'./'`, so `dist/index.html` opens from disk and from any sub-path); the Pages workflow written in `07-Build-Plan.md` Slice 0 (`.github/workflows/pages.yml`, inert inside `gnome-village`) is then at that repository's root and runs on its `main`.
 
 ---
 

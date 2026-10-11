@@ -1,6 +1,6 @@
 # Parque D'Amour: standing instructions for any model working in this repository
 
-Version 1 · 2026-10-10 · Owner: Jeduthun Oosthuis. `CLAUDE.md` is a verbatim copy of this file; when one changes, copy it over the other in the same commit.
+Version 1.1 · 2026-10-11 · Owner: Jeduthun Oosthuis. `CLAUDE.md` is a verbatim copy of this file; when one changes, copy it over the other in the same commit.
 
 ## 1. What this project is
 
@@ -41,16 +41,16 @@ Precedence: register > brief > the numbered documents 02 to 09 > code comments a
 
 ## 4. Workflow
 
-1. Work from the app root `/home/user/gnome-village/parque-damour` (later the repository `parque-damour`). Touch only the files your slice names under `Sx.5`. Create nothing outside `src/`, `tests/`, `tools/`, `docs/`, `scratch/`, `shots/`, `.github/` and the app root (S12 adds `resources/`).
+1. Work from the app root `/home/user/gnome-village/parque-damour` (the app stays inside the `gnome-village` repository; register row 4). Touch only the files your slice names under `Sx.5`. Create nothing outside `src/`, `tests/`, `tools/`, `docs/`, `scratch/`, `shots/`, `.github/` and the app root (S12 adds `resources/`).
 2. The npm scripts (03 section 14):
 
 | Script | Does |
 |---|---|
 | `npm run dev` | Vite dev server at `http://localhost:5173/` |
-| `npm run build` | single-file production build; `ls dist` must show only `index.html` (plus `style-board.html` and `music-board.html` from S1 on) |
+| `npm run build` | `tsc -b && vite build`: single-file production build; `ls dist` must show only `index.html` (plus `style-board.html` and `music-board.html` from S1 on) |
 | `npm run preview` | serves the production build |
 | `npm run lint` | oxlint over `src tests tools`; 0 errors |
-| `npm run typecheck` | `tsc --noEmit`, strict |
+| `npm run typecheck` | `tsc -b` over the project references (`tsconfig.json` references `tsconfig.app.json`, `tsconfig.test.json`, `tsconfig.node.json`; every one sets `noEmit`), strict |
 | `npm test` | Vitest; every file green, including `tests/determinism.test.ts` once it exists (S2) |
 | `npm run shot -- <slice>` | puppeteer-core with `/opt/pw-browsers/chromium`, 390 x 844, dpr 3, writes `shots/<slice>-<name>.png`, fails on any console error |
 | `npm run check` | typecheck, lint, test and build in one go |
@@ -70,7 +70,7 @@ Precedence: register > brief > the numbered documents 02 to 09 > code comments a
 6. Skipping, deleting, loosening or `it.skip`-ing a test, or changing a screenshot baseline.
 7. Adding a `statue` tool, or a new ability, avatar, archetype, stage, embarrassment kind or weather kind.
 8. Changing the save schema version or touching a `localStorage` key that does not start with `parque:`.
-9. Pushing, merging, force-pushing, or creating the `parque-damour` repository (register section 7).
+9. Pushing, merging, force-pushing, or creating a separate repository (register row 4 keeps the app in `gnome-village`; section 7 is optional and not planned).
 
 ## 6. Where things are
 
@@ -92,4 +92,4 @@ Precedence: register > brief > the numbered documents 02 to 09 > code comments a
 | Chromium for screenshots | `/opt/pw-browsers/chromium` |
 | Save keys | `localStorage` `parque:profile-v1`, `parque:park-v1` |
 | Debug harness and perf overlay (dev build only) | `window.__PD` from `src/debug/harness.ts`; `#perf` from `src/debug/perf.ts` |
-| Pages workflow (inactive until the repository move) | `.github/workflows/pages.yml` |
+| Pages workflow (inert: Pages deployment for this app is deferred, register row 4; the file is the recipe for the optional repository of register section 7) | `.github/workflows/pages.yml` |

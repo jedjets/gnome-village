@@ -1,4 +1,6 @@
-# Inactive until the move to the new repository (register section 7; build plan S0.7 item 5).
+# Inert: this file lives under parque-damour/.github/, not at the repository root, so GitHub never runs it.
+# Pages deployment for this app is deferred (register row 4, 2026-10-11); the file is the recipe for the optional
+# separate repository of register section 7 (build plan S0.7 item 5).
 name: pages
 on: { push: { branches: [main] } }
 permissions: { contents: read, pages: write, id-token: write }

@@ -26,7 +26,7 @@ npm run shot -- s0 # screenshots of the built app into shots/s0-phone.png and sh
 | `shot` | `node tools/shot.mjs <slice> [--url <url>] [--days <n>]` (default slice `s0`): opens `dist/index.html` from `file://` in `/opt/pw-browsers/chromium` through puppeteer-core, clicks Begin, writes `shots/<slice>-phone.png` (390 x 844, dpr 3) and `shots/<slice>-desktop.png` (1280 x 800, dpr 2); `--days n` sets the dial to 8x and waits n sim days on `body[data-day]`; exits 1 on any console error (03 section 14, 08 section 4.1) |
 | `check` | typecheck, lint, test and build in one go |
 
-Hash options: `#s=<seed>` fixes the park seed, `&halt` starts paused, `&dev` reveals the dev entries (sound check, perf overlay) through `body.dev`; `window.__PD` exists only in the dev build (`npm run dev`), never in `dist/`.
+Hash options: `#s=<seed>` fixes the park seed, `&halt` starts paused, `&dev` (or `#dev` alone) sets `body.dev`, the flag that reveals the dev entries (sound check, perf overlay) once S11 adds them (03 section 10.2); `window.__PD` exists only in the dev build (`npm run dev`), never in `dist/`, with or without the hash (03 section 13).
 
 ## 2. The single-file build
 

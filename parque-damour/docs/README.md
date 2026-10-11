@@ -9,7 +9,7 @@ This folder holds the complete design for v1 of Parque D'Amour, a phone-first Ca
 | File | Purpose | Who reads it |
 |---|---|---|
 | `00-Product-Brief.md` | Locked intent: vision, stack, visual and audio identity, the two modes, a day of play, v1 scope, non-goals, success criteria, governance | every model, first; the owner |
-| `01-Decision-Register.md` | The spine: the owner's 27 answers and the resolved decisions, the design numbers (sections 3.1 to 3.15), the gates (section 4), fixed names (section 5), GV facts verified, the repository move, the document index | every model, second; the owner records gate picks here |
+| `01-Decision-Register.md` | The spine: the owner's 27 answers and the resolved decisions, the design numbers (sections 3.1 to 3.15), the gates (section 4), fixed names (section 5), GV facts verified, the optional repository recipe (closed: the app stays in `gnome-village`), the document index | every model, second; the owner records gate picks here |
 | `02-Game-Design.md` | Complete rules of play: park, time and weather, visitors, needs and brain, romance, points and tiers, Creator mode tools, abilities, Avatar mode cascades, emergent life, HUD, tone rules as tests, the two-player hook | design and feature slices (S3 to S7, S10) |
 | `03-Technical-Architecture.md` | The engineering contract: principles P1 to P10, module map and layer rule, data model, loop, commands, subsystems, rendering, input, audio, UI shell, persistence, i18n, debug harness, build and tooling, performance plan | every code slice |
 | `04-Art-and-UI-Style-Guide.md` | What GV looks like, the three references analysed, the three style directions, the Style Gate board, the locked HUD identity, prop and character vocabulary, effects, motion, light and seasons, accessibility, the art checklist | art slices (S1, S2 part B, the S4 and S10 drawing sub-briefs, S9) |
@@ -30,10 +30,10 @@ Register section 4 is the authority for the gates; this table mirrors it. A gate
 |---|---|---|---|
 | Style Gate (S1) | `style-board.html`: directions A Storybook, B Pastel Postcard, C Line and Wash, each rendered with the real primitives (palette, ground, path, bed, tree in three seasons, bench, lamp, fountain, two lovers, pigeon, pomeranian, facade, HUD chips) | all art work from S2 on | pending |
 | Music Gate (S1) | `music-board.html`: motifs A musette waltz, B music-box lullaby, C café swing, each with a romance-rising and a parted variant | music and cue work from S8 on | pending |
-| Repository | The owner creates `parque-damour` on GitHub (empty, no README) | moving the folder out of `gnome-village` (register section 7) | pending |
+| Repository | Closed: the owner keeps building in gnome-village (2026-10-11) | nothing; Pages deployment is deferred and `.github/workflows/pages.yml` stays inert (register row 4, section 7) | closed |
 
 ## 3. Start here
 
-- **Owner:** read `00-Product-Brief.md`, then register sections 1 and 4; the two gates in section 4 are waiting on your picks, and section 7 is the repository move. Changes go into the register first, then the documents, then the code.
+- **Owner:** read `00-Product-Brief.md`, then register sections 1 and 4; the two gates in section 4 are waiting on your picks; the repository question is closed (row 4: the app stays in `gnome-village`; section 7 keeps an optional recipe). Changes go into the register first, then the documents, then the code.
 - **Model running a slice:** read `../AGENTS.md`, then `01-Decision-Register.md`, then `00-Product-Brief.md` sections 2, 8, 9 and 10, then `07-Build-Plan.md` section 0 and your slice `Sx`, then the documents your slice lists under `Sx.3 Read first`; finish with the common gate (07 0.5) and the hand-back (07 0.6).
 - **Model doing art or music:** check register section 4 first; if your gate is pending, build only the board your slice names (04 section 4 or 05 section 6). After the pick, read `04-Art-and-UI-Style-Guide.md` or `05-Audio-and-Music-Design.md` in full, render two or three variants on a scratch page, screenshot them at 390 x 844 and show the owner before building the final one (07 0.4).

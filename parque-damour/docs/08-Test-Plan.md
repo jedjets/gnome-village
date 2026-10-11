@@ -174,6 +174,7 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `romance.test.ts` | starting affinity is rnd(0.2, 0.4) and stage 1 | 200 formed pairs: all affinities in [0.2, 0.4); `stage === 1`; `a < b` |
 | `romance.test.ts` | mist shrinks formation range to 2 | mist 0.78: 3 tiles apart → null; 2 tiles → pair |
 | `romance.test.ts` | regulars with memory and the matchmaker skip the roll | both paths form a pair with `rngN` unchanged by the roll |
+| `romance.test.ts` | a couple arrives as a Pair at stage 3 with affinity in [0.55, 0.70] | 200 arriving couples: both members share one `pairId`, `pair.stage === 3`, affinity in [0.55, 0.70], no `PAIR_ROLL` draw and no `feed.pair.formed`; a returning alumni couple has affinity 0.70 exactly (register 3.4, 3.5) |
 | `romance.test.ts` | stage gates are exact | with every prerequisite present, `nextStageReady` is false at affinity 0.299 and true at 0.30 for Chat; likewise 0.45, 0.55, 0.65, 0.80, 0.90 for Bench, Stroll, Picnic, Kiss, Proposal |
 | `romance.test.ts` | a prerequisite missing means linger, not skip | affinity 0.50 and a free bench within 8: Bench starts, never Stroll; affinity 0.80 with no fountain, lamp or golden/evening phase: the pair stays at stage 5 and repeats Picnic |
 | `romance.test.ts` | stage durations | Notice 4 s; Chat in [20, 30]; Bench in [40, 60]; Stroll 60; Picnic in [50, 80]; Kiss 10; Proposal 15 (sim seconds at 1× and the same tick counts at 8×) |
@@ -199,7 +200,7 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `tone.test.ts` | embToday resets at f 0 | `embToday === 3` on day 1: 0 after the `newday` step |
 | `tone.test.ts` | backfire is 15 % with the partner within 4 | 400 seeded landings with the partner at 2 tiles: backfires between 40 and 80; with the partner at 6 tiles: 0 |
 | `tone.test.ts` | a backfire gives +0.04, no comfort loss, no MP, no embToday | after a forced backfire (seed chosen so the roll passes): affinity + 0.04, comfort unchanged, `embToday` unchanged, no `embarrassed` event with `landed: true` |
-| `tone.test.ts` | staff and scenery couples score 0 | `land('poop', gardenerId)` plays the reaction and emits no points |
+| `tone.test.ts` | staff score 0; a couple member scores like any pair | `land('poop', gardenerId)` plays the reaction and emits no points; `land('poop', coupleMemberId)` costs the couple's affinity and emits MP +1 |
 | `tone.test.ts` | rival lands only on a pair member | `land('rival', unpairedId)` has no effect and returns ok false with `reason.not_courting` |
 | `tone.test.ts` | no reaction longer than 8 s except distracted and lost | every reaction length in `act.ts` ≤ 8 except `distracted` 30 and `lost` 60 (design §13 Do-not) |
 | `tone.test.ts` | no forbidden word in any string | no value in `en` or `es` contains hurt, injured, hospital, blood, dead, died (case insensitive); ES list in section 9 |

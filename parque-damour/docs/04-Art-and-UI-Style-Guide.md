@@ -601,7 +601,7 @@ At the default zoom 1.3, `h = 28.6`: every tier shows. At Fit (0.30), `h = 6.6`:
 2. Every `single` gets one **signature colour** from 8 saturated tones at arrival: `#E25B5F`, `#F2C14E`, `#5FA8D3`, `#7DBF7A`, `#EDA9C4`, `#B9A6E0`, `#F08A4B`, `#4A4458`; drawn as the scarf. Singles are the romance candidates, so the eye finds them.
 3. When a `Pair` forms, nothing changes on the figures; the pair card shows both signatures as two dots beside the names, and the hearts between a pair are two-tone (left lobe one signature, right lobe the other) from stage 3 on.
 4. The featured pair wears the rose ring (7.1 rule 9). A pinned pair keeps it.
-5. Scenery couples share one hue so they read as "already together".
+5. The couple archetype arrives already paired (register 3.4) and shares one hue, so the two read as "already together".
 6. Do not: use colour to imply compatibility; change a signature colour during a visit.
 
 ### 7.4 The avatars and the creatures

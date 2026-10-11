@@ -22,7 +22,7 @@ Rules: a Tier C task names the exact file to write and the exact table to copy f
 
 ```
 You are implementing slice <Sx> of Parque D'Amour, a phone-first Canvas 2D game in TypeScript.
-App root: /home/user/gnome-village/parque-damour (later the repository parque-damour).
+App root: /home/user/gnome-village/parque-damour (inside the gnome-village repository; register row 4).
 Read, in this order, before writing anything:
   1. docs/01-Decision-Register.md (the spine; every number, name and id)
   2. docs/00-Product-Brief.md sections 2, 8, 9, 10
@@ -66,7 +66,7 @@ Run from the app root. Every command must exit 0.
 
 | # | Command | Must show |
 |---|---|---|
-| 1 | `npm run typecheck` | no errors (`tsc --noEmit`, strict) |
+| 1 | `npm run typecheck` | no errors (`tsc -b` over the project references, strict) |
 | 2 | `npm run lint` | 0 errors from oxlint over `src tests tools` |
 | 3 | `npm test` | all Vitest files green, including `tests/determinism.test.ts` once it exists (S2) |
 | 4 | `npm run build && ls dist` | exactly one entry: `index.html` (plus `style-board.html` and `music-board.html` from S1 on) |
@@ -133,8 +133,8 @@ Run every check from the app root. Record PASS or MISSING per row in the hand-ba
 |---|---|---|
 | 1 | `package.json` scripts `dev, build, preview, test, test:watch, lint, typecheck, shot, check, det, perf` (03 section 14) | `node -e "console.log(Object.keys(require('./package.json').scripts).join(' '))"` |
 | 2 | devDependencies `vite, typescript, vitest, oxlint, vite-plugin-singlefile, puppeteer-core, jsdom`; no `dependencies` | `node -e "const p=require('./package.json');console.log(p.dependencies||'none',Object.keys(p.devDependencies).join(' '))"` |
-| 3 | `vite.config.ts`: `viteSingleFile()`, `base: '/'`, `build.target: 'es2020'`, `assetsInlineLimit: 1_000_000`, `cssCodeSplit: false` | `grep -n -e viteSingleFile -e base -e es2020 -e assetsInlineLimit -e cssCodeSplit vite.config.ts` |
-| 4 | `tsconfig.json`: `strict`, `ES2020`, `ESNext`, `bundler`, `noUnusedLocals`, `noUnusedParameters`, `noFallthroughCasesInSwitch`, `noImplicitOverride`, `isolatedModules`, `types: ["vite/client"]` | `grep -c -e strict -e noUnusedLocals -e noUnusedParameters -e noFallthroughCasesInSwitch -e noImplicitOverride -e isolatedModules -e vite/client tsconfig.json` prints 7 |
+| 3 | `vite.config.ts`: `viteSingleFile()`, `base: './'` (relative, so the single file opens from disk and from any sub-path), `build.target: 'es2022'`, `assetsInlineLimit: 1_000_000`, `cssCodeSplit: false` | `grep -n -e viteSingleFile -e base -e es2022 -e assetsInlineLimit -e cssCodeSplit vite.config.ts` |
+| 4 | `tsconfig.json` holds only project references to `tsconfig.app.json` (src), `tsconfig.test.json` (tests) and `tsconfig.node.json` (vite.config.ts); `tsconfig.app.json`: `strict`, `ES2022`, `esnext`, `bundler`, `noUnusedLocals`, `noUnusedParameters`, `noFallthroughCasesInSwitch`, `noImplicitOverride`, `isolatedModules`, `noEmit`, `types: ["vite/client"]` | `grep -c references tsconfig.json` prints 1; `grep -c -e strict -e noUnusedLocals -e noUnusedParameters -e noFallthroughCasesInSwitch -e noImplicitOverride -e isolatedModules -e vite/client tsconfig.app.json` prints 7 |
 | 5 | `.oxlintrc.json` with `no-restricted-globals` for `Math.random` and `no-restricted-imports` for the layer rule (03 section 14) | `cat .oxlintrc.json` |
 | 6 | `index.html` holds every DOM id of 03 section 10.1 | `for id in stage cv hudClock wdot tPhase tDay hudVisitorsWrap hudVisitors tPop bAdd hudRomance tRom hudPoints tCP tMP card cName cSub cRel cBars cDo cPin rail groups tools row2 sizewrap size depth bPlace bCancel bUndo cdChip row3 bHalt spdR spdLbl bRotL bRotR bFit bMute bMode bPhoto bNew census romances progress evlog picker options snd perf hint feed intro iTitle iP begin bContinue lang photoX confirm confirmText confirmYes confirmNo; do if ! grep -q "id=\"$id\"" index.html; then echo "MISSING $id"; fi; done` prints nothing |
 | 7 | `index.html` head: `viewport-fit=cover, maximum-scale=1`, `theme-color #DCE6EC`, inline SVG favicon, no `<link>` to any network host | `grep -n -e viewport -e theme-color -e googleapis -e "<link" index.html` |
@@ -150,7 +150,7 @@ Run every check from the app root. Record PASS or MISSING per row in the hand-ba
 | 17 | `tests/` with Vitest configured in `vite.config.ts` (`test: { environment: 'node' }`, jsdom per file where needed) | `npm test` |
 | 18 | `.gitignore`: `node_modules`, `dist`, `shots`, `scratch` | `cat .gitignore` |
 | 19 | Fonts: `src/fonts/fraunces-*.woff2`, `src/fonts/figtree-*.woff2`, Latin plus Latin Extended subsets, both families under 400 KB together, `@font-face` in `shell.css` | `du -ch src/fonts/*.woff2` (read the total line) |
-| 20 | `.github/workflows/pages.yml` present (not active until the repository move, register section 7) | `cat .github/workflows/pages.yml` |
+| 20 | `.github/workflows/pages.yml` present and inert (Pages deployment for this app is deferred, register row 4; the file is not at the repository root, so GitHub never runs it) | `cat .github/workflows/pages.yml` |
 | 21 | `README.md` listing the scripts and the docs index | `cat README.md` |
 | 22 | `src/ui/i18n.ts` with `t()` and the two tables holding at least the intro keys; `<html lang>` follows `setLang` | `npm test` includes a parity test stub |
 
@@ -159,7 +159,7 @@ Run every check from the app root. Record PASS or MISSING per row in the hand-ba
 2. For row 14: `render/draw.ts` paints the 2304 tiles as diamonds in `--moss` tinted paper, the apron as a paler band, with a bbox cull; no props, no entities. `camera.ts` holds `cam`, `resize` (dpr capped at 2), `fitCam` and `clampCam` (03 section 7.1 items 4 and 5). Gestures may be deferred to S2.
 3. For row 15: the script waits for the `data-day` attribute on `body` to change when a day count is requested; S0 only needs the intro click and one capture.
 4. For row 19: download the woff2 subsets once with the proxy, commit them under `src/fonts/`; if the network refuses, keep the font stacks' system fallbacks, leave the `@font-face` rules in place with the file names, and list the gap in the hand-back. S11 closes it.
-5. For row 20 write this workflow and leave it inactive (it only triggers on the new repository's `main`):
+5. For row 20 write this workflow and leave it inert: it lives under `parque-damour/.github/`, not at the repository root, so GitHub never runs it; Pages deployment for this app is deferred (register row 4) and the file is the recipe for the optional separate repository of register section 7:
 
 ```yaml
 name: pages
@@ -400,7 +400,7 @@ S2 engine and renderer; `ghost.ts` stub; `commands.ts` with `tool` and `undo` ki
 Visitors reacting to tools (S4), the gardener (S4), abilities (S6), the Cupid and Mischief strips (S6), the Options sheet (S11).
 
 ### S3.10 Ask the owner before
-Adding a `statue` tool (none in register 3.7; AGENTS section 5 item 7); changing the undo depth; confirming on tree removal (02 section 15 open point 3 says no).
+Adding a `statue` tool (none in register 3.7; AGENTS section 5 item 7); changing the undo depth; confirming on tree removal (02 section 15 open point 2 says no).
 
 ### S3.11 Hand-back
 Format 0.6 plus the list of hooks left for S4 (vendor spawn, sitter eviction, `openNear` on undo).
@@ -459,7 +459,7 @@ S2 engine, S3 tools and save; `pickAt` with the people branch stubbed; S1 figure
 Pairs and anything romantic (S5), embarrassments (S5, S6), the pomeranian in the park (S6), the cameo archetype in action (S6), weather effects on the scene (S9), sound.
 
 ### S4.10 Ask the owner before
-Changing any speed, rate, weight or cap; adding an archetype; changing `FH` or the rig proportions (04 section 13 item 1); letting scenery couples pair (02 section 15 open point 1).
+Changing any speed, rate, weight or cap; adding an archetype; changing `FH` or the rig proportions (04 section 13 item 1); changing the couple archetype's arrival as a `Pair` at stage 3 with affinity rnd(0.55, 0.70) (register 3.4; S5 builds it).
 
 ### S4.11 Hand-back
 Format 0.6 plus the scratch page of the rig variants and the owner's pick.
@@ -485,19 +485,19 @@ S4 visitors, brain rung 6 hook, `act.ts`, feed pipe, card, sheets; `charm.ts` AP
 
 ### S5.6 Steps
 1. `charm.ts`: the base field rebuilt on `markCharmDirty` from beds, fountains, lit lamps, bandstands with the radii of 02 section 6.3 and the `player` flag by `placedBy`; dynamic sources (busker, petals, sunbeam, umbrella, boat, fireworks) added by S6 and S10 through `addSource` and `setPairCharm`; `charmAt` returns `{ total, player }` capped at 6, each source once.
-2. `romance.ts`: `Pair` of 03 section 3.4; `tryForm` with the six conditions of 02 section 6.1 (line of sight by Bresenham, mist radius 2, the once-per-day failed roll, `skipRoll` for regulars and the matchmaker); the seven stages with prerequisites, durations, gates, interruptions and on-screen events of 02 section 6.2; lingering; `retryT` 30 or 60; the initiator rule; `completeStage` adds 0.08 and emits `stage`; charm conversion every 10 s while together; decay 0.1 per day apart (regulars between visits); endings of 02 section 6.5 with gates and the `alumni` list; the returning-couple roll; featured with the tie-break of 02 section 6.6 and `setPin`; the regular-return proposal rule of 02 section 6.7.
+2. `romance.ts`: `Pair` of 03 section 3.4; `tryForm` with the six conditions of 02 section 6.1 (line of sight by Bresenham, mist radius 2, the once-per-day failed roll, `skipRoll` for regulars and the matchmaker); the seven stages with prerequisites, durations, gates, interruptions and on-screen events of 02 section 6.2; lingering; `retryT` 30 or 60; the initiator rule; `completeStage` adds 0.08 and emits `stage`; charm conversion every 10 s while together; decay 0.1 per day apart (regulars between visits); endings of 02 section 6.5 with gates and the `alumni` list; the couple archetype's `Pair` at arrival (stage 3 with Bench counted as completed, affinity rnd(0.55, 0.70), no roll, no `feed.pair.formed`; register 3.4, 02 section 6.1); the returning-couple roll (alumni return as the couple archetype at stage 3 with affinity 0.70 and may reach Happily again, feed `feed.romance.renewed` in place of `feed.happily`); featured with the tie-break of 02 section 6.6 and `setPin`; the regular-return proposal rule of 02 section 6.7.
 3. `brain.ts`: pair formation checks inside rung 7 strolling and idle for singles; rung 6 as 02 section 5.2.
 4. `act.ts`: states `notice, chat, goBench, bench, stroll, goPicnic, picnic, kiss, proposal, huff, laugh` with the durations of 02 section 6.2; `stroll` moves the pair as one unit at 2.4 (GV `court` rendezvous shape 4338, 5483-5491 for the midpoint walk); the pair leaves together or apart per 02 section 6.5.
-5. `embarrass.ts`: `EMB_KINDS` exactly the ten kinds of register section 5; `land(kind, victim, source)` with the cost table of 02 section 6.4, the stage factor and 0.15 cap, comfort -0.3, `embToday` on victim and pair, the 15 % backfire with the partner within 4 tiles, the cap of 3 with `reason.enough_today`, children refused with `reason.not_children`, staff and couples score 0, `rival` only on paired members; the reaction states and backfire scenes as states in `act.ts`; events `embarrassed` and `backfired`. No ability triggers it yet; the harness exposes `land`.
+5. `embarrass.ts`: `EMB_KINDS` exactly the ten kinds of register section 5; `land(kind, victim, source)` with the cost table of 02 section 6.4, the stage factor and 0.15 cap, comfort -0.3, `embToday` on victim and pair, the 15 % backfire with the partner within 4 tiles, the cap of 3 with `reason.enough_today`, children refused with `reason.not_children`, staff score 0 (a couple is a `Pair` and scores like any pair), `rival` only on paired members; the reaction states and backfire scenes as states in `act.ts`; events `embarrassed` and `backfired`. No ability triggers it yet; the harness exposes `land`.
 6. `effects.ts`: hearts per stage (04 section 7.6), the heartbreak particle, fireworks for Happily (04 section 8); `figures.ts` poses of 04 sections 9.2 and 9.3 for every stage and reaction, present two variants of the kiss and the proposal pose on a scratch page first.
 7. `hud.ts`: Romance chip "A & B · Stage" or `t('hud.romance.none')`, pulse on a stage change; `card.ts`: the pair card of 02 section 12.3 item 3 and 04 section 5.5 item 2 with the gate tick and Pin; the Heart bar on the single card.
 8. `sheets.ts`: Romances (pairs by stage, affinity bar, "n today", Pin, footer Happily and Parted counts), Events (last 40, "Day N · phase", `goToEvent` with the 5.2 s focus pin GV 10751, 10764).
-9. `feed.ts`: lines for pair formed, each stage, each embarrassment landed or backfired, Parted, Happily, a regular's return, the day tally stub, all with nested `@` keys (03 section 12 item 6).
+9. `feed.ts`: lines for pair formed, each stage, each embarrassment landed or backfired, Parted, Happily, renewed vows (`feed.romance.renewed`), a regular's return, the day tally stub, all with nested `@` keys (03 section 12 item 6).
 10. `store.ts`: pairs, alumni, `pinnedPair` (excluded from the hash); `loop.ts` phase 10 and the day reset.
 
 ### S5.7 Done when
 1. The common gate; determinism green over 3 days with pairs forming.
-2. `tests/romance.test.ts`: on seed `S_HAPPILY` (found by scanning seeds 1 to 200 with the harness, recorded in the test) a pair reaches Happily within 3 days; on seed `S_PARTED`, three harness `land` calls at stage 3 produce Parted and the two leave by different gates; a pair with affinity 0.50 and a free bench within 8 starts Bench and not Stroll; a pair at 0.80 with no fountain, lamp or evening lingers at stage 5; `charmAt` on a tile 2 from a player bed and 4 from a gen fountain returns `{ total: 3, player: 1 }`.
+2. `tests/romance.test.ts`: on seed `S_HAPPILY` (found by scanning seeds 1 to 200 with the harness, recorded in the test) a pair reaches Happily within 3 days; on seed `S_PARTED`, three harness `land` calls at stage 3 produce Parted and the two leave by different gates; a pair with affinity 0.50 and a free bench within 8 starts Bench and not Stroll; a pair at 0.80 with no fountain, lamp or evening lingers at stage 5; `charmAt` on a tile 2 from a player bed and 4 from a gen fountain returns `{ total: 3, player: 1 }`; every arriving couple is a `Pair` at stage 3 with affinity in [0.55, 0.70], and a returning alumni couple has affinity 0.70 (08 section 2.4).
 3. `tests/tone.test.ts`: `EMB_KINDS` equals the ten kinds in order; `land` on a child returns `reason.not_children`; the 4th landing in a day returns `reason.enough_today` and spends nothing; over 400 seeded landings with a partner within 4 tiles the backfire count is between 40 and 80; no reaction state exceeds 8 s except `distracted` 30 and `lost` 60.
 4. P3 of 02 section 1.2: on the unmodified starter park at 1x, at least one pair exists within 2 sim minutes on seeds 101 to 110.
 5. `shots/s5-pair-card.png` shows a pair card at stage Bench with both names, the Heart bar with a gate tick, the stage chip and Pin; `shots/s5-chip.png` shows the Romance chip naming the featured pair; `shots/s5-romances.png` shows the Romances sheet with two pairs; `shots/s5-kiss.png` at f = 0.76 shows a pair at Kiss with six hearts.
@@ -752,7 +752,7 @@ Extensions of `abilities.test.ts`, `avatar.test.ts`, `tone.test.ts`; `charm.test
 New abilities, a seventh avatar, balancing beyond the register's numbers, sound beyond the emitted events.
 
 ### S10.10 Ask the owner before
-Changing any cooldown, charge, radius or the 50 % rival roll; refusing `c_rowboat` in fog (02 section 15 open point 5); ignoring `seeks` in the matchmaker's introduce (open point 4).
+Changing any cooldown, charge, radius or the 50 % rival roll; refusing `c_rowboat` in fog (02 section 15 open point 4); ignoring `seeks` in the matchmaker's introduce (open point 3).
 
 ### S10.11 Hand-back
 Format 0.6 plus the scratch pages for the matchmaker, rowboat and fireworks variants with the picks.
@@ -818,10 +818,10 @@ Wrap the signed-off `dist/index.html` as an Android and iOS app with Capacitor, 
 Tier B.
 
 ### S12.3 Read first
-Register rows 23, 24, section 7. Brief section 2 (Stores row), 8.2 item 12. 03 section 14 (Capacitor readiness checklist, all ten items). 05 section 7.5 item 4.
+Register rows 4, 23, 24. Brief section 2 (Stores row), 8.2 item 12. 03 section 14 (Capacitor readiness checklist, all ten items). 05 section 7.5 item 4.
 
 ### S12.4 Inputs that already exist
-The v1 build with brief section 9 all green and the owner's written sign-off; the new repository `parque-damour`.
+The v1 build with brief section 9 all green and the owner's written sign-off.
 
 ### S12.5 Files to create or change
 `capacitor.config.ts`, `package.json` (scripts `cap:sync`, `cap:android`, `cap:ios`; devDependencies `@capacitor/core`, `@capacitor/cli`, `@capacitor/android`, `@capacitor/ios`), `android/` and `ios/` generated folders, app icons and splash (the first allowed image assets, outside `src/`), `README.md`.

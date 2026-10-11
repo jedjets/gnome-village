@@ -24,7 +24,7 @@ Tagline: **the park that matchmakes**.
 | Tests | Vitest via `npm test` | register 0 |
 | Lint | oxlint, zero errors | register 0 |
 | Screenshots | puppeteer-core with the Chromium at `/opt/pw-browsers/chromium`, viewport 390x844 | fixed tooling |
-| Hosting | GitHub Pages later, from the new repository `parque-damour`, `base: '/parque-damour/'` | register 4, 7 |
+| Hosting | None planned: the app stays in `gnome-village` and ships as the single file `dist/index.html` with `base: './'`; Pages deployment is deferred (the `pages.yml` workflow stays inert) and a separate repository is optional (register section 7) | register 4, 7 |
 | Stores | Capacitor wrapper later; v1 is designed for it now: offline, self-hosted fonts, safe areas, 60 fps on a mid phone | register 23 |
 | Persistence | `localStorage` keys `parque:profile-v1` and `parque:park-v1`, versioned, migrated | register 3.11 |
 | Audio | Web Audio API, procedural, zero assets | register 25 |

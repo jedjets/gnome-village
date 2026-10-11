@@ -169,7 +169,7 @@ An override is `{ kind, x, y, r, until }` kept in a list. `weatherAt` returns th
 ## 4. Visitors
 
 ### 4.1 The record (`src/entities/visitor.ts`)
-One `Visitor` type for every person. Fields used by the rules: `id, name, sex ('f' | 'm'), archetype, ageWord ('young' | 'grown' | 'elder'), seeks ('f' | 'm' | 'any'), x, y, st, t, path, hunger, energy, comfort, social, arrivedAt, leaveAt, gateIn, gateOut, pairId (0 if none), coupleOf (id, scenery couples only), parentOf / childOf (families), items { hat, purse, baguette, iceCream }, embToday, embDay, regularId (0 if passer-by), decideT`.
+One `Visitor` type for every person. Fields used by the rules: `id, name, sex ('f' | 'm'), archetype, ageWord ('young' | 'grown' | 'elder'), seeks ('f' | 'm' | 'any'), x, y, st, t, path, hunger, energy, comfort, social, arrivedAt, leaveAt, gateIn, gateOut, pairId (0 if none), coupleOf (id, couple archetype only: the partner they arrived with; their romance is an ordinary `Pair`, 6.1), parentOf / childOf (families), items { hat, purse, baguette, iceCream }, embToday, embDay, regularId (0 if passer-by), decideT`.
 
 ### 4.2 Arrivals (`src/entities/visitor.ts`, factory)
 1. Target population by phase: night 3, dawn 6, morning 16, midday 20, afternoon 24, golden hour 20, dusk 14, evening 9. Multiply by the weather and season arrival factors (sections 3.3, 3.4) and round.
@@ -192,11 +192,11 @@ Each routine is a loop: pick an activity by weight, do it, idle `rnd(2, 5)` s, p
 5. Read (15): sit on a bench 40 s with a book.
 6. Pair formation checks run during 1 and during idle (section 6.1). Chat sets `social = 0`.
 
-**couple** (scenery, two visitors linked by `coupleOf`, arrive together, never a `Pair`)
+**couple** (two visitors linked by `coupleOf` who arrive together already paired: a `Pair` at stage 3 (Bench) with affinity `rnd(0.55, 0.70)`, register 3.4; they continue the ladder from Stroll (6.1) and can reach Happily or be Parted like any pair; this routine runs between stages, since rung 6 comes before rung 7)
 1. Stroll together (50): the lower id leads, the other follows at 0.5 tile, speed 2.4.
 2. Bench (30): both sit on one bench 30–60 s; takes two seats.
 3. Picnic (20; ×1.5 in summer): a free picnic spot 40–60 s.
-4. Leave together by the same gate.
+4. Leave together by the same gate (a Parted couple has already left by different gates, 6.5).
 
 **family** (parent + child, child linked by `childOf`)
 1. Parent walks to a lawn tile ≥ 4 tiles from any path; child plays (runs a circle of radius 2 at 2.6) 30–60 s.
@@ -322,6 +322,8 @@ A `Pair { id, a, b, stage, affinity, retryT, togetherT, embToday, embDay, formed
 6. Starting affinity `rnd(0.2, 0.4)`. Stage 1 begins at once. Feed line "A and B noticed each other".
 Regulars with memory skip the roll (section 4.5.4). `a_matchmaker` introduce skips the roll (section 10.7).
 
+A couple archetype arrives already paired (register 3.4): the arrival factory creates the `Pair` with the two as `a` and `b`, `stage = 3` (Bench counts as completed, so the next attempt is 4 Stroll, whose gate 0.55 the affinity already meets), affinity `rnd(0.55, 0.70)` on the sim RNG, `formedDay` = the arrival day, no 50 % roll and no `feed.pair.formed` line; both keep `archetype = 'couple'` and `coupleOf`. From there the pair follows 6.2 to 6.6 like any other and counts for the HUD, the featured pair and points. Alumni (6.5) return as the couple archetype at stage 3 with affinity 0.70 and may reach Happily again; the feed then says they renewed their vows (`feed.romance.renewed`).
+
 ### 6.2 The seven stages
 | Stage | Name | Prerequisites ("Needs") | Duration (s) | Affinity gate | On screen | Interrupted by |
 |---|---|---|---|---|---|---|
@@ -382,7 +384,7 @@ An embarrassment `landed` on a visitor: comfort −0.3 at once; `embToday += 1` 
 Rules:
 1. **Backfire 15 %**: rolled on the sim RNG at the moment of landing, only when the victim is in a `Pair` and the partner is within 4 tiles. On backfire: the backfire scene plays instead of the reaction, affinity +0.04, comfort is not reduced, no MP, `embToday` is not incremented.
 2. **At most 3 landed embarrassments per person per day.** A 4th attempt fails before anything plays: toast "X has had enough for one day", no cooldown spent, no charge spent.
-3. Children are never targets (section 13). Staff and scenery couples can be targets but score 0.
+3. Children are never targets (section 13). Staff can be targets but score 0. A couple is a `Pair`, so an embarrassment on either member costs affinity and scores like any pair's.
 4. `rival` lands only on a member of a `Pair`; on anyone else the stranger just chats (no effect).
 5. The partner never gets a cost from the other's embarrassment; the pair's affinity is one number, so one cost per event.
 6. Reaction states are `BUSY` and `NO_SPACE`.
@@ -391,11 +393,11 @@ Rules:
 | Ending | Condition | What happens | Points |
 |---|---|---|---|
 | **Parted** | `affinity < 0.20` at stage ≥ 2, OR `pair.embToday >= 3` at stage ≥ 3 | 6 s `huff` on both facing away; the pair dissolves; each is assigned a different gate (the two nearest distinct gates) and leaves now; feed line; "heartbreak" particle (a heart splitting) | MP +5 |
-| **Happily** | stage 7 completes | fireworks particles 10 s over the spot; they leave together now by the nearest gate as one unit; the two are written to the park's `alumni` list (names, looks); regulars keep each other as `partnerId` with stage 7 | CP +5 |
+| **Happily** | stage 7 completes | fireworks particles 10 s over the spot; they leave together now by the nearest gate as one unit; the two are written to the park's `alumni` list (names, looks); regulars keep each other as `partnerId` with stage 7; an alumni couple (Returning couples, below) that reaches stage 7 again logs `feed.romance.renewed` in place of `feed.happily` and stays once in `alumni` | CP +5 |
 
-Other dissolutions (not endings, no points): both members leave at `leaveAt` (a pair at stage ≥ 2 leaves by the same gate together, feed "strolled off together"); one member leaves alone (passer-by): the pair dissolves, the other keeps `social = 0.5`. Regulars keep memory in every case.
+Other dissolutions (not endings, no points): both members leave at `leaveAt` (a pair at stage ≥ 2 leaves by the same gate together, feed "strolled off together"); one member leaves alone (passer-by): the pair dissolves, the other keeps `social = 0.5`. Regulars keep memory in every case. A couple shares one `leaveAt` (they arrived together), so a couple still paired at `leaveAt` leaves together by one gate with the same "strolled off together" line; a Parted couple has already left by different gates.
 
-Returning couples: on each new day there is a 20 % chance (sim RNG) that one `alumni` pair arrives as a scenery `couple` with their names.
+Returning couples: on each new day there is a 20 % chance (sim RNG) that one `alumni` pair arrives as the `couple` archetype with their names and looks: a `Pair` at stage 3 with affinity 0.70 (fixed, not rolled), feed `feed.alumni_return`. They may reach Happily again; the feed then says they renewed their vows (`feed.romance.renewed`) in place of `feed.happily`, with the same CP +5.
 
 ### 6.6 Featured pair, multiple pairs
 1. Several pairs run at once; there is no cap beyond the people cap.
@@ -590,7 +592,7 @@ Refusal: a dog walker's dog within 3 tiles → "the big dog is watching" (no sna
 ### 10.6 `a_mime`
 | Step | Candidate | Radius | Action | Returns | Scores |
 |---|---|---|---|---|---|
-| 3a | paired person or a scenery couple | 34 px | `mimic`: follow them 30 s mimicking; `mime` lands once on a paired member at t0 (`m_mime` rules) | 'mimicking' | MP as `m_mime` |
+| 3a | paired person (a couple is a `Pair`) | 34 px | `mimic`: follow them 30 s mimicking; `mime` lands once on a paired member at t0 (`m_mime` rules) | 'mimicking' | MP as `m_mime` |
 | 3b | bench | 0.75 | `statue`: sit frozen until the next tap | 'a statue' | — |
 | 4 | gravel or flagstone tile | tile | walk there, `wall` 20 s: the tile is blocked, pairs within 2 get `mime` and reroute | 'an invisible wall' | MP as `m_mime` |
 | 5 | any tile | | walk | 'walking' | — |
@@ -743,7 +745,7 @@ Values this document defines that the register does not (the owner can object to
 9. Every routine's weights and durations (4.3); kiosk café tables (2 per kiosk) and the chess rule (4.3); the comfort target formula (4.4).
 10. The eight regulars' names and `seeks`, return schedule, memory recreation rule, 40 generated names per sex, `ageWord` rule (4.5).
 11. Shelter tiles, the `CAN_INTERRUPT`, `NO_SPACE` and `SHELTERED` sets, the comfort ≥ 0.35 requirement for a stage attempt, blocked-target memory 60 s, no corner cutting (5.2–5.5).
-12. Line-of-sight definition and the once-per-day failed roll (6.1); lingering, the initiator rule, retry timers 30/60 s (6.2); together = within 4 tiles (6.3); the proposal's only failure is an interrupting embarrassment (6.2 stage 7).
+12. Line-of-sight definition and the once-per-day failed roll (6.1); a couple's `Pair` created at arrival with Bench counted as completed and no `feed.pair.formed` line (6.1); lingering, the initiator rule, retry timers 30/60 s (6.2); together = within 4 tiles (6.3); the proposal's only failure is an interrupting embarrassment (6.2 stage 7).
 13. The embarrassment base costs and the stage factors 1.0/1.25/1.5 capped at 0.15, which realise the register's "−0.06 to −0.15 by kind and stage" (6.4); backfire requires the partner within 4 tiles; `rival` lands only on paired members.
 14. Non-ending dissolutions, the `alumni` list and the 20 % returning-couple rule (6.5); the featured tie-break (6.6).
 15. MP scores only on paired victims (7.2); the unlock table placing two avatars at T1 and T3 and one at T0 and T2 (7.4) follows the register's avatar tiers exactly.
@@ -755,8 +757,7 @@ Values this document defines that the register does not (the owner can object to
 21. The command log length 600 (14.5).
 
 Open points for the owner:
-1. Should scenery couples ever be allowed to become a `Pair` (a "second honeymoon")? This document says no.
-2. Should the park close at night (no arrivals in [0.00, 0.20))? This document keeps a target of 3.
-3. Does `remove` on a tree need a confirm toast? This document says no (one tap removes).
-4. Should the matchmaker's introduce ignore `seeks` (a "surprising match")? This document says no.
-5. Whether `c_rowboat` should be refused during `m_fog` (visibility) is left to the content tables; this document allows it.
+1. Should the park close at night (no arrivals in [0.00, 0.20))? This document keeps a target of 3.
+2. Does `remove` on a tree need a confirm toast? This document says no (one tap removes).
+3. Should the matchmaker's introduce ignore `seeks` (a "surprising match")? This document says no.
+4. Whether `c_rowboat` should be refused during `m_fog` (visibility) is left to the content tables; this document allows it.

@@ -99,7 +99,7 @@ Lamps lit when `f >= 0.80 || f < 0.28`. Warm tint peaks at `f = 0.76`. `light` i
 | `SPD_CHILD` | 2.6 | child | register 3.4 |
 | `SPD_ELDER` | 2.0 | elder | register 3.4 |
 | `SPD_JOGGER` | 5.0 | jogger | register 3.4 |
-| `SPD_PAIR` | 2.4 | a pair strolling as one unit; scenery couples strolling | register 3.4 |
+| `SPD_PAIR` | 2.4 | a pair strolling as one unit, couples included | register 3.4 |
 | `SPD_CHASE` | 4.0 | victim chasing the pomeranian; fleeing a wasp | design §5.4 |
 | `SPD_POM` | 4.5 | pomeranian | design §5.4 |
 | `SPD_PIGEON_FLY` | 6.0 | pigeon flying, straight line | design §5.4 |
@@ -164,7 +164,10 @@ Lamps lit when `f >= 0.80 || f < 0.28`. Warm tint peaks at `f = 0.76`. `light` i
 | `STAGE_MIN_COMFORT` | 0.35 | both members need this to start a stage | design §5.2 |
 | `HUFF_T` | 6 s | Parted huff | design §6.5 |
 | `FIREWORKS_HAPPILY_T` | 10 s | fireworks after Happily | design §6.5 |
-| `ALUMNI_RETURN` | 0.20 | per-day chance an alumni pair returns as a couple | design §6.5 |
+| `ALUMNI_RETURN` | 0.20 | per-day chance an alumni pair returns as the couple archetype | design §6.5 |
+| `COUPLE_STAGE` | 3 | a couple archetype arrives as a `Pair` at this stage (Bench counted as completed; the next attempt is `stroll`) | register 3.4 |
+| `COUPLE_AFF_MIN`, `COUPLE_AFF_MAX` | 0.55, 0.70 | starting affinity `rnd` of an arriving couple | register 3.4 |
+| `ALUMNI_AFF` | 0.70 | starting affinity of a returning alumni couple (fixed, not rolled) | register 3.5 |
 | `CP_STAGE`, `CP_HAPPILY` | 1, 5 | Cupid Points | register 3.6 |
 | `MP_EMB`, `MP_PARTED` | 1, 5 | Mischief Points | register 3.6 |
 | `CONTRIB_CHARM` | 2 | `charmAt(midpoint).player >= 2` counts as contributed | register 3.6 |
@@ -300,7 +303,7 @@ Archetype weights per arrival roll (design §4.2.4). They do not vary by season 
 | id | Arrives as | Weight | Cap in park | `ageWord` | `sex` | Counts toward 30 |
 |---|---|---|---|---|---|---|
 | `single` | alone | 30 | - | young 50 % / grown 50 % | 50/50 | yes |
-| `couple` | two, linked by `coupleOf` | 12 | - | grown | one f, one m | yes (2) |
+| `couple` | two, linked by `coupleOf`, already a `Pair` at stage 3 with affinity rnd(0.55, 0.70) (register 3.4; section 8) | 12 | - | grown | one f, one m | yes (2) |
 | `family` | parent + `child` | 12 | - | grown; child young | parent 50/50; child 50/50 | yes (2) |
 | `elder` | alone | 10 | - | elder | 50/50 | yes |
 | `tourist` | alone (60 %) or pair (40 %) | 12 | - | young 50 % / grown 50 % | 50/50 | yes |
@@ -320,7 +323,7 @@ Needs rates are the same for every person (section 7); staff and cameos have no 
 | id | Speed | Routine activities (weight; duration in sim s) | Visit length | Signifier |
 |---|---|---|---|---|
 | `single` | 3.0 | stroll a loop (35; 70 when `social > 0.6`): one full round · bench (20): 20-60 · kiosk (15): eat 12, hunger to 0.1 · feed pigeons (15): 40, crumbs every 10 · read (15): 40 | 0.25-0.5 day, +0.1 per stage, cap 1.2 | scarf in the signature colour |
-| `couple` | 2.4 together | stroll together (50): lower id leads, the other 0.5 tile behind · bench (30): 30-60, two seats · picnic (20; x 1.5 in summer): 40-60 at a free picnic spot · leave together by one gate | 0.25-0.5 day | matching scarves, one hue |
+| `couple` | 2.4 together | stroll together (50): lower id leads, the other 0.5 tile behind · bench (30): 30-60, two seats · picnic (20; x 1.5 in summer): 40-60 at a free picnic spot · leave together by one gate; runs between romance stages, the pair continuing the ladder from `stroll` (section 8) | 0.25-0.5 day, +0.1 per stage, cap 1.2 | matching scarves, one hue |
 | `family` | parent 3.0, child 2.6 | parent to a lawn tile >= 4 from any path; child runs a circle r 2 for 30-60 · child chases the pomeranian (<= 12 s) or pigeons (22 % per decision) · kiosk together (child gets `iceCream`) · pond edge 20 | 0.25-0.5 day | parent tote bag; child at 0.65 scale with ice cream or balloon |
 | `elder` | 2.0 | bench 60-120 (50) · feed pigeons from the bench, crumbs every 10 (30) · chess (20): two elders at one `table` 90; else bench | 0.25-0.5 day | cane, flat cap, grey hair |
 | `tourist` | 3.0 | viewpoints in order fountain, bandstand if any, north edge: photo 6 each (flash particle) | 0.25 day | camera and sunhat |
@@ -402,7 +405,7 @@ Comfort target: `0.7 + 0.15 (lit lamp within 3 at night) - 0.35 * rain - 0.30 * 
 | 6 | `kiss` | phase `golden` or `evening`, OR within 3 of a fountain, OR within 3 of a lit lamp; rain < 0.3 unless `c_umbrella` | 10 | >= 0.80 | face; lean in 0.25 rad over 1 s; hold 1 s; lean back | embarrassment on either (missed; retry 60) | 6 |
 | 7 | `proposal` | at a romantic spot (section 4); same day as formation only if affinity >= 0.95, else a later visit (regulars) | 15 | >= 0.90 | initiator kneels at 0 s; ring sparkle at 8 s; the other claps hands to face at 12 s; embrace at 15 s | embarrassment on either: abandoned, back to stage 6, retry 60 | 12 at Happily, then fireworks |
 
-Rules (design §6.2): stages in order; +0.08 affinity per completed stage; a held gate with a missing prerequisite, or an unmet gate, makes the pair **linger** (repeat the current activity; charm keeps converting); an interrupted stage gives nothing and sets `retryT` 30 (60 for `kiss`, `proposal`); the lower id initiates. Endings: **Parted** (`huff` 6 s, different gates, heartbreak particle, MP +5) and **Happily** (fireworks 10 s, leave together, `alumni`, CP +5). Featured = highest stage, tie earliest `formedDay` then lowest id, or the pinned pair. Stage 1 has no `feed.stage.notice`: its feed line is `feed.pair.formed` at formation; stages 2 to 7 log `feed.stage.<id>` on completion.
+Rules (design §6.2): stages in order; +0.08 affinity per completed stage; a held gate with a missing prerequisite, or an unmet gate, makes the pair **linger** (repeat the current activity; charm keeps converting); an interrupted stage gives nothing and sets `retryT` 30 (60 for `kiss`, `proposal`); the lower id initiates. Endings: **Parted** (`huff` 6 s, different gates, heartbreak particle, MP +5) and **Happily** (fireworks 10 s, leave together, `alumni`, CP +5). Featured = highest stage, tie earliest `formedDay` then lowest id, or the pinned pair. Stage 1 has no `feed.stage.notice`: its feed line is `feed.pair.formed` at formation; stages 2 to 7 log `feed.stage.<id>` on completion. A couple archetype arrives as a `Pair` at stage 3 with Bench counted as completed and affinity rnd(0.55, 0.70), so its first attempt is `stroll` and it logs no `feed.pair.formed` (register 3.4, design §6.1); an alumni couple returns at stage 3 with affinity 0.70, and a second Happily logs `feed.romance.renewed` in place of `feed.happily` (design §6.5).
 
 ---
 
@@ -441,7 +444,7 @@ Static sources rebuild on a prop epoch (`markCharmDirty`); dynamic and pair sour
 | `fog` | `m_fog` | - | 0.06 | 0.06 / 0.075 / 0.09 | -0.3 | `lost` up to 60 s | `foghorn` | `feed.emb.fog` | `feed.emb.backfire.fog` | they bump into each other, `laugh` 4 s |
 | `flock` | `m_flock` | - | 0.09 | 0.09 / 0.1125 / 0.135 | -0.3 | `duck` 5 s; hat flies 2 tiles | `flutter` x 4 | `feed.emb.flock` | `feed.emb.backfire.flock` | they duck together laughing 5 s |
 
-Rules (design §6.4): cost = base x stage factor, capped at 0.15; applied once per event to the pair's one affinity number; backfire is rolled on the sim RNG only when the victim is in a `Pair` and the partner is within 4 tiles, and then plays the `laugh` scene instead, affinity +0.04, no comfort loss, no MP, no `embToday`; the 4th attempt on a person in a day fails with `reason.enough_today` before anything is spent; children fail with `reason.not_children`; staff and scenery couples can be targets but score 0; `rival` lands only on a `Pair` member; reaction states are `BUSY` and `NO_SPACE`; MP +1 only when the victim is in a `Pair`; every landing also emits `gasp` on the victim; a backfire emits `laugh` on both and no `gasp` (05 §3.3 items 4 and 5). Do not add an eleventh kind.
+Rules (design §6.4): cost = base x stage factor, capped at 0.15; applied once per event to the pair's one affinity number; backfire is rolled on the sim RNG only when the victim is in a `Pair` and the partner is within 4 tiles, and then plays the `laugh` scene instead, affinity +0.04, no comfort loss, no MP, no `embToday`; the 4th attempt on a person in a day fails with `reason.enough_today` before anything is spent; children fail with `reason.not_children`; staff can be targets but score 0 (a couple is a `Pair` and scores like any pair); `rival` lands only on a `Pair` member; reaction states are `BUSY` and `NO_SPACE`; MP +1 only when the victim is in a `Pair`; every landing also emits `gasp` on the victim; a backfire emits `laugh` on both and no `gasp` (05 §3.3 items 4 and 5). Do not add an eleventh kind.
 
 ---
 
@@ -1013,6 +1016,7 @@ The Points chip is `t('hud.cupid')` `#tCP` · `t('hud.mischief')` `#tMP`; the nu
 | `feed.pigeons` | A gathering of pigeons | TODO |
 | `feed.regular_return` | {name} is back | TODO |
 | `feed.alumni_return` | {a} and {b} came back, together | TODO |
+| `feed.romance.renewed` | {a} and {b} renewed their vows | {a} y {b} renovaron sus votos |
 | `feed.tally` | Today: Cupid {cp} · Mischief {mp} | TODO |
 | `feed.season.spring` | Spring in the park | TODO |
 | `feed.season.summer` | Summer in the park | TODO |
@@ -1175,7 +1179,7 @@ The Points chip is `t('hud.cupid')` `#tCP` · `t('hud.mischief')` `#tMP`; the nu
 | `gate.stop_all` | Stop all | TODO |
 | `gate.cue_bed` | Cue bed | TODO |
 
-Rules for this table: `Object.keys(en)` equals `Object.keys(es)` (test); no key may be added in code without a row here; a `.one` key always has a `.other`; a `.f` key always has a `.m`; numbers are formatted by `t()` with the locale's decimal rules; never build a sentence by concatenation. Count: 16.1 to 16.16 define 9 + 24 + 19 + 37 + 32 + 38 + 55 + 19 + 67 + 32 + 72 + 14 + 50 + 34 + 9 + 17 = 528 keys; the test asserts the count against the data file, not against this number.
+Rules for this table: `Object.keys(en)` equals `Object.keys(es)` (test); no key may be added in code without a row here; a `.one` key always has a `.other`; a `.f` key always has a `.m`; numbers are formatted by `t()` with the locale's decimal rules; never build a sentence by concatenation. Count: 16.1 to 16.16 define 9 + 24 + 19 + 37 + 32 + 38 + 55 + 19 + 67 + 32 + 73 + 14 + 50 + 34 + 9 + 17 = 529 keys; the test asserts the count against the data file, not against this number.
 
 ---
 
@@ -1235,12 +1239,12 @@ Values this document defines that neither the register nor `02-Game-Design.md` d
 4. The 40 generated first names per sex (6.1), the eight regulars' `ageWord` and personality lines (6.2), the lovers' example pair Amélie & Théo (6.2), and the fixed actor names Gustave, Marguerite, Violette, Pierrot, Pompon (6.3). The register and the design give only the regulars' names and `seeks`.
 5. `basket` is the `picnic` prop with `placedBy = 'sim'` and a life, not a separate kind (section 4); `rowboat` life is about 65 s (boarding plus the 60 s ride).
 6. The English wording of the per-ability and avatar refusal keys of 03 §5.4 (`reason.raining`, `reason.startled`, `reason.big_dog`, `reason.basket_empty`, `reason.nobody_for_them`, `reason.had_to_go` and the rest of 16.13); 03 owns the key names.
-7. The `feed.cast.<id>` feed line per ability, `feed.left_alone`, `feed.alumni_return`, `feed.ice`, `feed.thaw`, `item.*`, `spot.*`, `word.*`, and every English wording in section 16; the design fixes the wording of the New confirm, "The park is full", "has had enough for one day", and the ranked reasons, which are copied.
+7. The `feed.cast.<id>` feed line per ability, `feed.left_alone`, `feed.alumni_return`, `feed.ice`, `feed.thaw`, `item.*`, `spot.*`, `word.*`, and every English wording in section 16 (`feed.romance.renewed` is the owner's wording in both languages, 2026-10-11, not an assumption); the design fixes the wording of the New confirm, "The park is full", "has had enough for one day", and the ranked reasons, which are copied.
 8. `ending.happily` and `ending.parted` keys for the two endings as words (register §5).
 9. Section 17 copies the 38 cue ids, soft flags, scopes and gaps of `05-Audio-and-Music-Design.md` §3.2 (05 §9 item 1); 05 owns them, and a change starts there.
-10. The key count 528 (16.16) is a hand count for the reader; the test compares the two data files, not this number.
+10. The key count 529 (16.16) is a hand count for the reader; the test compares the two data files, not this number.
 
 Open points for the owner:
-1. Whether `c_rowboat` should be refused during `m_fog` (design §15 open point 5): this document allows it (no `reason` row).
+1. Whether `c_rowboat` should be refused during `m_fog` (design §15 open point 4): this document allows it (no `reason` row).
 2. Whether the park should have special days (a festival on summer day 2, a market on autumn day 2 as GV's midsummer and harvest, review §6.7): section 15 has none because the design defines none.
 3. Whether the Options sheet shows the seed (`sheet.options.seed`): brief §11 item 10 assumed yes; the register lists language, sound and speed only.
