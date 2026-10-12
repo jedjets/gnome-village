@@ -28,8 +28,8 @@ Register section 4 is the authority for the gates; this table mirrors it. A gate
 
 | Gate | What the owner sees | What it blocks | Status |
 |---|---|---|---|
-| Style Gate (S1) | `style-board.html`: directions A Storybook, B Pastel Postcard, C Line and Wash, each rendered with the real primitives (palette, ground, path, bed, tree in three seasons, bench, lamp, fountain, two lovers, pigeon, pomeranian, facade, HUD chips) | all art work from S2 on | pending |
-| Music Gate (S1) | `music-board.html`: motifs A musette waltz, B music-box lullaby, C café swing, each with a romance-rising and a parted variant | music and cue work from S8 on | pending |
+| Style Gate (S1) | `style-board.html`: directions A Storybook, B Pastel Postcard, C Line and Wash, each rendered with the real primitives (palette, ground, path, bed, tree in three seasons, bench, lamp, fountain, two lovers, pigeon, pomeranian, facade, HUD chips) | all art work from S2 on | passed 2026-10-12: A Storybook |
+| Music Gate (S1) | `music-board.html`: motifs A musette waltz, B music-box lullaby, C café swing, each with a romance-rising and a parted variant | music and cue work from S8 on | passed 2026-10-12: B Music-box lullaby and C Café swing (C by day, B from dusk to dawn) |
 | Repository | Closed: the owner keeps building in gnome-village (2026-10-11) | nothing; Pages deployment is deferred and `.github/workflows/pages.yml` stays inert (register row 4, section 7) | closed |
 
 ## 3. Start here

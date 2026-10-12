@@ -13,8 +13,11 @@ import {
 export type Key = 'G' | 'Em';
 export type StateName = 'flourish' | 'parted' | 'happily' | 'night' | 'rising' | 'stroll';
 export type MotifLetter = 'A' | 'B' | 'C';
-/** Set on the Music Gate pick (07 S1.6 item 17); A until then (05 6.5 item 3). */
-export const DEFAULT_MOTIF: MotifLetter = 'A';
+/** Music Gate passed 2026-10-12 (register section 4): the owner keeps B and C; A, this waltz, is retired.
+ *  Default use: C by day, B from dusk to dawn (register 3.13). S8 moves B and C here from src/debug/motifs.ts. */
+export const MUSIC_PICK = { day: 'C', night: 'B' } as const satisfies Record<'day' | 'night', MotifLetter>;
+/** The motif the game would play at the start of a new park (f = 0.30 is day). */
+export const DEFAULT_MOTIF: MotifLetter = MUSIC_PICK.day;
 
 /** What the waltz reads once per bar (05 5.6). S1: a stub the board sets; S8: filled from the simulation, never written by audio. */
 export interface MusicInput {

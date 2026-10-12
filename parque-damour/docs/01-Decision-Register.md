@@ -1,6 +1,6 @@
 # Parque D'Amour — Decision Register
 
-Version 1.1 · 2026-10-11 · Owner: Jeduthun Oosthuis · Author: Claude (design session)
+Version 1.2 · 2026-10-12 · Owner: Jeduthun Oosthuis · Author: Claude (design session)
 
 This file is the **spine** of the design pack. Every other document in `docs/` must agree with the numbers, names and ids here. If a document and this register disagree, the register wins and the document is wrong. Change a decision here first, then propagate.
 
@@ -13,7 +13,7 @@ Status legend: **LOCKED** = the owner decided · **ADVISED** = Claude's recommen
 | # | Topic | Owner's answer | Decision | Status |
 |---|---|---|---|---|
 | 0 | Set-up | "Set the game up according to your best practices." | Vite + TypeScript, strict, ES modules, no UI framework, one canvas, DOM overlays, Vitest, oxlint, single-file build for Chrome testing. Scaffold created in `parque-damour/`. | LOCKED |
-| 1 | Look | "The gnome village view and close to its aesthetic, with inspiration taken from my images." | Soft-isometric rotatable camera exactly as Gnome Village (GV). Painterly code-drawn look (zero image assets). French park restyle. Three style directions are rendered for the owner to pick at the **Style Gate** (Slice 1). | LOCKED + GATE |
+| 1 | Look | "The gnome village view and close to its aesthetic, with inspiration taken from my images." | Soft-isometric rotatable camera exactly as Gnome Village (GV). Painterly code-drawn look (zero image assets). French park restyle. Style Gate passed 2026-10-12: the owner picked **A Storybook** (GV palette and brushwork with French props). | LOCKED |
 | 2 | Terrain, water | "You advise, but I think simply placing ponds and waterways is sufficient." | Flat ground. Static placed water (pond brush, canal run) with constant depth. No raise/lower, no erosion, no flow sim. A river runs along the park's north edge **outside** the railings as scenery. | ADVISED |
 | 3 | Code shape | "You tell me." | Multi-file TypeScript modules under `src/`, bundled by Vite; `npm run build` also emits one self-contained `dist/index.html` (vite-plugin-singlefile) so the game can be opened or shared as one file like the GV HTML. No React. | ADVISED |
 | 4 | Repository | "You advise." | Keep building in `gnome-village`: the app and docs live in `parque-damour/` on branch `claude/parque-damour-game-design-oqc8zm` (owner, 2026-10-11). A separate repository is optional and not planned; section 7 keeps the recipe. | LOCKED |
@@ -37,7 +37,7 @@ Status legend: **LOCKED** = the owner decided · **ADVISED** = Claude's recommen
 | 22 | Languages | "Yes" | EN + ES from day one through a string table; French flavour words appear in both. | LOCKED |
 | 23 | Stores | "We will do that after html is fine." | Capacitor wrapper is a later slice. Design for it now: offline, self-hosted fonts, safe areas, 60 fps on a mid phone. | LOCKED |
 | 24 | Monetisation | "None for now." | None. No ads, no IAP, no accounts. | LOCKED |
-| 25 | Audio | "Procedural" | Procedural Web Audio, zero assets, GV's tone engine ported. Three music motifs rendered for the owner to pick at the **Music Gate** (Slice 1). | LOCKED + GATE |
+| 25 | Audio | "Procedural" | Procedural Web Audio, zero assets, GV's tone engine ported. Music Gate passed 2026-10-12: the owner liked **B Music-box lullaby** and **C Café swing** and keeps both; motif A (musette waltz) is retired. Use: C by day, B from dusk to dawn (section 4). | LOCKED |
 | 26 | Process | "Aesthetics are very important to me. Make sure the AI gives me style options before doing too much design. Music and sound are important too." | **Style Gate** and **Music Gate** in Slice 1 block all art and music work after the engine skeleton. Any model doing visual or audio work must present options before building. | LOCKED |
 
 ---
@@ -193,7 +193,7 @@ Avatars (possessable, unlocked by tier): `a_pigeon` (Mischief T0), `a_pomeranian
 - Every user-facing string goes through `t(key, params)` with EN and ES tables, plural and gender helpers. No inline sentence building. `<html lang>` follows the choice; the choice persists in the profile.
 
 ### 3.13 Audio
-- GV's engine ported: master chain, synthetic reverb, `tone`, panning, audibility, per-kind rate limiter (with the audibility-before-gate fix from the review §8). Birdsong voices kept. New cue vocabulary and ambience (fountain, café, distant bells and traffic, rain). Music: a procedural **musette waltz** by default; three motifs rendered at the Music Gate.
+- GV's engine ported: master chain, synthetic reverb, `tone`, panning, audibility, per-kind rate limiter (with the audibility-before-gate fix from the review §8). Birdsong voices kept. New cue vocabulary and ambience (fountain, café, distant bells and traffic, rain). Music: two procedural motifs picked at the Music Gate (section 4): **C Café swing** from dawn to the end of golden hour (`f` in [0.20, 0.80)) and **B Music-box lullaby** from dusk to dawn; each plays its rising or parted variant by the romance state; the change between B and C waits for a phrase boundary and crossfades over 2 s.
 
 ### 3.14 Tone rules
 - Nothing hurts anyone. Allowed: poop on head, slight trip, item snatched and later dropped, soaked, wasp flap, mime, rival flirt, fog, hats flying. Not allowed: injuries, cruelty, targeting children, mocking appearance. Max 3 embarrassments per person per day. Backfires exist so mischief stays charming.
@@ -203,12 +203,12 @@ No multiplayer transport, no monetisation, no store build, no terrain heights, n
 
 ---
 
-## 4. Gates awaiting the owner
+## 4. Gates
 
 | Gate | What the owner sees | Blocks |
 |---|---|---|
-| **Style Gate** (Slice 1) | `style-board.html`: three directions rendered with the real primitives, side by side: A "Storybook" (GV palette and brushwork with French props), B "Pastel Postcard" (flat vector like ref1), C "Line and Wash" (ink line and watercolour like ref2/ref3). Each shows palette, ground + path + bed, a tree in three seasons, bench, lamp, fountain, two lovers, a pigeon, the pomeranian, a facade, HUD chips. | All art work from Slice 2 on |
-| **Music Gate** (Slice 1) | `music-board.html`: three playable motifs: A musette waltz, B music-box lullaby (GV kin), C café swing; each with a romance-rising and a parted variant. | Music and cue work from Slice 8 on |
+| **Style Gate** (Slice 1) | `style-board.html`: three directions rendered with the real primitives, side by side: A "Storybook" (GV palette and brushwork with French props), B "Pastel Postcard" (flat vector like ref1), C "Line and Wash" (ink line and watercolour like ref2/ref3). Each shows palette, ground + path + bed, a tree in three seasons, bench, lamp, fountain, two lovers, a pigeon, the pomeranian, a facade, HUD chips. **Picked: A Storybook on 2026-10-12** (owner, in words). | Passed. All art from Slice 2 on draws direction A only; the B and C branches in existing primitives are frozen for the board and must not be extended |
+| **Music Gate** (Slice 1) | `music-board.html`: three playable motifs: A musette waltz, B music-box lullaby (GV kin), C café swing; each with a romance-rising and a parted variant. **Picked: B Music-box lullaby and C Café swing on 2026-10-12** (owner: "I liked B and C"); knobs at the board defaults (05 6.3) with the gate mix `MUSIC_MAKEUP 4.5`, B `TINE_MAKEUP 2`. Default use (ADVISED, owner may change): C by day, B from dusk to dawn (3.13). Motif A is retired. | Passed. Slice 8 moves B and C from `src/debug/motifs.ts` into `src/audio/music.ts` |
 | Repository | Closed: the owner keeps building in gnome-village (2026-10-11) | Nothing. Pages deployment for this app is deferred and `.github/workflows/pages.yml` stays inert; section 7 keeps the optional recipe |
 
 ---
