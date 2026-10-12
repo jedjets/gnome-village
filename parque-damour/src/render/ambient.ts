@@ -1,16 +1,21 @@
 // src/render/ambient.ts
 // The scene palettes (the only file in src/ with a scene colour literal, 04 4.5), the three StyleSpecs of the Style Gate,
-// the per-frame ambient light (AM, AT, AA, FOGA, lit, GC, shade, mix, faceLight), the sky keyframes and the per-direction
-// brush: how a shape is filled and lined in A Storybook (soft contour, faceLight), B Pastel Postcard (flat two-tone, no line)
-// and C Line and Wash (jittered ink from nzAt, a misregistered wash, hatching) (04 3.2, 3.3).
-// Ported from GV 6445-6478 (C, computeAmbient, lit, GC), 6450 (SUNL), 6630-6638 (NZ, nzAt, grain), 6959-6965 (faceLight,
-// shade, h01), 6480-6488 (SKYR), 10774 (WCOLD). PORT; the golden-hour windows follow the register (0.72-0.80, peak 0.76);
-// nzAt lives here instead of ground.ts (03 2.7) because the brush needs it and ground.ts imports this file.
-// TODO(S9): season tints by T.season, lamp warmth on figures (03 7.3 item 5).
+// the per-frame ambient light (AM, AT, AA, FOGA, lit, GC, shade, mix, faceLight), the season-tint hook, the sky keyframes and the
+// per-direction brush: how a shape is filled and lined in A Storybook (soft contour, faceLight), B Pastel Postcard (flat two-tone, no
+// line) and C Line and Wash (jittered ink from nzAt, a misregistered wash, hatching) (04 3.2, 3.3).
+// Ported from GV 6445-6478 (C, computeAmbient, lit, GC), 6450 (SUNL), 6494 (nightW), 6539 (the grey of a clouded sky), 6630-6638
+// (NZ, nzAt, grain), 6959-6965 (faceLight, shade, h01), 6480-6488 (SKYR), 10774 (WCOLD).
+// Verdict: PORT. Changes: the golden-hour windows follow the register (peaks 0.24 and 0.76, half-widths 0.08 and 0.10, 03 7.3 item 2;
+// GV 0.26 and 0.74 +- 0.11); the storm cover of GV 6458 is dropped (no storm front); the GC key carries a separator and the warm tint
+// (GV 6472 could collide and reused a dawn colour at dusk); nightW mixes toward the palette's `night` (GV recomputed NIGHTC from the
+// ramp each epoch: the same colour at night); nzAt lives here instead of ground.ts (03 2.7) because the brush needs it.
+// The Style Gate passed with A Storybook (register section 4, 2026-10-12): style() returns STYLES.A whatever profile.stylePick holds
+// (04 3.4 item 4, 4.5 item 1); the style board passes each column's own StyleSpec, and the B and C branches below are frozen for it.
+// Dropped from the range: the storm cover (6458), seaPlaneCol and wRGBA (6495-6523: no sea).
+// TODO(S9): lamp warmth on figures (03 7.3 item 5); snow cover on the season tint (04 10.3 winter).
 import { clamp01, css, hx, mixc, type RGB } from '../core/math.ts';
-import { T } from '../core/clock.ts';
+import { SEASON_DAYS, T, type Season } from '../core/clock.ts';
 import { W } from '../core/weather.ts';
-import { getProfile } from '../save/store.ts';
 import { rotVec } from './camera.ts';
 
 export type StyleId = 'A' | 'B' | 'C';
@@ -117,17 +122,46 @@ export const STYLES: Record<StyleId, StyleSpec> = {
   C: { id: 'C', palette: PALETTES.C, line: 'ink', shading: 'wash', grain: 'paper', themeColor: '#F7F3EA' },
 };
 
-/** The direction the game runs until the Style Gate is recorded (04 4.4 item 4); S1 step 16 sets the picked letter. */
+/** The direction picked at the Style Gate: A Storybook (register section 4, 2026-10-12; 04 4.4 item 4). */
 export const DEFAULT_STYLE: StyleId = 'A';
 
 export function isStyleId(v: unknown): v is StyleId {
   return v === 'A' || v === 'B' || v === 'C';
 }
 
-/** The StyleSpec named by profile.stylePick, or the default (04 4.5 item 1). */
+/** The game's direction: always A, whatever profile.stylePick holds (04 3.4 item 4, 4.5 item 1); the board passes its own specs. */
 export function style(): StyleSpec {
-  const pick = getProfile().stylePick;
-  return STYLES[isStyleId(pick) ? pick : DEFAULT_STYLE];
+  return STYLES[DEFAULT_STYLE];
+}
+
+/* ---------- the season-tint hook (03 7.3 item 6; 04 10.3) ---------- */
+/** Days over which a season change blends, centred on the change (03 7.3 item 6: half a day). */
+export const SEASON_BLEND = 0.5;
+export type SeasonMix = { from: Season; to: Season; k: number };
+const SMIX: SeasonMix = { from: 0, to: 0, k: 0 };
+/**
+ * The season a tint is drawn in at day count `abs` (T.abs): `from`, blended toward `to` by k over the half day centred on a season
+ * change. A park's first season has no change before it, so a new park (abs 0.30) draws pure spring. Reused object: copy it to keep it.
+ */
+export function seasonMix(abs: number = T.abs): SeasonMix {
+  const s = (Math.floor(Math.floor(abs) / SEASON_DAYS) % 4) as Season;
+  const edge = Math.round(abs / SEASON_DAYS) * SEASON_DAYS; // the nearest season change, in days
+  const d = abs - edge;
+  SMIX.from = s;
+  SMIX.to = s;
+  SMIX.k = 0;
+  if (edge > 0 && Math.abs(d) < SEASON_BLEND / 2) {
+    const before = (((edge / SEASON_DAYS - 1) % 4) + 4) % 4, after = (edge / SEASON_DAYS) % 4;
+    SMIX.from = before as Season;
+    SMIX.to = after as Season;
+    SMIX.k = (d + SEASON_BLEND / 2) / SEASON_BLEND;
+  }
+  return SMIX;
+}
+/** A hex tinted by season through the hook: `bySeason` gives the hex of one season, blended across a change. */
+export function seasonHex(bySeason: (s: Season) => string, abs: number = T.abs): string {
+  const m = seasonMix(abs);
+  return m.k <= 0 ? bySeason(m.from) : mix(bySeason(m.from), bySeason(m.to), m.k);
 }
 
 /* ---------- sky keyframes (04 10.1 item 2, direction A values; GV SKYR 6480-6488 re-keyed to the bands) ---------- */
@@ -151,16 +185,19 @@ export const WCOLD = {
   clear: '#F3D9A8', fair: '#DCE9F2', cloudy: '#C8CCDA', breeze: '#CDE3D8',
   rain: '#9FBCD4', shower: '#B7CCDE', mist: '#DDE2E8', snow: '#EFF4FA',
 } as const;
-/** The warm tint targets before and after noon (GV 6462) and the storm-free cloud grey of the sky (GV 6539). */
+/** The warm tint targets before and after noon (GV 6462). */
 const AT_AM: RGB = [255, 204, 162];
 const AT_PM: RGB = [255, 186, 158];
 export const WHITE: RGB = [255, 255, 255];
+/** The grey a clouded sky turns toward, top and bottom (GV paintSky 6539). */
+export const SKY_GREY: readonly [string, string] = ['#848CA0', '#B2B8C6'];
 
 /* ---------- ambient light (GV 6450-6478) ---------- */
 export let AM: RGB = [1, 1, 1];
 export let AT: RGB = AT_AM;
 export let AA = 0;
 export let FOGA = 0;
+let gkey = '|100,100,0a'; // the GC memo's ambient key
 /** The sun direction, normalised (GV 6450). */
 export const SUNL: RGB = (() => {
   const v: RGB = [-0.5, -0.3, 0.82];
@@ -177,6 +214,7 @@ export function computeAmbientAt(f: number, light: number, cloud = 0, mist = 0, 
   AA = clamp01(warm) * 0.22 * Math.max(0.25, light);
   AT = f < 0.5 ? AT_AM : AT_PM;
   FOGA = clamp01(mist * 0.3 + rain * 0.03 + snow * 0.14);
+  gkey = '|' + ((AM[0] * 100) | 0) + ',' + ((AM[2] * 100) | 0) + ',' + ((AA * 100) | 0) + (f < 0.5 ? 'a' : 'p');
 }
 
 /** Once per frame: the ambient state from the clock and the weather (03 7.3). */
@@ -198,7 +236,7 @@ export function lit(c: RGB): RGB {
 const gcache = new Map<string, string>();
 /** A lit CSS colour for a hex, memoised on the ambient state; flushed at 900 keys (GV 6470-6478). */
 export function GC(h: string, a?: number): string {
-  const k = h + '|' + (a === undefined ? '' : a) + '|' + ((AM[0] * 100) | 0) + ((AA * 100) | 0);
+  const k = h + '|' + (a === undefined ? '' : a) + gkey;
   const v = gcache.get(k);
   if (v) return v;
   const s = css(lit(hx(h)), a);
@@ -221,6 +259,12 @@ function hex2(v: number): string {
 export function toHex(c: RGB): string {
   return '#' + hex2(c[0]) + hex2(c[1]) + hex2(c[2]);
 }
+/** Water and sky give the night back: a lit colour mixed toward the palette's `night` as the light goes (GV nightW 6494). */
+export function nightW(c: RGB, spec: StyleSpec = style()): RGB {
+  const k = (1 - T.light) * 0.52;
+  return k < 0.012 ? c : mixc(c, hx(spec.palette.night), k);
+}
+
 /** Two hexes mixed by t, as a hex (so the result can go through GC). */
 export function mix(a: string, b: string, t: number): string {
   return toHex(mixc(hx(a), hx(b), t));
