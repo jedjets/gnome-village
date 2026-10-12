@@ -1,6 +1,6 @@
 # Parque D'Amour — Decision Register
 
-Version 1.2 · 2026-10-12 · Owner: Jeduthun Oosthuis · Author: Claude (design session)
+Version 1.3 · 2026-10-13 · Owner: Jeduthun Oosthuis · Author: Claude (design session)
 
 This file is the **spine** of the design pack. Every other document in `docs/` must agree with the numbers, names and ids here. If a document and this register disagree, the register wins and the document is wrong. Change a decision here first, then propagate.
 
@@ -209,6 +209,7 @@ No multiplayer transport, no monetisation, no store build, no terrain heights, n
 |---|---|---|
 | **Style Gate** (Slice 1) | `style-board.html`: three directions rendered with the real primitives, side by side: A "Storybook" (GV palette and brushwork with French props), B "Pastel Postcard" (flat vector like ref1), C "Line and Wash" (ink line and watercolour like ref2/ref3). Each shows palette, ground + path + bed, a tree in three seasons, bench, lamp, fountain, two lovers, a pigeon, the pomeranian, a facade, HUD chips. **Picked: A Storybook on 2026-10-12** (owner, in words). | Passed. All art from Slice 2 on draws direction A only; the B and C branches in existing primitives are frozen for the board and must not be extended |
 | **Music Gate** (Slice 1) | `music-board.html`: three playable motifs: A musette waltz, B music-box lullaby (GV kin), C café swing; each with a romance-rising and a parted variant. **Picked: B Music-box lullaby and C Café swing on 2026-10-12** (owner: "I liked B and C"); knobs at the board defaults (05 6.3) with the gate mix `MUSIC_MAKEUP 4.5`, B `TINE_MAKEUP 2`. Default use (ADVISED, owner may change): C by day, B from dusk to dawn (3.13). Motif A is retired. | Passed. Slice 8 moves B and C from `src/debug/motifs.ts` into `src/audio/music.ts` |
+| **Park element options** (Slice 2, register row 26) | `scratch/s2-options.html` (built from `src/render/*`): two or three Style A variants of six elements the Style Gate board did not show. **Picked on 2026-10-13** (owner, "1A 2A 3B 4A 5C 6B"): 1 skyline **A** tower and rooftops (as built); 2 kiosk **A** café kiosk with striped awning (as built); 3 bandstand **B** Belle Époque (tall panelled stone base with three steps, iron balustrade and lacework arches, lambrequin, concave zinc roof with a glazed lantern); 4 railings and gates **A** black iron with gilt spear tips on a stone plinth (as built); 5 footbridge **C** iron lattice (light iron bridge with a gentle camber, girder on a slim arch with a diagonal lattice web, lattice railings); 6 facade row **B** varied pastels (rose, sky, butter, sage and lavender washes with cream stone trim). | Passed. Slice 2 builds 3B, 5C and 6B into `src/render/props-park.ts` and `src/render/apron.ts`; the other variants stay only on the scratch page |
 | Repository | Closed: the owner keeps building in gnome-village (2026-10-11) | Nothing. Pages deployment for this app is deferred and `.github/workflows/pages.yml` stays inert; section 7 keeps the optional recipe |
 
 ---
