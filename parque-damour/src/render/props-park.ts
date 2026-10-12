@@ -1,9 +1,9 @@
 // src/render/props-park.ts
-// The park's built props that the Style Gate board did not show, in direction A only (04 3.4 item 2): the kiosk, the bandstand, the
-// picnic blanket and the footbridge, drawn to match the board's bench, lamp, fountain and facade tiles (soft gradient faces by faceLight, no
-// outlines, iron as lines, palette tokens only), each from a parameter table a later slice can vary to show the owner options (04 6.1;
-// 06 4). Split out of props.ts, which dispatches to these, to keep both files near the 600-line rule (AGENTS rule 9; same module, same
-// layer: 03 2.7 props.ts row).
+// The park's built props that the Style Gate board did not show, in direction A only (04 3.4 item 2): the kiosk, the bandstand (the
+// owner's pick 3B, Belle Époque), the picnic blanket and the footbridge (pick 5C, iron lattice; register section 4, 2026-10-13), drawn to
+// match the board's bench, lamp, fountain and facade tiles (soft gradient faces by faceLight, no outlines, iron as lines, palette tokens
+// only), each from a parameter table; and the board's bench, moved here from props.ts with no change. Split out of props.ts, which
+// dispatches to these, to keep both files near the 600-line rule (AGENTS rule 9; same module, same layer: 03 2.7 props.ts row).
 // Ported from GV 6953-6960 (wp, poly, faceVis, faceLight: the box primitives), 7046-7056 (houseFrame: a quarter-turned local frame), 10294
 // (archVoid: the flattened sin^0.55 arch over dusky water).
 // Verdict: ADAPT. Changes: regular octagons, frustums (prism to cone) and turned boxes replace GV's house kit; faces are shown by faceVis
@@ -12,8 +12,8 @@
 // Dropped from the range: logs, cobbles, planks, thatch, chimneys, smoke and the build stages of the house kit (6952-8044).
 // TODO(S4): the bandstand's string lights at night while a busker plays (06 4); TODO(S9): the kiosk's winter steam, awning flap in breeze,
 // snow on the deck and roofs (04 6.1).
-import { EH, TW } from './camera.ts';
-import { faceLight, fillEllipse, fillPoly, GC, h01, mix, scaleHex, shade, strokeLine, type Pen, type Proj, type Pt } from './ambient.ts';
+import { TW } from './camera.ts';
+import { faceLight, fillEllipse, fillPoly, GC, h01, lampGlow, mix, scaleHex, shade, strokeLine, type Pen, type Proj, type Pt } from './ambient.ts';
 import { TAU, clamp01 } from '../core/math.ts';
 import type { Prop } from '../world/grid.ts';
 import { depthOf } from './order.ts';
@@ -90,27 +90,94 @@ function backward<T>(a: readonly T[]): T[] {
   for (let i = a.length - 1; i >= 0; i--) out.push(a[i] as T);
   return out;
 }
-/** The ribs of an octagonal cone roof where two faces meet, on the side the viewer sees, at zoom 1.0 and over. */
-function ribs(pen: Pen, proj: Proj, cx: number, cy: number, r: number, e0: number, apex: number, hex: string): void {
+/** a[i] with i taken round the list (a polygon's corners). */
+const nth = <V>(a: readonly V[], i: number): V => a[((i % a.length) + a.length) % a.length] as V;
+/** The light of octagon face i (face 0 looks east). */
+function faceL(i: number): number {
+  return faceLight(Math.cos((i / 8) * TAU), Math.sin((i / 8) * TAU));
+}
+/** The ribs where the faces of a roof meet, along its profile of rings [radius, height] (a cone is two rings, the apex radius 0), on the
+ *  side the viewer sees, at zoom 1.0 and over. */
+function ribs(pen: Pen, proj: Proj, cx: number, cy: number, rings: readonly (readonly [number, number])[], hex: string): void {
   const { ctx, z } = pen;
   if (z < 1.0) return;
-  const eave = ngon(cx, cy, r, e0, 8), top = proj(cx, cy, apex);
+  const [r0, e0] = rings[0] as readonly [number, number], [r1, e1] = rings[1] as readonly [number, number];
   ctx.strokeStyle = shade(hex, 0.8, 0.8);
   ctx.lineWidth = Math.max(0.5, 0.5 * z);
   ctx.beginPath();
   for (let i = 0; i < 8; i++) {
-    if (!frustumVis(i, r, e0, 0, apex) && !frustumVis((i + 7) % 8, r, e0, 0, apex)) continue;
-    const q = proj(...(eave[i] as W3));
-    ctx.moveTo(q.x, q.y);
-    ctx.lineTo(top.x, top.y);
+    if (!frustumVis(i, r0, e0, r1, e1) && !frustumVis((i + 7) % 8, r0, e0, r1, e1)) continue;
+    rings.forEach(([r, e], k) => {
+      const q = proj(...(ngon(cx, cy, r, e, 8)[i] as W3));
+      if (k) ctx.lineTo(q.x, q.y);
+      else ctx.moveTo(q.x, q.y);
+    });
   }
   ctx.stroke();
 }
-/** A gilt finial: a small ball on a spike at the top of a roof (the railings' gilt spear tips, 04 6.4). */
-function finial(pen: Pen, proj: Proj, cx: number, cy: number, e: number, hex: string): void {
-  const z = pen.z, a = proj(cx, cy, e), b = proj(cx, cy, e + 0.12);
+/** A gilt finial: a small ball on a spike h EH tall at the top of a roof (the railings' gilt spear tips, 04 6.4). */
+function finial(pen: Pen, proj: Proj, cx: number, cy: number, e: number, hex: string, h = 0.12): void {
+  const z = pen.z, a = proj(cx, cy, e), b = proj(cx, cy, e + h);
   strokeLine(pen, [a, b], hex, Math.max(0.6, 0.6 * z), { light: 0.95 });
   fillEllipse(pen, b.x, b.y, Math.max(0.8, 0.05 * TW * z), Math.max(0.8, 0.05 * TW * z), hex, { light: 1.05 });
+}
+
+/* ---------- the bench (04 6.1 row bench; moved here from props.ts, AGENTS rule 9: the board still imports it from there) ---------- */
+/**
+ * A bench on tile (x, y); rot 0 runs along world x and faces +y (south), each step a quarter turn on (1 west, 2 north, 3 east; the
+ * game's Prop.rot r is (r + 2) % 4 here); height 0.45 EH; seat 0.2 EH. The far end, the back and the seat, the near end paint in the order
+ * the projection puts them; wet slats darken to x 0.86 (04 6.1).
+ */
+export function drawBench(pen: Pen, proj: Proj, x: number, y: number, rot = 0, wet = 0): void {
+  const P = pen.spec.palette;
+  const q = Math.PI / 2 * rot;
+  const cq = Math.cos(q), sq = Math.sin(q);
+  // a local frame: u along the seat, v from the back (negative) to the front (positive)
+  const W = (u: number, v: number, e: number): W3 => [x + u * cq - v * sq, y + u * sq + v * cq, e];
+  const slat = scaleHex(P.bedEarth, [1.2, 1.2, 1.2]);
+  const wk = 1 - 0.14 * wet;
+  const lightTop = 1.0 * wk, lightFront = faceLight(-sq, cq) * wk;
+  const seatE = 0.2, thick = 0.035;
+  // the cast-iron ends: two legs, a seat rail, the armrest curl (zinc, drawn as lines)
+  const ironW = Math.max(0.8, 1.1 * pen.z);
+  const end = (u: number, seed: number): void => {
+    for (const v of [-0.14, 0.13]) strokeLine(pen, quad(proj, W(u, v, 0), W(u, v, seatE)), P.zinc, ironW, { open: true, seed });
+    strokeLine(pen, quad(proj, W(u, -0.22, seatE), W(u, 0.18, seatE)), P.zinc, ironW, { open: true, seed: seed + 1 });
+    const curl: Pt[] = [];
+    for (let i = 0; i <= 8; i++) {
+      const t = i / 8;
+      const v = -0.2 + t * 0.34, e = seatE + 0.12 + Math.sin(t * Math.PI) * 0.1 - t * 0.04;
+      curl.push(proj(...W(u, v, e)));
+    }
+    strokeLine(pen, [proj(...W(u, -0.2, seatE)), ...curl], P.zinc, ironW, { open: true, seed: seed + 2 });
+  };
+  // which end is nearer, and whether the front faces the viewer, by where the projection puts them (screen y grows toward the viewer)
+  const uFar = proj(...W(-0.46, 0, 0)).y <= proj(...W(0.46, 0, 0)).y ? -0.46 : 0.46;
+  const frontNear = proj(...W(0, 0.2, 0)).y >= proj(...W(0, -0.2, 0)).y;
+  const back = (): void => {
+    // the back: two slats standing at the rear
+    for (const [e0, e1] of [[0.27, 0.35], [0.37, 0.45]] as const) {
+      fillPoly(pen, quad(proj, W(-0.45, -0.2, e0), W(0.45, -0.2, e0), W(0.45, -0.2, e1), W(-0.45, -0.2, e1)), slat, { seed: 10 + e0 * 100, light: lightFront });
+      fillPoly(pen, quad(proj, W(-0.45, -0.23, e1), W(0.45, -0.23, e1), W(0.45, -0.2, e1), W(-0.45, -0.2, e1)), slat, { seed: 11 + e0 * 100, light: lightTop, noInk: true });
+    }
+  };
+  const seat = (): void => {
+    // the seat: three slats along u, each 0.11 tile deep, with a thin front face where the viewer can see it
+    for (let k = 0; k < 3; k++) {
+      const v0 = -0.19 + k * 0.12, v1 = v0 + 0.11;
+      fillPoly(pen, quad(proj, W(-0.45, v0, seatE), W(0.45, v0, seatE), W(0.45, v1, seatE), W(-0.45, v1, seatE)), slat, { seed: 20 + k, light: lightTop });
+      if (frontNear) fillPoly(pen, quad(proj, W(-0.45, v1, seatE - thick), W(0.45, v1, seatE - thick), W(0.45, v1, seatE), W(-0.45, v1, seatE)), slat, { seed: 30 + k, light: lightFront * 0.92, noInk: true });
+    }
+  };
+  end(uFar, 3); // the far end first
+  if (frontNear) {
+    back();
+    seat();
+  } else {
+    seat();
+    back();
+  }
+  end(-uFar, 6); // the near end over the seat
 }
 
 /* ---------- the kiosk (04 6.1 row kiosk; 06 4): a green octagonal Paris kiosque ---------- */
@@ -192,87 +259,142 @@ export function drawKiosk(pen: Pen, proj: Proj, x: number, y: number, rot: numbe
   frustum(pen, proj, cx, cy, K.r + 0.06, K.body, K.r + 0.06, top, P[K.trim]);
   awning(true);
   frustum(pen, proj, cx, cy, K.roofR, top, 0, K.apex, P[K.roof]);
-  ribs(pen, proj, cx, cy, K.roofR, top, K.apex, P[K.roof]);
+  ribs(pen, proj, cx, cy, [[K.roofR, top], [0, K.apex]], P[K.roof]);
   finial(pen, proj, cx, cy, K.apex, P[K.gilt]);
 }
 
-/* ---------- the bandstand (04 6.1 row bandstand; 06 4): an octagonal kiosque a musique ---------- */
+/* ---------- the bandstand (04 6.1 row bandstand; 06 4): the owner's pick 3B, a Belle Époque kiosque a musique ---------- */
 export type BandstandSpec = {
-  r: number; deck: number; postR: number; eave: number; eaveR: number; apex: number; valance: number; rail: number; entrance: number;
-  step: number; base: HexKey; post: HexKey; roof: HexKey; trim: HexKey; gilt: HexKey;
+  r: number; base: number; postR: number; posts: number; eaveR: number; eave: number; roof: number; lantR: number; lantern: number;
+  apex: number; entrance: number; stone: HexKey; trim: HexKey; iron: HexKey; zinc: HexKey; glass: HexKey; gilt: HexKey;
 };
-/** The bandstand's numbers (EH heights, tile radii; the entrance is an octagon face, 2 = south) and palette keys. */
+/** The bandstand's numbers (EH heights, tile radii; the entrance is an octagon face, 2 = south) and palette keys (register section 4,
+ *  pick 3B, 2026-10-13: the tall panelled base, lacework arches, lambrequin, concave roof and glazed lantern of the owner's options page). */
 export const BANDSTAND: BandstandSpec = {
-  r: 1.38, deck: 0.25, postR: 1.2, eave: 1.32, eaveR: 1.5, apex: 1.85, valance: 0.1, rail: 0.3, entrance: 2, step: 0.12,
-  base: 'stone', post: 'zinc', roof: 'zinc', trim: 'paper', gilt: 'lamp',
+  r: 1.36, base: 0.44, postR: 1.2, posts: 1.5, eaveR: 1.52, eave: 1.58, roof: 2.34, lantR: 0.25, lantern: 2.54, apex: 2.8, entrance: 2,
+  stone: 'stone', trim: 'paper', iron: 'ink', zinc: 'zinc', glass: 'sky', gilt: 'lamp',
 };
 
 /**
- * A bandstand whose north-west tile is (x, y) (3 x 3): an octagonal stone platform 0.25 EH high with a step at the entrance, eight zinc
- * posts, a railing on the seven other sides, a scalloped paper valance under the eave, the zinc cone to 1.85 EH (0.25 + 1.6, 06 4) and a
- * gilt finial. part 1 is the back (platform, the posts and rails behind the centre), part 2 the front (the near posts and rails, valance and
- * roof), 0 both, so a busker on the platform paints between them (03 7.2).
+ * A bandstand whose north-west tile is (x, y) (3 x 3), Belle Époque (pick 3B): a tall octagonal stone base with moulded panels and three
+ * steps at the entrance, a cream cornice, a cast-iron balustrade, eight slender columns with lacework arches between them, a pointed
+ * lambrequin under the eave, a concave zinc roof sweeping up to a glazed lantern (lamp-lit at night) and a gilt finial. part 1 is the back
+ * (base, steps, the rails, columns and arches behind the centre), part 2 the front (the near ones, lambrequin and roof), 0 both, so a
+ * busker on the platform paints between them (03 7.2).
  */
 export function drawBandstand(pen: Pen, proj: Proj, x: number, y: number, part: 0 | 1 | 2 = 0): void {
   const { ctx, z } = pen, P = pen.spec.palette, B = BANDSTAND, cx = x + 1, cy = y + 1, cd = depthOf(cx, cy);
-  const posts = ngon(cx, cy, B.postR, B.deck, 8), iron = P[B.post];
-  const nearPost = (i: number): boolean => {
-    const q = posts[i] as W3;
-    return depthOf(q[0], q[1]) > cd;
-  };
+  const iron = mix(P[B.iron], P.zinc, 0.1), posts = ngon(cx, cy, B.postR, B.base, 8), w = Math.max(0.6, 0.55 * z);
+  const nearPost = (i: number): boolean => depthOf(nth(posts, i)[0], nth(posts, i)[1]) > cd;
   const nearSeg = (i: number): boolean => {
-    const a = posts[i] as W3, b = posts[(i + 1) % 8] as W3;
+    const a = nth(posts, i), b = nth(posts, i + 1);
     return depthOf((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) > cd;
   };
+  const rings = (pts: readonly W3[], rr: number, h: number): void => {
+    for (const q of pts) {
+      const c = proj(...q), r = rr * TW * z;
+      ctx.moveTo(c.x + r, c.y);
+      ctx.ellipse(c.x, c.y, r, r * h, 0, 0, TAU);
+    }
+  };
   const rails = (near: boolean): void => {
-    const w = Math.max(0.6, 0.55 * z);
     for (let i = 0; i < 8; i++) {
       if (i === B.entrance || nearSeg(i) !== near) continue;
-      const a = posts[i] as W3, b = posts[(i + 1) % 8] as W3;
-      for (const e of [B.deck + B.rail, B.deck + 0.06]) strokeLine(pen, [proj(a[0], a[1], e), proj(b[0], b[1], e)], iron, w, { light: 0.9 });
+      const a = nth(posts, i), b = nth(posts, i + 1);
+      for (const e of [B.base + 0.34, B.base + 0.05]) strokeLine(pen, [proj(a[0], a[1], e), proj(b[0], b[1], e)], iron, w, { light: 0.92 });
       if (z < 1.0) continue;
-      ctx.strokeStyle = shade(iron, 0.9);
+      ctx.strokeStyle = shade(iron, near ? 0.95 : 0.85);
       ctx.lineWidth = Math.max(0.5, 0.35 * z);
       ctx.beginPath();
-      for (let k = 1; k < 6; k++) {
-        const q = lerp3(a, b, k / 6), p0 = proj(q[0], q[1], B.deck + 0.06), p1 = proj(q[0], q[1], B.deck + B.rail);
+      for (let k = 1; k < 10; k++) {
+        const q = lerp3(a, b, k / 10), p0 = proj(q[0], q[1], B.base + 0.05), p1 = proj(q[0], q[1], B.base + 0.34);
         ctx.moveTo(p0.x, p0.y);
         ctx.lineTo(p1.x, p1.y);
       }
+      if (z >= 1.4) rings([0, 1, 2, 3, 4].map((k) => lerp3(a, b, (k + 0.5) / 5, B.base + 0.2)), 0.035, 1);
       ctx.stroke();
     }
   };
-  const postsOf = (near: boolean): void => {
-    const w = Math.max(0.8, 0.05 * TW * z);
+  const lace = (near: boolean): void => {
+    const L = near ? 0.95 : 0.85;
+    for (let i = 0; i < 8; i++) {
+      if (nearSeg(i) !== near) continue;
+      const a = nth(posts, i), b = nth(posts, i + 1), arch: Pt[] = [], arch2: Pt[] = [];
+      for (let k = 0; k <= 12; k++) {
+        const t = k / 12, q = lerp3(a, b, t), s = Math.pow(Math.sin(Math.PI * t), 0.7);
+        arch.push(proj(q[0], q[1], B.posts - 0.26 + 0.22 * s));
+        arch2.push(proj(q[0], q[1], B.posts - 0.18 + 0.14 * s));
+      }
+      strokeLine(pen, arch, iron, w * 0.85, { light: L });
+      strokeLine(pen, [proj(a[0], a[1], B.posts), proj(b[0], b[1], B.posts)], iron, w, { light: L });
+      if (z < 1.0) continue;
+      strokeLine(pen, arch2, iron, w * 0.5, { light: L });
+      ctx.strokeStyle = shade(iron, L);
+      ctx.lineWidth = Math.max(0.5, 0.35 * z);
+      ctx.beginPath();
+      rings([lerp3(a, b, 0.1, B.posts - 0.08), lerp3(a, b, 0.9, B.posts - 0.08)], 0.045, 0.9);
+      ctx.stroke();
+    }
+  };
+  const columns = (near: boolean): void => {
+    const pw = Math.max(0.8, 0.042 * TW * z);
     for (let i = 0; i < 8; i++) {
       if (nearPost(i) !== near) continue;
-      const q = posts[i] as W3;
-      strokeLine(pen, [proj(q[0], q[1], B.deck), proj(q[0], q[1], B.eave)], iron, w, { light: near ? 1.0 : 0.88 });
+      const q = nth(posts, i), c = proj(q[0], q[1], B.posts - 0.02);
+      strokeLine(pen, [proj(q[0], q[1], B.base), proj(q[0], q[1], B.posts)], iron, pw, { light: near ? 1.0 : 0.88 });
+      fillEllipse(pen, c.x, c.y, pw * 1.2, pw * 0.8, iron, { light: 1.0 });
     }
   };
   if (part !== 2) {
-    const ea = (B.entrance / 8) * TAU, ex = cx + Math.cos(ea) * (B.r + 0.12), ey = cy + Math.sin(ea) * (B.r + 0.12);
-    const stepFront = faceVis(Math.cos(ea), Math.sin(ea));
-    if (!stepFront) box(pen, proj, ex, ey, 0.13, 0.32, ea, 0, B.step, P[B.base]);
-    frustum(pen, proj, cx, cy, B.r, 0, B.r, B.deck, P[B.base], { cap: 1.05 });
-    if (stepFront) box(pen, proj, ex, ey, 0.13, 0.32, ea, 0, B.step, P[B.base]);
+    const ea = (B.entrance / 8) * TAU, ux = Math.cos(ea), uy = Math.sin(ea), front = faceVis(ux, uy);
+    const steps = (): void => {
+      for (const k of front ? [0, 1, 2] : [2, 1, 0])
+        box(pen, proj, cx + ux * (B.r + 0.08 + 0.16 * k), cy + uy * (B.r + 0.08 + 0.16 * k), 0.08, 0.44, ea, 0, (B.base * (3 - k)) / 4, P[B.stone], 1.05);
+    };
+    if (!front) steps();
+    frustum(pen, proj, cx, cy, B.r, 0, B.r, B.base - 0.06, P[B.stone]);
+    if (z >= 0.8) {
+      const r0 = ngon(cx, cy, B.r + 0.002, 0, 8);
+      for (let i = 0; i < 8; i++) {
+        if (!visF(i) || i === B.entrance) continue;
+        const a = nth(r0, i), b = nth(r0, i + 1);
+        fillPoly(pen, quad(proj, lerp3(a, b, 0.16, 0.07), lerp3(a, b, 0.84, 0.07), lerp3(a, b, 0.84, B.base - 0.13), lerp3(a, b, 0.16, B.base - 0.13)), P[B.stone], { light: faceL(i) * 0.9 });
+      }
+    }
+    frustum(pen, proj, cx, cy, B.r + 0.06, B.base - 0.06, B.r + 0.06, B.base, mix(P[B.stone], P[B.trim], 0.45), { cap: 1.0 });
+    if (front) steps();
     rails(false);
-    postsOf(false);
+    columns(false);
+    lace(false);
   }
   if (part !== 1) {
     rails(true);
-    postsOf(true);
-    // the valance: each face of the eave the viewer sees, its lower edge in three scallops
+    columns(true);
+    lace(true);
+    // the lambrequin: each eave face the viewer sees, its lower edge in pointed teeth
     const top = ngon(cx, cy, B.eaveR, B.eave, 8);
     for (let i = 0; i < 8; i++) {
       if (!frustumVis(i, B.eaveR, 0, B.eaveR, 1)) continue;
-      const a = top[i] as W3, b = top[(i + 1) % 8] as W3, pts: Pt[] = [proj(...a), proj(...b)];
-      for (let q = 6; q >= 0; q--) pts.push(proj(...lerp3(a, b, q / 6, B.eave - (q % 2 ? B.valance : B.valance * 0.45))));
-      fillPoly(pen, pts, P[B.trim], { light: faceLight(Math.cos((i / 8) * TAU), Math.sin((i / 8) * TAU)) });
+      const a = nth(top, i), b = nth(top, i + 1), pts: Pt[] = [proj(...a), proj(...b)];
+      for (let q = 8; q >= 0; q--) pts.push(proj(...lerp3(a, b, q / 8, B.eave - (q % 2 ? 0.14 : 0.04))));
+      fillPoly(pen, pts, P[B.trim], { light: faceL(i) });
     }
-    frustum(pen, proj, cx, cy, B.eaveR, B.eave, 0, B.apex, P[B.roof]);
-    ribs(pen, proj, cx, cy, B.eaveR, B.eave, B.apex, P[B.roof]);
-    finial(pen, proj, cx, cy, B.apex, P[B.gilt]);
+    // the concave roof: eight bands from the eave up to the lantern, steep at the top
+    const prof: [number, number][] = [];
+    for (let k = 0; k <= 8; k++) prof.push([B.lantR + 0.04 + (B.eaveR + 0.02 - B.lantR) * Math.pow(1 - k / 8, 2.6), B.eave + (B.roof - B.eave) * (k / 8)]);
+    for (let k = 0; k < 8; k++) frustum(pen, proj, cx, cy, nth(prof, k)[0], nth(prof, k)[1], nth(prof, k + 1)[0], nth(prof, k + 1)[1], P[B.zinc]);
+    ribs(pen, proj, cx, cy, prof, P[B.zinc]);
+    frustum(pen, proj, cx, cy, B.lantR, B.roof, B.lantR, B.lantern, P[B.trim], { light: 1.0 });
+    if (z >= 1.0) {
+      const lr = ngon(cx, cy, B.lantR + 0.004, 0, 8), lit = lampGlow() > 0.5;
+      for (let i = 0; i < 8; i++) {
+        if (!visF(i)) continue;
+        const a = nth(lr, i), b = nth(lr, i + 1);
+        fillPoly(pen, quad(proj, lerp3(a, b, 0.25, B.roof + 0.05), lerp3(a, b, 0.75, B.roof + 0.05), lerp3(a, b, 0.75, B.lantern - 0.05), lerp3(a, b, 0.25, B.lantern - 0.05)), lit ? P.lamp : P[B.glass], { light: faceL(i) * 0.9 });
+      }
+    }
+    frustum(pen, proj, cx, cy, B.lantR + 0.07, B.lantern, 0, B.apex, P[B.zinc]);
+    finial(pen, proj, cx, cy, B.apex, P[B.gilt], 0.14);
   }
 }
 
@@ -310,79 +432,89 @@ export function drawPicnic(pen: Pen, proj: Proj, x: number, y: number): void {
   strokeLine(pen, handle, P[K.basket], Math.max(0.8, 0.9 * pen.z), { light: 0.8 });
 }
 
-/* ---------- the bridge (04 6.1 row bridge; 06 4; 02 8.3 the crossing) ---------- */
+/* ---------- the bridge (04 6.1 row bridge; 06 4; 02 8.3 the crossing): the owner's pick 5C, an iron lattice footbridge ---------- */
 export type BridgeSpec = {
-  hw: number; land: number; end: number; rise: number; arch: number; deckT: number; rail: number; post: number; plank: number;
-  stone: HexKey; deck: HexKey; iron: HexKey; dusk: HexKey;
+  hw: number; land: number; end: number; rise: number; arch: number; rail: number; post: number; plank: number;
+  deck: HexKey; deckK: number; iron: HexKey; dusk: HexKey;
 };
-/** The bridge's numbers: deck half-width 0.34 tile, 0.35 tile onto each bank, 0.04 EH at the banks rising 0.24 to the middle, the arch
- *  0.14 EH, railings 0.3 EH with posts every 0.33 tile, planks 0.14 tile; palette keys. */
+/** The bridge's numbers: deck half-width 0.34 tile, 0.35 tile onto each bank, 0.05 EH at the banks rising 0.2 to the middle (a gentle
+ *  camber), the girder's arch 0.07 EH, lattice railings 0.3 EH with posts every 0.33 tile, planks 0.14 tile; palette keys (pick 5C). */
 export const BRIDGE: BridgeSpec = {
-  hw: 0.34, land: 0.35, end: 0.04, rise: 0.24, arch: 0.14, deckT: 0.06, rail: 0.3, post: 0.33, plank: 0.14,
-  stone: 'stone', deck: 'bedEarth', iron: 'zinc', dusk: 'night',
+  hw: 0.34, land: 0.35, end: 0.05, rise: 0.2, arch: 0.07, rail: 0.3, post: 0.33, plank: 0.14, deck: 'bedEarth', deckK: 0.3, iron: 'ink', dusk: 'night',
 };
 
 /**
- * A footbridge over its 1 to 4 water tiles (Prop.data.span; data.dir 0 north to south, 1 west to east): a plank deck humping from the
- * banks to the middle, the near side's stone face over a flattened arch (GV archVoid 10294: sin^0.55) with the water dusky under it,
- * zinc railings on both sides; wet darkens it to x 0.86 (04 6.1). part 1 is the deck and the far railing, part 2 the near face and railing,
- * 0 both: walkers on the deck paint between them (03 7.2).
+ * A footbridge over its 1 to 4 water tiles (Prop.data.span; data.dir 0 north to south, 1 west to east), iron lattice (pick 5C, register
+ * section 4, 2026-10-13): a pale plank deck on a gentle camber; on each side a light iron girder, its top chord under the deck edge and
+ * its bottom chord on a slim arch from bank to bank, joined by a diagonal lattice web, the water dusky under it; lattice railings of two
+ * crossing diagonals between posts; wet darkens the deck to x 0.86 (04 6.1). part 1 is the deck and the far railing, part 2 the near
+ * girder and railing, 0 both: walkers on the deck paint between them (03 7.2).
  */
 export function drawBridge(pen: Pen, proj: Proj, p: Prop, part: 0 | 1 | 2 = 0, wet = 0): void {
-  const { z } = pen, P = pen.spec.palette, B = BRIDGE, wk = 1 - 0.14 * wet;
+  const { ctx, z } = pen, P = pen.spec.palette, B = BRIDGE, wk = 1 - 0.14 * wet;
   const dir = p.data.dir ?? (p.w > p.h ? 1 : 0), span = p.data.span ?? Math.max(p.w, p.h);
   const L = span + 2 * B.land, u0 = (dir === 0 ? p.y : p.x) - 0.5 - B.land;
   const W = (u: number, v: number, e: number): W3 => (dir === 0 ? [p.x + v, u0 + u, e] : [u0 + u, p.y + v, e]);
   const deckE = (u: number): number => B.end + B.rise * Math.pow(Math.sin(Math.PI * clamp01(u / L)), 0.6);
   const w0 = B.land - 0.05, w1 = L - w0;
-  const archE = (u: number): number => (u <= w0 || u >= w1 ? 0 : B.arch * Math.pow(Math.sin((Math.PI * (u - w0)) / (w1 - w0)), 0.55));
+  const archE = (u: number): number => (u <= w0 || u >= w1 ? 0 : B.arch * Math.pow(Math.sin((Math.PI * (u - w0)) / (w1 - w0)), 0.7));
   const sa = W(L / 2, B.hw, 0), sb = W(L / 2, -B.hw, 0);
   const nearV = depthOf(sa[0], sa[1]) >= depthOf(sb[0], sb[1]) ? B.hw : -B.hw;
-  const n = Math.max(8, Math.round(L * 6)), us: number[] = [];
+  const FL = faceLight(dir === 0 ? Math.sign(nearV) : 0, dir === 0 ? 0 : Math.sign(nearV));
+  const n = Math.max(10, Math.round(L * 8)), us: number[] = [];
   for (let i = 0; i <= n; i++) us.push((L * i) / n);
+  const iron = mix(P[B.iron], P.zinc, 0.1), lw = Math.max(0.6, 0.55 * z), deckHex = mix(P[B.deck], P.paper, B.deckK);
   const railing = (v: number): void => {
-    const vv = v - Math.sign(v) * 0.03, w = Math.max(0.6, 0.55 * z), iron = P[B.iron];
-    strokeLine(pen, us.map((u) => proj(...W(u, vv, deckE(u) + B.rail))), iron, w, { light: 0.95 });
-    if (z >= 1.0) strokeLine(pen, us.map((u) => proj(...W(u, vv, deckE(u) + B.rail * 0.5))), iron, w * 0.8, { light: 0.9 });
-    const np = Math.max(2, Math.round((L - 0.16) / B.post));
+    const vv = v - Math.sign(v) * 0.04, H = B.rail, np = Math.max(2, Math.round((L - 0.16) / B.post));
+    const uk = (k: number): number => 0.08 + ((L - 0.16) * k) / np;
+    if (z >= 1.0)
+      for (let k = 0; k < np; k++) {
+        // the lattice panel between two posts: two crossing diagonals
+        const a = uk(k), b = uk(k + 1), ea = deckE(a), eb = deckE(b);
+        strokeLine(pen, [proj(...W(a, vv, ea + 0.02)), proj(...W(b, vv, eb + H - 0.04))], iron, lw * 0.6, { light: 0.85 });
+        strokeLine(pen, [proj(...W(a, vv, ea + H - 0.04)), proj(...W(b, vv, eb + 0.02))], iron, lw * 0.6, { light: 0.85 });
+      }
+    strokeLine(pen, us.map((u) => proj(...W(u, vv, deckE(u) + H))), iron, lw, { light: 0.95 });
+    strokeLine(pen, us.map((u) => proj(...W(u, vv, deckE(u) + 0.04))), iron, lw * 0.8, { light: 0.9 });
     for (let k = 0; k <= np; k++) {
-      const u = 0.08 + ((L - 0.16) * k) / np, e = deckE(u);
-      strokeLine(pen, [proj(...W(u, vv, e)), proj(...W(u, vv, e + B.rail))], iron, k === 0 || k === np ? w * 1.6 : w, { light: 0.9 });
+      const u = uk(k), e = deckE(u);
+      strokeLine(pen, [proj(...W(u, vv, e)), proj(...W(u, vv, e + H))], iron, (k === 0 || k === np ? 1.7 : 1.0) * lw, { light: 0.9 });
     }
   };
   if (part !== 2) {
     if (z < 0.8) {
       const deck = [...us.map((u) => proj(...W(u, -B.hw, deckE(u)))), ...backward(us).map((u) => proj(...W(u, B.hw, deckE(u))))];
-      fillPoly(pen, deck, P[B.deck], { light: wk });
+      fillPoly(pen, deck, deckHex, { light: wk });
     } else
       for (let u = 0, k = 0; u < L - 0.01; u += B.plank, k++) {
         const a = u, b = Math.min(L, u + B.plank - 0.02);
-        fillPoly(pen, quad(proj, W(a, -B.hw, deckE(a)), W(b, -B.hw, deckE(b)), W(b, B.hw, deckE(b)), W(a, B.hw, deckE(a))), P[B.deck], { light: (0.94 + 0.1 * h01(p.id, k, 3)) * wk });
+        fillPoly(pen, quad(proj, W(a, -B.hw, deckE(a)), W(b, -B.hw, deckE(b)), W(b, B.hw, deckE(b)), W(a, B.hw, deckE(a))), deckHex, { light: (0.94 + 0.1 * h01(p.id, k, 3)) * wk });
       }
     railing(-nearV);
   }
   if (part !== 1) {
+    // the near girder: the water dusky under its arch, the lattice web, the bottom chord on the arch, the top chord under the deck edge
     const under: Pt[] = [];
     for (const u of us) if (u >= w0 && u <= w1) under.push(proj(...W(u, nearV, archE(u))));
     under.push(proj(...W(w1, nearV, 0)), proj(...W(w0, nearV, 0)));
-    fillPoly(pen, under, P[B.dusk], { alpha: 0.45 });
-    const face = [...us.map((u) => proj(...W(u, nearV, deckE(u)))), ...backward(us).map((u) => proj(...W(u, nearV, archE(u))))];
-    const nx = dir === 0 ? Math.sign(nearV) : 0, ny = dir === 0 ? 0 : Math.sign(nearV);
-    fillPoly(pen, face, P[B.stone], { light: faceLight(nx, ny) * wk });
-    if (z >= 1.2) {
-      // the arch ring's stones: short joints across it
-      const ctx = pen.ctx;
-      ctx.strokeStyle = shade(P[B.stone], 0.82 * wk, 0.7);
-      ctx.lineWidth = Math.max(0.5, 0.4 * z);
-      ctx.beginPath();
-      for (let k = 1; k < 8; k++) {
-        const u = w0 + ((w1 - w0) * k) / 8, e = archE(u), a = proj(...W(u, nearV, e)), b = proj(...W(u, nearV, Math.min(deckE(u) - 0.02, e + 0.06)));
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-      }
-      ctx.stroke();
+    fillPoly(pen, under, P[B.dusk], { alpha: 0.28 });
+    const m = Math.max(6, Math.round((w1 - w0) / 0.13));
+    ctx.strokeStyle = shade(iron, FL * 0.95);
+    ctx.lineWidth = Math.max(0.5, (z >= 1.0 ? 0.45 : 0.6) * z);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let k = 0; k < m; k++) {
+      const a = w0 + ((w1 - w0) * k) / m, b = w0 + ((w1 - w0) * (k + 1)) / m;
+      const pa = proj(...W(a, nearV, archE(a))), pb = proj(...W(b, nearV, archE(b)));
+      const qa = proj(...W(a, nearV, deckE(a) - 0.04)), qb = proj(...W(b, nearV, deckE(b) - 0.04));
+      ctx.moveTo(pa.x, pa.y);
+      ctx.lineTo(qb.x, qb.y);
+      ctx.moveTo(qa.x, qa.y);
+      ctx.lineTo(pb.x, pb.y);
     }
-    strokeLine(pen, us.map((u) => proj(...W(u, nearV, deckE(u) - B.deckT / 2))), P[B.deck], Math.max(0.8, B.deckT * EH * z), { light: 0.8 * wk });
+    ctx.stroke();
+    strokeLine(pen, us.filter((u) => u >= w0 && u <= w1).map((u) => proj(...W(u, nearV, archE(u)))), iron, lw * 1.5, { light: FL });
+    strokeLine(pen, us.map((u) => proj(...W(u, nearV, deckE(u) - 0.035))), iron, lw * 1.6, { light: FL });
     railing(nearV);
   }
 }

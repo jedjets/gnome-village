@@ -10,7 +10,8 @@
 // and each colour is one cached Path2D in world units filled under setWorldTransform (03 7.5 item 4's runs and per-tile cull become one
 // fill per colour); the ribbon threshold is 04 6.5's (a way from WEAR 1.6, off below 1.1; bare earth on at 2.6, off below 2.1) where GV
 // had one way threshold 2.6; a way runs on into a gravel or flagstone tile beside it; ribbons are one nonzero fill, not per-tile clips
-// (flat ground: nothing in front can hide them); the epoch also turns on a changed tile layer (worldVersion) or quality level.
+// (flat ground: nothing in front can hide them); the epoch also turns on a changed tile layer (worldVersion) or quality level, and its
+// 220 ms tick rebuilds only when what the colours read has moved (a paused park rebuilds nothing); pebbles are tiny world squares.
 // Dropped from the range: paved ways and hearth slabs (KIND gravel is the paving), clipTile, the line mode below z 0.7, steps.
 // TODO(S9): lamp pools (03 7.3 item 5), snow cover (04 10.3), landed leaves (04 10.4).
 import { clamp01, css, hx, mixc, TAU, type RGB, type XY } from '../core/math.ts';
@@ -120,16 +121,24 @@ export function setGroundQuality(q: number): void {
     colEpoch++;
   }
 }
-/** A new epoch every 220 ms, 110 ms while turning (GV 9586-9587), or when the season, the lamps, the quality or the tiles change; with no
- *  frame clock running (a test, a scripted draw) a change of light counts as the time having passed. */
+/** What the tile colours read that the sim changes without a world version: the light, the season blend and the WET, PETALS, WEAR
+ *  and ICE layers, as one number (a weighted sum; the epoch only needs to know that something moved). */
+function colourState(): string {
+  let s = 0;
+  for (let i = 0; i < NC; i++) s += (WET[i] as number) * 3.1 + (PETALS[i] as number) * 5.3 + (WEAR[i] as number) * 1.7 + (ICE[i] as number) * 7.9;
+  return ((AM[0] * 1000) | 0) + ',' + ((AM[1] * 1000) | 0) + ',' + ((AA * 1000) | 0) + ',' + seasonHex((q) => lawnHex(style(), q)) + ',' + s;
+}
+/** A new epoch every 220 ms, 110 ms while turning (GV 9586-9587), when what the colours read has changed (colourState; a paused or
+ *  unchanged park rebuilds nothing), or at once when the season, the lamps, the quality or the tiles change; with no frame clock running
+ *  (a test, a scripted draw) a change counts as the time having passed. */
 function stepEpoch(): void {
-  const t = now(), amb = ((AM[0] * 1000) | 0) + ',' + ((AA * 1000) | 0);
-  const turning = cam.ang !== colAng;
-  if (t - colAt > 220 || t < colAt || (turning && t - colAt > 110) || T.season !== colSeason || T.lamps !== colLamps ||
-    worldVersion() !== colWorld || (t === colAt && amb !== colAmb)) {
+  const t = now(), turning = cam.ang !== colAng;
+  if (t - colAt <= (turning ? 110 : 220) && t > colAt && T.season === colSeason && T.lamps === colLamps && worldVersion() === colWorld) return;
+  const amb = colourState();
+  colAt = t;
+  colAng = cam.ang;
+  if (amb !== colAmb || T.season !== colSeason || T.lamps !== colLamps || worldVersion() !== colWorld) {
     colEpoch++;
-    colAt = t;
-    colAng = cam.ang;
     colSeason = T.season;
     colLamps = T.lamps;
     colWorld = worldVersion();
@@ -386,9 +395,10 @@ function buildDetail(): void {
     if (KIND[i] === Kind.gravel) {
       const n = 6 + Math.floor(h01(seed, 0, 7) * 4);
       for (let k = 0; k < n; k++) {
-        const u = x - 0.42 + h01(seed, k, 8) * 0.84, v = y - 0.42 + h01(seed, k, 9) * 0.84, r = 0.035 + h01(seed, k, 10) * 0.035;
-        PEB.moveTo(u + r, v);
-        PEB.arc(u, v, r, 0, TAU);
+        // a world square of the round pebble's area: a 4-edge diamond on screen rasters at a fraction of an arc's cost, and at 2 to 4 px
+        // the two look the same
+        const u = x - 0.42 + h01(seed, k, 8) * 0.84, v = y - 0.42 + h01(seed, k, 9) * 0.84, r = (0.035 + h01(seed, k, 10) * 0.035) * 0.886;
+        PEB.rect(u - r, v - r, 2 * r, 2 * r);
       }
     } else if (KIND[i] === Kind.flagstone) {
       const n = 2 + (h01(seed, 0, 11) < 0.5 ? 0 : 1);

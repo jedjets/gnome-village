@@ -419,8 +419,8 @@ export function drawRiver(ctx: CanvasRenderingContext2D, x0: number, y0: number,
   ctx.fillStyle = css(nightW(lit(hx(mix(P.water, P.sky, 0.45)))), 0.35);
   ctx.fillRect(x0, y0 + (y1 - y0) * 0.3, x1 - x0, (y1 - y0) * 0.4);
   if (cam.z >= 0.4) {
-    const t = T.abs * DAYLEN, span = x1 - x0, streak = new Path2D();
-    for (let k = 0; k < STREAKS; k++) {
+    const t = T.abs * DAYLEN, span = x1 - x0, streak = new Path2D(), n = Math.round((STREAKS * span) / 64); // 90 on the apron's 64
+    for (let k = 0; k < n; k++) {
       const v = y0 + 0.35 + h01(k, 1, 61) * (y1 - y0 - 0.7);
       const u = x0 + ((((h01(k, 2, 61) * span + 0.3 * t * (0.8 + 0.4 * h01(k, 3, 61))) % span) + span) % span);
       const len = 0.6 * Math.min(1, (x1 - u) / 0.6);

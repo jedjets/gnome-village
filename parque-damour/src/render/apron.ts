@@ -6,8 +6,9 @@
 // Ported from GV 6953-6965 (wp, poly, faceVis, faceLight, shade, h01: the iso box kit), 7509-7547 (fencePieces: the railing idea).
 // Verdict: ADAPT. Changes: boxes are prisms of world points, any polygon, faces culled by faceVis and lit by faceLight; a facade block is
 // one drawable at the largest depth of its footprint (03 7.2 item 2); a block nearer the camera than the park centre fades to the cutaway
-// over 0.4 s of frame time (04 6.4, A7); windows one a tile (3 a row on a 3-tile block), 40 % lit at night by h01; the cafe is the block
-// nearest the middle of each side that does not face a gate; railings come from park.railPieces() (all four sides: the north gate needs a barrier to sit in).
+// over 0.4 s of frame time (04 6.4, A7); walls in five pastel washes (pick 6B); windows one a tile, 40 % lit at night by h01, cached with
+// the dormers in each face's own frame; the cafe is the block nearest the middle of each side that does not face a gate, its tables the
+// board's; railings come from park.railPieces() (all four sides: the north gate needs a barrier to sit in).
 // Dropped from the range: the house kit beyond the box primitives (6967-7035), GV's fences of logs.
 // TODO(S9): mist greys the facades to 60 % (04 10.5); awning scallops flap in a breeze (04 6.4 row cafe).
 import { clamp01, css, hx, TAU, type XY } from '../core/math.ts';
@@ -16,18 +17,21 @@ import { W } from '../core/weather.ts';
 import { now } from '../core/loop.ts';
 import { N } from '../world/grid.ts';
 import { BACKDROP, GATES, facadeBlocks, railPieces, type FacadeBlock } from '../world/park.ts';
-import { CTR, EH, TH, TW, cam, view } from './camera.ts';
+import { CTR, EH, TW, cam, view } from './camera.ts';
 import { screenInto } from './project.ts';
 import { depthOf, footprintDepth, type Drawable } from './order.ts';
 import { GC, faceLight, h01, lampGlow, mix, shade, style } from './ambient.ts';
 import { HI, LO, RIVER_DROP, vis, wall, xy } from './backdrop.ts';
+import { drawBistroTable } from './props.ts';
+import { gamePen, gameProj } from './flora.ts';
+import { resetTransform } from './ground.ts';
 
 const SP: XY = { x: 0, y: 0 }, SQ: XY = { x: 0, y: 0 };
 
 /* ---------- the apron drawables (03 7.4 item 4; 04 6.4) ---------- */
 type Item = Drawable & { ref: number; r: number; h: number; fw: number; fh: number };
-type Fr = { ax: number; ay: number; len: number; tx: number; ty: number; nx: number; ny: number; ox: number; oy: number; ux: number; uy: number; wx: number; wy: number; L: number };
-type Blk = { b: FacadeBlock; x0: number; y0: number; x1: number; y1: number; street: number; open: number; cafe: boolean; cut: number; tone: number };
+type Fr = { len: number; ox: number; oy: number; ux: number; uy: number; wx: number; wy: number; L: number };
+type Blk = { b: FacadeBlock; x0: number; y0: number; x1: number; y1: number; street: number; open: number; cafe: boolean; cut: number };
 type Pillar = { x: number; y: number; nx: number; ny: number; hx: number; hy: number };
 const ITEMS: Item[] = [];
 const OUT: Drawable[] = [];
@@ -38,6 +42,12 @@ let cutAt = -1e9;
 /** The four faces of a box in order north, east, south, west: their outward normals. */
 const FN4: readonly (readonly [number, number])[] = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 const OUTN: Record<string, readonly [number, number]> = { north: [0, -1], east: [1, 0], south: [0, 1], west: [-1, 0] };
+
+/** A line from (x0, y0) to (x1, y1) onto a path or the context. */
+function seg(t: CanvasPath, x0: number, y0: number, x1: number, y1: number): void {
+  t.moveTo(x0, y0);
+  t.lineTo(x1, y1);
+}
 
 function item(kind: string, id: number, ref: number, x: number, y: number, r: number, h: number, draw: Drawable['draw'], fw = 0, fh = 0): void {
   ITEMS.push({ depth: 0, kind, id, x, y, z: 0, draw, ref, r, h, fw, fh });
@@ -82,8 +92,7 @@ function build(): void {
       if (!shut) open |= 1 << f;
     }
     const street = b.side === 'east' ? 3 : b.side === 'west' ? 1 : b.side === 'south' ? 0 : 2;
-    // each building's stone a shade lighter or darker than its neighbours' (+-3 %, by h01 so it holds), so a row reads as houses
-    BLKS.push({ b, x0, y0, x1, y1, street, open, cafe: cafeOf[b.side] === b, cut: -1, tone: 0.97 + 0.06 * h01(b.id, 7, 97) });
+    BLKS.push({ b, x0, y0, x1, y1, street, open, cafe: cafeOf[b.side] === b, cut: -1 });
     item('facade', 50500 + b.id, BLKS.length - 1, b.x0, b.y0, 2, BACKDROP.facadeHeight + 0.5, drawFacade, b.w, b.h);
   }
   item('boat', 50700, 0, 44, -3, 3, 1, drawBarge, 5, 2);
@@ -159,10 +168,7 @@ function sq(x: number, y: number, r: number, ry = r): number[] {
 
 let IRON = '';
 /** Iron: `ink` a tenth of the way toward `zinc` (04 6.4 row railings; the board's balconies). */
-function iron(): string {
-  const P = style().palette;
-  return IRON || (IRON = mix(P.ink, P.zinc, 0.1));
-}
+const iron = (): string => IRON || (IRON = mix(style().palette.ink, style().palette.zinc, 0.1));
 /** The plinth's lit stone on each side this frame (north, east, south, west), so 182 pieces share four strings. */
 const PLINTH = ['', '', '', ''];
 
@@ -183,14 +189,10 @@ function drawRail(d: Drawable, ctx: CanvasRenderingContext2D): void {
   ctx.lineWidth = Math.max(0.5, 0.75 * z);
   ctx.lineCap = 'round';
   ctx.beginPath();
-  for (const e of [0.14, top - 0.06]) {
-    ctx.moveTo(SP.x, SP.y - e * ez);
-    ctx.lineTo(SQ.x, SQ.y - e * ez);
-  }
+  for (const e of [0.14, top - 0.06]) seg(ctx, SP.x, SP.y - e * ez, SQ.x, SQ.y - e * ez);
   for (let k = 0; k < 4; k++) {
     const u = 0.125 + 0.25 * k;
-    ctx.moveTo(SP.x + ux * u, SP.y + uy * u - 0.08 * ez);
-    ctx.lineTo(SP.x + ux * u, SP.y + uy * u - top * ez);
+    seg(ctx, SP.x + ux * u, SP.y + uy * u - 0.08 * ez, SP.x + ux * u, SP.y + uy * u - top * ez);
   }
   ctx.stroke();
   if (z >= 0.8) {
@@ -217,8 +219,7 @@ function drawPillar(d: Drawable, ctx: CanvasRenderingContext2D): void {
   ctx.strokeStyle = shade(P.zinc, 0.9);
   ctx.lineWidth = Math.max(0.6, 1.4 * z);
   ctx.beginPath();
-  ctx.moveTo(a.x, a.y);
-  ctx.lineTo(b.x, b.y);
+  seg(ctx, a.x, a.y, b.x, b.y);
   ctx.stroke();
   const glow = lampGlow(), gr = Math.max(1, 0.09 * TW * z);
   if (glow > 0.01) {
@@ -240,32 +241,33 @@ function leaf(ctx: CanvasRenderingContext2D, p: Pillar, z: number): void {
   ctx.strokeStyle = GC(iron());
   ctx.lineWidth = Math.max(0.5, 0.7 * z);
   ctx.beginPath();
-  for (const e of [0.06, 0.48]) {
-    ctx.moveTo(SP.x, SP.y - e * ez);
-    ctx.lineTo(SQ.x, SQ.y - e * ez);
-  }
+  for (const e of [0.06, 0.48]) seg(ctx, SP.x, SP.y - e * ez, SQ.x, SQ.y - e * ez);
   for (let k = 0; k <= n; k++) {
     const x = SP.x + ((SQ.x - SP.x) * k) / n, y = SP.y + ((SQ.y - SP.y) * k) / n;
-    ctx.moveTo(x, y - 0.06 * ez);
-    ctx.lineTo(x, y - 0.54 * ez);
+    seg(ctx, x, y - 0.06 * ez, x, y - 0.54 * ez);
   }
   ctx.stroke();
 }
 
 /* ---------- facade blocks: iso boxes in the manner of the board's tile 11 (04 6.4 row facades; GV box kit 6953-6965) ---------- */
 const WALL = 5, ROOF = 6, INS = 0.45; // the wall top under the mansard, the roof top (6.0 EH), the mansard's set-back
-type Hexes = { stone: string; zinc: string; sky: string; shop: string; iron: string; paper: string; red: string; lamp: string };
-const HEX: Partial<Record<'near' | 'far', Hexes>> = {};
-/** The facade colours; the far bank's in the haze at 0.35 toward `fog` (04 6.4 row far bank). */
-function hexes(far: boolean): Hexes {
-  const k = far ? 'far' : 'near', got = HEX[k];
+type Hexes = { wall: string; stone: string; zinc: string; sky: string; shop: string; iron: string; paper: string; red: string; lamp: string };
+const HEX = new Map<number, Hexes>();
+/**
+ * A block's colours: its wall washed in one of rose, sky, butter, sage or lavender (the owner's pick 6B, register section 4, 2026-10-13),
+ * by (id x 3) mod 5 so the blocks either side of it (ids 1 apart along the south and far rows, 2 apart along east and west) never share
+ * one, with cream `stone` trim; the far bank's in the haze at 0.35 toward `fog` (04 6.4 rows facades, far bank).
+ */
+function hexes(b: FacadeBlock): Hexes {
+  const got = HEX.get(b.id);
   if (got) return got;
-  const P = style().palette, f = (h: string): string => (far ? mix(h, P.fog, 0.35) : h);
+  const P = style().palette, f = (h: string): string => (b.far ? mix(h, P.fog, 0.35) : h);
+  const [wash, k] = ([[P.rose, 0.36], [P.sky, 0.55], [P.lamp, 0.3], [P.foliageSpring, 0.5], [P.bedLavender, 0.38]] as const)[(b.id * 3) % 5] as readonly [string, number];
   const h: Hexes = {
-    stone: f(P.stone), zinc: f(P.zinc), sky: f(P.sky), shop: f(mix(P.ink, P.foliageSummer, 0.35)), iron: f(iron()), paper: f(P.paper),
-    red: f(P.awningRed), lamp: P.lamp,
+    wall: f(mix(mix(P.stone, wash, k), P.paper, 0.22)), stone: f(P.stone), zinc: f(P.zinc), sky: f(P.sky),
+    shop: f(mix(P.ink, P.foliageSummer, 0.35)), iron: f(iron()), paper: f(P.paper), red: f(P.awningRed), lamp: P.lamp,
   };
-  HEX[k] = h;
+  HEX.set(b.id, h);
   return h;
 }
 
@@ -275,7 +277,7 @@ function frame(B: Blk, f: number): Fr {
   const ax = c[f * 2] as number, ay = c[f * 2 + 1] as number, bx = c[((f + 1) % 4) * 2] as number, by = c[((f + 1) % 4) * 2 + 1] as number;
   const len = Math.hypot(bx - ax, by - ay), tx = (bx - ax) / len, ty = (by - ay) / len, [nx, ny] = FN4[f] as readonly [number, number];
   const o = screenInto(ax, ay, 0, { x: 0, y: 0 }), u = screenInto(ax + tx, ay + ty, 0, { x: 0, y: 0 }), w = screenInto(ax + nx, ay + ny, 0, { x: 0, y: 0 });
-  return { ax, ay, len, tx, ty, nx, ny, ox: o.x, oy: o.y, ux: u.x - o.x, uy: u.y - o.y, wx: w.x - o.x, wy: w.y - o.y, L: faceLight(nx, ny) };
+  return { len, ox: o.x, oy: o.y, ux: u.x - o.x, uy: u.y - o.y, wx: w.x - o.x, wy: w.y - o.y, L: faceLight(nx, ny) };
 }
 /** A quad on a face frame from its four (u, e, w) corners, onto a path or the context (no beginPath). */
 function q4(t: CanvasPath, fr: Fr, ...c: number[]): void {
@@ -293,14 +295,13 @@ function rect(t: CanvasPath, fr: Fr, u0: number, u1: number, e0: number, e1: num
 }
 function line(ctx: CanvasRenderingContext2D, fr: Fr, u0: number, e0: number, w0: number, u1: number, e1: number, w1: number): void {
   const ez = EH * cam.z;
-  ctx.moveTo(fr.ox + u0 * fr.ux + w0 * fr.wx, fr.oy + u0 * fr.uy + w0 * fr.wy - e0 * ez);
-  ctx.lineTo(fr.ox + u1 * fr.ux + w1 * fr.wx, fr.oy + u1 * fr.uy + w1 * fr.wy - e1 * ez);
+  seg(ctx, fr.ox + u0 * fr.ux + w0 * fr.wx, fr.oy + u0 * fr.uy + w0 * fr.wy - e0 * ez, fr.ox + u1 * fr.ux + w1 * fr.wx, fr.oy + u1 * fr.uy + w1 * fr.wy - e1 * ez);
 }
 
 /** A facade block, full or cut away; between the two (0.4 s after a turn) the full block fades out over the cut one. */
 function drawFacade(d: Drawable, ctx: CanvasRenderingContext2D): void {
   const B = BLKS[(d as Item).ref] as Blk, [sx, sy] = FN4[B.street] as readonly [number, number];
-  if (B.cafe && !vis(sx, sy)) tables(ctx, frame(B, B.street), hexes(false), cam.z); // seen from behind: the tables are farther off
+  if (B.cafe && !vis(sx, sy)) tables(ctx, B); // seen from behind: the tables are farther off
   if (B.cut < 1) {
     ctx.globalAlpha = 1 - B.cut;
     facade(ctx, B, false);
@@ -312,13 +313,33 @@ function drawFacade(d: Drawable, ctx: CanvasRenderingContext2D): void {
   ctx.globalAlpha = 1;
 }
 
+/** A face's frame as the canvas transform: face-local (u tiles along it, e EH up) to device px, for the cached paths and the fills. */
+function onFace(ctx: CanvasRenderingContext2D, fr: Fr, w = 0): void {
+  const d = view.dpr;
+  ctx.setTransform(fr.ux * d, fr.uy * d, 0, -EH * cam.z * d, (fr.ox + w * fr.wx) * d, (fr.oy + w * fr.wy) * d);
+}
+/** The wall's light, 1.06 at the top to 0.94 at the foot, as a face-local gradient kept while its colours hold. */
+const GRAD = new Map<string, CanvasGradient>();
+function wallGrad(ctx: CanvasRenderingContext2D, hex: string, L: number): CanvasGradient {
+  const a = shade(hex, L * 1.06), b = shade(hex, L * 0.94), k = a + b;
+  let g = GRAD.get(k);
+  if (!g) {
+    if (GRAD.size > 300) GRAD.clear();
+    g = ctx.createLinearGradient(0, WALL, 0, 0);
+    g.addColorStop(0, a);
+    g.addColorStop(1, b);
+    GRAD.set(k, g);
+  }
+  return g;
+}
+
 /**
  * The block's visible open walls (5 storeys, 04 6.4: shop front, four rows of windows a tile apart, balconies on rows 2 and 5, string
  * courses), the mansard (zinc, set back 0.45, with dormers and chimneys), the cafe's awning. The near-side cut keeps the ground floor
- * band only, 0.6 EH at alpha 0.35, no roof (03 7.4 item 4, A7).
+ * band only, 0.6 EH at alpha 0.35, no roof (03 7.4 item 4, A7). Walls, shop fronts and windows draw in the face's own frame.
  */
 function facade(ctx: CanvasRenderingContext2D, B: Blk, cut: boolean): void {
-  const z = cam.z, C = hexes(B.b.far), glow = lampGlow(), a = cut ? 0.35 : undefined, top = cut ? 0.6 : WALL;
+  const z = cam.z, C = hexes(B.b), glow = lampGlow(), a = cut ? 0.35 : undefined, top = cut ? 0.6 : WALL;
   let st: Fr | null = null;
   if (cut)
     for (let f = 0; f < 4; f++) {
@@ -326,106 +347,98 @@ function facade(ctx: CanvasRenderingContext2D, B: Blk, cut: boolean): void {
       const [nx, ny] = FN4[f] as readonly [number, number];
       if (!((B.open >> f) & 1) || vis(nx, ny)) continue;
       const fr = frame(B, f);
-      ctx.fillStyle = shade(C.stone, faceLight(-nx, -ny) * 0.82 * B.tone, a);
-      ctx.beginPath();
-      rect(ctx, fr, 0, fr.len, 0, top);
-      ctx.fill();
+      onFace(ctx, fr);
+      ctx.fillStyle = shade(C.wall, faceLight(-nx, -ny) * 0.82, a);
+      ctx.fillRect(0, 0, fr.len, top);
     }
   for (let f = 0; f < 4; f++) {
     const [nx, ny] = FN4[f] as readonly [number, number];
     if (!((B.open >> f) & 1) || !vis(nx, ny)) continue;
     const fr = frame(B, f), street = f === B.street;
-    ctx.beginPath();
-    rect(ctx, fr, 0, fr.len, 0, top);
-    if (!cut && z >= 0.6) {
-      const g = ctx.createLinearGradient(fr.ox, fr.oy - top * EH * z, fr.ox, fr.oy);
-      g.addColorStop(0, shade(C.stone, fr.L * 1.06 * B.tone));
-      g.addColorStop(1, shade(C.stone, fr.L * 0.94 * B.tone));
-      ctx.fillStyle = g;
-    } else ctx.fillStyle = shade(C.stone, fr.L * B.tone, a);
-    ctx.fill();
+    onFace(ctx, fr);
+    ctx.fillStyle = !cut && z >= 0.6 ? wallGrad(ctx, C.wall, fr.L) : shade(C.wall, fr.L, a);
+    ctx.fillRect(0, 0, fr.len, top);
     if (street) {
       st = fr;
       ctx.fillStyle = shade(C.shop, fr.L, a); // the shop front, a dark Paris green; a wide window a tile
-      ctx.beginPath();
-      rect(ctx, fr, 0.06, fr.len - 0.06, 0, cut ? 0.6 : 1.05);
-      ctx.fill();
+      ctx.fillRect(0.06, 0, fr.len - 0.12, cut ? 0.6 : 1.05);
     }
+    if (!cut) windows(ctx, fr, B, f, street, C, glow, z);
+    resetTransform(ctx);
     if (cut) continue;
-    windows(ctx, fr, B, f, street, C, glow, z);
+    if (z >= 0.6) {
+      // the string courses between the storeys
+      ctx.strokeStyle = shade(C.stone, fr.L * 0.86);
+      ctx.lineWidth = Math.max(0.6, 0.9 * z);
+      ctx.beginPath();
+      for (let r = 0; r < 4; r++) line(ctx, fr, 0, 1.17 + r * 0.95, 0.02, fr.len, 1.17 + r * 0.95, 0.02);
+      ctx.stroke();
+    }
     if (street && z >= 0.6) balcony(ctx, fr, 2.2, windowSpans(fr.len), C, z);
   }
+  resetTransform(ctx);
   if (cut) return;
   roof(ctx, B, C, glow, z);
   if (st && z >= 0.6) balcony(ctx, st, WALL + 0.02, [0, st.len], C, z);
   if (st && B.cafe) {
     awning(ctx, st, C, z);
-    tables(ctx, st, C, z);
+    tables(ctx, B);
   }
 }
 
-/** The cafe's three bistro tables on the pavement under the awning: a `paper` top on a `zinc` pedestal, two chairs with `sky` seats. */
-function tables(ctx: CanvasRenderingContext2D, fr: Fr, C: Hexes, z: number): void {
-  if (z < 0.45) return;
-  const P = style().palette, ez = EH * z, r = 0.17 * Math.SQRT2 * z;
+/** The cafe's three bistro tables on the pavement 0.62 out from its shop front, one a tile: the board's table (props.drawBistroTable). */
+function tables(ctx: CanvasRenderingContext2D, B: Blk): void {
+  if (cam.z < 0.45) return;
+  const f = B.street, c = [B.x0, B.y0, B.x1, B.y0, B.x1, B.y1, B.x0, B.y1], [nx, ny] = FN4[f] as readonly [number, number], g = (f + 1) % 4;
+  const ax = c[f * 2] as number, ay = c[f * 2 + 1] as number, len = Math.hypot((c[g * 2] as number) - ax, (c[g * 2 + 1] as number) - ay);
+  const tx = ((c[g * 2] as number) - ax) / len, ty = ((c[g * 2 + 1] as number) - ay) / len;
   for (let k = 0; k < 3; k++) {
-    const u = (fr.len * (k + 0.5)) / 3, w = 0.62;
-    const cx = fr.ox + u * fr.ux + w * fr.wx, cy = fr.oy + u * fr.uy + w * fr.wy;
-    ctx.fillStyle = shade(P.sky, 0.95);
-    ctx.beginPath();
-    for (const du of [-0.24, 0.24]) rect(ctx, fr, u + du - 0.07, u + du + 0.07, 0.2, 0.25, w);
-    ctx.fill();
-    ctx.strokeStyle = shade(C.zinc, 0.85);
-    ctx.lineWidth = Math.max(0.5, 0.7 * z);
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx, cy - 0.45 * ez);
-    for (const du of [-0.24, 0.24]) line(ctx, fr, u + du * 1.25, 0.25, w, u + du * 1.25, 0.55, w);
-    ctx.stroke();
-    ctx.fillStyle = shade(P.paper, 1.02);
-    ctx.beginPath();
-    ctx.ellipse(cx, cy - 0.45 * ez, r * (TW / 2), r * (TH / 2), 0, 0, TAU);
-    ctx.fill();
+    const u = (len * (k + 0.5)) / 3;
+    drawBistroTable(gamePen(ctx), gameProj, ax + tx * u + nx * 0.62, ay + ty * u + ny * 0.62);
   }
 }
 
-/** Windows a tile apart, 0.36 x 0.62, in `sky` glass; 40 % lit at night by h01 so the pattern holds, with a 2 px bleed (04 10.2 item 3). */
-function windows(ctx: CanvasRenderingContext2D, fr: Fr, B: Blk, f: number, street: boolean, C: Hexes, glow: number, z: number): void {
-  const glass = new Path2D(), lamp = new Path2D(), seed = B.b.id * 7 + f;
-  const rows = street ? 4 : 5;
+/** A face's window panes in face-local units, built once: `glass` all of them, `lamp` the 40 % lit at night (h01, so the pattern holds). */
+type Panes = { glass: Path2D; lamp: Path2D };
+const PANES = new Map<string, Panes>();
+function panes(B: Blk, f: number, len: number, street: boolean, night: boolean, shopGlass: boolean): Panes {
+  const key = B.b.id + '|' + f + '|' + (night ? 1 : 0) + (shopGlass ? 1 : 0);
+  let p = PANES.get(key);
+  if (p) return p;
+  p = { glass: new Path2D(), lamp: new Path2D() };
+  const seed = B.b.id * 7 + f, rows = street ? 4 : 5;
   for (let r = 0; r < rows; r++) {
     const e0 = street ? 1.25 + r * 0.95 : r === 0 ? 0.3 : 1.25 + (r - 1) * 0.95, h = street || r > 0 ? 0.62 : 0.55;
-    for (let k = 0; k < fr.len; k++) {
-      rect(glass, fr, k + 0.32, k + 0.68, e0, e0 + h);
-      if ((street || r > 0) && glow > 0.01 && h01(seed, r, k) < 0.4) rect(lamp, fr, k + 0.32, k + 0.68, e0, e0 + h);
+    for (let k = 0; k < len; k++) {
+      p.glass.rect(k + 0.32, e0, 0.36, h);
+      if ((street || r > 0) && night && h01(seed, r, k) < 0.4) p.lamp.rect(k + 0.32, e0, 0.36, h);
     }
   }
-  if (street && glow > 0.01 && B.cafe) for (let k = 0; k < fr.len; k++) rect(lamp, fr, k + 0.18, k + 0.82, 0.2, 0.85); // the cafe glows
-  else if (street && z >= 0.45) for (let k = 0; k < fr.len; k++) rect(glass, fr, k + 0.18, k + 0.82, 0.2, 0.85);
+  if (street && night && B.cafe) for (let k = 0; k < len; k++) p.lamp.rect(k + 0.18, 0.2, 0.64, 0.65); // the cafe glows
+  else if (street && shopGlass) for (let k = 0; k < len; k++) p.glass.rect(k + 0.18, 0.2, 0.64, 0.65);
+  PANES.set(key, p);
+  return p;
+}
+/** Windows a tile apart, 0.36 x 0.62, in `sky` glass, framed in zinc from zoom 1; lit ones `lamp` with a 2 px bleed from zoom 0.8 (04
+ *  10.2 item 3). Called in the face's frame (onFace); the frames and bleeds stroke the cached panes moved to CSS px at a screen width. */
+function windows(ctx: CanvasRenderingContext2D, fr: Fr, B: Blk, f: number, street: boolean, C: Hexes, glow: number, z: number): void {
+  const p = panes(B, f, fr.len, street, glow > 0.01, z >= 0.45), m = new DOMMatrix([fr.ux, fr.uy, 0, -EH * z, fr.ox, fr.oy]);
+  const edge = (path: Path2D, col: string, w: number): void => {
+    const out = new Path2D();
+    out.addPath(path, m);
+    resetTransform(ctx);
+    ctx.strokeStyle = col;
+    ctx.lineWidth = w;
+    ctx.stroke(out);
+    onFace(ctx, fr);
+  };
   ctx.fillStyle = shade(C.sky, fr.L * 0.92);
-  ctx.fill(glass);
-  if (z >= 1) {
-    ctx.strokeStyle = shade(C.zinc, 0.9);
-    ctx.lineWidth = Math.max(0.5, 0.5 * z);
-    ctx.stroke(glass);
-  }
-  if (glow > 0.01) {
-    ctx.fillStyle = css(hx(C.lamp), 0.85 * glow);
-    ctx.fill(lamp);
-    if (z >= 0.8) {
-      ctx.strokeStyle = css(hx(C.lamp), 0.25 * glow);
-      ctx.lineWidth = 2;
-      ctx.stroke(lamp);
-    }
-  }
-  if (z >= 0.6) {
-    // the string courses between the storeys
-    ctx.strokeStyle = shade(C.stone, fr.L * 0.86);
-    ctx.lineWidth = Math.max(0.6, 0.9 * z);
-    ctx.beginPath();
-    for (let r = 0; r < 4; r++) line(ctx, fr, 0, 1.17 + r * 0.95, 0.02, fr.len, 1.17 + r * 0.95, 0.02);
-    ctx.stroke();
-  }
+  ctx.fill(p.glass);
+  if (z >= 1) edge(p.glass, shade(C.zinc, 0.9), Math.max(0.5, 0.5 * z));
+  if (glow <= 0.01) return;
+  ctx.fillStyle = css(hx(C.lamp), 0.85 * glow);
+  ctx.fill(p.lamp);
+  if (z >= 0.8) edge(p.lamp, css(hx(C.lamp), 0.25 * glow), 2);
 }
 
 /** A wrought-iron balcony: a stone slab 0.14 out, a rail 0.42 up, balusters from zoom 1 (04 6.4; the board's bay). */
@@ -451,19 +464,23 @@ function balcony(ctx: CanvasRenderingContext2D, fr: Fr, e: number, spans: readon
 /** One balcony a window: the spans [k + 0.17, k + 0.83] along a face of `len` tiles (a reused list per length). */
 const SPANS = new Map<number, number[]>();
 function windowSpans(len: number): readonly number[] {
-  let s = SPANS.get(len);
-  if (!s) {
-    s = [];
-    for (let k = 0; k < len; k++) s.push(k + 0.17, k + 0.83);
-    SPANS.set(len, s);
-  }
-  return s;
+  if (!SPANS.has(len)) SPANS.set(len, Array.from({ length: len * 2 }, (_, i) => (i >> 1) + (i & 1 ? 0.83 : 0.17)));
+  return SPANS.get(len) as number[];
 }
 
-/** Fill a path in one colour. */
-function fillPath(ctx: CanvasRenderingContext2D, p: Path2D, style: string): void {
-  ctx.fillStyle = style;
-  ctx.fill(p);
+/** A face's dormers in face-local units, built once: the stone bodies, their glass, and the 40 % lit at night (h01). */
+const DORM = new Map<string, { body: Path2D; glass: Path2D; lamp: Path2D }>();
+function dormers(B: Blk, f: number, len: number, night: boolean): { body: Path2D; glass: Path2D; lamp: Path2D } {
+  const key = B.b.id + '|' + f + '|' + (night ? 1 : 0);
+  let d = DORM.get(key);
+  if (d) return d;
+  d = { body: new Path2D(), glass: new Path2D(), lamp: new Path2D() };
+  for (let k = 0; k < len; k++) {
+    d.body.rect(k + 0.37, WALL + 0.15, 0.26, 0.55);
+    (night && h01(B.b.id, 9, k + f * 5) < 0.4 ? d.lamp : d.glass).rect(k + 0.43, WALL + 0.27, 0.14, 0.31);
+  }
+  DORM.set(key, d);
+  return d;
 }
 
 /** The mansard: zinc slopes on the open sides (set back 0.45), the flat top, dormers a tile apart, two chimney stacks; rain darkens it. */
@@ -492,18 +509,17 @@ function roof(ctx: CanvasRenderingContext2D, B: Blk, C: Hexes, glow: number, z: 
     for (let f = 0; f < 4; f++) {
       const [nx, ny] = FN4[f] as readonly [number, number];
       if (!((o >> f) & 1) || !vis(nx, ny)) continue;
-      // the face's dormers in three batched fills (bodies, caps, glass): they never overlap one another
-      const fr = frame(B, f), body = new Path2D(), cap = new Path2D(), glass = new Path2D(), lamp = new Path2D();
-      for (let k = 0; k < fr.len; k++) {
-        const u = k + 0.5;
-        rect(body, fr, u - 0.13, u + 0.13, WALL + 0.15, WALL + 0.7, -0.22);
-        rect(glow > 0.01 && h01(B.b.id, 9, k + f * 5) < 0.4 ? lamp : glass, fr, u - 0.07, u + 0.07, WALL + 0.27, WALL + 0.58, -0.22);
-        q4(cap, fr, u - 0.17, WALL + 0.7, -0.2, u + 0.17, WALL + 0.7, -0.2, u, WALL + 0.9, -0.32, u, WALL + 0.9, -0.32);
+      // the face's dormers, batched: bodies, glass and lit glass cached in the face's frame 0.22 in, then the caps (none overlap)
+      const fr = frame(B, f), d = dormers(B, f, fr.len, glow > 0.01), cap = new Path2D();
+      onFace(ctx, fr, -0.22);
+      for (const [p, col] of [[d.body, shade(C.stone, fr.L)], [d.glass, shade(C.sky, fr.L * 0.9)], [d.lamp, css(hx(C.lamp), 0.85 * glow)]] as const) {
+        ctx.fillStyle = col;
+        ctx.fill(p);
       }
-      fillPath(ctx, body, shade(C.stone, fr.L));
-      fillPath(ctx, cap, shade(C.zinc, 1));
-      fillPath(ctx, glass, shade(C.sky, fr.L * 0.9));
-      fillPath(ctx, lamp, css(hx(C.lamp), 0.85 * glow));
+      resetTransform(ctx);
+      for (let k = 0; k < fr.len; k++) q4(cap, fr, k + 0.33, WALL + 0.7, -0.2, k + 0.67, WALL + 0.7, -0.2, k + 0.5, WALL + 0.9, -0.32, k + 0.5, WALL + 0.9, -0.32);
+      ctx.fillStyle = shade(C.zinc, 1);
+      ctx.fill(cap);
     }
   if (z >= 0.45)
     for (let k = 0; k < 2; k++)
@@ -573,17 +589,13 @@ function drawSail(d: Drawable, ctx: CanvasRenderingContext2D): void {
   ctx.strokeStyle = shade(P.ink, 1);
   ctx.lineWidth = Math.max(0.6, 0.9 * z);
   ctx.beginPath();
-  ctx.moveTo(m0.x, m0.y);
-  ctx.lineTo(m1.x, m1.y);
+  seg(ctx, m0.x, m0.y, m1.x, m1.y);
   ctx.stroke();
   ctx.fillStyle = shade(P.paper, 0.98, 0.95); // the mainsail aft of the mast and the jib forward, in the hull's plane
   ctx.beginPath();
   for (const tri of [[-0.04, 0, -0.04, 1.42, -0.6, 0.05], [0.04, 0, 0.04, 1.25, 0.55, -0.06]]) {
-    for (let i = 0; i < 3; i++) {
-      const p = screenInto(x + (tri[i * 2] as number), y, tri[i * 2 + 1] as number, SP);
-      if (i) ctx.lineTo(p.x, p.y);
-      else ctx.moveTo(p.x, p.y);
-    }
+    ctx.moveTo(...xy(screenInto(x + (tri[0] as number), y, tri[1] as number, SP)));
+    for (let i = 1; i < 3; i++) ctx.lineTo(...xy(screenInto(x + (tri[i * 2] as number), y, tri[i * 2 + 1] as number, SP)));
     ctx.closePath();
   }
   ctx.fill();

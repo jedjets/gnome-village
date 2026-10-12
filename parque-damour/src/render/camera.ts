@@ -190,13 +190,19 @@ export function apronBox(): { a: number; b: number; c: number; d: number } {
   return { a, b, c, d };
 }
 
-/** Frame the park plus apron and centre on the park (GV 6400-6408 with the 64 x 64 box and the floor 0.30). */
+/**
+ * Frame the park plus apron and centre on the park (GV 6400-6408 with the 64 x 64 box and the floor 0.30); then, when the box is shorter
+ * than the screen below it, lower it until its near corner sits 12 px above the highest bottom overlay (the rail), so the sky and the
+ * skyline fill the top instead of an empty city haze filling the bottom (a deviation from 03 7.1 item 4's centring; S2 hand-back).
+ */
 export function fitCam(): void {
   const L = apronBox();
   const availW = Math.max(120, view.cw - 18), availH = Math.max(160, view.chh * 0.58);
   cam.z = clamp(Math.min((availW * 1.16) / Math.max(1, L.b - L.a), availH / Math.max(1, L.d - L.c)), ZMIN, ZMAX);
   cam.ox = -((L.a + L.b) / 2) * cam.z;
   cam.oy = -((L.c + L.d) / 2) * cam.z;
+  const bot = bandEdges().bot, near = view.chh * VANCH + L.d * cam.z + cam.oy;
+  if (bot < view.chh && near < bot - 12) cam.oy += bot - 12 - near;
   cam.fitZ = cam.z;
   clampCam();
 }
@@ -326,6 +332,11 @@ export function focusY(): number {
 }
 
 function measureBand(): number {
+  const { top, bot } = bandEdges();
+  return clamp(top + (bot - top) * 0.46, 100, view.chh * 0.5);
+}
+/** The bottom of the top chips and feed line, and the top of the highest bottom overlay showing (chh when none is laid out yet). */
+function bandEdges(): { top: number; bot: number } {
   let top = 0, bot = view.chh;
   if (typeof document !== 'undefined') {
     for (const id of BAND_TOP) {
@@ -341,7 +352,7 @@ function measureBand(): number {
       if (r.height > 0 && r.top > top + 60) bot = Math.min(bot, r.top);
     }
   }
-  return clamp(top + (bot - top) * 0.46, 100, view.chh * 0.5);
+  return { top, bot };
 }
 
 /** The world point a quarter turn pivots on: the followed thing, else the ground under the view anchor (GV screenCentreWorld 11303). */

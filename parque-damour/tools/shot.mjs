@@ -49,7 +49,9 @@ const START_ABS = 0.3; // a new park's T.abs (register 3.2)
  * `abs` must come after every scene at an earlier time.
  * s2: 07 S2.7 items 2 to 4, and the deviation of 07 0.3 item 5 recorded in the S2 hand-back: the overview at zoom 0.8 (the river, the
  * railings on three sides and the skyline in one view; the pan per turn puts the horizon about 175 px down and shows the most river and
- * railing, worked out from the projection) and a summer view at Fit (day 4, f 0.45: leaves out, so the species read).
+ * railing, worked out from the projection), a summer view at Fit (day 4, f 0.45: leaves out) and the same day at the default zoom 1.3
+ * panned west of the fountain onto five trees of all three species, so the plane, chestnut and lime crowns can be told apart (07 S2.7
+ * item 2; on day 1 they are in bud).
  */
 const SCENE_SETS = {
   s2: [
@@ -65,6 +67,7 @@ const SCENE_SETS = {
     { name: 'zoom-03', turn: 0, z: 0.3 },
     { name: 'zoom-24', turn: 0, z: 2.4 },
     { name: 'summer', turn: 0, fit: true, abs: 3.45 },
+    { name: 'summer-13', turn: 0, z: 1.3, ox: 270, oy: -20, abs: 3.45 },
   ],
 };
 

@@ -1,7 +1,7 @@
 // src/render/props.ts
-// The props of the Style Gate board in the three treatments: bench, the three-globe lamp with its halo and pool, the 2 x 2
-// fountain, the bistro table, and the Haussmann facade bay with the cafe awning, lit windows at night and the near-side cutaway
-// (04 6.1, 6.2, 6.4; 3.2). Every prop draws in world space through a Proj so it turns with the camera (GV `wp`).
+// The props of the Style Gate board in the three treatments: the three-globe lamp with its halo and pool, the 2 x 2 fountain, the
+// bistro table, and the Haussmann facade bay with the cafe awning, lit windows at night and the near-side cutaway (04 6.1, 6.2, 6.4;
+// 3.2); the board's bench is props-park.ts's, re-exported here. Every prop draws in world space through a Proj so it turns with the camera (GV `wp`).
 // The game side, direction A only (04 3.4): drawProp dispatching every placed kind (the kiosk, bandstand, picnic and bridge come from
 // props-park.ts, trees and hedges from flora.ts), and the props as painter drawables with their depth keys and culls (03 2.7 props.ts row,
 // 7.2, 7.7, 15.2 item 6; 04 6.1). The board's primitives are reused for the bench, lamp, fountain and table.
@@ -17,7 +17,7 @@
 // TODO(S4, S6): easel, crumbs, peel, sprinkler, rowboat, umbrella. TODO(S9): the halo breath, snow caps, a halo pool cap of 24 (04 10.2).
 import { EH, TH, TW, cam, view } from './camera.ts';
 import {
-  GC, faceLight, fillEllipse, fillPoly, h01, inkLine, lampGlow, mix, scaleHex, shade, skyRamp, strokeLine,
+  GC, faceLight, fillEllipse, fillPoly, h01, inkLine, lampGlow, mix, shade, skyRamp, strokeLine,
   type Pen, type Proj, type Pt,
 } from './ambient.ts';
 import { drawRipple, drawSprayDot } from './effects.ts';
@@ -28,9 +28,11 @@ import { iceState } from '../world/water.ts';
 import { screenInto } from './project.ts';
 import { depthOf, footprintDepth, type Drawable } from './order.ts';
 import { SPECIES_HEIGHT, drawHedge, drawTreeProp, gamePen, gameProj, renderCtx, type Species } from './flora.ts';
-import { drawBandstand, drawBridge, drawKiosk, drawPicnic } from './props-park.ts';
+import { drawBandstand, drawBench, drawBridge, drawKiosk, drawPicnic } from './props-park.ts';
 
 export { treeSprite } from './flora.ts';
+/** The bench lives in props-park.ts (AGENTS rule 9); the Style Gate board imports it from here. */
+export { drawBench } from './props-park.ts';
 
 type W3 = readonly [number, number, number]; // world x, y, e
 
@@ -65,64 +67,6 @@ function cylinder(pen: Pen, proj: Proj, cx: number, cy: number, r: number, e0: n
   const body = [l0, r0, r1, l1];
   fillPoly(pen, body, hex, { seed, light: 0.9, grad: grad ? { from: l1, to: r1, k0: 1.08, k1: 0.86 } : undefined, away: false });
   fillPoly(pen, ring(proj, cx, cy, r, e1), hex, { seed: seed + 1, light: 1.02, gapless: true });
-}
-
-/* ---------- the bench (04 6.1 row bench) ---------- */
-/**
- * A bench on tile (x, y); rot 0 runs along world x and faces +y (south), each step a quarter turn on (1 west, 2 north, 3 east; the
- * game's Prop.rot r is (r + 2) % 4 here); height 0.45 EH; seat 0.2 EH. The far end, the back and the seat, the near end paint in the order
- * the projection puts them; wet slats darken to x 0.86 (04 6.1).
- */
-export function drawBench(pen: Pen, proj: Proj, x: number, y: number, rot = 0, wet = 0): void {
-  const P = pen.spec.palette;
-  const q = Math.PI / 2 * rot;
-  const cq = Math.cos(q), sq = Math.sin(q);
-  // a local frame: u along the seat, v from the back (negative) to the front (positive)
-  const W = (u: number, v: number, e: number): W3 => [x + u * cq - v * sq, y + u * sq + v * cq, e];
-  const slat = scaleHex(P.bedEarth, [1.2, 1.2, 1.2]);
-  const wk = 1 - 0.14 * wet;
-  const lightTop = 1.0 * wk, lightFront = faceLight(-sq, cq) * wk;
-  const seatE = 0.2, thick = 0.035;
-  // the cast-iron ends: two legs, a seat rail, the armrest curl (zinc, drawn as lines)
-  const ironW = Math.max(0.8, 1.1 * pen.z);
-  const end = (u: number, seed: number): void => {
-    for (const v of [-0.14, 0.13]) strokeLine(pen, quad(proj, W(u, v, 0), W(u, v, seatE)), P.zinc, ironW, { open: true, seed });
-    strokeLine(pen, quad(proj, W(u, -0.22, seatE), W(u, 0.18, seatE)), P.zinc, ironW, { open: true, seed: seed + 1 });
-    const curl: Pt[] = [];
-    for (let i = 0; i <= 8; i++) {
-      const t = i / 8;
-      const v = -0.2 + t * 0.34, e = seatE + 0.12 + Math.sin(t * Math.PI) * 0.1 - t * 0.04;
-      curl.push(proj(...W(u, v, e)));
-    }
-    strokeLine(pen, [proj(...W(u, -0.2, seatE)), ...curl], P.zinc, ironW, { open: true, seed: seed + 2 });
-  };
-  // which end is nearer, and whether the front faces the viewer, by where the projection puts them (screen y grows toward the viewer)
-  const uFar = proj(...W(-0.46, 0, 0)).y <= proj(...W(0.46, 0, 0)).y ? -0.46 : 0.46;
-  const frontNear = proj(...W(0, 0.2, 0)).y >= proj(...W(0, -0.2, 0)).y;
-  const back = (): void => {
-    // the back: two slats standing at the rear
-    for (const [e0, e1] of [[0.27, 0.35], [0.37, 0.45]] as const) {
-      fillPoly(pen, quad(proj, W(-0.45, -0.2, e0), W(0.45, -0.2, e0), W(0.45, -0.2, e1), W(-0.45, -0.2, e1)), slat, { seed: 10 + e0 * 100, light: lightFront });
-      fillPoly(pen, quad(proj, W(-0.45, -0.23, e1), W(0.45, -0.23, e1), W(0.45, -0.2, e1), W(-0.45, -0.2, e1)), slat, { seed: 11 + e0 * 100, light: lightTop, noInk: true });
-    }
-  };
-  const seat = (): void => {
-    // the seat: three slats along u, each 0.11 tile deep, with a thin front face where the viewer can see it
-    for (let k = 0; k < 3; k++) {
-      const v0 = -0.19 + k * 0.12, v1 = v0 + 0.11;
-      fillPoly(pen, quad(proj, W(-0.45, v0, seatE), W(0.45, v0, seatE), W(0.45, v1, seatE), W(-0.45, v1, seatE)), slat, { seed: 20 + k, light: lightTop });
-      if (frontNear) fillPoly(pen, quad(proj, W(-0.45, v1, seatE - thick), W(0.45, v1, seatE - thick), W(0.45, v1, seatE), W(-0.45, v1, seatE)), slat, { seed: 30 + k, light: lightFront * 0.92, noInk: true });
-    }
-  };
-  end(uFar, 3); // the far end first
-  if (frontNear) {
-    back();
-    seat();
-  } else {
-    seat();
-    back();
-  }
-  end(-uFar, 6); // the near end over the seat
 }
 
 /* ---------- the three-globe lamp (04 6.2; ref3) ---------- */
@@ -518,7 +462,7 @@ function drawAwning(pen: Pen, proj: Proj, x0: number, y1: number, seed: number):
 /* ---------- the dispatcher and the painter drawables (03 2.7 props.ts row, 7.2, 7.7, 15.2 item 6; GV drawProp 9540-9553) ---------- */
 /** Drawn height in EH of each kind the game draws, for the size and screen culls (04 6.1; a tree's crown stands 1.5 x its height). */
 const PROP_H: Partial<Record<PropKind, number>> = {
-  bench: 0.6, lamp: 1.75, fountain: 1.6, kiosk: 1.65, table: 0.62, bandstand: 2.0, picnic: 0.35, basket: 0.35, bridge: 0.6, hedge: 0.5, tree: 3.8,
+  bench: 0.6, lamp: 1.75, fountain: 1.6, kiosk: 1.65, table: 0.62, bandstand: 3.0, picnic: 0.35, basket: 0.35, bridge: 0.6, hedge: 0.5, tree: 3.8,
 };
 /** How far the lamp is on: the lamps' hours with their fade (ambient.lampGlow), or a c_lamplight litUntil still ahead (03 7.7 item 3). */
 function lampOn(p: Prop): number {

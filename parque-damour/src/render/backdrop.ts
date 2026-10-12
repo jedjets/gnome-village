@@ -1,20 +1,22 @@
 // src/render/backdrop.ts
-// What lies round the park (03 7.4; 04 6.4): the sky, painted with the skyline band and the distant city into an offscreen canvas at
-// most every 260 ms; and the apron ground (the street and pavement east, south and west, the quay, the river 0.3 EH below it, the far
-// bank). The apron drawables the painter sorts with the props (railings, gates, facade blocks, boats) are apron.ts's, which shares the
-// apron's edges and the wall helpers below. The board's sky band (04 4.2 tile 12) is kept as it was: its B and C branches are frozen
-// for style-board.html (04 3.4).
+// What lies round the park (03 7.4; 04 6.4): the sky, cached offscreen and repainted at most every 260 ms, the skyline band in a strip
+// cache on the horizon, the distant city in haze below it; and the apron ground (the street and pavement east, south and west, the quay,
+// the river 0.3 EH below it, the far bank), run on past the apron on the sides that face the camera. The apron drawables the painter
+// sorts with the props (railings, gates, facade blocks, boats) are apron.ts's, which shares the apron's edges and the wall helpers below.
+// The board's sky band (04 4.2 tile 12) is kept as it was: its B and C branches are frozen for style-board.html (04 3.4).
 // Ported from GV 6497-6507 (initBackdrop, rampSky), 6511 (horizonY), 6525-6534 (drawSky: the offscreen cache), 6535-6618 (paintSky,
 // drawClouds), 6574-6579 (the far-shore bands, as the skyline), 6953-6965 (wp, faceVis, faceLight, shade, h01: the iso box kit).
 // Verdict: ADAPT. Changes: the sun arcs from the left at f 0.25 to the right at f 0.80 across the top of the sky (03 7.4 item 1; GV's
 // ellipse put it off the right edge at noon, review 16) and the moon takes its own arc by night; the 70 stars and the clouds are placed
 // by h01 and move on sim seconds and W.drift (GV seeded them on the visual stream and twinkled them on the wall clock), and 3 clouds
-// show in fair weather and 8 when cloudy (04 10.5); the crescent is bitten by the sky's own colour (04 12: source-over only); the cache
-// is keyed on the size, the dpr, the horizon, the zoom and round(cam.ang / 0.02) (09 2.6), and a scripted draw that does not move the
-// frame clock repaints when the sky's time or cloud moves; the open sea below the horizon became the city in haze, and the far-shore sine
-// bands became two rows of roofs, three domes and the Eiffel Tower laid out by world bearing, so a quarter turn carries them a quarter
-// of the strip and the tower keeps its north-west bearing (the strip runs the way the bearing turns on screen: +cam.ang, where 03 7.4
-// item 2 writes -cam.ang); walls are faces of world points, culled by faceVis and lit by faceLight.
+// show in fair weather and 8 when cloudy (04 10.5); the crescent is bitten by the sky's own colour (04 12: source-over only); GV's one
+// full-canvas cache became a sky cache at the horizon's height, stretched while the view moves under 4 %, and a skyline strip keyed on
+// its zoom and round(cam.ang / 0.02) (09 2.6), with the haze filled straight in, so a pan, a pause or a sky off screen repaints nothing;
+// a scripted draw that does not move the frame clock repaints when the sky's time or cloud moves; the open sea below the horizon became
+// the city in haze, and the far-shore sine bands became two rows of roofs, three domes and the Eiffel Tower laid out by world bearing,
+// so a quarter turn carries them a quarter of the strip and the tower keeps its north-west bearing (the strip runs the way the bearing
+// turns on screen: +cam.ang, where 03 7.4 item 2 writes -cam.ang), drawn at the zoom min(z, 0.45) so it stays far off when zoomed in;
+// walls are faces of world points, culled by faceVis and lit by faceLight.
 // Dropped from the range: the storm bank and its veil (6538, 6585-6604), seaPlaneCol and the sea gradient (6517-6523, 6565-6573), the
 // horizon line (6580), cobbles, logEnd and the house kit (6967-7035).
 // TODO(S9): mist greys the far bank and skyline further (04 10.5).
@@ -143,15 +145,19 @@ function drawClouds(pen: Pen, x: number, y: number, w: number, h: number, bottom
   }
 }
 
-/* ---------- the game's sky: one offscreen backdrop, repainted at most every 260 ms (GV drawSky 6525-6534) ---------- */
+/* ---------- the game's sky: two small caches, the sky and the skyline strip (GV drawSky 6525-6534; 03 7.4 items 1-2) ---------- */
 /** The apron's outer edges in world units (-8.5 and 55.5). */
 export const LO = -APRON - 0.5, HI = N + APRON - 0.5;
 const FAR = BACKDROP.farBankFrom - BACKDROP.facadeDepth + 0.5; // the far bank's back edge (-10.5)
 /** The river lies 0.3 EH under the quay (04 6.4 row quay: the wall is 0.3 high). */
 export const RIVER_DROP = 0.3;
+/** The skyline is far off: it draws at zoom zMax at most, so zooming in never brings the rooftops up to the facades (a parameter table, as
+ *  props-park.ts's, so an options page can show it unclamped). */
+export const SKYLINE_VIEW = { zMax: 0.45 };
 const SP: XY = { x: 0, y: 0 };
-let skyC: HTMLCanvasElement | null = null, skyG: CanvasRenderingContext2D | null = null;
-let skyAt = -1e9, skyKey = '', skySim = '';
+type Cache = { c: HTMLCanvasElement | null; g: CanvasRenderingContext2D | null; key: string; sim: string; at: number; h: number };
+const SKY: Cache = { c: null, g: null, key: '', sim: '', at: -1e9, h: 0 };
+const LINE: Cache = { c: null, g: null, key: '', sim: '', at: -1e9, h: 0 };
 
 /** The screen y of the farthest corner of the drawn ground (the park, the apron and the far bank), less half a tile (GV horizonY 6511). */
 export function horizonY(): number {
@@ -160,52 +166,85 @@ export function horizonY(): number {
   return y - (TH / 2) * cam.z;
 }
 
-/** Phase 2 (03 7.9): blit the backdrop, repainting it first when the view moved or 260 ms have passed; then the tower's beacon. */
-export function drawSky(c?: CanvasRenderingContext2D): void {
-  const ctx = ctxOf(c), cv = ctx.canvas;
-  if (!skyC) {
-    skyC = document.createElement('canvas');
-    skyG = skyC.getContext('2d');
+function canvasOf(k: Cache, w: number, h: number): CanvasRenderingContext2D | null {
+  if (!k.c) {
+    k.c = document.createElement('canvas');
+    k.g = k.c.getContext('2d');
   }
-  if (!skyG) return;
-  const hy = horizonY(), t = now();
-  const key = cv.width + 'x' + cv.height + '|' + view.dpr + '|' + Math.round(hy / 3) + '|' + Math.round(cam.z * 40) + '|' + Math.round(cam.ang / 0.02);
-  const sim = Math.round(T.f * 2000) + ',' + Math.round(W.cloud * 40) + ',' + Math.round(W.drift / 8);
-  if (key !== skyKey || t - skyAt > 260 || t < skyAt || (t === skyAt && sim !== skySim)) {
-    if (skyC.width !== cv.width || skyC.height !== cv.height) {
-      skyC.width = cv.width;
-      skyC.height = cv.height;
-    }
-    skyG.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-    paintSky(skyG, hy);
-    skyAt = t;
-    skyKey = key;
-    skySim = sim;
+  if (k.c.width !== w || k.c.height !== h) {
+    k.c.width = w;
+    k.c.height = h;
   }
-  ctx.save();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.drawImage(skyC, 0, 0);
-  ctx.restore();
-  beacon(ctx, hy);
+  return k.g;
 }
 
-/** The sky ramp greyed by cloud and fogged, stars, the sun or moon, clouds, the skyline, and the city in haze below the horizon. */
-function paintSky(g: CanvasRenderingContext2D, hy: number): void {
-  const spec = style(), P = spec.palette, cw = view.cw, chh = view.chh, fog = hx(P.fog);
-  let [t, b] = skyRamp(spec, T.f);
-  const gr = clamp01(W.cloud * 0.35); // a grey sky under cloud (GV 6537-6538, without the storm bank)
+/** The sky ramp for now, greyed by cloud (GV 6537-6538, without the storm bank) and fogged: [top, bottom]. */
+function ramp(): [RGB, RGB] {
+  const fog = hx(style().palette.fog);
+  let [t, b] = skyRamp(style(), T.f);
+  const gr = clamp01(W.cloud * 0.35);
   if (gr > 0.01) {
     t = mixc(t, hx(SKY_GREY[0]), gr);
     b = mixc(b, hx(SKY_GREY[1]), gr * 0.8);
   }
-  t = mixc(t, fog, FOGA * 0.5);
-  b = mixc(b, fog, FOGA * 0.55);
-  const sh = clamp(hy, chh * 0.12, chh); // the sky's own height: its bottom colour sits on the horizon
+  return [mixc(t, fog, FOGA * 0.5), mixc(b, fog, FOGA * 0.55)];
+}
+
+/**
+ * Phase 2 (03 7.9). The sky (ramp, stars, sun or moon, clouds) is cached at the height of the horizon and stretched to it while the view
+ * moves less than 4 %, repainting when that height, the size or (at most every 260 ms) the sky's time and cloud change; the skyline strip
+ * is cached on its zoom, the angle, its colours and the window glow, and laid on the horizon; the city haze below the horizon is filled
+ * straight in. Nothing is painted for a sky above the screen, and a paused park repaints nothing.
+ */
+export function drawSky(c?: CanvasRenderingContext2D): void {
+  const ctx = ctxOf(c), hy = horizonY(), t = now(), cw = view.cw, chh = view.chh, d = view.dpr;
+  const [top, bot] = ramp();
+  ctx.save();
+  if (hy > 0) {
+    const sh = clamp(hy, chh * 0.12, chh), sim = Math.round(T.f * 2000) + ',' + Math.round(W.cloud * 40) + ',' + Math.round(W.drift / 8);
+    const key = cw + 'x' + chh + '|' + d, r = sh / (SKY.h || 1);
+    if (key !== SKY.key || r < 0.96 || r > 1.04 || (sim !== SKY.sim && (t - SKY.at > 260 || t <= SKY.at))) {
+      const g = canvasOf(SKY, Math.round(cw * d), Math.ceil(sh * d));
+      if (g) {
+        g.setTransform(d, 0, 0, d, 0, 0);
+        paintSky(g, sh, top, bot);
+      }
+      Object.assign(SKY, { key, sim, at: t, h: sh });
+    }
+    if (SKY.c) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(SKY.c, 0, 0, SKY.c.width, SKY.c.height, 0, 0, SKY.c.width, sh * d);
+    }
+    if (hy < chh) skyline(ctx, hy, bot);
+  }
+  ctx.restore();
+  // the city beyond the apron, going into the sky's own haze toward the horizon (where GV laid the open sea, 6565-6573), filled round
+  // the flat street box that phase 3 paints over anyway (even-odd), so at the default zoom it costs a thin border, not the whole canvas
+  if (hy < chh) {
+    const city = lit(hx(mix(style().palette.flagstone, style().palette.zinc, 0.4))), y0 = Math.max(0, hy), [x0, x1, qy, y1] = streetBox();
+    const pg = ctx.createLinearGradient(0, hy, 0, chh);
+    pg.addColorStop(0, css(mixc(city, bot, 0.6 + FOGA * 0.3)));
+    pg.addColorStop(1, css(mixc(city, bot, 0.15 + FOGA * 0.3)));
+    ctx.fillStyle = pg;
+    ctx.beginPath();
+    ctx.rect(0, y0, cw, chh - y0);
+    ctx.moveTo(...xy(screenInto(x0, qy, 0, SP)));
+    for (const [x, y] of [[x1, qy], [x1, y1], [x0, y1]] as const) ctx.lineTo(...xy(screenInto(x, y, 0, SP)));
+    ctx.closePath();
+    ctx.fill('evenodd');
+  }
+  beacon(ctx, hy);
+}
+
+/** The sky ramp from 0 to sh, stars, the sun or moon, and the clouds, into the sky cache (CSS px). */
+function paintSky(g: CanvasRenderingContext2D, sh: number, t: RGB, b: RGB): void {
+  const cw = view.cw, fog = hx(style().palette.fog);
   const gg = g.createLinearGradient(0, 0, 0, sh);
   gg.addColorStop(0, css(t));
   gg.addColorStop(1, css(b));
   g.fillStyle = gg;
-  g.fillRect(0, 0, cw, chh);
+  g.fillRect(0, 0, cw, sh + 1);
   const ts = T.abs * DAYLEN;
   const na = clamp01(1 - T.light * 2.4); // stars below light 0.42 (GV 6543-6551)
   if (na > 0.02) {
@@ -260,16 +299,6 @@ function paintSky(g: CanvasRenderingContext2D, hy: number): void {
     }
     g.globalAlpha = 1;
   }
-  if (hy > 0 && hy < chh) skyline(g, hy, b);
-  // the city beyond the apron, going into the sky's own haze toward the horizon (where GV laid the open sea, 6565-6573)
-  if (hy < chh) {
-    const city = lit(hx(mix(P.flagstone, P.zinc, 0.4)));
-    const pg = g.createLinearGradient(0, hy, 0, chh);
-    pg.addColorStop(0, css(mixc(city, b, 0.6 + FOGA * 0.3)));
-    pg.addColorStop(1, css(mixc(city, b, 0.15 + FOGA * 0.3)));
-    g.fillStyle = pg;
-    g.fillRect(0, Math.max(0, hy), cw, chh - Math.max(0, hy));
-  }
 }
 
 /* ---------- the skyline band (04 6.4 row skyline; 03 7.4 item 2) ---------- */
@@ -284,16 +313,40 @@ const TOWER: readonly number[] = [
   0.07, 0.375, 0.045, 0.375, 0.032, 0.5, 0.023, 0.65, 0.018, 0.8, 0.03, 0.8, 0.03, 0.83, 0.012, 0.85, 0.004, 0.97, 0, 1,
 ];
 
+/** The skyline's zoom: the camera's, up to SKYLINE_VIEW.zMax. */
+function zSky(): number {
+  return Math.min(cam.z, SKYLINE_VIEW.zMax);
+}
 /** Screen x of a world bearing on the strip: the bearing behind the far corner is mid-screen (the strip may repeat at +-STRIP z). */
 function bearingX(th: number): number {
   let psi = th + cam.ang + (3 * Math.PI) / 4;
   psi -= TAU * Math.round(psi / TAU);
-  return view.cw / 2 + (psi / TAU) * STRIP * cam.z;
+  return view.cw / 2 + (psi / TAU) * STRIP * zSky();
 }
 
-function skyline(g: CanvasRenderingContext2D, hy: number, b: RGB): void {
-  const P = style().palette, z = cam.z, S = BACKDROP.facadeHeight * EH * z, SW = STRIP * z, fog = hx(P.fog), zinc = lit(hx(P.zinc));
+/** Lay the skyline strip on the horizon, repainting it when its zoom, the angle, its colours or the window glow change. */
+function skyline(ctx: CanvasRenderingContext2D, hy: number, b: RGB): void {
+  const P = style().palette, fog = hx(P.fog), zinc = lit(hx(P.zinc)), d = view.dpr;
   const back = mixc(mixc(zinc, b, 0.7), fog, FOGA * 0.5), front = mixc(mixc(zinc, b, 0.5), fog, FOGA * 0.5);
+  const S = BACKDROP.facadeHeight * EH * zSky(), base = Math.ceil(S * SKYLINE.towerScale) + 4, glow = lampGlow();
+  const key = view.cw + '|' + d + '|' + Math.round(zSky() * 40) + '|' + Math.round(cam.ang / 0.02) + '|' + css(back) + css(front) + '|' + Math.round(glow * 16);
+  if (key !== LINE.key) {
+    const g = canvasOf(LINE, Math.round(view.cw * d), Math.ceil((base + 4) * d));
+    if (g) {
+      g.setTransform(d, 0, 0, d, 0, 0);
+      g.clearRect(0, 0, view.cw, base + 4);
+      paintSkyline(g, base, S, back, front, glow);
+    }
+    LINE.key = key;
+    LINE.h = base;
+  }
+  if (!LINE.c) return;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(LINE.c, 0, Math.round((hy - LINE.h) * d));
+}
+
+function paintSkyline(g: CanvasRenderingContext2D, hy: number, S: number, back: RGB, front: RGB, glow: number): void {
+  const P = style().palette, z = zSky(), SW = STRIP * z;
   roofRow(g, 72, 0.5, 0.42, S, SW, hy, back, 1);
   g.fillStyle = css(back);
   for (const [th, k] of DOMES)
@@ -326,7 +379,6 @@ function skyline(g: CanvasRenderingContext2D, hy: number, b: RGB): void {
   }
   roofRow(g, 120, 0.28, 0.24, S, SW, hy, front, 2);
   // night: 12 lit windows per 100 px of the near row, fading in with the lamps (04 6.4, 10.1 item 4)
-  const glow = lampGlow();
   if (glow > 0.01) {
     const sw = SW / 120, dot = Math.max(1, 1.1 * z);
     g.fillStyle = css(hx(P.lamp), 0.85 * glow);
@@ -366,13 +418,13 @@ function roofRow(g: CanvasRenderingContext2D, n: number, base: number, vary: num
 function beacon(ctx: CanvasRenderingContext2D, hy: number): void {
   const glow = lampGlow();
   if (glow < 0.01 || hy <= 0 || hy > view.chh || (T.abs * DAYLEN) % 4 > 0.2) return;
-  const H = BACKDROP.facadeHeight * EH * cam.z * SKYLINE.towerScale, SW = STRIP * cam.z;
+  const H = BACKDROP.facadeHeight * EH * zSky() * SKYLINE.towerScale, SW = STRIP * zSky();
   ctx.fillStyle = css(hx(style().palette.lamp), glow);
   for (const off of [-SW, 0, SW]) {
     const x = bearingX(SKYLINE.towerAngle) + off;
     if (x < 0 || x > view.cw) continue;
     ctx.beginPath();
-    ctx.arc(x, hy - H, Math.max(1.5, 3 * cam.z), 0, TAU);
+    ctx.arc(x, hy - H, Math.max(1.5, 3 * zSky()), 0, TAU);
     ctx.fill();
   }
 }
@@ -397,41 +449,51 @@ export function xy(p: XY): [number, number] {
   return [p.x, p.y];
 }
 
+/** How far the street, the quay, the river and the far bank run on past the apron on the sides that face the camera (tiles). */
+const RUN_ON = 120;
+/** The flat street, pavement and quay phase 3 paints at e = 0, world [x0, x1] x [qy, y1], run on past the apron on the camera's sides. */
+function streetBox(): [number, number, number, number] {
+  return [vis(-1, 0) ? LO - RUN_ON : LO, vis(1, 0) ? HI + RUN_ON : HI, BACKDROP.quayY - 0.5, vis(0, 1) ? HI + RUN_ON : HI];
+}
+
 /**
  * Phase 3 (03 7.9): the river 0.3 EH down, the quay wall seen from the north and the far bank's wall seen from the south, then the
  * flat ground at e = 0: the street east, south and west, the pavement ring with its kerb, the quay with its coping and mooring rings,
- * the steps down to the water at g_north, the far bank in the haze of 0.35 (04 6.4).
+ * the steps down to the water at g_north, the far bank in the haze of 0.35 (04 6.4). On each side that faces the camera the street, the
+ * quay, the river and the far bank run on RUN_ON tiles past the apron, so no edge of the apron shows below the park (the far sides end at
+ * the horizon, where the city haze takes over).
  */
 export function apronGround(c?: CanvasRenderingContext2D): void {
-  const ctx = ctxOf(c), P = style().palette, z = cam.z, qy = BACKDROP.quayY - 0.5, ry = BACKDROP.riverTo - 0.5;
-  drawRiver(ctx, LO, ry, HI, qy, -RIVER_DROP);
-  if (vis(0, -1)) wall(ctx, LO, qy, HI, qy, -RIVER_DROP, 0, P.stone, 0.9); // walls run so their outward side is on the left
-  if (vis(0, 1)) wall(ctx, HI, ry, LO, ry, -RIVER_DROP, 0, mix(P.stone, P.fog, 0.35), 0.9);
+  const ctx = ctxOf(c), P = style().palette, z = cam.z, [x0, x1, qy, y1] = streetBox(), ry = BACKDROP.riverTo - 0.5;
+  const y0 = vis(0, -1) ? FAR - RUN_ON : FAR;
+  drawRiver(ctx, x0, ry, x1, qy, -RIVER_DROP);
+  if (vis(0, -1)) wall(ctx, x0, qy, x1, qy, -RIVER_DROP, 0, P.stone, 0.9); // walls run so their outward side is on the left
+  if (vis(0, 1)) wall(ctx, x1, ry, x0, ry, -RIVER_DROP, 0, mix(P.stone, P.fog, 0.35), 0.9);
   // the steps at g_north: three treads from the quay down to the water (04 6.4 row quay)
   const g = GATES.find((o) => o.side === 'north'), sx0 = (g?.tiles[0].x ?? 23) - 0.5;
   for (let k = 0; k < 3; k++) {
-    const y0 = qy - 0.18 * (k + 1), e = -RIVER_DROP * ((k + 1) / 4);
-    if (vis(0, -1)) wall(ctx, sx0, y0, sx0 + 2, y0, e - RIVER_DROP / 4, e, P.stone, 0.92);
+    const ty = qy - 0.18 * (k + 1), e = -RIVER_DROP * ((k + 1) / 4);
+    if (vis(0, -1)) wall(ctx, sx0, ty, sx0 + 2, ty, e - RIVER_DROP / 4, e, P.stone, 0.92);
     ctx.save();
     setWorldTransform(ctx, e);
     ctx.fillStyle = shade(P.flagstone, 1.02 - 0.04 * k);
-    ctx.fillRect(sx0, y0, 2, 0.18);
+    ctx.fillRect(sx0, ty, 2, 0.18);
     ctx.restore();
   }
   ctx.save();
   setWorldTransform(ctx);
   ctx.fillStyle = shade(P.flagstone, 0.9); // the street beyond the pavement
-  ctx.fillRect(LO, qy + 1, HI - LO, HI - qy - 1);
+  ctx.fillRect(x0, qy + 1, x1 - x0, y1 - qy - 1);
   ctx.fillStyle = shade(P.flagstone, 1); // the pavement, a tile wide outside the railings
   ctx.fillRect(-1.5, -0.5, 1, N + 1);
   ctx.fillRect(N - 0.5, -0.5, 1, N + 1);
   ctx.fillRect(-1.5, N - 0.5, N + 2, 1);
   ctx.fillStyle = shade(P.flagstone, 0.97); // the quay, then its paler coping along the water
-  ctx.fillRect(LO, qy, HI - LO, 1);
+  ctx.fillRect(x0, qy, x1 - x0, 1);
   ctx.fillStyle = shade(P.flagstone, 1.07);
-  ctx.fillRect(LO, qy, HI - LO, 0.14);
+  ctx.fillRect(x0, qy, x1 - x0, 0.14);
   ctx.fillStyle = shade(mix(P.flagstone, P.fog, 0.35), 0.95); // the far bank
-  ctx.fillRect(LO, FAR, HI - LO, ry - FAR);
+  ctx.fillRect(x0, y0, x1 - x0, ry - y0);
   ctx.lineCap = 'round';
   if (z >= 0.7) {
     // paving joints a tile apart on the pavement and the quay

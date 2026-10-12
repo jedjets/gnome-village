@@ -8,7 +8,8 @@
 // Verdict: PORT. Changes: the golden-hour windows follow the register (peaks 0.24 and 0.76, half-widths 0.08 and 0.10, 03 7.3 item 2;
 // GV 0.26 and 0.74 +- 0.11); the storm cover of GV 6458 is dropped (no storm front); the GC key carries a separator and the warm tint
 // (GV 6472 could collide and reused a dawn colour at dusk); nightW mixes toward the palette's `night` (GV recomputed NIGHTC from the
-// ramp each epoch: the same colour at night); nzAt lives here instead of ground.ts (03 2.7) because the brush needs it.
+// ramp each epoch: the same colour at night); nzAt lives here instead of ground.ts (03 2.7) because the brush needs it; the game's light
+// (computeAmbient) is neutral by day and dims only from fair to cloudy, computeAmbientAt keeps 03 7.3's curve for the board (S2 hand-back).
 // The Style Gate passed with A Storybook (register section 4, 2026-10-12): style() returns STYLES.A whatever profile.stylePick holds
 // (04 3.4 item 4, 4.5 item 1); the style board passes each column's own StyleSpec, and the B and C branches below are frozen for it.
 // Dropped from the range: the storm cover (6458), seaPlaneCol and wRGBA (6495-6523: no sea).
@@ -57,24 +58,16 @@ export const PRIMARY_KEYS = [
 
 /** The tokens that are the same in every direction (04 3.1, third table). */
 const SHARED = {
-  teal: '#86BBB3',
-  crumbs: '#E7D7B0',
+  teal: '#86BBB3', crumbs: '#E7D7B0',
   skin: ['#F0DCCB', '#E8C9A8', '#C9A07C', '#8E6B4E'],
   hair: ['#3A3440', '#5C4634', '#8B6748', '#C2703E', '#E0BE7C', '#B7AFA3'],
-  elderHair: '#E4E1EA',
-  eye: '#5A5468',
+  elderHair: '#E4E1EA', eye: '#5A5468',
   coat: ['#B9B7C6', '#C7B8A6', '#A6B4C2', '#B5C2A8', '#C9B2B8', '#9E9AAE', '#D1C3A2', '#8F9AA8'],
   signature: ['#E25B5F', '#F2C14E', '#5FA8D3', '#7DBF7A', '#EDA9C4', '#B9A6E0', '#F08A4B', '#4A4458'],
-  dust: '#CFC6C0',
-  splash: '#A9D3E6',
-  waspStripe: '#E8C64A',
-  pigeon: '#8E8AA0',
-  beak: '#E7B97A',
+  dust: '#CFC6C0', splash: '#A9D3E6', waspStripe: '#E8C64A',
+  pigeon: '#8E8AA0', beak: '#E7B97A',
   pomeranian: ['#F2C98A', '#F7DFB0', '#E8B06C'] as [string, string, string],
-  matchmakerBlue: '#3F7FC4',
-  baguette: '#E0A85C',
-  straw: '#E9D7AE',
-  wicker: '#C98F4C',
+  matchmakerBlue: '#3F7FC4', baguette: '#E0A85C', straw: '#E9D7AE', wicker: '#C98F4C',
 };
 
 export const PALETTES: Record<StyleId, Palette> = {
@@ -199,17 +192,13 @@ export let AA = 0;
 export let FOGA = 0;
 let gkey = '|100,100,100,0a'; // the GC memo's ambient key
 /** The sun direction, normalised (GV 6450). */
-export const SUNL: RGB = (() => {
-  const v: RGB = [-0.5, -0.3, 0.82];
-  const l = Math.hypot(v[0], v[1], v[2]);
-  return [v[0] / l, v[1] / l, v[2] / l];
-})();
+export const SUNL: RGB = ((v: RGB): RGB => [v[0] / Math.hypot(...v), v[1] / Math.hypot(...v), v[2] / Math.hypot(...v)])([-0.5, -0.3, 0.82]);
 
-/** The ambient state for a day fraction and light, with the weather fractions (03 7.3 items 1-3; 04 10.1 item 1). */
-export function computeAmbientAt(f: number, light: number, cloud = 0, mist = 0, rain = 0, snow = 0): void {
-  AM = mixc([0.46, 0.5, 0.72], [1, 1, 1], Math.pow(clamp01(light), 0.7));
-  const dim = cloud * 0.12;
-  AM = [AM[0] * (1 - dim), AM[1] * (1 - dim), AM[2] * (1 - dim * 0.92)];
+const NIGHT_AM: RGB = [0.46, 0.5, 0.72], ONE: RGB = [1, 1, 1];
+/** GV's curve at the game's night light 0.06 (02 3.2): about [0.535, 0.570, 0.759], 04 10.1 item 5's dark teal. */
+const AM_NIGHT = mixc(NIGHT_AM, ONE, Math.pow(0.06, 0.7));
+function setAmbient(f: number, light: number, am: RGB, dim: number, mist: number, rain: number, snow: number): void {
+  AM = [am[0] * (1 - dim), am[1] * (1 - dim), am[2] * (1 - dim * 0.92)];
   const warm = clamp01(1 - Math.abs(f - 0.76) / 0.1) + clamp01(1 - Math.abs(f - 0.24) / 0.08);
   AA = clamp01(warm) * 0.22 * Math.max(0.25, light);
   AT = f < 0.5 ? AT_AM : AT_PM;
@@ -218,9 +207,19 @@ export function computeAmbientAt(f: number, light: number, cloud = 0, mist = 0, 
   gkey = '|' + ((AM[0] * 100) | 0) + ',' + ((AM[1] * 100) | 0) + ',' + ((AM[2] * 100) | 0) + ',' + ((AA * 100) | 0) + (f < 0.5 ? 'a' : 'p');
 }
 
-/** Once per frame: the ambient state from the clock and the weather (03 7.3). */
+/** The ambient state for a day fraction and light, as 03 7.3 items 1-3 write it and the Style Gate board drew it (04 10.1 item 1). */
+export function computeAmbientAt(f: number, light: number, cloud = 0, mist = 0, rain = 0, snow = 0): void {
+  setAmbient(f, light, mixc(NIGHT_AM, ONE, Math.pow(clamp01(light), 0.7)), cloud * 0.12, mist, rain, snow);
+}
+
+/**
+ * Once per frame: the game's light from the clock and the weather. Daytime is neutral, as the board showed direction A (light 0.75 and
+ * up draws the palette as picked), easing to GV's night tint at the night light 0.06; the cloud dim follows 04 10.5 (clear and fair
+ * undimmed, cloudy 12 %), where 03 7.3 item 1's cloud x 0.12 dimmed fair weather by 4 % (07 0.3 item 5; the S2 hand-back).
+ */
 export function computeAmbient(): void {
-  computeAmbientAt(T.f, T.light, W.cloud, W.mist, W.rain, W.snow);
+  const k = Math.pow(clamp01((T.light - 0.06) / 0.69), 0.7);
+  setAmbient(T.f, T.light, mixc(AM_NIGHT, ONE, k), 0.12 * clamp01((W.cloud - 0.34) / 0.4), W.mist, W.rain, W.snow);
 }
 
 /**
@@ -307,12 +306,6 @@ export function skyRamp(spec: StyleSpec, f: number): [RGB, RGB] {
   const keyTop = (s: SkyKey): RGB => hx(s.f === 0.5 ? spec.palette.sky : s.t);
   const keyBot = (s: SkyKey): RGB => hx(s.f === 0.5 && spec.id !== 'A' ? spec.palette.paper : s.b);
   return [mixc(keyTop(a), keyTop(b), k), mixc(keyBot(a), keyBot(b), k)];
-}
-
-/** The flat sky colour for the current light (draw.ts fills the canvas with it before S2's sky pass). */
-export function skyColour(): string {
-  const [t, b] = skyRamp(style(), T.f);
-  return css(mixc(t, b, 0.4));
 }
 
 /* ---------- grain, hashes (GV 6630-6638, 6965) ---------- */
@@ -448,17 +441,18 @@ export function inkLine(pen: Pen, pts: Pt[], o: ShapeOpts = {}): void {
   ctx.stroke();
 }
 
+/** The screen box of a polygon: [x0, y0, x1, y1]. */
+function bbox(pts: Pt[]): [number, number, number, number] {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of pts) [x0, y0, x1, y1] = [Math.min(x0, p.x), Math.min(y0, p.y), Math.max(x1, p.x), Math.max(y1, p.y)];
+  return [x0, y0, x1, y1];
+}
+
 /** Hatching for an away face in direction C: 3 ink lines per quarter tile at 45 degrees, at zoom >= 1.0 (04 3.2). */
 function hatch(pen: Pen, pts: Pt[], seed: number): void {
   const { ctx, spec, z } = pen;
   if (z < 1.0) return;
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (const p of pts) {
-    if (p.x < x0) x0 = p.x;
-    if (p.x > x1) x1 = p.x;
-    if (p.y < y0) y0 = p.y;
-    if (p.y > y1) y1 = p.y;
-  }
+  const [x0, y0, x1, y1] = bbox(pts);
   const gap = (26 * z) / 12; // a quarter tile (TW / 4) holds 3 lines
   ctx.save();
   tracePath(ctx, pts, true);
@@ -495,13 +489,7 @@ export function fillPoly(pen: Pen, pts: Pt[], hex: string, o: ShapeOpts = {}): v
     ctx.stroke();
     ctx.clip();
     const seed = o.seed ?? 0;
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (const p of pts) {
-      if (p.x < x0) x0 = p.x;
-      if (p.x > x1) x1 = p.x;
-      if (p.y < y0) y0 = p.y;
-      if (p.y > y1) y1 = p.y;
-    }
+    const [x0, y0, x1, y1] = bbox(pts);
     const w = x1 - x0, h = y1 - y0;
     if (w > 4 && h > 4) {
       for (let k = 0; k < 3; k++) {
@@ -530,13 +518,7 @@ export function fillPoly(pen: Pen, pts: Pt[], hex: string, o: ShapeOpts = {}): v
   if (spec.shading === 'flat') {
     // B: the same colour over the edge rounds the corners (0.08 tile) and hides the seams; a small shape (a beak, an eye)
     // takes a thinner edge so the rounding never inflates it
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (const p of pts) {
-      if (p.x < x0) x0 = p.x;
-      if (p.x > x1) x1 = p.x;
-      if (p.y < y0) y0 = p.y;
-      if (p.y > y1) y1 = p.y;
-    }
+    const [x0, y0, x1, y1] = bbox(pts);
     ctx.strokeStyle = shade(hex, light, alpha);
     ctx.lineJoin = 'round';
     ctx.lineWidth = Math.max(0.8, Math.min(2 * z, 0.2 * Math.min(x1 - x0, y1 - y0)));
