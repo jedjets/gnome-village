@@ -68,6 +68,7 @@ export const es: Record<string, string> = {
 
   'toast.fit': 'El parque entero',
   'toast.new_park': 'Un parque nuevo',
+  'toast.start': 'De vuelta a la fuente',
 
   'feed.season.spring': 'Primavera en el parque',
   'feed.season.summer': 'Verano en el parque',

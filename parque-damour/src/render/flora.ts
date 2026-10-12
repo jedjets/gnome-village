@@ -158,12 +158,28 @@ export function drawTree(pen: Pen, p: Pt, t: TreeShape, season: number, dayInSea
       if (spec.id === 'B') strokeLine(pen, [a, b], trunk, tw, { open: true });
       else if (spec.id === 'A') strokeLine(pen, [a, b], trunk, tw, { open: true, noInk: true });
       else inkLine(pen, [a, b], { open: true, seed: t.seed + Math.round(g.a * 100), lineW: tw });
-      if (cp.ph === 'bud') {
+      if (cp.ph === 'bud' && spec.id !== 'A') {
         ctx.fillStyle = shade(crownHex(spec, t.species, season, 'bud'), 1, 0.55 + cp.f * 0.4);
         ctx.beginPath();
         ctx.arc(b.x, b.y, Math.max(0.8, H * 0.03), 0, Math.PI * 2);
         ctx.fill();
       }
+    }
+    if (cp.ph === 'bud' && spec.id === 'A') {
+      // A only (the board draws no bud tile): bursting buds as small clusters of young-green dabs at the twig tips and along them,
+      // fuller toward blossom, so a day-1 park reads as spring, not winter (placed by h01 so a cached sprite repeats)
+      ctx.fillStyle = shade(mix(crownHex(spec, t.species, season, 'bud'), P.foliageSummer, 0.4), 1, 0.6 + 0.3 * cp.f);
+      ctx.beginPath();
+      t.twigs.forEach((g, j) => {
+        for (let k = 0; k < 3; k++) {
+          const u = k === 0 ? 1 : 0.45 + 0.4 * h01(t.seed + j, k, 41), a = h01(t.seed + j, k, 42) * Math.PI * 2;
+          const r = Math.max(0.7, H * (0.026 + 0.018 * cp.f) * (k === 0 ? 1.2 : 0.85)), off = r * 0.6;
+          const x = X(g.x + Math.sin(g.a) * g.len * u) + Math.cos(a) * off, y = Y(g.y - Math.cos(g.a) * g.len * u) + Math.sin(a) * off;
+          ctx.moveTo(x + r, y);
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+        }
+      });
+      ctx.fill();
     }
     if (spec.id === 'B') for (const b of t.branches) strokeLine(pen, branchPts(b), trunk, Math.max(1.2, H * 0.035), { open: true });
     if ((o.snow ?? 0) > 0) {

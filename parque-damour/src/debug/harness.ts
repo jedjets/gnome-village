@@ -5,8 +5,8 @@
 // object so a duplicate key is impossible (09 5.3 rule 4). Nothing here writes sim state except through enqueue, apply, replay, restore,
 // newPark, setWeather and simulate (09 5.3 rule 1).
 // Groups present in S2: State, Stepping, Commands, Picking, Save (snapshot, restore), Park (newPark, setWeather), Render, Screenshots
-// (seedVisual), Meta. Later slices add: State visitors/pairs/creatures/effects (S4-S6) and feed() (S3), Picking tap (S4), Save savePark/
-// loadPark/clearAll (S3), Park callVisitor (S4), Render DBG, Audio (S8), Screenshots fxStep (S2 Part B).
+// (seedVisual, fxStep), Meta. Later slices add: State visitors/pairs/creatures/effects (S4-S6) and feed() (S3), Picking tap (S4), Save
+// savePark/loadPark/clearAll (S3), Park callVisitor (S4), Render DBG, Audio (S8). restore drops the old scene's particles, as newPark does.
 import { T } from '../core/clock.ts';
 import { seedVisual, rngN } from '../core/rng.ts';
 import { SIM_DT, SP, setSpeed, simulate, tick } from '../core/loop.ts';
@@ -17,6 +17,7 @@ import { BEDC, ICE, KIND, OCC, PAVEDAY, PETALS, WATER, WEAR, WET, props } from '
 import { cam, view } from '../render/camera.ts';
 import { pickAt, screenOf, screenToTile } from '../render/project.ts';
 import { draw, getCtx } from '../render/draw.ts';
+import { clearParticles, fxStep } from '../render/effects.ts';
 import { SCHEMA_VERSION } from '../save/schema.ts';
 import { restore, snapshot, stateHash, worldHash } from '../save/store.ts';
 import { FT, qualityLevel } from './perf.ts';
@@ -47,7 +48,14 @@ export function buildHarness(api: HarnessApi) {
   };
   const commands = { enqueue, apply: applyNow, log, replay };
   const picking = { pick: pickAt, screenOf, screenToTile };
-  const save = { snapshot, restore };
+  const save = {
+    snapshot,
+    /** Restore a snapshot; the particles belong to the old scene and go (03 7.8; the props builder's note). */
+    restore: (s: Parameters<typeof restore>[0]): void => {
+      restore(s);
+      clearParticles();
+    },
+  };
   const park = {
     newPark: api.newPark,
     /** Enqueues the logged `debug.weather` command; it applies on the next step. */
@@ -65,7 +73,8 @@ export function buildHarness(api: HarnessApi) {
     FT,
     qualityLevel,
   };
-  const screenshots = { seedVisual };
+  /** seedVisual reseeds the visual stream; fxStep(dt, n) runs n steps of ambient spawning and particle motion, paused or not (08 4.1). */
+  const screenshots = { seedVisual, fxStep };
   const meta = { version: 'dev', schemaVersion: SCHEMA_VERSION };
   return { ...state, ...stepping, ...commands, ...picking, ...save, ...park, ...render, ...screenshots, ...meta };
 }

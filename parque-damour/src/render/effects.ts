@@ -261,8 +261,9 @@ export function stepParticles(dt: number): void {
 /* ---------- ambient effects: the fountains' spray and ripple rings (GV ambientFx 8818-8847 skeleton; 04 section 8 row fountain spray) ---------- */
 /**
  * The spray, matched to props.ts drawFountain: the finial top at e 1.5, the upper bowl's lip r 0.45 at e 0.9, the basin water at e 0.28, the
- * pedestal r 0.17 (a ring's gap 0.19). 12 drops a second (a third over the bowl's lip, the rest up about 0.6 EH from the finial), budget
- * 30, ripple rings 0.5 a second for 4 s from r 0.2 to 0.68; db paints them after the fountain, whose depth is at most 1 past its centre.
+ * pedestal r 0.17 (a ring's gap 0.19). 12 drops a second (a third over the bowl's lip, the rest a low fan from the finial: up 0.2 to 0.28
+ * EH and out 0.3 to 0.4 tile into the bowl, the arc of the board's tile 6), budget 30, ripple rings 0.5 a second for 4 s from r 0.2 to
+ * 0.68; db paints them after the fountain, whose depth is at most 1 past its centre.
  */
 export const SPRAY = {
   rate: 12, budget: 30, cascade: 1 / 3, top: 1.5, bowl: 0.9, lip: 0.45, basin: 0.28,
@@ -281,7 +282,7 @@ function sprayDrop(cx: number, cy: number): void {
     const v = vrnd(0.14, 0.26), vz = vrnd(0, 0.25), l = fallTime(vz, S.bowl - S.basin);
     addPart({ k: 'drop', x: cx + ca * S.lip, y: cy + sa * S.lip, z: S.bowl, vx: ca * v, vy: sa * v, vz, l, m: l, ph: 0, db: S.db });
   } else {
-    const v = vrnd(0.12, 0.24), vz = vrnd(1.6, 1.85), l = fallTime(vz, S.top - S.bowl);
+    const v = vrnd(0.24, 0.34), vz = vrnd(1.0, 1.2), l = fallTime(vz, S.top - S.bowl);
     addPart({ k: 'drop', x: cx, y: cy, z: S.top, vx: ca * v, vy: sa * v, vz, l, m: l, ph: 0, db: S.db });
   }
 }

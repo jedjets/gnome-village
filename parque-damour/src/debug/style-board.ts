@@ -10,7 +10,7 @@ import {
   PALETTES, PRIMARY_KEYS, STYLES, STYLE_IDS, computeAmbientAt, isStyleId,
   type Pen, type Proj, type StyleId, type StyleSpec,
 } from '../render/ambient.ts';
-import { drawTilePatch, type Patch, type TileSample } from '../render/ground.ts';
+import { drawTilePatch, type Patch, type TileSample } from '../render/board-ground.ts';
 import { drawTree, treeShape } from '../render/flora.ts';
 import { drawBench, drawFacadeBay, drawFountain, drawLamp, drawLampPool } from '../render/props.ts';
 import { FH, drawFigure, type Look } from '../render/figures.ts';

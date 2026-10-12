@@ -5,9 +5,10 @@
 // counts; FT.t0 (write-only in GV) is dropped. It steps down only when the draw EMA stays above 22 ms for 180 frames after 4 s, never steps
 // up in a session, and is off under WebDriver (GV 12064; GV stepped on the 181st slow frame, 03 13 and 08 2.9 say the 180th).
 // Dropped from the range: nothing else.
-// Wiring is main.ts's: call ftNote from loop.onFrameEnd, toggle the overlay from the clock chip's double tap under body.dev (Part B).
+// Wiring is main.ts's: ftNote from loop.onFrameEnd (draw is the frame listeners' time: the draw and the HUD's 0.35 s refresh), the
+// overlay toggled by the clock chip's double tap under body.dev, the counts from setPerfCounts (particles when given).
 
-export type PerfCounts = { people: number; creatures: number; props: number; zoom: number };
+export type PerfCounts = { people: number; creatures: number; props: number; particles?: number; zoom: number };
 
 export const FT = { on: false, sim: 0, draw: 0, frame: 0, wSim: 0, wDraw: 0, wAt: 0, fps: 0, n: 0, acc: 0, slow: 0, stepped: 0 };
 
@@ -41,7 +42,8 @@ export function perfText(): string {
     'frame ' + FT.frame.toFixed(1) + ' ms  ' + FT.fps + ' fps\n' +
     'sim   ' + FT.sim.toFixed(1) + ' ms  (peak ' + FT.wSim.toFixed(1) + ')\n' +
     'draw  ' + FT.draw.toFixed(1) + ' ms  (peak ' + FT.wDraw.toFixed(1) + ')\n' +
-    c.people + ' people · ' + c.creatures + ' creatures · ' + c.props + ' props · zoom ' + c.zoom.toFixed(2) + ' · quality ' + level
+    c.people + ' people · ' + c.creatures + ' creatures · ' + c.props + ' props · ' +
+    (c.particles === undefined ? '' : c.particles + ' particles · ') + 'zoom ' + c.zoom.toFixed(2) + ' · quality ' + level
   );
 }
 
