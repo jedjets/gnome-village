@@ -69,6 +69,16 @@ export const es: Record<string, string> = {
   'toast.fit': 'El parque entero',
   'toast.new_park': 'Un parque nuevo',
 
+  'feed.season.spring': 'Primavera en el parque',
+  'feed.season.summer': 'Verano en el parque',
+  'feed.season.autumn': 'Otoño en el parque',
+  'feed.season.winter': 'Invierno en el parque',
+
+  'reason.not_here': 'aquí no',
+  'reason.not_in_avatar': 'no mientras eres alguien',
+  'reason.wrong_side': 'no es de este bando',
+  'reason.wrong_mode': 'no en este modo',
+
   'aria.clock': 'Hora del día, día y estación. Abre los sucesos',
   'aria.visitors': 'Visitantes en el parque. Abre el censo',
   'aria.add_visitor': 'Llamar a un visitante por una puerta',

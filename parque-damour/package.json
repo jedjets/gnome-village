@@ -16,7 +16,8 @@
     "shot:style": "node tools/shot-style.mjs",
     "check": "npm run typecheck && npm run lint && npm test && npm run build",
     "audio-smoke": "node tools/audio-smoke.mjs",
-    "shot:board": "node tools/shot-board.mjs"
+    "shot:board": "node tools/shot-board.mjs",
+    "det": "node tools/det.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

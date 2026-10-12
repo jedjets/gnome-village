@@ -2,12 +2,14 @@
 // The park clock T: absolute day count, day fraction f, day, season, light, phase, lamps (register 3.2, 02 3.1-3.2).
 // Ported from GV 814-828 (T, updateTime). ADAPT: abs is recomputed from the integer tick (no float drift, 03 6.1);
 // light is the piecewise-linear table of 02 3.2, not GV's cosine; cold, thaw and ds are dropped (03 6.1 item 3).
-// TODO(S2): emit 'newday' and 'season' through core/events.ts (03 6.1 item 2).
+// stepClock emits 'newday' when the day changes, 'season' when the season changes after day 1, and 'lampsLit' when the lamps come on
+// (f crosses 0.80) (03 6.1 item 2); syncClock sets the same values without emitting, for a new park or a restore.
+import { emit } from './events.ts';
 
 export const DAYLEN = 360; // sim seconds per day at 1x
 export const SEASON_DAYS = 3;
 export const START_ABS = 0.3; // a new park starts in the morning of spring day 1
-const STEPS_PER_DAY = 60 * DAYLEN; // 21600 fixed steps of 1/60 s
+export const STEPS_PER_DAY = 60 * DAYLEN; // 21600 fixed steps of 1/60 s
 
 export type Phase = 'night' | 'dawn' | 'morning' | 'midday' | 'afternoon' | 'golden' | 'dusk' | 'evening';
 export type Season = 0 | 1 | 2 | 3;
@@ -70,9 +72,7 @@ export function seasonOf(day: number): Season {
   return (Math.floor((day - 1) / SEASON_DAYS) % 4) as Season;
 }
 
-/** Recompute T from the integer step count (03 4.2 phase 3). */
-export function stepClock(tick: number): void {
-  const prevDay = T.day;
+function setFromTick(tick: number): void {
   T.abs = START_ABS + tick / STEPS_PER_DAY;
   T.f = T.abs % 1;
   T.day = Math.floor(T.abs) + 1;
@@ -80,7 +80,24 @@ export function stepClock(tick: number): void {
   T.phase = phaseOf(T.f);
   T.light = lightOf(T.f);
   T.lamps = lampsAt(T.f);
+}
+
+/** Recompute T from the integer step count (03 4.2 phase 3) and emit the day, season and lamp changes it crosses. */
+export function stepClock(tick: number): void {
+  const prevDay = T.day;
+  const prevSeason = T.season;
+  const prevLamps = T.lamps;
+  setFromTick(tick);
   newDay = tick > 0 && T.day !== prevDay;
+  if (newDay) emit({ kind: 'newday', tick, params: { day: T.day } });
+  if (tick > 0 && T.season !== prevSeason && T.day > 1) emit({ kind: 'season', tick, params: { season: SEASON_KEYS[T.season] } });
+  if (tick > 0 && T.lamps && !prevLamps) emit({ kind: 'lampsLit', tick }); // 05 3.2 cue 31 lamp_hum
+}
+
+/** Set T for `tick` without emitting anything: a new park (tick 0) or a restore. */
+export function syncClock(tick: number): void {
+  setFromTick(tick);
+  newDay = false;
 }
 
 /** True only on the step where the day changed. */

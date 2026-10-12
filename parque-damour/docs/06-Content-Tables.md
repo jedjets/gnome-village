@@ -329,7 +329,7 @@ Needs rates are the same for every person (section 7); staff and cameos have no 
 | `tourist` | 3.0 | viewpoints in order fountain, bandstand if any, north edge: photo 6 each (flash particle) | 0.25 day | camera and sunhat |
 | `jogger` | 5.0 | 2-4 laps of the outer loop on gravel; scatters pigeons within 2; never sits; leaves | until the laps end | headband, bright band, shorts |
 | `artist` | 3.0 | walk to a viewpoint, place `easel`, paint 0.4 day; leaves with the easel | 0.4 day + travel | floppy hat and palette |
-| `busker` | 3.0 | to the bandstand if free, else a loop tile where two gravel runs meet; play 120 (AI) or 90 (summoned): charm +3 within 8; leave | one performance | accordion; notes particles |
+| `busker` | 3.0 | to the bandstand if free, else a loop tile where two gravel runs meet; play 120 (AI) or 90 (summoned): charm +3 within 8; leave | one performance | accordion (a visual only: what he plays is the current motif's melody panned toward him, 05 §5.6 rule 5); notes particles |
 | `dogwalker` | 3.0 | loop a path twice; the dog (1 tile behind) scatters pigeons within 3; leave with the dog | two loops | lead drawn as a 1 px line |
 | `gardener` | 3.0 | patrol the outer loop · pave a qualifying run at 1.3 s per tile · tidy 6 s at a bed every 120 s · shelter at the kiosk in rain > 0.6 | never leaves | green apron, rake |
 | `vendor` | static | stands on the serving tile; serves one eater at a time; a second waits 5 s on an adjacent tile; a third goes elsewhere | while the kiosk exists | white apron and cap |
@@ -530,7 +530,7 @@ Rules: a tier is reached when the ladder's cumulative points >= threshold; point
 
 ---
 
-## 14. Weather (`src/core/weather.ts`; kind ids are the `weather.<id>` keys; targets eased with a 2.6 s half-life as GV 846-881; picked on the sim RNG as GV 852)
+## 14. Weather (`src/core/weather.ts`; kind ids are the `weather.<id>` keys; targets eased with a 2.6 s half-life as GV 846-881; picked on the sim RNG as GV 852-853: two draws, the kind then the duration; `debug.weather` sets a kind for its mean duration with no draw, 03 §5.1)
 
 ### 14.1 Kinds and targets
 | id | cloud | rain | mist | wind | snow | Duration (sim s) | Arrivals x | Comfort term | Effect on charm and stages | Dot colour |
@@ -1101,6 +1101,7 @@ The Points chip is `t('hud.cupid')` `#tCP` · `t('hud.mischief')` `#tMP`; the nu
 | `reason.not_in_avatar` | not while being someone | TODO |
 | `reason.busy` | busy | TODO |
 | `reason.wrong_side` | not for this side | TODO |
+| `reason.wrong_mode` | not in this mode | TODO |
 | `reason.startled` | startled by a dog | TODO |
 | `reason.big_dog` | the big dog is watching | TODO |
 | `reason.basket_empty` | the basket is empty: pick some flowers | TODO |
@@ -1178,6 +1179,8 @@ The Points chip is `t('hud.cupid')` `#tCP` · `t('hud.mischief')` `#tMP`; the nu
 | `gate.stop` | Stop | TODO |
 | `gate.stop_all` | Stop all | TODO |
 | `gate.cue_bed` | Cue bed | TODO |
+
+Both gates passed on 2026-10-12 (register §4): style **A Storybook**; music **B Music-box lullaby** and **C Café swing**, with **A Musette waltz** retired (05 §5.9). The boards stay as the record of the gates and still show all three directions and play all three motifs, so every key above stays, including `gate.dir.B`, `gate.dir.C` and `gate.motif.A`. No game screen uses a `gate.*` key.
 
 Rules for this table: `Object.keys(en)` equals `Object.keys(es)` (test); no key may be added in code without a row here; a `.one` key always has a `.other`; a `.f` key always has a `.m`; numbers are formatted by `t()` with the locale's decimal rules; never build a sentence by concatenation. Count: 16.1 to 16.16 define 9 + 24 + 19 + 37 + 32 + 38 + 55 + 19 + 67 + 32 + 73 + 14 + 50 + 34 + 9 + 17 = 529 keys; the test asserts the count against the data file, not against this number.
 

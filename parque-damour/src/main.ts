@@ -2,9 +2,7 @@
 // Boot order and wiring only, no rules (03 2.2): language, intro, then on Begin: park, renderer, rail, HUD, loop.
 // Ported from GV 12127-12222 (boot) as a wiring pattern. ADAPT: modules instead of closures; styles are linked from index.html.
 // TODO(S2): camera.setupInput, the tap handler; TODO(S3): Continue, autosave on visibilitychange and pagehide, park.new as a command; TODO(S8): audio.init on Begin.
-import { stepClock } from './core/clock.ts';
-import { onFrame, setSpeed, setTick, start } from './core/loop.ts';
-import { genPark } from './world/gen.ts';
+import { newPark as loopNewPark, onFrame, setSpeed, start } from './core/loop.ts';
 import { cam, fitCam, resize, turnStep } from './render/camera.ts';
 import { initRender, draw } from './render/draw.ts';
 import { $, applyDom, layoutOverlays, toast } from './ui/dom.ts';
@@ -38,10 +36,9 @@ function detectLang(): Lang {
   return (navigator.language || 'en').toLowerCase().startsWith('es') ? 'es' : 'en';
 }
 
+/** The sim's newPark (world, creator mode, empty log and sequence, tick 0; core/loop.ts), then the hash and the camera. */
 function newPark(seed: number): void {
-  genPark(seed);
-  setTick(0);
-  stepClock(0);
+  loopNewPark(seed);
   history.replaceState(null, '', '#s=' + seed + (hasDevHash() ? '&dev' : ''));
   cam.free = false;
   cam.follow = 0;

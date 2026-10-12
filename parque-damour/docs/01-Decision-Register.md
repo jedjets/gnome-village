@@ -249,7 +249,7 @@ Not planned: row 4 keeps the app in `gnome-village` (2026-10-11). If the owner e
 | `02-Game-Design.md` | Complete rules of play | design and feature slices |
 | `03-Technical-Architecture.md` | Modules, data model, loop, commands, render, save, i18n | all code slices |
 | `04-Art-and-UI-Style-Guide.md` | GV look, the three style directions, the Style Gate board, props, characters, effects | art slices |
-| `05-Audio-and-Music-Design.md` | Engine port, cue vocabulary, ambience, the waltz, the Music Gate board | audio slices |
+| `05-Audio-and-Music-Design.md` | Engine port, cue vocabulary, ambience, the game music (motifs B and C), the retired waltz, the Music Gate board | audio slices |
 | `06-Content-Tables.md` | Every tunable number and every string key | data entry and balancing |
 | `07-Build-Plan.md` | Slices S0 to S12 as self-contained task briefs with model tiers | whoever runs the project |
 | `08-Test-Plan.md` | Unit, determinism, screenshot, performance, manual QA | every slice's done-when |

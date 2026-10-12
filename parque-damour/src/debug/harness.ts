@@ -1,37 +1,78 @@
 // src/debug/harness.ts
 // window.__PD for the console, the determinism runner and screenshot assertions (03 section 13).
 // Ported from GV 12223-12241 (window.__GV). ADAPT: installed only in a DEV build (`import.meta.env.DEV`), never in dist/ (03 section 13, A20);
-// `#dev` in the hash sets `body.dev` (03 10.2) and does not install it. Only what section 13 lists.
-// TODO(S2): hash(), commands, save, weather, audio groups.
+// `#dev` in the hash sets `body.dev` (03 10.2) and does not install it. Only what section 13 lists, built from named groups spread into one
+// object so a duplicate key is impossible (09 5.3 rule 4). Nothing here writes sim state except through enqueue, apply, replay, restore,
+// newPark, setWeather and simulate (09 5.3 rule 1).
+// Groups present in S2: State, Stepping, Commands, Picking, Save (snapshot, restore), Park (newPark, setWeather), Render, Screenshots
+// (seedVisual), Meta. Later slices add: State visitors/pairs/creatures/effects (S4-S6) and feed() (S3), Picking tap (S4), Save savePark/
+// loadPark/clearAll (S3), Park callVisitor (S4), Render DBG, Audio (S8), Screenshots fxStep (S2 Part B).
 import { T } from '../core/clock.ts';
-import { rngN } from '../core/rng.ts';
-import { SIM_DT, simulate, tick, setSpeed } from '../core/loop.ts';
-import { KIND, WEAR, OCC, WATER, ICE, WET, PETALS, BEDC } from '../world/grid.ts';
-import { cam, view, fitCam } from '../render/camera.ts';
-import { screenOf, screenToTile } from '../render/project.ts';
-import { draw } from '../render/draw.ts';
+import { seedVisual, rngN } from '../core/rng.ts';
+import { SIM_DT, SP, setSpeed, simulate, tick } from '../core/loop.ts';
+import { applyNow, enqueue, log, replay } from '../core/commands.ts';
+import { drain } from '../core/events.ts';
+import { W, type WeatherKind } from '../core/weather.ts';
+import { BEDC, ICE, KIND, OCC, PAVEDAY, PETALS, WATER, WEAR, WET, props } from '../world/grid.ts';
+import { cam, view } from '../render/camera.ts';
+import { pickAt, screenOf, screenToTile } from '../render/project.ts';
+import { draw, getCtx } from '../render/draw.ts';
+import { SCHEMA_VERSION } from '../save/schema.ts';
+import { restore, snapshot, stateHash, worldHash } from '../save/store.ts';
+import { FT, qualityLevel } from './perf.ts';
 
 export type HarnessApi = { newPark: (seed: number) => void };
 
-export function installHarness(api: HarnessApi): void {
-  const pd = {
+export function buildHarness(api: HarnessApi) {
+  const state = {
     T,
+    W,
+    layers: { KIND, WEAR, OCC, WATER, ICE, WET, PETALS, BEDC, PAVEDAY },
+    props,
     cam,
-    view,
-    layers: { KIND, WEAR, OCC, WATER, ICE, WET, PETALS, BEDC },
-    getClock: () => ({ ...T }),
+  };
+  const stepping = {
+    /** Run `n` fixed steps with lite 0 (the exact path), drain the events they queued, and return the tick. */
     simulate: (n = 1): number => {
       for (let i = 0; i < n; i++) simulate(SIM_DT, 0);
+      drain(0);
       return tick();
     },
     tick,
     rngN,
+    hash: stateHash,
+    worldHash,
     setSpeed,
-    draw,
-    fitCam,
-    screenOf,
-    screenToTile,
-    newPark: api.newPark,
+    SP,
   };
-  (window as unknown as { __PD: typeof pd }).__PD = pd;
+  const commands = { enqueue, apply: applyNow, log, replay };
+  const picking = { pick: pickAt, screenOf, screenToTile };
+  const save = { snapshot, restore };
+  const park = {
+    newPark: api.newPark,
+    /** Enqueues the logged `debug.weather` command; it applies on the next step. */
+    setWeather: (kind: WeatherKind): void => {
+      enqueue({ side: 'park', kind: 'debug.weather', payload: { kind } });
+    },
+  };
+  const render = {
+    draw,
+    pix: (x: number, y: number, w: number, h: number): number[] => {
+      const d = getCtx().getImageData(x * view.dpr, y * view.dpr, w * view.dpr, h * view.dpr);
+      return Array.from(d.data);
+    },
+    dpr: (): number => view.dpr,
+    FT,
+    qualityLevel,
+  };
+  const screenshots = { seedVisual };
+  const meta = { version: 'dev', schemaVersion: SCHEMA_VERSION };
+  return { ...state, ...stepping, ...commands, ...picking, ...save, ...park, ...render, ...screenshots, ...meta };
 }
+
+export type Harness = ReturnType<typeof buildHarness>;
+
+export function installHarness(api: HarnessApi): void {
+  (window as unknown as { __PD: Harness }).__PD = buildHarness(api);
+}
+

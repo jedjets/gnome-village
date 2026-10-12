@@ -69,6 +69,16 @@ export const en: Record<string, string> = {
   'toast.fit': 'The whole park',
   'toast.new_park': 'A new park',
 
+  'feed.season.spring': 'Spring in the park',
+  'feed.season.summer': 'Summer in the park',
+  'feed.season.autumn': 'Autumn in the park',
+  'feed.season.winter': 'Winter in the park',
+
+  'reason.not_here': 'not here',
+  'reason.not_in_avatar': 'not while being someone',
+  'reason.wrong_side': 'not for this side',
+  'reason.wrong_mode': 'not in this mode',
+
   'aria.clock': 'Time of day, day and season. Opens the events',
   'aria.visitors': 'Visitors in the park. Opens the census',
   'aria.add_visitor': 'Call a visitor through a gate',

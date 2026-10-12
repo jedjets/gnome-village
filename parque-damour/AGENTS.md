@@ -1,6 +1,6 @@
 # Parque D'Amour: standing instructions for any model working in this repository
 
-Version 1.1 · 2026-10-11 · Owner: Jeduthun Oosthuis. `CLAUDE.md` is a verbatim copy of this file; when one changes, copy it over the other in the same commit.
+Version 1.2 · 2026-10-12 · Owner: Jeduthun Oosthuis. `CLAUDE.md` is a verbatim copy of this file; when one changes, copy it over the other in the same commit.
 
 ## 1. What this project is
 
@@ -18,7 +18,7 @@ It is built on the architecture and layout of the owner's single-file game Gnome
 | 4 | The documents your slice lists under `Sx.3 Read first` | 02 rules of play, 03 code contract, 04 art, 05 audio, 06 numbers and string keys, 08 tests, 09 porting map. |
 | 5 | The rest of `docs/`, then `10-Gnome-Village-HTML-Architecture-Review.md` and `gv-review-notes/` | Reference about GV, not rules for Parque. |
 
-Precedence: register > brief > the numbered documents 02 to 09 > code comments and READMEs. A conflict is a bug in the lower document: stop, write it under "Open questions" in your hand-back, and do not choose. Never change the register or the brief without the owner; propose a change as four lines, What / Why / Where / Risk (brief 10.2). Gate picks go into register section 4 on the owner's word only. `docs/README.md` indexes the pack.
+Precedence: register > brief > the numbered documents 02 to 09 > code comments and READMEs. A conflict with the register or the brief is a bug in the lower document: stop, write it under "Open questions" in your hand-back, and do not choose. A rule that is impossible as written, or two numbered documents that disagree, and the register does not settle it: follow 07 section 0.3 item 5 (take the reading that keeps every fixed coordinate and register value, implement it, list it under Deviations, carry on). Never change the register or the brief without the owner; propose a change as four lines, What / Why / Where / Risk (brief 10.2). Gate picks go into register section 4 on the owner's word only. `docs/README.md` indexes the pack.
 
 ## 3. Hard rules
 
@@ -26,7 +26,7 @@ Precedence: register > brief > the numbered documents 02 to 09 > code comments a
 |---|---|---|
 | 1 | Deterministic simulation: fixed step `SIM_DT = 1/60`; the same seed and command log give the same `stateHash` and `rngN` on any device at any speed. Sim decisions call `rng()`; anything visual or audible calls `vrng()`. No `Math.random`, `Date.now` or `performance.now` outside `src/core/loop.ts` (audio cue gaps are the only other real-time timers). | 03 P1, P3, P10; 07 0.7 item 6 |
 | 2 | Commands only: `ui/`, `render/`, `audio/` and `debug/` never write simulation state. Every player action is a `Command {tick, side, kind, payload}` enqueued by the shell and applied by the loop at the start of a step. | register 2.9; 03 P2, section 5 |
-| 3 | Imports flow downward only: nothing under `core/`, `world/`, `entities/`, `play/` or `save/` imports from `render/`, `audio/`, `ui/` or `debug/`, or reads `cam`, the DOM or the wall clock. The one `MODE` read is the decide-cadence branch (03 4.4). | 03 2.1, P3, P4 |
+| 3 | Imports flow downward only: nothing under `core/`, `world/`, `entities/`, `play/` or `save/` imports from `render/`, `audio/`, `ui/` or `debug/`, or reads `cam`, the DOM or the wall clock. Two named exceptions inside the sim layers: `core/weather.ts` imports `world/grid.ts` for the `WET` layer, and `core/commands.ts` imports `play/mode.ts` for the mode rules of 03 5.3. The one `MODE` read in the sim is the decide-cadence branch (03 4.4). | 03 2.1, P3, P4 |
 | 4 | Ids, not references: every cross-entity link in a record or saved field is a numeric id; 0 means none. No record holds another record. | register 3.3; 03 P5 |
 | 5 | Typed arrays for tiles: each per-tile layer is a typed array of length `NC = 2304` indexed by `I(x, y) = y * N + x`. No per-tile objects. | register 3.1; 03 P6 |
 | 6 | Every user-facing string (toast, feed, card, rail, aria-label, cascade status, refusal reason) is a key resolved by `t(key, params)`. Add the key to `src/ui/strings/en.ts` and `src/ui/strings/es.ts` in the same change. No inline sentence building; use `plural()` and `gender()`. | register 3.12; 03 P7, section 12 |
@@ -35,7 +35,7 @@ Precedence: register > brief > the numbered documents 02 to 09 > code comments a
 | 9 | Keep every source file under about 600 lines. When a file grows past that, split it along the module map in 03 section 2; never invent a new directory or move a responsibility to another layer. | this file |
 | 10 | When porting GV code, read only the line range with `sed -n 'A,Bp'` (never the whole file) and start the file with the header comment of 09 1.3: `// Ported from GV <first>-<last> (<functions>).`, the verdict PORT or ADAPT, the rules changed, the lines dropped. Never port terrain, water flow, erosion, construction or households (07 0.7 item 1). | 09 1.2, 1.3; brief 10.3 |
 | 11 | Every sim rule you touch gets or updates a Vitest test in `tests/` that fixes a number from the design; each `describe` names the register row or document section it locks. Never skip, weaken or delete a test, never mock `rng()`, never change a screenshot baseline to make a test pass. | 08 1.3, 1.4; 09 1.3 |
-| 12 | Never touch the gates' decisions. No final prop, figure, ground, sky, cue or music until the owner's pick is recorded in register section 4; until then only the boards of S1. For any art or music work, render two or three variants on a scratch page, screenshot them at 390 x 844 and present them to the owner before building the final one. | register rows 1, 25, 26; 07 0.4 |
+| 12 | The gates are passed (2026-10-12, register section 4). (a) Draw direction **A Storybook** only; new primitives implement A only; the B and C branches already in `src/render/*` are frozen for `style-board.html` and are never extended (04 3.4). (b) Music is motifs **B Music-box lullaby** and **C Café swing** as register 3.13 and section 4: C while `f` is in [0.20, 0.80), B from dusk to dawn, each in its rising or parted variant by the romance state. A switch between them waits for a phrase boundary and crossfades over 2 s. The gate mix stays: `MUSIC_MAKEUP` 4.5 on every music voice and B `TINE_MAKEUP` 2. Motif A (the musette waltz) is retired and plays only on `music-board.html`. (c) Still, before any new prop, figure, effect, cue or music: render two or three variants on a scratch page, screenshot them at 390 x 844 and present them to the owner before building the final one (register row 26). (d) Never change a recorded pick. | register rows 1, 25, 26, sections 3.13 and 4; 04 3.4; 05 5.4; 07 0.4 |
 | 13 | Tone: nothing hurts anyone. Allowed: poop on head, slight trip, item snatched and later dropped, soaked, wasp flap, mime, rival flirt, fog, hats flying. Not allowed: injuries, cruelty, targeting children, mocking appearance. At most 3 embarrassments per person per day; the 15 % backfire stays. | register 3.14; 02 section 13 |
 | 14 | Use ids, names and numbers exactly as register sections 3 and 5 spell them; never rename, round or "improve" one. A value no document defines: define it, list it under "Assumptions" in your hand-back, carry on. | brief 10.2, 10.3; 07 0.7 item 8 |
 
@@ -64,7 +64,7 @@ Precedence: register > brief > the numbered documents 02 to 09 > code comments a
 
 1. Changing any number, name, id or status in the register, or any text of the brief.
 2. Adding a dependency (runtime or dev), a font family, an image, an SVG file or an audio file.
-3. Doing any art, prop, figure, effect, cue or music work before its gate is passed, or without presenting options first.
+3. Doing any art, prop, figure, effect, cue or music work without presenting options first, or outside the gate picks (direction A; motifs B and C; hard rule 12).
 4. Changing a token value in `src/styles/tokens.css`, the iso constants (`TW 26, TH 13, EH 26, VANCH 0.46`), the time constants, the caps, or a DOM id of 03 section 10.1.
 5. Touching a file outside your slice's list, another slice's document, or the module map itself.
 6. Skipping, deleting, loosening or `it.skip`-ing a test, or changing a screenshot baseline.

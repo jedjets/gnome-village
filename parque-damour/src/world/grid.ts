@@ -1,7 +1,9 @@
 // src/world/grid.ts
-// World constants and the per-tile typed-array layers (register 3.1, 03 3.2).
+// World constants, the per-tile typed-array layers (register 3.1, 03 3.2) and the prop list that stands on them (03 3.6).
 // Ported from GV 567-568 (N, NC) and 612-673 (the layer arrays). ADAPT: one scale (S = 1), flat ground (E all zero), park kinds.
-// TODO(S2): layersState/setLayersState used by save/store.ts snapshot; BLOCK also considers passable props.
+// The Prop type and the `props` list live here because world/gen.ts (L1) places props and entities/ (L2) may only import downward;
+// entities/visitor.ts re-exports the type in S4 (03 3.6). Apron props (railing, gate, facade, quay) are never in this list (park.ts).
+import { freePropId, nextPropId, type PropId, type VisitorId, type PairId } from '../core/ids.ts';
 
 export const N = 48;
 export const S = 1;
@@ -39,13 +41,121 @@ export const PAVEDAY = new Int16Array(NC); // day the gardener last paved, 0 nev
 export const E = new Float32Array(NC); // ground height: always 0 in v1
 export const BLOCK = new Uint8Array(NC); // derived: 1 blocked for walking
 
+/** Bumped whenever KIND, OCC or the props change, so a cache (the water bodies, the charm field) knows to rebuild. */
+let version = 1;
 let blockDirty = true;
+
+export function worldVersion(): number {
+  return version;
+}
 
 export function markBlockDirty(): void {
   blockDirty = true;
+  version++;
 }
 
-/** Beds, water and occupied tiles block walking (02 2.3). */
+/* ---------- props (03 3.6) ---------- */
+
+export type PropKind =
+  | 'bench' | 'lamp' | 'fountain' | 'kiosk' | 'table' | 'bandstand' | 'picnic' | 'bridge' | 'hedge' | 'tree' | 'easel' | 'crumbs'
+  | 'peel' | 'sprinkler' | 'basket' | 'rowboat' | 'umbrella' | 'railing' | 'gate' | 'facade' | 'quay';
+
+export type PropData = {
+  species?: 0 | 1 | 2; // tree: 0 plane, 1 chestnut, 2 lime
+  stock?: number;
+  sitters?: VisitorId[];
+  vendorId?: VisitorId;
+  tableIds?: PropId[];
+  ownerId?: number;
+  litUntil?: number;
+  span?: number; // bridge: water tiles spanned
+  dir?: 0 | 1; // bridge: 0 north-south, 1 east-west
+  pairId?: PairId;
+};
+
+/**
+ * x, y is the north-west tile; w, h the footprint in tiles. `rot` is quarter turns clockwise on the map (+x east, +y south) from
+ * facing north: 0 north, 1 east, 2 south, 3 west. A bench faces `rot`; a kiosk serves on `rot` (0 serves south, by 06 section 3).
+ */
+export type Prop = {
+  id: PropId;
+  kind: PropKind;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rot: 0 | 1 | 2 | 3;
+  placedBy: 'gen' | 'player' | 'sim';
+  passable: boolean;
+  untilTick: number; // 0 = permanent
+  data: PropData;
+};
+export type NewProp = Omit<Prop, 'id' | 'data' | 'untilTick' | 'passable'> & { data?: PropData; untilTick?: number; passable?: boolean };
+
+/** Passable by 06 section 4: the picnic blanket, crumbs, a banana peel and a bridge. */
+const PASSABLE: ReadonlySet<PropKind> = new Set<PropKind>(['picnic', 'crumbs', 'peel', 'bridge', 'basket', 'umbrella', 'rowboat']);
+
+export const props: Prop[] = [];
+const byId = new Map<PropId, Prop>();
+
+export function propById(id: PropId): Prop | undefined {
+  return byId.get(id);
+}
+
+/** Place a prop: allocate its id, list it, and write the id into OCC on every footprint tile when it blocks walking. */
+export function addProp(spec: NewProp): Prop {
+  const p: Prop = {
+    id: nextPropId(),
+    kind: spec.kind,
+    x: spec.x,
+    y: spec.y,
+    w: spec.w,
+    h: spec.h,
+    rot: spec.rot,
+    placedBy: spec.placedBy,
+    passable: spec.passable ?? PASSABLE.has(spec.kind),
+    untilTick: spec.untilTick ?? 0,
+    data: spec.data ?? {},
+  };
+  props.push(p);
+  byId.set(p.id, p);
+  if (!p.passable)
+    for (let y = p.y; y < p.y + p.h; y++) for (let x = p.x; x < p.x + p.w; x++) if (inB(x, y)) OCC[I(x, y)] = p.id;
+  markBlockDirty();
+  return p;
+}
+
+/** Remove a prop: clear its OCC tiles, free its id. Returns the prop, or undefined when no such id is listed. */
+export function removeProp(id: PropId): Prop | undefined {
+  const p = byId.get(id);
+  if (!p) return undefined;
+  props.splice(props.indexOf(p), 1);
+  byId.delete(id);
+  for (let y = p.y; y < p.y + p.h; y++)
+    for (let x = p.x; x < p.x + p.w; x++) if (inB(x, y) && OCC[I(x, y)] === id) OCC[I(x, y)] = 0;
+  freePropId(id);
+  markBlockDirty();
+  return p;
+}
+
+/** A deep copy of the list for a snapshot. */
+export function propsState(): Prop[] {
+  return JSON.parse(JSON.stringify(props)) as Prop[];
+}
+
+/** Replace the list (a restore). OCC comes back with the layers, not from here; the ids come back with the ids state. */
+export function setPropsState(list: readonly Prop[]): void {
+  props.length = 0;
+  byId.clear();
+  for (const p of list) {
+    const c = JSON.parse(JSON.stringify(p)) as Prop;
+    props.push(c);
+    byId.set(c.id, c);
+  }
+  markBlockDirty();
+}
+
+/** Beds, water and occupied tiles block walking; a bridge opens the water under it (02 2.3). */
 export function rebuildBlock(): void {
   if (!blockDirty) return;
   blockDirty = false;
@@ -53,8 +163,12 @@ export function rebuildBlock(): void {
     const k = KIND[i];
     BLOCK[i] = k === Kind.bed || k === Kind.pond || k === Kind.canal || OCC[i] !== 0 ? 1 : 0;
   }
+  for (const p of props)
+    if (p.kind === 'bridge')
+      for (let y = p.y; y < p.y + p.h; y++) for (let x = p.x; x < p.x + p.w; x++) if (inB(x, y)) BLOCK[I(x, y)] = 0;
 }
 
+/** A new park: every layer and the prop list back to empty (gen.ts resets the id counters with it). */
 export function clearLayers(): void {
   KIND.fill(0);
   WEAR.fill(0);
@@ -66,7 +180,9 @@ export function clearLayers(): void {
   BEDC.fill(0);
   PAVEDAY.fill(0);
   E.fill(0);
-  blockDirty = true;
+  props.length = 0;
+  byId.clear();
+  markBlockDirty();
 }
 
 export type LayersState = {
@@ -105,5 +221,5 @@ export function setLayersState(s: LayersState): void {
   PETALS.set(s.PETALS);
   BEDC.set(s.BEDC);
   PAVEDAY.set(s.PAVEDAY);
-  blockDirty = true;
+  markBlockDirty();
 }

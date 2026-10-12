@@ -1,8 +1,8 @@
 # Parque D'Amour: Art and UI Style Guide
 
-Version 1 · 2026-10-10 · Owner: Jeduthun Oosthuis · Author: Claude (design session)
+Version 1.1 · 2026-10-12 · Owner: Jeduthun Oosthuis · Author: Claude (design session)
 
-**How to use this document.** This is the art bible for every model that draws, styles or lays out anything in Parque D'Amour. Read `01-Decision-Register.md` (the register) and `00-Product-Brief.md` (the brief) first; every number, name and id here matches them, and where this document defines a value they do not, that value is listed in section 13 so the owner can object. Section 1 describes what Gnome Village (GV) looks like today, precisely enough to reproduce it; "GV 6445" means line 6445 of the GV HTML file as indexed in `10-Gnome-Village-HTML-Architecture-Review.md`. Section 2 analyses the owner's three reference images. Section 3 defines the three directions for the Style Gate; section 4 specifies the board that renders them. Sections 5 to 11 lock everything that does not depend on the gate. Section 12 is the checklist for any model doing art work. Rules marked "Do not" are hard limits. "Done when" lines are acceptance tests. No model draws a final prop, figure, ground or sky before the owner's pick is recorded in the register §4 (brief 3.4 rule 3).
+**How to use this document.** This is the art bible for every model that draws, styles or lays out anything in Parque D'Amour. Read `01-Decision-Register.md` (the register) and `00-Product-Brief.md` (the brief) first; every number, name and id here matches them, and where this document defines a value they do not, that value is listed in section 13 so the owner can object. Section 1 describes what Gnome Village (GV) looks like today, precisely enough to reproduce it; "GV 6445" means line 6445 of the GV HTML file as indexed in `10-Gnome-Village-HTML-Architecture-Review.md`. Section 2 analyses the owner's three reference images. Section 3 defines the three directions for the Style Gate and, in 3.4, the rule that only direction A is drawn now; section 4 specifies the board that renders them. Sections 5 to 11 lock everything that does not depend on the gate. Section 12 is the checklist for any model doing art work. Rules marked "Do not" are hard limits. "Done when" lines are acceptance tests. The Style Gate passed on 2026-10-12: the owner picked **A Storybook** (register row 1 and §4). From Slice 2 on every model draws direction A only (3.4), and still shows the owner two or three options before building any new prop, figure, effect or screen (register row 26; section 12 step 3).
 
 ---
 
@@ -192,7 +192,7 @@ GV type sizes are 8.5 to 11.5 px (review §13). Section 5.2 raises them.
 
 ## 3. Style Gate: the three directions
 
-All three share the locked items of section 5 (projection, HUD paper, fonts, layout). They differ only in the scene: palette, line, shading, edges, texture, figures, trees, water, mood. Each direction is a `StyleSpec` (section 4.5). The owner picks one; the pick is recorded in the register §4 and in `profile.stylePick`.
+All three share the locked items of section 5 (projection, HUD paper, fonts, layout). They differ only in the scene: palette, line, shading, edges, texture, figures, trees, water, mood. Each direction is a `StyleSpec` (section 4.5). The owner picked **A Storybook** on 2026-10-12; the pick is recorded in the register row 1 and §4. From Slice 2 on the game uses column A of 3.1 and 3.2 only; columns B and C stay in this section as the record of what the board showed (3.4).
 
 ### 3.1 Palette tokens (16 primary per direction, plus the secondary set)
 | Token | A Storybook | B Pastel Postcard | C Line and Wash | Used for |
@@ -242,7 +242,7 @@ Secondary tokens that are the same in every direction (the directions differ in 
 
 | Token | Value | Used for |
 |---|---|---|
-| `teal` | `#86BBB3` | 30 % of autumn leaves (8, 10.4; ref3) |
+| `teal` | `#86BBB3` | 30 % of autumn leaves (8, 10.4; ref3); the pigeon's neck sheen (7.4) |
 | `crumbs` | `#E7D7B0` | crumb dots (6.1) |
 | `skin` | `['#F0DCCB', '#E8C9A8', '#C9A07C', '#8E6B4E']` (the first is GV `SKIN` 8046) | skin by seed (7.1 rule 8) |
 | `hair` | `['#3A3440', '#5C4634', '#8B6748', '#C2703E', '#E0BE7C', '#B7AFA3']` | the 6 hair tones (7.1 rule 8); `#C2703E` is the matchmaker's ponytail (7.4) |
@@ -282,6 +282,15 @@ The sky keyframes of 10.1 and the weather-dot colours of 10.5 are exported const
 2. All three use the same rig skeleton, the same prop footprints and the same particle kinds; only the drawing of each differs. All three must keep 60 fps with the full scene (brief 9.3); direction C's ink jitter is computed per segment from `nzAt`, never from `Math.random`.
 3. Do not: mix treatments (an ink-outlined tree in direction B); add a fourth direction; use any colour outside the `Palette` keys (3.1, primary and secondary) plus `lit()`, `shade()` and `mix()` transforms, except the HUD tokens.
 
+### 3.4 After the gate: direction A only
+1. The Style Gate passed on 2026-10-12 with **A Storybook** (register row 1 and §4). All art from Slice 2 on draws direction A only: column A of 3.1 and 3.2.
+2. New primitives implement direction A only. They read `style().palette` and the A treatment (`line: 'soft'`, `shading: 'gradient'`, `grain: 'gv'`); they hold no B or C branch.
+3. The B and C branches already in the `src/render/*` primitives (built in Slice 1 for the board) are frozen. They stay only so `style-board.html` still renders all three columns as the record of the gate. Do not extend them, do not fix or retune them, and do not delete them.
+4. The `StyleSpec` type, `STYLES`, `PALETTES` (all three) and `style()` stay; `style()` returns direction A. The board draws each column by passing its own `StyleSpec` to the tile function (4.2).
+5. Theme colour and body background are `#DCE6EC` (3.2 last row, column A): `--theme-color` and `--body-bg` in `src/styles/tokens.css` and `<meta name="theme-color">` in `index.html` (5.7 item 4).
+6. Where 3.3 and sections 5 to 12 still name B or C (for example "all three" in 3.3 item 2, the ink veins of 10.4 item 3 or the `multiply` grain in the section 12 "Do not" line), that text describes the frozen board branches only. The game draws A, and the 60 fps rule of 3.3 item 2 is measured on A.
+7. Do not: reopen or change the recorded pick (only the owner can), or offer B or C as an option for a new prop; the options of register row 26 are variants inside direction A.
+
 ---
 
 ## 4. The style board specification (`style-board.html`)
@@ -289,7 +298,7 @@ The sky keyframes of 10.1 and the weather-dot colours of 10.5 are exported const
 ### 4.1 Purpose and placement
 1. One HTML page that renders the three directions with the real primitives from `src/render/*`, so the pick is made on what the game will draw, not a mock-up.
 2. Source: `style-board.html` at the app root with its script in `src/debug/style-board.ts`; built by Vite as a second entry to `dist/style-board.html`, single file. (03 §2.10 lists `debug/style-board.ts`; 07 S1.5 names the files. Section 13.)
-3. It is built in Slice 1 and blocks all art work from Slice 2 on (register §4).
+3. It was built in Slice 1 and blocked all art work from Slice 2 on until the pick (register §4). The owner picked A on 2026-10-12, so art work from Slice 2 on may start, in direction A only (3.4). The page stays in the build, unchanged, as the record of the gate.
 
 ### 4.2 Tiles to render, per direction (the same list, the same order)
 | # | Tile | Content | Canvas size (CSS px) | Zoom |
@@ -316,13 +325,15 @@ Done when: every tile renders in all three columns with no console error, each t
 3. Safe areas and 16 px side gutters as the game shell.
 
 ### 4.4 Recording the pick
+Picked: **A Storybook**, on 2026-10-12, in the owner's words (register row 1 and §4). The owner saw the board, including tile 7 (the two lovers at `FH` 22 px, zoom 1.3), and picked A without objection. Items 1 to 3 describe how the board records a pick; they stay as built.
+
 1. Under each column (desktop) or under the switch (phone) sits a button **Choose A** / **Choose B** / **Choose C** in the Begin-button recipe.
 2. Tapping it writes `profile.stylePick = 'A' | 'B' | 'C'` into `parque:profile-v1` through `src/save/store.ts` (register 3.11 names the field "style pick"; the TypeScript name is `stylePick`, section 13), shows a toast "Picked: Storybook" (through `t()`), and marks the button pressed.
 3. The owner also tells the model which letter was picked; the model records the pick and the date in the register §4 row (brief 10.2 rule 4). The profile field alone is not the record.
-4. Until a pick exists, the game runs direction A (register row 1 and brief 3.2 keep GV's look until the gate).
+4. The pick is A, so the game runs direction A and `style()` returns `STYLES.A` (4.5 item 1, 3.4).
 
 ### 4.5 One source of truth for colour
-1. `src/render/ambient.ts` exports `PALETTES: Record<'A'|'B'|'C', Palette>`, `STYLES: Record<'A'|'B'|'C', StyleSpec>`, and `style(): StyleSpec` which returns the entry named by `profile.stylePick` (default `'A'`). Every scene colour in `src/render/*` is read as `style().palette.lawn` and passed through `lit()`. `ambient.ts` is the one home of every scene colour, primary and secondary (3.1); `tests/palette.test.ts` (07 S1.8) checks every key of `Palette` in all three palettes (a string value is a 7-character hex; an array value holds only such strings), not a fixed count of 16.
+1. `src/render/ambient.ts` exports `PALETTES: Record<'A'|'B'|'C', Palette>`, `STYLES: Record<'A'|'B'|'C', StyleSpec>`, and `style(): StyleSpec` which returns `STYLES.A`, the direction picked at the Style Gate (register §4, 2026-10-12). The B and C entries stay for the board only (3.4). Every scene colour in `src/render/*` is read as `style().palette.lawn` and passed through `lit()`. `ambient.ts` is the one home of every scene colour, primary and secondary (3.1); `tests/palette.test.ts` (07 S1.8) checks every key of `Palette` in all three palettes (a string value is a 7-character hex; an array value holds only such strings), not a fixed count of 16.
 2. `src/styles/tokens.css` holds every HUD colour as a custom property. `shell.css` uses only `var(--...)`.
 3. No other file in `src/` may contain a colour literal (hex, `rgb(`, `rgba(`, `hsl(`). `08-Test-Plan.md` adds a grep test for this; GV's ~180 scattered literals are the reason (review §7.2).
 4. Type signatures:
@@ -442,7 +453,7 @@ Recipe as 1.10 (radius 16 px, `blur(11px)`, width `min(94vw, 420px)`, max-height
 Census and Events are mutually exclusive (GV 10748).
 
 ### 5.7 Intro screen and logo
-1. Layout as GV 294–313: the mark, the title **Parque D'Amour** in Fraunces 34 px, four short paragraphs, **Begin** (and **Continue** above it when a save exists, register Q21), the EN / ES toggle. Background: the radial paper gradient of 1.10 until the gate, then the direction's `paper` to `sky` at 55 %.
+1. Layout as GV 294–313: the mark, the title **Parque D'Amour** in Fraunces 34 px, four short paragraphs, **Begin** (and **Continue** above it when a save exists, register Q21), the EN / ES toggle. Background: direction A's `paper` to `sky` at 55 % (the gate passed with A on 2026-10-12; before it the intro used the radial paper gradient of 1.10).
 2. The mark is an inline SVG (as GV's gnome hats 295–305), 92×76, no file. Two sketches; the default is A.
 
 Sketch A, two hearts on a bench (Cupid rose, Mischief ember):
@@ -472,7 +483,7 @@ Sketch B, a beret and a pigeon:
 ```
 
 3. Favicon: the same mark as a `data:image/svg+xml` `<link rel="icon">` in `index.html`; no file (brief 8.2 item 1). No apple-touch icon in v1 (brief 8.2 item 12).
-4. Theme colour `<meta name="theme-color">` and body background: `#DCE6EC` until the gate (brief 3.2), then the picked direction's value from 3.2.
+4. Theme colour `<meta name="theme-color">` and body background: `#DCE6EC`, direction A's value from 3.2 (the gate passed with A on 2026-10-12; brief 3.2). They live in `src/styles/tokens.css` as `--theme-color` and `--body-bg`.
 5. Done when: the intro renders at 390×844 with nothing under the safe areas and the mark is crisp at dpr 3.
 
 ### 5.8 Photo mode, feed, toast
@@ -488,7 +499,7 @@ Units: footprint in tiles; height in EH units (1 EH = 26 px at zoom 1; a grown v
 | Prop | Footprint | Height | Orientations | Parts to draw (back to front) | Variants | Animation |
 |---|---|---|---|---|---|---|
 | bench | 1×1 | 0.45 | 4 (rotates on repeat tap) | two cast-iron ends (`zinc`, curled), seat of 3 slats (`bedEarth` lightened 1.2), back of 2 slats | wet: slats ×0.86; snow cap 2 px | none; sitters use the sitting pose |
-| lamp | 1×1 | 1.4 post + 0.25 head | 1 | fluted post (`zinc`, 0.06 tile wide), base disc, two curved arms, three globes (ref3) r 0.09 tile; lit: globes `lamp`, halo radial gradient r 0.9 tile from `rgba(255,214,150,0.32)` to 0 (GV 7995), ground pool ellipse 1.6×0.8 tiles at alpha 0.16 | lit f ≥ 0.80 or f < 0.28; `c_lamplight`: halo r ×1.4, alpha ×1.3 | halo breathes ±5 % at 0.5 Hz |
+| lamp | 1×1 | 1.4 post + 0.25 head | 1 | fluted post (`zinc`, 0.06 tile wide), base disc, two curved arms, three globes (ref3) r 0.11 tile (as the style board draws them, kept at the gate); lit: globes `lamp`, halo radial gradient r 0.9 tile from `rgba(255,214,150,0.32)` to 0 (GV 7995), ground pool ellipse 1.6×0.8 tiles at alpha 0.16 | lit f ≥ 0.80 or f < 0.28; `c_lamplight`: halo r ×1.4, alpha ×1.3 | halo breathes ±5 % at 0.5 Hz |
 | fountain | 2×2 | 0.9 basin + 0.6 column | 1 | octagonal basin wall (`stone`), water disc (`water` with sky sheen), central tier and bowl, column top | winter with `ICE`: no spray, disc `#DCE9F1`, frost on the rim | spray particles 12/s, ripple rings 0.5/s (section 8) |
 | kiosk | 2×2 | 1.6 | 4 (serving side) | octagonal base (`foliageSummer` darkened 0.8, the Paris green), counter on the serving side, striped awning (`awningRed`/`paper`, 6 stripes), conical roof (`zinc`) with finial, menu board; two café tables (1×1 each, two chairs) on its east side when free | night: counter window `lamp`; winter: steam puff every 4 s | awning edge scallops flap ±1 px in breeze |
 | bandstand | 3×3 | 0.25 platform + 1.6 roof | 1 | octagonal platform (`stone`), 8 posts (`zinc`), railing, roof (`zinc`) with finial | night and busker playing: string lights (8 `lamp` dots) | notes particles while playing |
@@ -532,7 +543,7 @@ All are world-space props outside the 48×48 interior so they turn with the came
 | railings | the boundary of rows 0 and 47, columns 0 and 47 | 0.5 | iron rail (`ink` ×0.9 toward `zinc`), uprights every 0.25 tile with gilt spear tips (`lamp`), a stone plinth 0.08 EH (`stone`) | none | none |
 | gates (5) | 02 §2.4 tiles | pillars 0.9, leaves 0.5 | two pillars (`stone`) with caps and a single-globe lamp each, two open iron leaves | lamps lit as 6.1 | none |
 | pavement | 1 tile outside E, S, W | 0 | `flagstone` with kerb line (`zinc`), 3 bistro tables outside the café | wet puddles as 6.5 | none |
-| facades | 2 to 8 tiles outside E, S, W | 6.0 (5 storeys + mansard) | per bay 2 tiles wide: wall (`stone`), 5 rows of windows (2 per bay, `sky` glass, `zinc` frames), wrought-iron balconies on rows 2 and 5 (`ink` lines), shop front on the ground floor, mansard roof (`zinc`) with 2 dormers, chimney stacks | night: 40 % of windows `lamp` from f 0.80 to 0.28, chosen per bay by `h01` so the pattern is stable; rain: roof ×0.86 | none |
+| facades | blocks 3 tiles along the street x 2 deep, one row on each of E, S, W with the near face 2 tiles beyond the boundary, plus a far-bank row at y = -10 to -9 (07 S2 step 10, 03 7.4) | 6.0 (5 storeys + mansard) | per bay 2 tiles wide: wall (`stone`), 5 rows of windows (2 per bay, `sky` glass, `zinc` frames), wrought-iron balconies on rows 2 and 5 (`ink` lines), shop front on the ground floor, mansard roof (`zinc`) with 2 dormers, chimney stacks | night: 40 % of windows `lamp` from f 0.80 to 0.28, chosen per bay by `h01` so the pattern is stable; rain: roof ×0.86 | none |
 | café | one bay on each of E, S, W | 1.2 awning | striped awning (`awningRed`/`paper`), "CAFÉ" lettering as 4 blocks, 3 bistro tables with chairs on the pavement, a glowing window at night | none | awning scallops flap ±1 px in breeze |
 | quay | y = −1 | 0.3 | wall (`stone` ×0.9), coping (`flagstone`), mooring rings every 4 tiles, steps at `g_north` (3 treads) | wet ×0.86 | none |
 | river | y = −2 to −8 | 0 | base `water` ×0.95, long streaks (0.6 tile) in `paper` at alpha 0.25 drifting east 0.3 tile/s, one moored péniche barge (4×1.5 tiles, `ink` hull, `awningRed` cabin) near the east end, a sailboat (ref1) crossing once per day | night toward `NIGHTC` as GV 6494; never freezes | streak drift; barge bob ±0.5 px |
@@ -611,7 +622,7 @@ At the default zoom 1.3, `h = 28.6`: every tier shows. At Fit (0.30), `h = 6.6`:
 | `a_florist` | 1.0 FH | straw hat (`#E9D7AE`), green apron, a wicker basket (`#C98F4C`) of flowers (3 dots in rose, marigold, lavender; the same basket is the `c_bouquet` cameo's); petals scatter from the hand | none |
 | `a_busker` | 1.0 FH | as the busker archetype, flat cap | none |
 | `a_mime` | 1.0 FH | white face (`paper` disc over the skin), black beret, black and white horizontal stripes, red scarf, white gloves | differs from the matchmaker by the white face, the black stripes and no hair showing |
-| `a_pigeon`, pigeons | 0.18 EH (4.7 px at zoom 1) | GV bird recipe (8575–8598): body ellipse `#8E8AA0`, head disc, beak `#E7B97A`, a neck sheen ellipse `#8CBE85` at alpha 0.6, tail stroke; walking: bob 0.08·s at 3 Hz and a head peck; flying: two-stroke wings flapping at 5 Hz, arc height 46·z px (GV 8591–8592) | culled below 1.6 px; `m_flock` adds 20 visual pigeons |
+| `a_pigeon`, pigeons | 0.18 EH (4.7 px at zoom 1) | GV bird recipe (8575–8598): body ellipse `#8E8AA0`, head disc, beak `#E7B97A`, a neck sheen ellipse in `teal` `#86BBB3` at alpha 0.6 (as the style board draws it, kept at the gate; GV's `#8CBE85` is the HUD token `--moss`, not a scene colour), tail stroke; walking: bob 0.08·s at 3 Hz and a head peck; flying: two-stroke wings flapping at 5 Hz, arc height 46·z px (GV 8591–8592) | culled below 1.6 px; `m_flock` adds 20 visual pigeons |
 | `a_pomeranian` | 0.3 EH | three overlapping fluff ellipses (`#F2C98A` body, `#F7DFB0` chest, `#E8B06C` ears), a curled tail, black dot eyes and nose, a tiny red collar; running: body stretches 1.15× along the heading, legs as 4 short strokes at 8 Hz; the snatched item drawn in the mouth | never drawn outside the park |
 | dogs (walkers') | 0.45 EH | GV fox/dog recipe (8506) at 11.7·z (0.45 EH): trotting body, collar `awningRed`, lead to the walker | on a lead 1 tile behind |
 | wasp | particle | GV bee recipe (8617): jittering `ink` ellipse with a `#E8C64A` stripe | none |
@@ -807,7 +818,7 @@ Seven dots are GV `WCOLD` (10774); `shower` is new (section 13).
 ## 12. Checklist for any model doing art work
 Before starting:
 1. Read the register §3 and §4, the brief §3, and this document's sections 3 to 7 for the thing you are drawing.
-2. Confirm the Style Gate is recorded as passed in the register §4. If it is not, you may only work on `style-board.html` (section 4).
+2. The Style Gate is recorded as passed in the register §4 (A Storybook, 2026-10-12). Draw direction A only; never extend the frozen B and C branches (3.4).
 3. **Present options first** (register row 26): for any new prop, figure, effect or screen, render two or three variants as small tiles on a scratch page, screenshot them, and show the owner before building the final one.
 
 While working:
@@ -818,7 +829,7 @@ While working:
 
 Before finishing:
 8. Screenshot with puppeteer-core (`/opt/pw-browsers/chromium`) at **390×844** (dpr 3) and **1280×800** (dpr 2), at f = 0.30, 0.76 and 0.90, at zoom 0.30, 1.3 and 2.4.
-9. Compare each screenshot against the style board column of the picked direction; the palette, line, shading and texture must match the board tile for the same object.
+9. Compare each screenshot against the style board's column A (the picked direction); the palette, line, shading and texture must match the board tile for the same object.
 10. Check the perf overlay: frame EMA ≤ 16.7 ms and sim + draw ≤ 12 ms with 30 visitors, 12 pigeons, 4 dogs and 220 particles (brief 9.3).
 11. Run `npm test` and `npm run lint`; the determinism test must still pass (draw code cannot change it; if it does, you touched sim state).
 12. **Never add image assets**: no PNG, JPG, SVG files, sprite sheets, fonts beyond the two bundled families, or fetches. Inline SVG markup in `index.html` for the mark, the favicon and tool icons is allowed (GV 295–305, 11029–11037).
@@ -835,12 +846,12 @@ Values this document defines that the register does not (the owner may object to
 2. The default zoom 1.3 for a new park, centred on the fountain (5.1).
 3. All hex values of the three direction palettes (3.1, primary and secondary), the treatment table (3.2) and the per-direction theme colours. Direction A reuses GV constants where a GV constant exists.
 4. The 13 board tiles, their sizes and zooms, the phone and desktop layouts, and the board's file paths `style-board.html` and `src/debug/style-board.ts` (4.1–4.3).
-5. The profile field name `stylePick` with values `'A' | 'B' | 'C'`, and direction A as the default until a pick exists (4.4).
+5. The profile field name `stylePick` with values `'A' | 'B' | 'C'`, and direction A as the default; A is now also the recorded pick (4.4).
 6. The `Palette` and `StyleSpec` types and the "no colour literal outside two files" rule with its grep test (4.5); `ambient.ts` holds all three palettes rather than only the chosen one (brief 3.4 item 4 says the chosen palette is written once; keeping all three lets the board and the game share one file and a later second style needs no migration, register 3.11).
 7. The full type scale of 5.2 (the brief fixes only the 11 px minimum); the bar colours and low-state thresholds of 5.5; the gate tick on the Heart bar.
 8. The segmented switch styling, the tier badge on locked pills, the cooldown chip design, the row-3 wrap rule, and the 36 px / 44 px hit targets (5.4).
 9. Sheet row content and the avatar picker portraits (5.6); the two logo sketches, A as the default; the inline SVG favicon (5.7).
-10. Every footprint, height, orientation count, part list, variant and animation in section 6; the three-globe lamp as the lamp for every direction; the lamp pool radius 1.6 tiles; the kiosk's Paris green; the hedge auto-join; the Eiffel Tower bearing north-west; the péniche and the sailboat; the near-side rule for facades (6.4).
+10. Every footprint, height, orientation count, part list, variant and animation in section 6; the three-globe lamp as the lamp for every direction; the lamp globe radius 0.11 tile; the lamp pool radius 1.6 tiles; the kiosk's Paris green; the hedge auto-join; the Eiffel Tower bearing north-west; the péniche and the sailboat; the near-side rule for facades (6.4).
 11. The species table (plane, chestnut, lime) with heights and autumn colours (6.3); `02-Game-Design.md` §2.5 names the species, this document gives them their look; the `PETALS` ground dots (6.5).
 12. The archetype signifiers (7.2), the 8 signature colours and the lovers' colour axis (7.3), the avatar and creature drawings (7.4), the expression table (7.5), heart counts per stage (7.6).
 13. Every particle kind, rate, look and budget in section 8, including the tasteful poop splat (white-grey, no brown).
@@ -848,9 +859,14 @@ Values this document defines that the register does not (the owner may object to
 15. The re-keyed sky ramp and warm windows (10.1), the 24-pool cap (10.2), the season tint formulas and the `snowCover` rates (10.3), the leaf rules (10.4), the `shower` dot colour `#B7CCDE` (10.5); the Romance chip pulse and Points flash timings (5.2).
 16. Accessibility thresholds (contrast test over the darkest screenshot, 2 Hz flash limit, halved particles under reduced motion) (11); the screenshot matrix of 12.9 (three times of day, three zooms, two viewports).
 
+Settled by the Style Gate on 2026-10-12 (the owner saw the board and picked A without objection; these stand):
+1. Figure height `FH = 22` px at zoom 1 (0.85 EH) stands (7.1 rule 1). The owner saw it on board tile 7 at zoom 1.3. Changing it still needs the owner (07 S1.10 and S4.10).
+2. The five HUD accent tokens (`--moss`, `--sky`, `--berry`, `--ember`, `--stone`) are fixed at GV's values (brief 3.2, 1.10); the gate did not retint them. `src/styles/tokens.css` also holds the direction A scene accents for HUD use, from 3.1 column A: `--rose` `#EDA9C4`, `--lawn` `#9CCB92`, `--gravel` `#D9CBAE`, `--water` `#6FB8DC`, `--awning` `#D9636A`; and `--theme-color` and `--body-bg` `#DCE6EC` (3.4 item 5).
+3. The lamp globe radius is 0.11 tile (6.1), as the board draws it.
+4. The pigeon's neck sheen uses the `teal` token (7.4, 3.1), as the board draws it.
+
+Dropped at the gate: the cost of direction C's screen-space paper grain (it mattered only if C were picked; the game draws A, which bakes the GV grain into tile colours, 1.3 rule 4).
+
 Open points for the owner:
-1. Is 22 px (0.85 EH) the right figure height? It makes faces readable at zoom 1.0 and above but makes people larger relative to tiles than GV's gnomes (0.55 EH). The board tile 7 shows it.
-2. The brief (11 item 4) assumes the gate may not retint the five HUD accent tokens; this document keeps them fixed in every direction. Confirm.
-3. Direction C's screen-space paper grain is drawn over the whole scene every frame (one `drawImage` of a 256×256 tile, multiply). If the perf overlay shows it costing more than 1 ms on a mid phone, the fallback is grain baked into tile colours as in A.
-4. Whether the featured pair's rose ring should also show in avatar mode (this document says yes).
-5. The 40 % lit-window rate on facades at night, and whether the Eiffel Tower should sparkle (a 5-minute real-time cycle would not be deterministic in sim time; this document gives it only a 4 s beacon).
+1. Whether the featured pair's rose ring should also show in avatar mode (this document says yes).
+2. The 40 % lit-window rate on facades at night, and whether the Eiffel Tower should sparkle (a 5-minute real-time cycle would not be deterministic in sim time; this document gives it only a 4 s beacon).

@@ -1,13 +1,37 @@
 // src/world/gen.ts
-// The seeded starter park (02 2.5), as tile data only: lawn, two gravel loops, five gate spokes, the fountain's flagstone ring, a pond, two beds.
-// Ported from GV 885-911 (seed and reseed shape). ADAPT: fixed skeleton, the seed varies only the pond position and the bed colour order.
-// TODO(S2): props (fountain, benches, kiosk, lamps, trees) through core/ids.ts, the seeded pond outline, the bridge; S0 keeps the pond 4 x 4.
-import { seedSim, seedVisual, rint, chance } from '../core/rng.ts';
-import { N, I, inB, Kind, KIND, WATER, BEDC, clearLayers, markBlockDirty, rebuildBlock } from './grid.ts';
+// The seeded starter park (02 2.5): tile data, then props. Fixed skeleton: fountain, flagstone rings, two gravel loops, five gate spokes,
+// the pond's neck and bridge, six benches, two beds, the kiosk with two tables, four lamps. The seed varies only the pond outline, the
+// bed colour order and the tree positions.
+// Ported from GV 885-911 (seed and reseed shape: both streams are reseeded first, 887) and the site-scoring loop shape of 1022-1035 (the
+// shuffled candidate list with spacing tests for the trees). ADAPT: a fixed skeleton instead of GV's silhouettes, rivers, soil and
+// flowers (889-910, 913-1020 are dropped).
+//
+// Geometry (02 2.5):
+//  - A loop is the tiles whose floor(max(|x - 23.5|, |y - 23.5|)) is in {5, 6} (inner: 17-18 / 29-30 on each axis) or {13, 14} (outer:
+//    9-10 / 37-38), 2 wide.
+//  - The pond lies in x 30-36, y 11-13 (the part of the old box (30,8)-(37,13) inside the outer loop): a west lobe (x 30-33), an east
+//    lobe (x 35-36) and the 2-tile neck (34,11)-(34,12) between them, 14 to 20 tiles; (34,10) is the loop and (34,13) is lawn, so the
+//    bridge spans the neck north to south with land at both ends.
+//  - Starter trees stay on lawn (no mulch under them, so the seed changes KIND only on pond tiles); the tree tool writes mulch (02 8.3).
+import { seedSim, seedVisual, chance, rng } from '../core/rng.ts';
+import { resetIds } from '../core/ids.ts';
+import { resetWeather } from '../core/weather.ts';
+import { N, NC, I, inB, Kind, KIND, WATER, BEDC, OCC, addProp, clearLayers, markBlockDirty, props, rebuildBlock, type Prop } from './grid.ts';
 import { GATES, type Gate } from './park.ts';
+import { resetIce } from './water.ts';
+import { markCharmDirty } from './charm.ts';
 
 const CX = (N - 1) / 2; // 23.5
 const CY = (N - 1) / 2;
+
+let seed0 = 0;
+/** The seed the current park was built from (saved with it). */
+export function parkSeed(): number {
+  return seed0;
+}
+export function setParkSeed(seed: number): void {
+  seed0 = seed >>> 0;
+}
 
 function setKind(x: number, y: number, k: Kind): void {
   if (inB(x, y)) KIND[I(x, y)] = k;
@@ -37,30 +61,147 @@ function spoke(g: Gate): void {
   }
 }
 
-/** Build the park for `seed`. Writes layers only; the sim stream is consumed from a fresh seed. */
+/* ---------- the pond ---------- */
+
+const NECK: ReadonlyArray<readonly [number, number]> = [[34, 11], [34, 12]];
+// the neck, (34,11) and (34,12), and the tiles beside it, (33,11) (33,12) (35,11) (35,12), are never offered below, so the lobes always meet
+// water the seed may take away, in a fixed order; corners are the likeliest to go
+const OPTIONAL: ReadonlyArray<readonly [number, number]> = [
+  [30, 11], [31, 11], [32, 11], [30, 12], [31, 12], [32, 12], [30, 13], [31, 13], [32, 13], [33, 13],
+  [36, 11], [36, 12], [35, 13], [36, 13],
+];
+const CORNERS = new Set(['30,11', '30,13', '36,11', '36,13']);
+export const POND_MIN = 14; // the outline never shrinks below this (a rowboat needs 12, 02 9.2)
+
+function pondTiles(): number[] {
+  const out: number[] = [];
+  for (let y = 11; y <= 13; y++) for (let x = 30; x <= 36; x++) if (KIND[I(x, y)] === Kind.pond) out.push(I(x, y));
+  return out;
+}
+
+/** Tiles reachable from the neck over pond tiles (4-connected). */
+function connected(): number {
+  const seen = new Set<number>();
+  const stack = [I(NECK[0]![0], NECK[0]![1])];
+  while (stack.length > 0) {
+    const i = stack.pop() as number;
+    if (seen.has(i) || KIND[i] !== Kind.pond) continue;
+    seen.add(i);
+    const x = i % N, y = (i / N) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) if (inB(x + dx, y + dy)) stack.push(I(x + dx, y + dy));
+  }
+  return seen.size;
+}
+
+function water(x: number, y: number): void {
+  KIND[I(x, y)] = Kind.pond;
+  WATER[I(x, y)] = 0.6;
+}
+
+/** A pond tile with a dry 4-neighbour: taking it leaves the outline, never a lawn island in the middle of the water. */
+function onEdge(x: number, y: number): boolean {
+  return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => KIND[I(x + (dx as number), y + (dy as number))] !== Kind.pond);
+}
+
+function makePond(): void {
+  for (let y = 11; y <= 13; y++) for (let x = 30; x <= 36; x++) if (x !== 34 || y < 13) water(x, y);
+  for (const [x, y] of OPTIONAL) {
+    const take = rng() < (CORNERS.has(x + ',' + y) ? 0.5 : 0.15); // one draw per optional tile, whatever happens
+    if (!take || !onEdge(x, y)) continue;
+    KIND[I(x, y)] = Kind.lawn;
+    WATER[I(x, y)] = 0;
+    const left = pondTiles().length;
+    if (left < POND_MIN || connected() !== left) water(x, y); // would split the pond or shrink it too far: keep the tile
+  }
+}
+
+/* ---------- props ---------- */
+
+type Rot = 0 | 1 | 2 | 3;
+
+/** The side a bench or kiosk faces to look at (cx, cy): 0 north, 1 east, 2 south, 3 west. */
+function facing(x: number, y: number, cx: number, cy: number): Rot {
+  const dx = cx - x, dy = cy - y;
+  if (Math.abs(dx) >= Math.abs(dy)) return dx > 0 ? 1 : 3;
+  return dy > 0 ? 2 : 0;
+}
+
+// The six bench tiles: the lawn ring just outside the inner loop (floor distance 7), at the angles 0, 60, ..., 300 degrees from the fountain.
+const BENCHES: ReadonlyArray<readonly [number, number]> = [[31, 24], [28, 31], [19, 31], [16, 24], [19, 16], [28, 16]];
+// Two lamps per loop at its north and south points, on the lawn side.
+const LAMPS: ReadonlyArray<readonly [number, number]> = [[24, 16], [23, 31], [24, 11], [23, 36]];
+
+function placeProps(): Prop[] {
+  const out: Prop[] = [];
+  const gen = 'gen' as const;
+  out.push(addProp({ kind: 'fountain', x: 23, y: 23, w: 2, h: 2, rot: 0, placedBy: gen }));
+  for (const [x, y] of BENCHES) out.push(addProp({ kind: 'bench', x, y, w: 1, h: 1, rot: facing(x, y, CX, CY), placedBy: gen }));
+  const kiosk = addProp({ kind: 'kiosk', x: 14, y: 44, w: 2, h: 2, rot: 0, placedBy: gen });
+  out.push(kiosk);
+  const t1 = addProp({ kind: 'table', x: 16, y: 44, w: 1, h: 1, rot: 0, placedBy: gen });
+  const t2 = addProp({ kind: 'table', x: 16, y: 45, w: 1, h: 1, rot: 0, placedBy: gen });
+  kiosk.data.tableIds = [t1.id, t2.id];
+  out.push(t1, t2);
+  for (const [x, y] of LAMPS) out.push(addProp({ kind: 'lamp', x, y, w: 1, h: 1, rot: 0, placedBy: gen }));
+  out.push(addProp({ kind: 'bridge', x: 34, y: 11, w: 1, h: 2, rot: 0, placedBy: gen, data: { span: 2, dir: 0 } }));
+  return out;
+}
+
+/** Twelve trees, four of each species: on lawn, at least 3 tiles from any path or prop, at least 4 from each other (02 2.5). */
+function placeTrees(): void {
+  const blocked = new Uint8Array(NC); // 1 = within Chebyshev 2 of a path tile or a prop
+  const mark = (x: number, y: number): void => {
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (inB(x + dx, y + dy)) blocked[I(x + dx, y + dy)] = 1;
+  };
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      const k = KIND[I(x, y)];
+      if (k === Kind.gravel || k === Kind.flagstone || OCC[I(x, y)] !== 0) mark(x, y);
+    }
+  for (const p of props) for (let y = p.y; y < p.y + p.h; y++) for (let x = p.x; x < p.x + p.w; x++) mark(x, y);
+  const cand: number[] = [];
+  for (let y = 1; y < N - 1; y++)
+    for (let x = 1; x < N - 1; x++) {
+      const i = I(x, y);
+      if (KIND[i] === Kind.lawn && WATER[i] === 0 && blocked[i] === 0) cand.push(i);
+    }
+  for (let i = cand.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const t = cand[i] as number;
+    cand[i] = cand[j] as number;
+    cand[j] = t;
+  }
+  const chosen: number[] = [];
+  for (const i of cand) {
+    const x = i % N, y = (i / N) | 0;
+    if (chosen.some((c) => Math.max(Math.abs((c % N) - x), Math.abs(((c / N) | 0) - y)) < 4)) continue;
+    chosen.push(i);
+    addProp({ kind: 'tree', x, y, w: 1, h: 1, rot: 0, placedBy: 'gen', data: { species: (chosen.length - 1) % 3 as 0 | 1 | 2 } });
+    if (chosen.length === 12) break;
+  }
+}
+
+/** Build the park for `seed`: reseed both streams, reset every world-owned state (ids, props, layers, weather, ice), then lay the park. */
 export function genPark(seed: number): void {
   seedSim(seed);
-  seedVisual((seed ^ 0x9e3779b9) >>> 0);
+  seedVisual((seed ^ 0x9e3779b9) >>> 0); // GV 887: the visual stream follows the seed too
+  setParkSeed(seed);
+  resetIds();
   clearLayers();
+  resetWeather();
+  resetIce();
 
-  ring(13); // outer loop (Chebyshev 13 and 14)
-  ring(5); // inner loop (Chebyshev 5 and 6)
-
+  ring(13); // outer loop (floor distance 13 and 14)
+  ring(5); // inner loop (5 and 6)
   for (const g of GATES) spoke(g);
 
-  // the fountain's flagstone ring: 4 x 4 around the 2 x 2 fountain at (23,23)-(24,24)
+  // flagstone around the fountain (4 x 4 around the 2 x 2) and around the kiosk (4 x 4 around the 2 x 2), with its serving tile (14,46)
   for (let y = 22; y <= 25; y++) for (let x = 22; x <= 25; x++) setKind(x, y, Kind.flagstone);
+  for (let y = 43; y <= 46; y++) for (let x = 13; x <= 16; x++) setKind(x, y, Kind.flagstone);
 
-  // the pond: 4 x 4, seeded along the row below the outer loop inside the box of 02 2.5
-  const px = 30 + rint(0, 3);
-  const py = 11;
-  for (let y = py; y < py + 4; y++)
-    for (let x = px; x < px + 4; x++) {
-      KIND[I(x, y)] = Kind.pond;
-      WATER[I(x, y)] = 0.6;
-    }
+  makePond();
 
-  // two bed clusters; the seed swaps rose and lavender
+  // two bed clusters of 2 x 2; the seed swaps rose and lavender
   const swap = chance(0.5);
   const beds: Array<[number, number, number]> = [
     [19, 19, swap ? 1 : 0],
@@ -73,6 +214,9 @@ export function genPark(seed: number): void {
         BEDC[I(x, y)] = col;
       }
 
+  placeProps();
+  placeTrees();
   markBlockDirty();
   rebuildBlock();
+  markCharmDirty();
 }

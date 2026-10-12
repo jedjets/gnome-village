@@ -1,6 +1,6 @@
 # Parque D'Amour: Test Plan
 
-Version 1 · 2026-10-10 · Owner: Jeduthun Oosthuis · Author: Claude (design session)
+Version 1.1 · 2026-10-12 · Owner: Jeduthun Oosthuis · Author: Claude (design session)
 
 **How to use this document.** This file says how we know a slice works. Read `01-Decision-Register.md` (the register) and `00-Product-Brief.md` (the brief) first, then this file, then the slice brief in `07-Build-Plan.md`. Section 1 says which kind of test covers which rule. Section 2 lists every unit test by file, name and assertion; copy the name into `it('...')` and write the assertion as stated. Sections 3 to 5 are the determinism harness, the screenshot regression and the performance budgets, with scripts under `tools/`. Sections 6 and 7 are checklists a person runs on a phone and over the content. Section 8 is the release checklist. Every number, id and key here matches the register, `02-Game-Design.md` (the design), `03-Technical-Architecture.md` (03) and `06-Content-Tables.md` (06); where this document needed a value none of them defines, the value is defined here and listed in section 9. "GV 1234" is an absolute line in the owner's Gnome Village HTML as indexed by `10-Gnome-Village-HTML-Architecture-Review.md` (the review). Ranges use a hyphen (GV 583-598). A test that fails is a bug in the code or in a lower document, never a reason to edit the register.
 
@@ -15,7 +15,7 @@ Version 1 · 2026-10-10 · Owner: Jeduthun Oosthuis · Author: Claude (design se
 | Unit | Vitest (`npm test`), `environment: 'node'`; `jsdom` only for files under `tests/ui/` | CI and every hand-back (07 §0.5 row 3) | every rule with a number: sim modules, commands, save, i18n, content spellings, colour-literal and string-literal greps | blocks every slice |
 | Harness | the same sim modules driven through `simulate`, `enqueue`, `stateHash` (Vitest), and `window.__PD` in a dev build driven by `tools/det.mjs` (puppeteer-core) | CI (Vitest part); dev machine (browser part) | determinism, replay, speed invariance, save round trip in the real page, scripted scenes | blocks every slice that touches `src/core`, `src/world`, `src/entities`, `src/play`, `src/save` (07 §0.5) |
 | Screenshot | `tools/shot.mjs` (puppeteer-core, Chromium at `/opt/pw-browsers/chromium`) | CI (smoke) and every hand-back (scenes) | layout at phone and desktop size, safe areas, the five regression scenes, pixel diff against baselines | blocks every slice with a `shots/` row in its "Done when" |
-| Manual | a person with a phone and desktop Chrome | before each gate and before release | gestures, audio unlock, background and resume, feel, tone, both languages | blocks release |
+| Manual | a person with a phone and desktop Chrome | before release (both gates passed on 2026-10-12, register §4) | gestures, audio unlock, background and resume, feel, tone, both languages | blocks release |
 | Performance | the perf overlay, `__PD.FT`, `__PD.SP`, `tools/perf.mjs` | dev machine, then a phone | the budgets of section 5 | desktop budget blocks release; phone is a report (brief §9 row 4) |
 
 ### 1.2 What is tested where
@@ -72,15 +72,16 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `clock.test.ts` | lamps follow f >= 0.80 or f < 0.28 | `T.lamps` is true at f 0.80, 0.95, 0.10, 0.279; false at 0.28, 0.50, 0.799 |
 | `clock.test.ts` | light is linear inside a phase | at f 0.76 `T.light` ≈ 0.75 (midpoint of 0.88 → 0.62, design §3.2); at f 0.50 it is 1.00; at f 0.10 it is 0.06 |
 | `clock.test.ts` | seasons turn every 3 days and wrap | day 1-3 season 0, day 4 season 1, day 10 season 3, day 13 season 0 |
-| `clock.test.ts` | newday and season events fire once | stepping ticks 21599 → 21600 emits exactly one `newday`; ticks across day 3 → 4 emit exactly one `season` |
+| `clock.test.ts` | newday and season events fire once | stepping ticks 15119 → 15120 emits exactly one `newday` (abs crosses 1 because a park starts at f 0.30); ticks 58319 → 58320 (day 3 → 4) emit one `newday` then one `season` |
+| `clock.test.ts` | lampsLit fires once at dusk | stepping ticks 10799 → 10800 (f reaches 0.80) emits exactly one `lampsLit`; none when the lamps go out at f 0.28; the next at tick 32400 (03 §6.1 item 2) |
 | `weather.test.ts` | the eight kinds exist with exact ids | the kind list equals `['clear','fair','cloudy','breeze','rain','shower','mist','snow']` |
 | `weather.test.ts` | every season's weights sum to 100 | for each of the four season rows of design §3.3 the sum is 100; snow is 0 outside winter |
 | `weather.test.ts` | a new park starts fair with next 40 | after `genPark`: `W.kind === 'fair'`, `W.next === 40` (GV 845) |
-| `weather.test.ts` | the pick uses the sim stream | `rngN()` increases by exactly one at the change; `vrng` state is unchanged |
+| `weather.test.ts` | the pick uses the sim stream | `rngN()` increases by exactly two at the change (the kind, then the duration, GV 852-853); `vrng` state is unchanged |
 | `weather.test.ts` | targets ease with a 2.6 s half-life | from rain 0 to kind rain (target 0.80): after 2.6 s `W.rain` ≈ 0.40 ± 0.01 (GV 868) |
 | `weather.test.ts` | weatherAt returns the override inside and the global outside | `addOverride` r 2 at (10, 10) rain 0.9: `weatherAt(12, 12).rain === 0.9`, `weatherAt(13, 10).rain` equals `W.rain` |
 | `weather.test.ts` | overrides cap at 16 and expire at until | the 17th `addOverride` returns 0; an override with `until = tick + 60` is gone at tick + 61 |
-| `weather.test.ts` | WET rises 0.2 per s in rain and falls 0.01 per s dry | 5 s at rain 0.8: `WET[i] === 1` (clamped); then 10 s dry: `WET[i]` ≈ 0.9 |
+| `weather.test.ts` | WET rises 0.2 per s in rain and falls 0.01 per s dry | after 1 s at rain 0.8, `WET[i]` ≈ 0.2 (±0.001); after 299 steps `WET[i] < 1`, after 300 steps (5 s) `WET[i] === 1` (clamped; the rise snaps to 1 within 1e-6, 03 §6.2 item 3, because the float32 sum stops at 0.9999992); then 10 s dry: `WET[i]` ≈ 0.9 (±0.001) |
 | `weather.test.ts` | ice needs 60 s of snow and 120 s to thaw | pond `ICE` is 0 at 59 s of snow > 0.3, 1 at 60 s; back to 0 at 120 s without snow, not at 119 |
 | `commands.test.ts` | enqueue stamps tick + 1 and a rising seq | two `enqueue` at `tick()` 10: both have `tick === 11`, `seq` increases by 1 |
 | `commands.test.ts` | applyPending orders by tick, side, seq | mischief, cupid, park commands enqueued in that order at one tick apply as park, cupid, mischief (03 §5.2) |
@@ -93,13 +94,15 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `events.test.ts` | on delivers at once and watch after drain | an `on` listener runs inside `emit`; a `watch` listener runs only at `drain` |
 | `events.test.ts` | lite bits drop only fx and cue events | with `lite = 3`, 20 steps emitting one `fx` each: the frame listener receives 8; a `stage` event is never dropped (03 §4.5) |
 | `loop.test.ts` | nsMax and budget follow GV 12082-12083 | `nsMax(8) === 22`, `nsMax(1) === 8`; `lite(8) === 3`, `lite(6) === 1`; budgets 26, 13, 9 ms for speed 8, 4, 1 |
+| `loop.test.ts` | while paused only speed applies | with `requestAnimationFrame` stubbed and the dial at 0: a cupid command enqueued in one frame and a park command in the next change nothing; a `speed 1` command applies in the paused frame; the first step applies park before cupid; `restore` of the tick-0 snapshot and `replay(log(), 1)` give the same `stateHash()` (03 §4.6) |
 
 ### 2.2 `src/world/` (files `gen.test.ts`, `park.test.ts`, `water.test.ts`, `wear.test.ts`, `charm.test.ts`)
 
 | File | Test | Assertion |
 |---|---|---|
-| `gen.test.ts` | the fixed skeleton is seed independent | seeds 1 and 2: fountain `OCC` at (23,23)-(24,24), gravel at Chebyshev 5-6 and 13-14 from (23.5, 23.5), kiosk at (14,44)-(15,45), 6 benches, 4 lamps, 2 beds of 2×2 (design §2.5) |
-| `gen.test.ts` | the seed varies only pond outline, trees and bed colours | seeds 1 and 2 differ in `KIND` only on pond tiles inside (30,8)-(37,13), in tree positions and in `BEDC`; nothing else |
+| `gen.test.ts` | the fixed skeleton is seed independent | seeds 1 and 2: fountain `OCC` at (23,23)-(24,24), gravel on every tile with floor(cheb) in {5, 6, 13, 14}, where cheb = max(\|x − 23.5\|, \|y − 23.5\|), kiosk at (14,44)-(15,45), 6 benches, 4 lamps, 2 beds of 2×2 (design §2.5) |
+| `gen.test.ts` | the seed varies only pond outline, trees and bed colours | seeds 1 and 2 differ in `KIND` only on pond tiles inside x 30-36, y 11-13, in tree positions and in `BEDC`; nothing else |
+| `gen.test.ts` | the pond is 14 to 20 tiles in x 30-36, y 11-13 | seeds 1 to 40: one 4-connected body of 14 to 20 tiles; (33..35, 11..12) always water, (34,13) always lawn (design §2.5) |
 | `gen.test.ts` | twelve trees of three species on lawn | 12 tree props, 4 per species, each on lawn before placement, ≥ 3 tiles from paths and props, ≥ 4 tiles apart |
 | `gen.test.ts` | the bridge spans the pond neck | a passable bridge prop covers (34,11) and (34,12) with `span === 2` |
 | `park.test.ts` | the five gates have the design's tiles | `GATES` ids and tiles equal design §2.4 exactly; `isGateTile(12, 47) === 'g_south_w'`; `isGateTile(12, 46) === null` |
@@ -111,7 +114,7 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `wear.test.ts` | wear grows on lawn while moving | 10 s of a moving visitor on one lawn tile: `WEAR[i]` ≈ 10 × 0.42 × ... > 4 is clamped to 4; after 1 s it is ≈ 0.42 (GV 1674-1681) |
 | `wear.test.ts` | wear does not grow on gravel or wet lawn | the same on gravel: 0; on lawn with `WET > 0.5`: 0 |
 | `wear.test.ts` | decay rates by threshold | `WEAR 0.5` → 0.49875 after `decayWear()`; `WEAR 3` → 2.99835 (GV 1683-1687) |
-| `wear.test.ts` | findPavingRun needs 2.6 and returns ≥ 3 | a line of 5 tiles at WEAR 3 returns a run of 5; a line of 2 returns null; a tile within 2 of a fountain is never the seed (design §11.1) |
+| `wear.test.ts` | findPavingRun needs 2.6 and returns ≥ 3 | a line of 5 tiles at WEAR 3 returns a run of 5; a line of 2 returns null; a tile within 2 of a fountain or a lamp is never the seed, but a run seeded outside that reach follows the wear past the lamp (design §11.1 item 4) |
 | `charm.test.ts` | one player bed and one gen fountain read 3 and 1 | `charmAt` on a tile within both radii: `{ total: 3, player: 1 }` (03 §6.7 done-when) |
 | `charm.test.ts` | each static source counts once per tile | two beds within 3: `total === 1`; a fountain within 5 and a bandstand within 4: `total === 4` |
 | `charm.test.ts` | the cap is 6 for both numbers | bed + fountain + bandstand + lit lamp + busker (+9 raw): `total === 6` |
@@ -283,8 +286,11 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `colour-literals.test.ts` | no colour literal outside two files | grep `src/` for `#[0-9a-fA-F]{3,8}\b`, `rgb(`, `rgba(`, `hsl(`: hits only in `src/render/ambient.ts` and `src/styles/tokens.css` (04 §4.5 item 3) |
 | `colour-literals.test.ts` | no Math.random or Date.now | grep `src/` for `Math.random`, `Date.now`, `performance.now`: hits only in `src/core/loop.ts` |
 | `palette.test.ts` | every Palette key in all three palettes | every key of `Palette` exists in `PALETTES.A`, `.B` and `.C`; a string value matches `#[0-9A-Fa-f]{6}`; an array value holds only such strings (04 §4.5 item 1; 07 S1.8) |
+| `palette.test.ts` | the game draws direction A whatever the board pick | with `profile.stylePick` set to `'B'`, then `'C'`, then `null`, `style()` returns `STYLES.A` (04 §3.4 item 4, §4.5 item 1) |
 
 ### 2.8 Audio (files `limiter.test.ts`, `cues.test.ts`, `melody.test.ts`, `musicState.test.ts`, `scheduler.test.ts`, `mute.test.ts`; 05 §8.2 owns the details)
+
+The game music is motif **B Music-box lullaby** (dusk to dawn) and motif **C Café swing** (dawn to the end of golden hour), picked at the Music Gate on 2026-10-12 (register row 25, §3.13, §4; 05 §5). Motif A, the musette waltz, is retired: it plays only on `music-board.html`, and its tests stay as the board test (the last `melody.test.ts` row). Every planner test seeds the visual stream with `seedVisual(seed)` or passes a seeded `mulberry32(seed)` as `rand`; no test needs an `AudioContext`. A switch test runs the music scheduler with the engine's dry run on (05 §8.3 `dryRun(true)`) and a fake context clock.
 
 | File | Test | Assertion |
 |---|---|---|
@@ -292,8 +298,22 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `limiter.test.ts` | audibility before the gate | a cue with gain ≤ 0.02 leaves the kind's gap unchanged (review §8 fix) |
 | `cues.test.ts` | the 38 ids in order, gains ≤ 0.060 | `Object.keys(CUES)` equals 06 §17 in order; no gain above 0.060 |
 | `cues.test.ts` | every trigger fires in a 3-day run | each event kind named in 06 §17 is emitted at least once by the determinism fixture |
-| `melody.test.ts`, `musicState.test.ts`, `scheduler.test.ts` | as 05 §8.2 items 3 to 5 | reproducible phrases on a seeded `vrng`; the state priority table; `rngN` unchanged by the audio scheduler |
+| `melody.test.ts` | B's planner is reproducible under a seeded vrng | `seedVisual(101)`; plan 8 B phrases in `rising`, then 8 in `parted`; reseed 101 and plan again: the two note lists are equal; seed 102 gives a different list (05 §5.2 item 6, §8.2 item 3) |
+| `melody.test.ts` | B's first rising phrase is GV's | the first phrase after B starts in `rising` is MIDI 72 76 79 81 79 76 74 72 74 76 79 84 (GV 6196; 05 §5.2 item 5) |
+| `melody.test.ts` | every B phrase stays in PENT_C and ends on a tonic | 200 seeded phrases per variant: 12 notes each; every note in `PENT_C` (72 74 76 79 81 84 86 88 91 93); note 12 is 72 or 84 in `rising`, 81 or 93 in `parted` (05 §5.2 items 6 and 7) |
+| `melody.test.ts` | C's planner is reproducible under a seeded vrng | `seedVisual(101)`; plan 16 C bars (8 phrases) in `rising`, then 16 in `parted`; reseed 101 and plan again: the two note lists are equal; seed 102 gives a different list (05 §5.3 item 6) |
+| `melody.test.ts` | C's notes stay in range and on the chord | 200 seeded phrases per variant: every melody note in 65-86 (F4 to D6); outside the flourish run, every sung note on beats 1 and 3 is a tone of the chord sounding on that beat; every answer bar holds exactly one note, on beat 1, 1.5 beats long (05 §5.3 item 6) |
+| `melody.test.ts` | the retired waltz still plans as at the gate (board test) | the waltz `describe` blocks already in the file stay with every assertion unchanged; from S8 they import motif A from `src/debug/motifs.ts` instead of `src/audio/music.ts` (07 S8.6 step 6); they lock the board's record of the gate, not the game (05 §5.9, §6.5 item 3) |
+| `musicState.test.ts` | the clock rule picks C by day and B from dusk to dawn | `wantedMotif(f)` is `'C'` at f 0.20, 0.50, 0.79 and 0.799999; `'B'` at f 0.80, 0.90, 0.00, 0.19 and 0.199999 (register §3.13; 05 §5.4 item 1, §8.2 item 4) |
+| `musicState.test.ts` | a new park starts with C and Continue at night with B | `startMusic()` at f 0.30 schedules C at once with its motif gain at 1 and no crossfade; at f 0.90 it schedules B the same way (05 §5.4 item 2) |
+| `musicState.test.ts` | a switch waits for the phrase start | C playing at 120 BPM, the clock moved from f 0.79 to 0.80 during the first bar of a C phrase: no B note starts before the start `T` of C's next phrase (2 bars later at most); B's first note starts at `T` exactly. B playing at 84 BPM, the clock moved from f 0.19 to 0.20 during the first bar of a B phrase: no C note starts before B's next phrase start (4 bars later at most) (05 §5.1 item 6, §5.4 item 3) |
+| `musicState.test.ts` | the crossfade lasts 2 s and touches only the motif gains | at a switch at `T`: the incoming motif gain ramps linearly 0 to 1 and the outgoing 1 to 0 over [T, T + 2 s]; no outgoing note starts after T + 2 s; the music room return ramps 0.30 to 0.45 (C to B) or 0.45 to 0.30 (B to C); the `musicBus` gain is unchanged; a second change wanted during the ramp starts nothing before T + 2 s (05 §5.4 items 4, 6 and 7) |
+| `musicState.test.ts` | the state table, first match wins | the table of 05 §5.6 picks `flourish` over `parted` over `happily` over `night` over `rising` over `stroll`; `night` matches exactly when `wantedMotif(f)` is `'B'` (05 §8.2 item 4) |
+| `musicState.test.ts` | variant and tempo change only where allowed | a `parted` event mid-phrase: the variant turns `parted` at the next phrase start of the playing motif, not before; the tempo moves at most 8 BPM per bar (C 120 to 96 in 3 bars, B 84 to 66 in 3 bars) and stays inside 0.8-1.2 times the variant's base tempo; C keeps its loop bar (`bar mod 8`) across the change (05 §5.6 rules 1 and 2) |
+| `scheduler.test.ts` | as 05 §8.2 item 5 | `updateAmbience` driven by a fake clock and a fake `audibleGain` logs the expected decisions; `rngN` of the sim stream is unchanged by the ambience and music schedulers |
 | `mute.test.ts` | muted survives a reload and silences tone | `settings.muted` saved as true is true again after the profile is reloaded; while `isMuted()` is true, `tone()` schedules nothing (07 S8.8; 05 §7.3) |
+
+Browser check (not Vitest; 07 S8.7 item 3; 05 §7.2 item 3): `npm run audio-smoke` runs `tools/audio-smoke.mjs` on `music-board.html`, whose B and C are the game's `src/audio/music.ts` from S8 on. It must show: B rising and C rising each peak between −22 and −18 dBFS at `master`, and the two peaks lie within 2 dB of each other (the gate measured −19.9 and −19.5 dBFS, 0.4 dB apart); the compressor output stays under −10 dBFS with the cue bed over B and over C; all six Play buttons (A, B and C, each `rising` and `parted`) sound and Stop silences them.
 
 ### 2.9 Render, UI and build (files `project.test.ts`, `order.test.ts`, `pick.test.ts`, `seasons.test.ts`, `perf.test.ts`, `bundle.test.ts`, `tests/ui/overlays.test.ts`, `tests/ui/rail.test.ts`, `tests/ui/intro.test.ts`, `tests/ui/a11y.test.ts`; the four under `tests/ui/` run under jsdom)
 
@@ -320,16 +340,16 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 
 `window.__PD` is installed only in a dev build (03 §13; GV `window.__GV` 12223-12241). The tests in this section use: `simulate(n)`, `tick()`, `rngN()`, `hash()`, `setSpeed(v)`, `enqueue(cmd)`, `log()`, `replay(cmds)`, `snapshot()`, `restore(s)`, `newPark(seed)`, `setWeather(kind)`, `callVisitor()`, `draw()`, `pix(x, y, w, h)`, `FT`, `SP`, `audio.dryRun(on)`. The screenshot members `seedVisual(seed)` and `fxStep(dt, n)` of 03 §13 (Screenshots group) touch the visual stream and particles only.
 
-`hash()` is `store.stateHash()`: FNV-1a over `tick`, the sim RNG state and draw count, the weather block, the nine saved layers and the canonical JSON of props, visitors, pairs, creatures, effects, sides, regulars, alumni, tally, mode and the profile's `cp`/`mp`, arrays sorted by id. Excluded: feed, log, pinned pair, visual RNG, speed (03 §11). A test that needs the excluded parts asserts on them by name.
+`hash()` is `store.stateHash()`: FNV-1a over `tick`, the sim RNG state and draw count, the weather block including the ice timers, the id counters and free lists (`IdsState`), the paving tally, the nine saved layers and the canonical JSON of props, visitors, pairs, creatures, effects, sides, regulars, alumni, tally, mode and the profile's `cp`/`mp`, arrays sorted by id. Excluded: seed, feed, log, pinned pair, visual RNG, speed (03 §11). A test that needs the excluded parts asserts on them by name.
 
 ### 3.2 `tests/determinism.test.ts` (Vitest, no browser)
 
-1. Fixture `tests/fixtures/det-s<N>.json`: `seed 101`, `steps 64800` (3 days: 60 steps × 360 s × 3, brief §9 row 5), a command list. S2 ships 12 commands (`speed` changes and `debug setWeather`, 07 S2.6 item 15); each later slice appends its own (S3 four tool commands, S6 eight ability commands, S7 `avatar.enter a_pigeon`, six `avatar.tap`, `avatar.leave`) and records the new `rngN` and `hash` in the hand-back.
+1. Fixture `tests/fixtures/det-s<N>.json`: `seed 101`, `steps 64800` (3 days: 60 steps × 360 s × 3, brief §9 row 5), a command list, and `expect: { rngN, stateHash }` (run 1 asserts both). S2 ships 12 commands (`speed` changes and `debug setWeather`, 07 S2.6 item 15); at least one fixture command has a tick in 20,001–21,000 (for run 5), and the last command is `speed 0` at tick 64,800 (it stops the real loop of 3.4 item 3). Each later slice appends its own commands before that last one (S3 four tool commands, S6 eight ability commands, S7 `avatar.enter a_pigeon`, six `avatar.tap`, `avatar.leave`) and records the new `rngN` and `stateHash` in the fixture and the hand-back.
 2. Run 1: `newPark(101)`, enqueue the fixture commands at their ticks, `simulate(64800)`; record `hash()`, `rngN()`, `tick()`.
 3. Run 2: the same from scratch; assert `hash`, `rngN` and `tick` equal run 1.
 4. Run 3: the same plus one extra `setWeather('rain')` at step 30,000; assert `hash` differs from run 1 (the test proves it is not vacuous).
 5. Run 4 (speed invariance, 03 §4.5): run 1 again but driving `simulate(SIM_DT, 3)` instead of `lite 1`, in batches of 22 steps (`nsMax` at 8×); assert `hash` equals run 1.
-6. Run 5 (replay): `snapshot()` at step 20,000 of run 1, continue to 21,000, `h1 = hash()`; `restore`, `replay(log(), 21000)`; assert `hash() === h1` and visitor positions and pair affinities equal to the last bit (design §14.5).
+6. Run 5 (replay): `snapshot()` at step 20,000 of run 1; continue to 21,000; `h1 = hash()`; keep `cmds = log().filter(c => c.tick > 20000)` (after `restore`, `log()` is the snapshot's log, whose commands are already applied); `restore(snapshot)`; `replay(cmds, 21000)`; assert `hash() === h1`, `rngN()` equal, and visitor positions and pair affinities equal to the last bit (design §14.5).
 7. Run 6 (save round trip inside the run): at step 40,000 `restore(JSON.parse(JSON.stringify(snapshot())))`, continue to 64,800; assert `hash` equals run 1.
 8. Run time budget: the whole file under 90 s on the CI machine; if it is slower, profile the sim, do not shorten the run.
 9. Done when: all six runs pass on the fixture of the current slice and the values are listed in the hand-back (07 §0.6 item 4).
@@ -344,8 +364,8 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 
 1. Launch Chromium (`/opt/pw-browsers/chromium`, headless) with `--autoplay-policy=no-user-gesture-required`; open `<url>#s=101&halt&dev`; click `#begin`; wait for `window.__PD`.
 2. `__PD.audio.dryRun(true)`; enqueue the fixture; `__PD.simulate(64800)` in chunks of 2000 inside `page.evaluate` so the page stays responsive; read `hash()` and `rngN()`.
-3. Repeat in a fresh page; assert equal. Then a third page at `setSpeed(8)` run by the real loop for 3 sim days (poll `tick() >= 64800`, then `setSpeed(0)` and `simulate(64800 - tick())` for the remainder); assert the same `hash` at the same `tick`.
-4. Also assert: zero console errors; `__PD.audio.log.length === 200` (05 §8.3); `rngN` equals the Vitest value for the same fixture.
+3. Repeat in a fresh page; assert equal. Then a third page runs the fixture through the real loop at `setSpeed(8)`: queue the commands with `replay(cmds, 0)` (an `upToTick` already passed only queues them at their ticks). The fixture's last command, `speed 0` at tick 64,800, stops the loop exactly there; poll until `tick() === 64800` and `T.speed === 0`, then compare; assert the same `hash` and `rngN` as page 1. (Do not poll `tick() >= 64800` and top up with `simulate`: the real loop can run up to `nsMax` = 22 steps past a tick in one frame.)
+4. Also assert: zero console errors; `rngN` and `hash` equal the fixture's `expect` values (the Vitest values); from S8 on (when `__PD.audio` exists), also `__PD.audio.log.length === 200` (05 §8.3).
 5. Exit non-zero on any mismatch and print both hashes and the first differing 600-step window.
 
 ---
@@ -382,7 +402,7 @@ Baselines: `tests/baseline/<id>-<viewport>[-a<angle>].png`, 13 files. Each slice
 
 ### 4.4 When a baseline may change
 
-1. After the Style Gate pick is recorded in the register §4: regenerate all 13 once, in the S2 hand-back.
+1. The Style Gate pick is recorded (A Storybook, register §4, 2026-10-12): the S2 hand-back generates all 13 once, drawn in direction A.
 2. When a slice's "Done when" names a new or changed look for a scene (a new prop, the rig, the lamp halo): regenerate those scenes only, attach before and after to the hand-back.
 3. Never because a test is red for an unknown reason. Find the cause first (section 3.3 for sim causes; a changed `vrng` draw order for visual causes).
 4. `npm run shot -- --update <id>` overwrites a baseline; the command is listed in the hand-back item 2.
@@ -441,13 +461,13 @@ Each item: do, then expect. Run on a phone in portrait with the dev build, then 
 5. **Rail.** Row 1 strip scrolls sideways with snap and shows the edge fade when more pills exist (GV 11059); switching Park | Cupid | Mischief swaps the strip; a locked pill is dimmed with its tier and toasts `rail.locked_at`; row 2 shows size for a brush, Place/Cancel for a ghost, Undo for Park, the cooldown ring for an armed ability; row 3 has every button of register §3.9.
 6. **Safe areas.** On a notched phone nothing sits under the top inset or the home indicator: chips, rail, feed, toast, every sheet, photo close button (GV 32, 77, 157-165).
 7. **Sheets.** Open Census; open Events: Census closes (GV 10748). The card hides while a sheet is open (`body.sheet`). Rotate the phone and back: overlays re-stack within 220 ms (GV 12132). Every sheet's bottom equals the rail height + 8 (`layoutOverlays`, GV 10689).
-8. **Audio unlock.** Fresh load, muted off: no sound before Begin; after Begin the waltz starts within 4 s and birds within 5 s (05 §8.1). Tap Sound: silence within 50 ms; tap again: music on the next bar.
+8. **Audio unlock.** Fresh load, muted off: no sound before Begin; after Begin motif C (Café swing) starts within 4 s, because a new park starts at f 0.30, by day (05 §5.4 item 2), and birds within 5 s (05 §8.1). Tap Sound: silence within 50 ms; tap again: music on the next bar.
 9. **Background and resume.** Press the home button for 10 s and return. Expect: the sim continued from where it was (no catch-up burst: the backlog is dropped, GV 12086); audio resumes without doubled notes; an autosave happened (reload and Continue shows the same state); `pagehide` on tab close also saves.
 10. **Save and continue.** Paint a path, place a bench, wait 30 sim s, kill the tab, reopen: Continue is shown; tapping it restores silently with the path, the bench, the clock, the weather, the pairs, the mode and the avatar. New asks the confirm; Yes gives a new park and a new `#s=`; No changes nothing.
 11. **Language.** Options → ES. Expect: every chip, pill, card, sheet, feed line (including old ones, through `@` keys), toast and aria-label in Spanish; `<html lang="es">`; the choice survives a reload; the intro toggle matches.
 12. **Photo mode.** Tap Photo. Expect: HUD, rail, card, feed, toast and sheets hidden, only the close button; gestures still work; close restores everything (GV 164-168, 63).
 13. **Avatar mode.** Be someone → pigeon. Expect: zoom to 1.5 if below 1.3, follow, the strip card with " · you", three hint chips, Park strip and Undo hidden, a 6 s hint toast. Tap lawn: it flies there (silent). Tap a visitor: the status toast. Tap Creator: the pigeon goes on by itself within 2 s (GV 11252-11269 pattern).
-14. **Speed and pause.** Pause: the clock stops, music keeps playing, the feed does not advance. 8×: the clock runs eight times faster; cue gaps widen; the frame rate holds (GV `aOK` 6131).
+14. **Speed and pause.** Pause: the clock stops, music keeps playing, the feed does not advance. 8×: the clock runs eight times faster; cue gaps widen; the frame rate holds (GV `aOK` 6131); the music keeps its tempo and changes between C and B twice per 45 s day, each time at a phrase start with a 2 s crossfade and no click (05 §5.4 item 8).
 15. **Private window.** Open in a private window. Expect: the game runs; one notice that saving is off; no crash on autosave.
 16. **Zero console errors** through all of the above, and after a full 12-day year at 8×.
 
@@ -512,10 +532,10 @@ Manual: possess each avatar and perform every row once; the toast reads the stat
 6. `npm run det` passes against the dev build of the same commit; `tests/determinism.test.ts` values recorded in the release note.
 7. `npm run perf` desktop budgets met; the phone report of 5.3 attached with device names.
 8. Section 6 run on one Android and one iPhone with every item passed; section 7 run with both languages.
-9. The register §4 rows for the Style Gate and the Music Gate hold the owner's letter and date; the profile `stylePick` and `musicPick` defaults equal those letters.
+9. **Met on 2026-10-12.** The register §4 rows hold the owner's picks with the date: Style Gate A Storybook; Music Gate B Music-box lullaby and C Café swing, motif A retired. The code defaults match: `DEFAULT_STYLE` in `src/render/ambient.ts` is `'A'` and `MUSIC_PICK` in `src/audio/music.ts` is `{ day: 'C', night: 'B' }`. The profile fields `stylePick` and `musicPick` stay `null` until a board's Choose button is pressed (2.6 `migrate.test.ts`); the game reads the code defaults, never `stylePick` or `musicPick` (`style()` returns `STYLES.A`, 04 §4.5 item 1; 05 §6.5 item 1). At release, check only that these two constants are unchanged.
 10. `SCHEMA_VERSION` unchanged since the last release, or `migrate.ts` has the new step and `migrate.test.ts` has its fixture.
 11. Save round trip by hand: play, close, reopen, Continue, identical scene; `localStorage` keys are exactly `parque:profile-v1` and `parque:park-v1`.
-12. Both boards (`style-board.html`, `music-board.html`) still open without error (they are shipped beside the game).
+12. Both boards (`style-board.html`, `music-board.html`) still open without error (they are shipped beside the game as the record of the gates); the music board still plays all three motifs, A from `src/debug/motifs.ts` and B and C from `src/audio/music.ts`.
 13. Tag the commit `v1.0.<n>` and write the release note: hashes of 6, numbers of 7, the baselines regenerated, open points.
 
 ---
@@ -537,6 +557,8 @@ Values this document defines that the register, the design, 03 and 06 do not (th
 11. Scenes A and D rendered in ES as extra non-baselined shots (7.2 item 4).
 12. Test naming and the `describe` comment rule (1.3 items 4 and 5).
 13. The refusal key `reason.too_many_effects` (EN "too much going on already") returned by the 65th cast while 64 effects are active (2.5 `abilities.test.ts`): 03 §3.11 caps active effects at 64, but 03 §5.4 and 06 §16.13 name no key for it. Proposal: add the row to both.
+14. The music test values of 2.8: seeds 101 and 102; 8 B phrases and 16 C bars for each reproducibility check; 200 seeded phrases per variant for the range checks; the fake context clock under the dry run for the switch tests; the name `wantedMotif(f)` for the clock rule of 05 §5.4 item 1 (07 §16 item 15).
+15. The peak rule of 2.8: B rising and C rising within 2 dB of each other at `master`, checked by `tools/audio-smoke.mjs` on `music-board.html`. 05 §7.2 item 3 fixes only the window of −22 to −18 dBFS for each; the gate measured −19.9 and −19.5 dBFS.
 
 Open points for the owner:
 

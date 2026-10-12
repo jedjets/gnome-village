@@ -1,8 +1,8 @@
 // src/core/rng.ts
 // Two mulberry32 streams with a draw counter: rng() decides what happens in the sim, vrng() decides only how it looks.
 // Ported from GV 583-598 (mulberry32, rng, rnd, rint, pick, chance, vrng, vrnd, vrint, vpick, vchance). PORT.
-// Added: seedSim, seedVisual, simState, setSimState so a save and a test can read and restore the sim stream (03 2.3).
-// TODO(S2): save/store.ts stores simState() and rngN() in the snapshot; the determinism test reads rngN().
+// Added: seedSim, seedVisual, simState, setSimState, visState, setVisState so a save and a test can read and restore both streams (03 2.3, 3.10).
+// save/store.ts stores simState(), rngN() and visState() in the snapshot; the determinism test reads rngN().
 
 type Stream = { a: number };
 
@@ -60,6 +60,12 @@ export function setSimState(state: number, n: number): void {
 /* ---------- the visual stream: particles, sky, sound; never the sim ---------- */
 export function seedVisual(seed: number): void {
   vis.a = seed | 0;
+}
+export function visState(): number {
+  return vis.a;
+}
+export function setVisState(state: number): void {
+  vis.a = state | 0;
 }
 export function vrng(): number {
   return next(vis);

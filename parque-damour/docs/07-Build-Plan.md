@@ -1,6 +1,6 @@
 # Parque D'Amour: Build Plan
 
-Version 1 · 2026-10-10 · Owner: Jeduthun Oosthuis · Author: Claude (design session)
+Version 1.1 · 2026-10-12 · Owner: Jeduthun Oosthuis · Author: Claude (design session)
 
 **How to use this document.** This file turns the design pack into work. It is a list of slices, S0 to S12, in the order they are built. Each slice is a self-contained task brief: a model given only section 0 and its own slice section, plus the documents the slice names under "Read first", can do the work without reading the rest of the pack. Section 0 tells the person running the project how to brief a model and what to demand back. Sections 13 to 15 give the dependency graph, the effort estimates and the definition of done for v1. Every number, name and id here matches `01-Decision-Register.md` (the register); where this document needed a value the register does not define, the value is defined here and listed in section 16. "GV" is the owner's Gnome Village HTML; "GV 1234" is an absolute line in that file as indexed by `10-Gnome-Village-HTML-Architecture-Review.md` (the review). Module paths such as `src/play/tools.ts` are the fixed module map of the scaffold. Ranges are written with a hyphen (GV 6331-6358).
 
@@ -29,12 +29,18 @@ Read, in this order, before writing anything:
   3. docs/07-Build-Plan.md section 0 and section <Sx> (your task)
   4. The documents and sections listed under "<Sx>.3 Read first"
 Precedence: the register wins over the brief; the brief wins over every numbered document; a
-numbered document wins over code comments. If your task and a higher document disagree, STOP,
-write the disagreement in your hand-back report, and do not choose.
+numbered document wins over code comments. If your task contradicts the register or the brief,
+STOP, write the disagreement in your hand-back report, and do not choose. If a rule is
+impossible as written, or two numbered documents (or a document and the GV lines it cites)
+disagree and the register does not settle it, follow build plan 0.3 item 5: take the reading
+that keeps every fixed coordinate and every register value, implement it, list it under
+Deviations with the exact alternative, and carry on.
 Options rule: if the task produces anything a player sees or hears (a prop, a figure, an effect,
 a screen, a cue, a motif), render two or three small variants on a scratch page, screenshot
-them, and show them before building the final one. Never start art or music work before the
-matching gate is recorded as passed in the register section 4.
+them, and show them before building the final one. Both gates passed on 2026-10-12 (register
+section 4): draw direction A Storybook only and play motifs B and C only. The style direction B
+and C branches in src/render are frozen for the style board, and music motif A (the waltz) is
+retired to the music board; never extend either.
 Touch only the files named under "<Sx>.5 Files". Create no file outside src/, tests/, tools/,
 docs/, scratch/, shots/, .github/ and the app root (S12 adds resources/). Do not edit docs/01-Decision-Register.md unless the task says you are
 recording a gate pick. Do not edit another slice's documents.
@@ -52,11 +58,12 @@ Do not mark anything done that you did not run.
 2. `00-Product-Brief.md`: intent, scope, non-goals, success criteria.
 3. The numbered design documents from `02-` on, including this file. `10-Gnome-Village-HTML-Architecture-Review.md` and `gv-review-notes/` are reference about GV, not rules for Parque.
 4. Code comments and READMEs.
-A conflict is a bug in the lower document. A model reports it and stops; it never resolves it by choice.
+A conflict with the register or the brief is a bug in the lower document. A model reports it and stops; it never resolves it by choice.
+5. If a rule is impossible as written, or a numbered document disagrees with another numbered document or with the GV lines it cites, and the register does not settle it: take the reading that keeps every fixed coordinate and every register value, implement it, list it under Deviations with the exact alternative, and carry on. STOP only when your work would contradict the register or the brief. (The "Ask the owner before" list of each slice and AGENTS.md section 5 still apply: an assumption never changes a register value, loosens a test or touches a file outside the slice's list.)
 
 ### 0.4 Present options before art or music (register row 26)
 
-1. The Style Gate and the Music Gate (S1) block all art work from S2 on and all music and cue work from S8 on. "Passed" means the register section 4 row holds the owner's letter and a date.
+1. The Style Gate and the Music Gate (S1) block all art work from S2 on and all music and cue work from S8 on. "Passed" means the register section 4 row holds the owner's letter and a date. Both passed on 2026-10-12: Style **A Storybook**; Music **B Music-box lullaby** and **C Café swing**, with motif A (the musette waltz) retired (register rows 1 and 25, sections 3.13 and 4). Nothing waits on a gate any more. Art draws style direction A only (04 section 3.4); the game music is motifs B and C only (05 section 5).
 2. Inside any later slice, a model that draws or sounds something new first renders two or three variants as tiles on a scratch page (`scratch/<slice>-<thing>.html`, not committed), screenshots them at 390x844, and shows them to the owner in the hand-back or mid-task. It builds the final one only after the owner's word.
 3. A model that cannot reach the owner mid-task builds the variant that matches the picked style board tile most closely, says so under "Assumptions", and keeps the scratch page so the owner can pick later.
 
@@ -87,7 +94,7 @@ HAND-BACK <Sx> <date>
 4. Determinism fixture (if the slice touches the sim): seed, steps, rngN, stateHash, same on
    run 2 <yes|no>, differs with one extra command <yes|no>
 5. GV lines ported: <module: GV a-b, ...>
-6. Deviations from the brief: <none | list, each with why>
+6. Deviations from the brief: <none | list, each with why and the exact alternative reading (0.3 item 5)>
 7. Assumptions I made (values not in the register or the docs): <list, each with the file>
 8. Open questions for the owner: <list>
 9. Options shown (if any): <scratch page path, screenshot paths, the owner's pick or "pending">
@@ -97,7 +104,7 @@ HAND-BACK <Sx> <date>
 ### 0.7 Rules for every slice (do not list)
 
 1. Do not port GV terrain, erosion, flow, sea, floods, gorges, dams, bridges that span heights, boats, the flyer, the construction economy, households or babies (GV 699-812, 882-1358, 1985-2125, 2478-4221, 11323-12012; brief section 8.2).
-2. Do not read `MODE`, `PLAYER`, the camera or the DOM inside `src/entities`, `src/world` or `src/core` except the one branch at the decide cadence (03 section 4.4).
+2. Do not read `MODE`, `PLAYER`, the camera or the DOM inside `src/entities`, `src/world` or `src/core` except the one branch at the decide cadence (03 section 4.4) and `core/commands.ts` validating the mode rules of 03 section 5.3 (a named exception of 03 section 2.1).
 3. Do not mutate simulation state from `src/ui`, `src/render`, `src/audio` or `src/debug`; enqueue a `Command` (03 section 5).
 4. Do not write a user-facing string, a feed line, a toast or an aria-label as a literal; add the key to `src/ui/strings/en.ts` and `es.ts` and call `t()`.
 5. Do not add a scene colour literal outside `src/render/ambient.ts` or a HUD colour outside `src/styles/tokens.css` (04 section 4.5).
@@ -208,6 +215,8 @@ Format 0.6. Item 3 is the 22-row table with PASS or FIXED per row.
 
 ## S1. Style Gate and Music Gate
 
+**Status: done 2026-10-12.** Style Gate: **A Storybook**. Music Gate: **B Music-box lullaby** and **C Café swing** kept; motif A (the musette waltz) retired. Board files: `style-board.html` and `music-board.html` (with `src/debug/style-board.ts`, `src/debug/music-board.ts`, `src/debug/motifs.ts`); both stay as the record of the gates. Both gate picks are in register section 4 (and in register rows 1 and 25 and section 3.13). The owner saw tile 7 (`FH 22` at zoom 1.3) and did not object, so `FH 22`, the lamp globe radius 0.11 tile and the `teal` pigeon sheen stand (04 section 13, "Settled by the Style Gate"). The sections below are the record of what was built; do not run them again. Where they cite 05 section 5 for the waltz, read 05 section 5.9 (05 section 5 now holds motifs B and C).
+
 ### S1.1 Goal
 Build `style-board.html` (three art directions drawn with the real render primitives) and `music-board.html` (three motifs played by the real audio engine), show them to the owner, and record the two picks. Nothing visual or audible beyond the boards is built in this slice.
 
@@ -262,7 +271,7 @@ Recording the picks (one model, after both letters):
 The park, the pipeline, any prop beyond the 13 tiles, cues beyond the five of the cue bed, ambience, birds, the Sound check sheet, the Options sheet.
 
 ### S1.10 Ask the owner before
-Changing any hex in 04 section 3.1 (offer a variant tile instead); adding a fourth direction or motif; changing `FH` (04 section 13 item 1 is the owner's open point, show tile 7 and ask); changing the base tempo 164 or the key G; recording a pick the owner has not stated in words.
+Changing any hex in 04 section 3.1 (offer a variant tile instead); adding a fourth direction or motif; changing `FH` (22 stands since the Style Gate, 04 section 13 'Settled by the Style Gate' item 1; only the owner can change it); retuning any board motif (the retired waltz of 05 section 5.9, or B and C of 05 sections 5.2, 5.3 and 5.5); recording a pick the owner has not stated in words.
 
 ### S1.11 Hand-back
 Format 0.6, with item 9 holding all screenshot paths and the readout JSON, and a line "Register section 4 updated: yes/no".
@@ -275,16 +284,17 @@ Format 0.6, with item 9 holding all screenshot paths and the readout JSON, and a
 Build the deterministic engine (rng, clock, weather, events, commands, loop, grid, park, starter park, static water, wear) and the renderer core (camera, gestures, projection, painter order, ambient light, backdrop, ground, water, props, flora, pipeline) so the seeded starter park draws at 390x844 in the picked style with no visitors yet.
 
 ### S2.2 Model tier
-Part A (steps 1 to 15, engine): Tier B; it needs no gate and may start while S1 runs. Part B (steps 16 to 27, renderer): Tier A; it starts after the Style Gate is recorded.
+Part A (steps 1 to 15, engine): Tier B; it needs no gate and may start while S1 runs. Part B (steps 16 to 27, renderer): Tier A; the Style Gate it waited for is recorded (A Storybook, register section 4, 2026-10-12), so part B draws direction A only (04 section 3.4).
 
 ### S2.3 Read first
-Register sections 3.1, 3.2, 6. 02 sections 2 (the park, gates, starter park, props), 3 (time, light, weather), 11.1 (wear), 14 (two-player hook). 03 sections 2.3, 2.4, 2.7, 3.1, 3.2, 3.6, 3.11, 4 (the loop), 5 (commands), 6.1, 6.2, 7 (rendering), 8 (input), 11 (state hash row), 13 (harness), 15 (performance). 04 sections 5.1, 6 (prop vocabulary), 10.1, 12. Review sections 2.1, 2.4, 7.1 to 7.4, 9, 13, 14 (rows "Core & loop", "World state", "Renderer"). Notes `02-notes.md`, `03-notes.md`, `13-notes.md`, `16-notes.md`, `17-notes.md` for line-level detail. 08 sections 2.1, 2.2, 2.9, 3; 09 sections 2.2, 2.3, 2.6, 3.
+Part A (engine): register sections 3.1, 3.2, 3.3, 6. 02 sections 2 (the park, gates, starter park, props), 3 (time, light, weather), 8.3 (the `bridge` row: the crossing rule), 11.1 (wear), 14 (two-player hook). 03 sections 2.1, 2.3, 2.4, 3.1, 3.2, 3.6, 3.10, 3.11, 4 (the loop), 5 (commands), 6.1, 6.2, 7.4 item 4 (the backdrop sizes `BACKDROP` holds), 11 (state hash row), 13 (harness). 06 section 14 (weather tables). 08 sections 1.3, 2.1, 2.2, 2.9 (`perf.test.ts`), 3. 09 sections 2.2, 2.3, and section 4 rows 7 and 35. GV lines only as each step cites them.
+Part B (renderer): everything for part A, plus 03 sections 2.7, 7 (rendering), 8 (input), 15 (performance); 04 sections 5.1, 6 (prop vocabulary), 10.1, 12; review sections 2.1, 2.4, 7.1 to 7.4, 9, 13, 14 (rows "Core & loop", "World state", "Renderer"); notes `02-notes.md`, `03-notes.md`, `13-notes.md`, `16-notes.md`, `17-notes.md` for line-level detail; 09 sections 2.6, 3.
 
 ### S2.4 Inputs that already exist
 S0 shell and loop skeleton; S1 primitives in `render/*` drawn with `style()`; `ambient.ts` palettes; the register's pick.
 
 ### S2.5 Files to create or change
-Part A: `src/core/rng.ts`, `math.ts`, `ids.ts`, `clock.ts`, `weather.ts`, `events.ts`, `commands.ts`, `loop.ts`; `src/world/grid.ts`, `park.ts`, `gen.ts`, `water.ts`, `wear.ts`, `charm.ts` (empty field API only); `src/save/schema.ts`, `src/save/store.ts` (`snapshot`, `restore`, `stateHash`, no localStorage yet); `src/debug/harness.ts`, `src/debug/perf.ts`; `tools/det.mjs` (08 section 3.4); `tests/determinism.test.ts`, `tests/clock.test.ts`, `tests/weather.test.ts`, `tests/events.test.ts`, `tests/loop.test.ts`, `tests/gen.test.ts`, `tests/park.test.ts`, `tests/water.test.ts`, `tests/commands.test.ts`.
+Part A: `src/core/rng.ts`, `math.ts`, `ids.ts`, `clock.ts`, `weather.ts`, `events.ts`, `commands.ts`, `loop.ts`; `src/world/grid.ts`, `park.ts`, `gen.ts`, `water.ts`, `wear.ts`, `charm.ts` (empty field API only); `src/save/schema.ts`, `src/save/store.ts` (`snapshot`, `restore`, `stateHash`, no localStorage yet); `src/debug/harness.ts`, `src/debug/perf.ts` (`ftNote`, `FT`, `qualityLevel`, the overlay text; step 14); `src/ui/strings/en.ts` and `es.ts` (add `reason.not_here`, `reason.wrong_side`, `reason.wrong_mode`, `reason.not_in_avatar`, `feed.season.spring`, `feed.season.summer`, `feed.season.autumn`, `feed.season.winter`, with the 06 section 16.11 and 16.13 texts); `package.json` (add the script `"det": "node tools/det.mjs"`, 03 section 14); `tools/det.mjs` (08 section 3.4); `tests/fixtures/det-s2.json`; `tests/determinism.test.ts`, `tests/clock.test.ts`, `tests/weather.test.ts`, `tests/events.test.ts`, `tests/loop.test.ts`, `tests/gen.test.ts`, `tests/park.test.ts`, `tests/water.test.ts`, `tests/wear.test.ts`, `tests/commands.test.ts`, `tests/perf.test.ts`; `tests/grid.test.ts` (replace the S0 16-tile pond assertion with the 02 section 2.5 pond rule: 14 to 20 tiles in x 30-36, y 11-13).
 Part B: `src/render/camera.ts`, `project.ts`, `order.ts`, `ambient.ts`, `backdrop.ts`, `ground.ts`, `water.ts`, `props.ts`, `flora.ts`, `effects.ts` (particle system), `ghost.ts` (stub), `draw.ts`; `src/main.ts` (wiring); `src/ui/hud.ts` (clock chip only); `tools/shot.mjs` (day wait); `tests/project.test.ts`, `tests/order.test.ts`, `tests/pick.test.ts`.
 
 ### S2.6 Steps
@@ -292,31 +302,31 @@ Part A, engine (Tier B):
 1. `rng.ts`: finish the API of 03 section 2.3 including `simState/setSimState`.
 2. `math.ts`: `clamp, clamp01, lerp, smooth, TAU, noise2, fbm2, hx (3-digit hex fixed), mixc, css, cheb, fnv1a` (GV 578-582, 599-609).
 3. `ids.ts`: allocators per 03 section 2.3; `PropId` free list; `idsState/setIdsState`.
-4. `clock.ts`: `DAYLEN 360`, `SEASON_DAYS 3`, `START_ABS 0.30`; `T.abs = START_ABS + tick / (60 * DAYLEN)`; `phaseOf(f)` by the eight bands of register 3.2; `light` by the piecewise-linear table of 02 section 3.2; `lamps = f >= 0.80 || f < 0.28`; emit `newday`.
-5. `weather.ts`: the eight kinds with the targets, durations and per-season weights of 02 section 3.3, eased with a 2.6 s half-life (GV 846-881); first change at 40 s; start `fair`; the override list and `weatherAt` of 02 section 3.5 (data only; S9 draws them); `WET` rise 0.2/s at rain > 0.3 and fall 0.01/s (02 section 2.2).
+4. `clock.ts`: `DAYLEN 360`, `SEASON_DAYS 3`, `START_ABS 0.30`; `T.abs = START_ABS + tick / (60 * DAYLEN)`; `phaseOf(f)` by the eight bands of register 3.2; `light` by the piecewise-linear table of 02 section 3.2; `lamps = f >= 0.80 || f < 0.28`; emit `newday`, `season` and `lampsLit` per 03 section 6.1 item 2 (a park starts at `f` 0.30, so day 2 begins at tick 15,120 and the lamps first light at tick 10,800).
+5. `weather.ts`: the eight kinds with the targets, durations and per-season weights of 02 section 3.3, eased with a 2.6 s half-life (GV 846-881); a pick makes two sim draws, the kind then the duration (GV 852-853); first change at 40 s; start `fair`; `stepWeather(dt, tick)` (overrides expire on the first step with `tick > until`); the override list and `weatherAt` of 02 section 3.5 (data only; S9 draws them); `stepWet(dt)`: `WET` rise 0.2/s at rain > 0.3 and fall 0.01/s (02 section 2.2), snapping to 1 within 1e-6 (03 section 6.2 item 3); the `debug.weather` handler sets the kind and the kind's mean duration with no draw (03 section 5.1). This file imports `world/grid.ts` for `WET`, a named exception of 03 section 2.1.
 6. `events.ts`: `on, watch, emit, drain(lite)` per 03 section 2.3; the lite bits of 03 section 4.5.
-7. `commands.ts`: the union of 03 section 5.1, `enqueue` (stamp `tick + 1`, `seq`), `applyPending` ordered by `(tick, side park < cupid < mischief, seq)`, `applyCommand` with the `Result` type, the log of 600, `replay`. In S2 only `speed`, `park.new` and `debug` apply; the others return `reason.not_here` until their slice.
-8. `loop.ts`: `frame` and `simulate` exactly as 03 sections 4.1 and 4.2, phases 1 to 4, 11 and 13 active, the rest as no-op calls kept in order; `SP` laps.
+7. `commands.ts`: the union of 03 section 5.1, `enqueue` (stamp `tick + 1`, `seq`), `applyPending` ordered by `(tick, side park < cupid < mischief, seq)`, `applyCommand` with the `Result` type, the log of 600, `replay`. `applyPending(tick, only?)`. In S2 only `speed`, `park.new` and `debug.weather` apply; the others return `reason.not_here` until their slice. It imports `play/mode.ts` for the mode rules of 03 section 5.3, a named exception of 03 section 2.1.
+8. `loop.ts`: `frame` and `simulate` exactly as 03 sections 4.1 and 4.2, phases 1 to 4, 11 and 13 active, the rest as no-op calls kept in order; `SP` laps; while paused, `frame` applies only pending `speed` commands (03 section 4.6); `newPark(seed)` runs `genPark`, `setMode('creator')`, `resetCommands` and `setTick(0)`.
 9. `grid.ts`: `N 48, S 1, NC 2304, I, inB`, the nine saved layers plus `E` and `BLOCK` (03 section 3.2), `Kind` enum, `layersState/setLayersState`.
-10. `park.ts`: `APRON 8`, the five gates with the tiles, `outside` tiles and weights of 02 section 2.4, `nearestGate`, `isBoundary`, `isGateTile`, and `BACKDROP` (quay y = -1, river y = -2 to -8, pavement 1 tile, facade blocks 2x3 at 2 to 8 tiles on E, S, W, skyline band; 03 section 7.4).
-11. `gen.ts`: the starter park of 02 section 2.5 exactly (fountain 2x2 at (23,23), flagstone ring, inner loop at Chebyshev 5 and 6, outer at 13 and 14, five spokes, pond in (30,8)-(37,13) with the neck at (34,11)-(34,12) and a span-2 bridge, six benches at the six angles, two 2x2 beds, kiosk at (14,44) with two tables east, four lamps, twelve trees 4/4/4 with the spacing rules). Reseed both streams from the seed first (GV 887).
+10. `park.ts`: `APRON 8`, the five gates with the tiles, `outside` tiles and weights of 02 section 2.4, `nearestGate`, `isBoundary`, `isGateTile`, and `BACKDROP` (quay y = -1, river y = -2 to -8, pavement 1 tile; facade blocks 3 tiles along the street x 2 deep, one row on each of E, S, W whose near face is 2 tiles beyond the boundary and one far-bank row at y = -10 to -9; heights 6.0 EH (04 section 6.4 wins over the old 03 section 7.4 figure); railings 0.5 EH, one piece per boundary tile except gate tiles; skyline band; 03 section 7.4 item 4).
+11. `gen.ts`: the starter park of 02 section 2.5 exactly (fountain 2x2 at (23,23), flagstone ring, inner loop where floor(Chebyshev distance from (23.5,23.5)) is 5 or 6, outer where it is 13 or 14, five spokes, pond of 14 to 20 tiles in x 30-36, y 11-13 with the neck at (34,11)-(34,12) and a span-2 bridge landing on (34,10) and (34,13), six benches at the six angles, two 2x2 beds, kiosk at (14,44) with two tables east, four lamps, twelve trees 4/4/4 with the spacing rules). Reseed both streams from the seed first (GV 887).
 12. `water.ts`: `waterBodies` by flood fill over `KIND` 5 and 6, `bodyAt`, `findCrossing` (02 section 8.3 bridge rule: shortest straight N-S or E-W crossing through the tile, land both ends, at most 4 water tiles), `stepIce` (02 section 3.3 snow row: `ICE = 1` after 60 s of snow, 0 after 120 s without).
-13. `wear.ts`: `wearAt` and `decayWear` as GV 1674-1687 with the formula of 02 section 11.1 items 1 and 2; `findPavingRun` per item 4; `markPaved` writes `PAVEDAY`.
-14. `store.ts` (in-memory only): `snapshot()` and `restore()` over `ParkSaveV1` (03 section 3.10), `stateHash()` exactly as 03 section 11; `harness.ts` installs `window.__PD` per 03 section 13 under `import.meta.env.DEV`; add `worldHash()` (hash of the nine layers and `props` only) for tool tests.
-15. `tests/determinism.test.ts`: seed 101, run 64,800 steps (3 days) with a scripted log of 12 commands (`speed` changes and `debug setWeather`), record `stateHash` and `rngN`; run again, assert equal; run a third time with one extra `setWeather` at step 30,000, assert different. Also 03 section 4.5 "Done when": 1x and 8x paths give the same hash (drive `simulate` with `lite` 1 and 3). `tools/det.mjs`: write the script per 08 section 3.4 (the same fixture through `__PD` in Chromium) and run it once in the hand-back.
-Part B, renderer (Tier A, after the Style Gate):
+13. `wear.ts`: `wearAt` and `decayWear` as GV 1674-1687 with the formula of 02 section 11.1 items 1 and 2; `findPavingRun` per item 4 (the fountain and lamp exclusion applies to the seed tile only; a followed tile must be lawn, unoccupied and not paved today); `markPaved` writes `PAVEDAY`. Tests in `tests/wear.test.ts` (08 section 2.2).
+14. `store.ts` (in-memory only): `snapshot()` and `restore()` over `ParkSaveV1` (03 section 3.10), `stateHash()` exactly as 03 section 11; `harness.ts` installs `window.__PD` per 03 section 13 under `import.meta.env.DEV`; add `worldHash()` (hash of the nine layers and `props` only) for tool tests. `perf.ts`: `FT`, `ftNote` (EMA k 0.08, one-second peaks), `qualityLevel()` and the `#perf` overlay text (GV 12057-12069, 03 section 13), tested in `tests/perf.test.ts` (08 section 2.9); part B step 26 wires it to the frame. `ids.ts` from step 3 also gives `freePropId(id, reserve)`, `releasePropId`, `reclaimPropId` for S3 undo (03 section 5.6 item 3).
+15. `tests/determinism.test.ts`: the six runs of 08 section 3.2. Fixture `tests/fixtures/det-s2.json`: seed 101, 64,800 steps (3 days), a scripted log of 12 commands (`speed` changes and `debug.weather`); at least one fixture command has a tick in 20,001-21,000 (for run 5), and the last command is `speed 0` at tick 64,800; `expect` holds `rngN` and `stateHash`, and run 1 asserts both. Run again, assert equal; run a third time with one extra `setWeather` at step 30,000, assert different. Also 03 section 4.5 "Done when": 1x and 8x paths give the same hash (drive `simulate` with `lite` 1 and 3; this only proves `lite` changes nothing, the real 8x proof is `det.mjs` page 3). `tools/det.mjs`: write the script per 08 section 3.4 (the same fixture through `__PD` in Chromium, including the real loop at 8x) and run it once in the hand-back.
+Part B, renderer (Tier A; the Style Gate is recorded: direction A):
 16. `camera.ts`: port GV 6331-6358 (`cam`, `resize` with dpr cap 2, `setAngle`, `rotXY`, `rotVec`, `turnStep`), 6400-6416 (`fitCam` over the 64x64 box, `clampCam` with the register's floor 0.30), 11168-11230 (`setupInput`: pan, pinch, twist with the 0.06 rad dead zone, tap under 9 px and 420 ms, wheel x1.12 / x0.89, drag-paint throttle), 11280-11322 (`followStep`, `focusY`, `keepCentre`, `centreOn`), 12142-12154 (quarter turns, Fit).
 17. `project.ts`: `screenOf` (GV 6382-6384 without the `SEAS` term), the closed-form `screenToTile` of 03 section 7.1 item 6 (GV 6423-6443 is not ported), `pickAt` priority of 03 section 8.2 (people, creatures, props, tile).
 18. `order.ts`: counting sort into 1/64-tile buckets over drawables (GV 6367-6373), ties by lower id.
-19. `ambient.ts`: `computeAmbient`, `lit`, `GC` (GV 6452-6478) with the golden-hour windows of 03 section 7.3 item 2 and the season tint hook.
+19. `ambient.ts`: `computeAmbient`, `lit`, `GC` (GV 6452-6478) with the golden-hour windows of 03 section 7.3 item 2 and the season tint hook. Change `style()` to return `STYLES.A` without reading `profile.stylePick` (04 section 3.4 item 4, section 4.5 item 1). The style board keeps passing each column's own `StyleSpec` (04 section 4.2), so a Choose B or Choose C press on the board never changes the game.
 20. `backdrop.ts`: sky ramp, stars, sun on the corrected arc, moon, clouds into an offscreen canvas at 260 ms (GV 6480-6618, 6525-6534); the skyline band offset by `cam.ang` (GV 6511-6516 far-shore idea); apron ground polygons; apron drawables (railings per boundary tile, five gates, facade blocks as iso boxes GV 6953-7035, quay wall, awnings) with the near-side cutaway rule (03 section 7.4 item 4).
 21. `ground.ts`: epoch cache `TILE_COL/TILE_EP` (GV 9449-9465, cadence 9586-9587), `groundCol` reduced per 03 section 7.5 item 3 (GV 6665-6741 rule stack without slope, AO or gradients), the tile pass grouped by colour, worn-lawn ribbons (GV 8654-8776) at `z >= 0.45`, bed flowers by `BEDC` at `z > 0.8`.
 22. `water.ts`: pond and canal outlines as cached paths on a water epoch (GV 9034-9177 field and `waterPath`, 9260 `strokeBanks`), fill, rim, ice state, ripples at `z > 0.7` (GV 9981 ripples only).
 23. `props.ts`: `drawProp` for bench (4 facings), lamp (three-globe, lit state), fountain 2x2, kiosk 2x2 with awning, table, bandstand 3x3, picnic 2x2, bridge 1 to 4, hedge (auto-join), tree via the sprite cache (GV 6782-6835, key per 03 section 7.7 item 2); culls per 03 section 15.2 item 6.
 24. `flora.ts`: `treeShape` for plane, chestnut, lime (GV 1692-1728 shape builder), `crownPhase` by 02 section 3.4, `drawBedTile`, `drawHedge`.
 25. `effects.ts`: the particle system `P` with cap 220 and `updateParts` on the visual stream (GV 2386-2408, 8609), stepped on the frame (03 section 4.1 item 7); fountain spray from `ambientFx`, never from `drawProp`.
-26. `draw.ts`: the eight-phase pipeline of 03 section 7.9 (GV 12042-12053, 9578-9600); `perf.ts` `ftNote` and the `#perf` overlay (GV 12057-12069).
-27. `main.ts`: wire Begin to `newPark(seed)`, the hash `#s=<seed>&halt` (GV 12097, 814, 12115), rotate, Fit, speed, pause; `hud.ts` writes the clock chip (weather dot, phase word, Day N, season) every 0.35 s.
+26. `draw.ts`: the eight-phase pipeline of 03 section 7.9 (GV 12042-12053, 9578-9600); wire part A's `perf.ftNote` to `loop.onFrameEnd` and show the `#perf` overlay (toggle, counts) (GV 12057-12069).
+27. `main.ts`: wire Begin to `newPark(seed)` (its body is `core/loop.ts` `newPark(seed)` then the hash and the camera: `history.replaceState`, `cam.free = false`, `cam.follow = 0`, `fitCam()`; never a second copy of the sim reset), the hash `#s=<seed>&halt` (GV 12097, 814, 12115), rotate, Fit, speed, pause; `hud.ts` writes the clock chip (weather dot, phase word, Day N, season) every 0.35 s.
 
 Port list for part B (cite in comments):
 | Module | PORT (as is) | ADAPT (reshape) | Do not port |
@@ -341,7 +351,7 @@ Port list for part B (cite in comments):
 6. `pickAt` unit test: a tap on the fountain's screen point returns `{ kind: 'prop' }` with the fountain id at all four angles.
 
 ### S2.8 Tests to add
-`determinism.test.ts`, `clock.test.ts` (band edges, lamps rule, `newday`), `weather.test.ts` (weights sum to 100 per season; `weatherAt` inside and outside an override), `gen.test.ts` (fixed skeleton tiles; seed-varied items; `inB` gates), `water.test.ts` (`findCrossing` cases: 1 to 4 tiles, too wide, no land), `commands.test.ts` (ordering, `tick + 1` stamping, log cap 600, rejection reasons), `project.test.ts` (`screenToTile(screenOf(x, y))` round trip at four angles and three zooms), `order.test.ts` (stable ties), `loop.test.ts` (`nsMax`, lite bits and budgets of GV 12082-12083), `park.test.ts` (gate tiles, `inB`, `isBoundary`, `nearestGate`), `pick.test.ts` (`pickAt` priority; the fountain at all four angles), `events.test.ts` (`on` at once, `watch` after `drain`; lite bits drop only `fx` and `cue`).
+Part A: `determinism.test.ts` (the six runs of 08 section 3.2; `rngN` and `stateHash` locked in the fixture), `clock.test.ts` (band edges, lamps rule, `newday` at tick 15,120, `lampsLit` at 10,800), `weather.test.ts` (weights sum to 100 per season; two sim draws per pick; `weatherAt` inside and outside an override; `WET` exactly 1 after 5 s of rain), `gen.test.ts` (fixed skeleton tiles; seed-varied items; the pond rule; `inB` gates), `grid.test.ts` (the S0 pond assertion replaced by the 02 section 2.5 rule), `water.test.ts` (`findCrossing` cases: 1 to 4 tiles, too wide, no land), `wear.test.ts` (the 08 section 2.2 wear rows), `commands.test.ts` (ordering, `tick + 1` stamping, the kind filter, log cap 600, rejection reasons, `park.new` back to creator mode), `perf.test.ts` (08 section 2.9), `loop.test.ts` (`nsMax`, lite bits and budgets of GV 12082-12083; the paused frame of 03 section 4.6; no wall-clock assertion, 08 section 1.3 item 3), `park.test.ts` (gate tiles, `inB`, `isBoundary`, `nearestGate`, the `BACKDROP` sizes), `events.test.ts` (`on` at once, `watch` after `drain`; lite bits drop only `fx` and `cue`). Part B: `project.test.ts` (`screenToTile(screenOf(x, y))` round trip at four angles and three zooms), `order.test.ts` (stable ties), `pick.test.ts` (`pickAt` priority; the fountain at all four angles).
 
 ### S2.9 Out of scope
 Visitors and creatures (S4), tools and ghosts (S3), localStorage (S3), weather visuals, lamp halos and season tints (S9), gestures for painting (S3 wires them), any sound.
@@ -618,48 +628,65 @@ Format 0.6 plus a list of the cascade status keys added to the string tables.
 ## S8. Audio: engine, cues, ambience, the chosen music
 
 ### S8.1 Goal
-Every romance and mischief beat has a cue, the park has its ambience (fountain, café, bells, boulevard, rain, pigeons, birds), the picked motif plays and follows the featured pair, and the dev Sound check plays every cue.
+Every romance and mischief beat has a cue, the park has its ambience (fountain, café, bells, boulevard, rain, pigeons, birds), the game plays the two picked motifs (**C Café swing** from dawn to the end of golden hour, **B Music-box lullaby** from dusk to dawn), each motif follows the featured pair through its `rising` and `parted` variants, a change between B and C waits for a phrase boundary and crossfades over 2 s, and the dev Sound check plays every cue.
 
 ### S8.2 Model tier
 Tier A.
 
 ### S8.3 Read first
-Register 3.13, 3.2 (real-time gaps), section 4 Music Gate row (the pick and knobs). 05 sections 1 to 5, 6.5 item 3, 7, 8, 9. 03 sections 2.8, 4.1 item 8, 9, 13 (audio harness). 02 section 12.4 (Options, dev flag). Review section 8. Note `12-notes.md`. 08 section 2.8; 09 section 2.7, section 4 rows 1 and 14.
+Register row 25, sections 3.13, 3.2 (real-time gaps) and 4 (Music Gate row: the pick, the knobs, the gate mix). 05 sections 1 to 4; 5.1 to 5.8 (the game music: motifs B and C, which motif plays, the voices, the state table, ducking, scheduling); 5.9 (the retired waltz); 6.2, 6.3 (columns B and C), 6.5 item 3 (the move); 7 (the mix, with the gate mix of 7.2 item 3); 8; 9. 03 sections 2.8, 4.1 item 8, 9, 13 (audio harness). 02 sections 3.2 (the day fraction `f` and its bands), 12.4 (Options, dev flag). Review section 8. Note `12-notes.md`. 08 section 2.8; 09 section 2.7, section 4 rows 1 and 14.
 
 ### S8.4 Inputs that already exist
-S1 `engine.ts`, `limiter.ts`, `music.ts` (motif A) and `debug/motifs.ts`; the event bus with `stage, embarrassed, backfired, happily, parted, cast, unlock, fx, newday` events from S4 to S7; the register's music pick.
+1. From S1, the gate code (commit `5bbc5f3`, exactly what the owner heard): `src/audio/engine.ts`, `limiter.ts`, and `cues.ts` with the five cue-bed cues.
+2. `src/audio/music.ts` holds the retired waltz (motif A: planner, chord tables, accordion voice, state table, scheduler) and already exports `MUSIC_PICK = { day: 'C', night: 'B' }`, `DEFAULT_MOTIF = MUSIC_PICK.day` and `MUSIC_MAKEUP = 4.5`.
+3. `src/debug/motifs.ts` holds motifs B and C: the `Motif` interface of 05 section 6.2, `BarSeq`, the shared `voice()`, `makeB` with `TINE_MAKEUP = 2`, `makeC`, their tables, and `MOTIFS`.
+4. `music-board.html` and `src/debug/music-board.ts` play all three motifs; `tools/audio-smoke.mjs` (`npm run audio-smoke`) measured the gate peaks (05 section 7.2 item 3).
+5. `tests/limiter.test.ts`; `tests/melody.test.ts`, which tests the waltz planner and state table imported from `src/audio/music.ts`.
+6. From S2 to S7: the clock `T.f`; the event bus with `stage, embarrassed, backfired, happily, parted, cast, unlock, fx, newday` events; the featured pair (S5); buskers in state `play`; `getMode()` (S7). S10 emits the `c_fireworks` cast and the `a_busker` play state that this slice already listens for (S10.6 step 5).
 
 ### S8.5 Files to create or change
-`src/audio/engine.ts`, `limiter.ts`, `cues.ts`, `ambience.ts`, `birds.ts`, `music.ts`, `src/debug/motifs.ts` (remove the picked motif if it moves), `src/ui/sheets.ts` (Sound check under the dev flag), `src/ui/rail.ts` (Sound button through `t()`, `aria-pressed`), `src/ui/hud.ts`, `src/main.ts` (Begin and Continue unlock, `visibilitychange`, `resume()` on pointerdown while suspended), `src/save/store.ts` (`settings.muted`), `src/debug/harness.ts` (`__PD.audio`), strings, tests.
+`src/audio/engine.ts`, `limiter.ts`, `cues.ts`, `ambience.ts`, `birds.ts`, `music.ts` (motifs B and C, the `Motif` interface, the clock rule, the phrase-boundary switch, the state input), `src/debug/motifs.ts` (becomes motif A, the retired waltz, for the board only), `src/debug/music-board.ts` (B and C from `src/audio/music.ts`, A from `src/debug/motifs.ts`), `src/ui/sheets.ts` (Sound check under the dev flag), `src/ui/rail.ts` (Sound button through `t()`, `aria-pressed`), `src/ui/hud.ts`, `src/main.ts` (Begin and Continue unlock, `startMusic()`, `updateMusic()` every frame, `visibilitychange`, `resume()` on pointerdown while suspended), `src/save/store.ts` (`settings.muted`), `src/debug/harness.ts` (`__PD.audio`), `tools/audio-smoke.mjs` (the level checks move from A to B and C), strings, tests: `tests/melody.test.ts` (B and C blocks added; the waltz import path changes), `tests/musicState.test.ts`, `tests/cues.test.ts`, `tests/scheduler.test.ts`, `tests/mute.test.ts`.
 
 ### S8.6 Steps
 1. Finish the engine port per the table of 05 section 2.1 (every row, with the verdicts) and the limiter order of 05 section 2.4 item 3: audibility before the gate.
 2. `cues.ts`: the registry of exactly the 38 cue ids of 05 section 3.2 with recipe, gap, soft flag, scope, threshold; `bindCues` subscribes every trigger; `voice` pitch factors 1.19 and 0.84; `step_*` by stride.
 3. `ambience.ts`: the scheduler of 05 section 4 (songbird windows, owl, pigeons, fountains as point sources, café at kiosks, boulevard beyond the south railings, rain on gravel, fireworks pacing, crickets and the snow hush, mist and the foghorn, bells at the six phase boundaries), real time, `grain()` at most 6 per second, never a continuous noise.
 4. `birds.ts`: GV 6212-6269 verbatim with trees from `props`.
-5. `music.ts`: if the pick is A, wire the state object to the simulation per 05 section 5.6 (featured pair, light, parted, happily, fireworks, busker pan, avatar mode); if B or C, move that motif from `debug/motifs.ts` into `music.ts`, apply the recorded knobs, keep 05 sections 5.7 and 5.8; the ducking table of 05 section 5.7.
-6. Mute per 05 section 7.3 (hard cut, profile setting, Options and the Sound button are one setting); iOS rules of 05 section 7.5 item 4.
-7. The Sound check sheet of 05 section 2.6 listed in Options under the dev flag; `__PD.audio` of 05 section 8.3 with `dryRun`.
-8. Run the manual list of 05 section 8.1 in desktop Chromium and record each line's result in the hand-back; present two alternative recipes for `kiss` and `splat` on the sound check before settling (0.4).
+5. Move B and C into the game (05 section 6.5 item 3a). Cut from `src/debug/motifs.ts` and paste into `src/audio/music.ts`: the `Motif` interface, `BarSeq`, the shared `voice()`, `makeB`, `makeC`, `TINE_MAKEUP`, and their pitch, chord and knob tables. Change no number of 05 sections 5.2, 5.3 and 5.5 and no knob default of 05 section 6.3 (columns B and C). Keep `MUSIC_MAKEUP = 4.5` on every music voice and `TINE_MAKEUP = 2` on every B voice (05 section 5.5 item 5). Factor B's phrase planner and C's bar planner into pure exported functions that take a random source (default `vrng`) and return notes, keeping the same draws in the same order, so a test can pass a seeded stream. `src/audio/music.ts` imports nothing from `src/debug/`. If the code and 05 section 5 disagree, stop and report it; do not choose (05 section 5, first paragraph).
+6. Move the waltz out (05 section 6.5 item 3b). Cut motif A (its planner, chord tables, accordion voice and state table) from `src/audio/music.ts` into `src/debug/motifs.ts` and wrap it as a `Motif` with id `'A'`. Export the waltz names under the names `tests/melody.test.ts` already imports, so that file changes only its import path. Do not retune or extend the waltz (05 section 5.9). `MUSIC_PICK`, `DEFAULT_MOTIF`, `MUSIC_MAKEUP` and `freqOf` stay in `music.ts`. `src/main.ts` never imports `src/debug/motifs.ts` (05 section 6.1 item 2).
+7. Which motif plays (05 section 5.4). Export `wantedMotif(f)`: it returns `MUSIC_PICK.day` (`'C'`) for `f` in [0.20, 0.80) and `MUSIC_PICK.night` (`'B'`) otherwise. Keep 0.20 and 0.80 as two named constants beside `MUSIC_PICK`, because the hours are ADVISED and the owner may change them (05 section 9 open point 1). Then:
+   a. `startMusic()` starts the wanted motif at once, with no crossfade: a new park (`f` 0.30) starts with C; Continue at night starts with B.
+   b. Read the wanted motif once per bar of the playing motif. When it differs, change nothing until the playing motif's next phrase start `T` (05 section 5.1 item 6: B every 4 bars, C every 2 bars).
+   c. At `T` the incoming motif starts its first bar (B: a new phrase, GV's phrase when `rising`; C: bar 1 of its chord loop). The outgoing motif keeps scheduling until `T + 2 s`, then stops.
+   d. Give each motif its own `GainNode` into `musicBus`. Over `[T, T + 2 s]` ramp the incoming one linearly from 0 to 1 and the outgoing one from 1 to 0 (`linearRampToValueAtTime`); ramp the music room return from the outgoing motif's `reverb` knob to the incoming one's (C 0.30, B 0.45).
+   e. One switch at a time: a change wanted during a crossfade waits until the crossfade ends. A switch never touches `musicBus`; the ducks, the busker rule and mute act on both motifs while they overlap.
+8. Wire the state input to the simulation (05 sections 5.6 and 6.5 item 3c). `music.ts` reads these once per bar, read-only, when it builds the next bar: the featured pair's stage and affinity (sampled into a ring of 16 and compared with the sample nearest 30 sim s back, for `rising`); a Parted ending within the last 24 bars and a Happily ending within the last 8 bars (from the `parted` and `happily` events); `c_fireworks` active (`flourish`); a busker in state `play` with `audibleGain >= 0.05` (the busker pan rule); `getMode() === 'avatar'` (`musicBus` × 0.8, 05 section 5.6 item 6). The `night` row comes from `wantedMotif(f)` of step 7, not from `light`. The first matching row of the 05 section 5.6 table wins. The variant changes only at a phrase start of the playing motif; the tempo moves by at most 8 BPM per bar and stays inside 0.8 to 1.2 times the variant's base tempo; C keeps its loop bar when the variant changes. A state never starts, stops or switches a motif. Audio writes nothing to the simulation (05 section 1 item 5).
+9. Keep 05 section 5.7 (ducking) and 05 section 5.8 (start, scheduling, loop) for both motifs: `startMusic()` 1.5 s after the Begin or Continue tap with `musicBus` from 0 to 0.50 over 4 s; `updateMusic()` every frame schedules the notes inside a 0.35 s look-ahead and runs both motifs during a crossfade; `stopMusic()` fades over 0.3 s. Music keeps playing while the game is paused (05 section 9 item 4; still the owner's open point, the default stands).
+10. Mute per 05 section 7.3 (hard cut, profile setting, Options and the Sound button are one setting); iOS rules of 05 section 7.5 item 4.
+11. The Sound check sheet of 05 section 2.6 listed in Options under the dev flag, with the five music buttons **B rising**, **B parted**, **C rising**, **C parted** and **stop music** (05 section 2.6 item 2); `__PD.audio` of 05 section 8.3 with `dryRun` and `music.motif` reporting `'B'` or `'C'`.
+12. The board (05 section 6.5 item 3e): `src/debug/music-board.ts` plays A from `src/debug/motifs.ts` and B and C from `src/audio/music.ts`, so the board now plays the game's own B and C. Change `tools/audio-smoke.mjs` so its level window checks B rising and C rising instead of A rising and plays the cue bed over B rising and over C rising; the presence and Stop checks stay for all six Play buttons. Run `npm run audio-smoke` and record the peaks.
+13. Run the manual list of 05 section 8.1 (items 1 to 11) in desktop Chromium and record each line's result in the hand-back; present two alternative recipes for `kiss` and `splat` on the sound check before settling (0.4).
 
 ### S8.7 Done when
 1. The common gate; determinism green: a 3-day run with sound on and `dryRun(true)` ends with `rngN` equal to the silent run (05 section 8.3 "Done when", `log.length === 200`).
-2. `tests/limiter.test.ts`, `cues.test.ts`, `melody.test.ts`, `musicState.test.ts`, `scheduler.test.ts` of 05 section 8.2 items 1 to 5 green; `peak.test.ts` (item 6) run once and its peak recorded.
-3. The manual list 05 section 8.1 items 1 to 10 each PASS, written in the hand-back with what was heard.
-4. `grep -rn "Math.random\|performance.now\|Date.now" src/audio` prints nothing.
-5. `shots/s8-soundcheck.png` shows the Sound check sheet with all 38 cue buttons, the ambience bursts, the six bird voices and the three music buttons.
+2. `tests/limiter.test.ts`, `cues.test.ts`, `melody.test.ts`, `musicState.test.ts`, `scheduler.test.ts` (05 section 8.2 items 1 to 5) and `mute.test.ts` green, holding the B and C rows of 08 section 2.8; the waltz assertions of `melody.test.ts` pass unchanged against `src/debug/motifs.ts`; `peak.test.ts` (05 section 8.2 item 6) run once and its peak recorded.
+3. `npm run audio-smoke` exits 0: B rising and C rising each peak between −22 and −18 dBFS at `master` and within 2 dB of each other (the gate measured −19.9 and −19.5 dBFS); the compressor output stays under −10 dBFS with the cue bed over B and over C (05 section 7.2 item 3).
+4. The manual list 05 section 8.1 items 1 to 11 each PASS, written in the hand-back with what was heard: item 1 hears C after Begin; item 10 hears Parted by day (C) and at night (B); item 11 hears the switch at `f` 0.80 and at `f` 0.20 within one phrase, with a 2 s crossfade and no gap or click.
+5. `grep -rn "Math.random\|performance.now\|Date.now" src/audio` prints nothing; `grep -rn "debug/" src/audio` prints nothing; `grep -n "motifs" src/main.ts` prints nothing.
+6. `shots/s8-soundcheck.png` shows the Sound check sheet with all 38 cue buttons, the ambience bursts, the six bird voices and the five music buttons.
+7. `music-board.html` still plays all six variants (A, B and C, each `rising` and `parted`) with no console error (05 section 6.5 item 4).
 
 ### S8.8 Tests to add
-The five of 05 section 8.2 plus `mute.test.ts` (muted in the profile survives reload; `tone()` schedules nothing while muted).
+The five of 05 section 8.2 plus `mute.test.ts` (muted in the profile survives reload; `tone()` schedules nothing while muted), with the rows of 08 section 2.8: the B and C planners reproducible under a seeded `vrng`; the clock rule at `f` 0.19, 0.20, 0.79 and 0.80; a switch only at a phrase start with the 2 s ramps; the state table for both motifs. `tests/melody.test.ts` keeps its waltz blocks as the board test of the retired motif A.
 
 ### S8.9 Out of scope
-Any visual; weather drawing; a second motif in the game; the Capacitor audio session.
+Any visual; weather drawing; the waltz in the game (it plays on the board only); a third motif; festival or special-day music (no festival days in v1); the Capacitor audio session.
 
 ### S8.10 Ask the owner before
-Changing the master chain numbers (05 section 2.2 are locked), the motif, the base tempo or key, a gain above 0.060, adding a noise bed, silencing music on pause (05 section 9 open point 2).
+Changing the master chain numbers (05 section 2.2 are locked); any number of motif B or C (05 sections 5.2, 5.3, 5.5), their base tempos (B 84 and 66 BPM, C 120 and 96 BPM) or keys; `MUSIC_MAKEUP` 4.5 or `TINE_MAKEUP` 2; the switch hours (`f` 0.20 and 0.80) or the 2 s crossfade (ADVISED, 05 section 9 open point 1); playing the waltz in the game; a gain above 0.060; adding a noise bed; silencing music on pause (05 section 9 open point 2); the avatar-mode mix (05 section 9 open point 3).
 
 ### S8.11 Hand-back
-Format 0.6 plus the 05 section 8.1 results table and the peak value.
+Format 0.6 plus the 05 section 8.1 results table, the `audio-smoke` peaks (B rising, C rising, their difference in dB, the compressor output with the cue bed over each) and the `peak.test.ts` value.
 
 ---
 
@@ -860,16 +887,16 @@ Format 0.6 plus the device list, OS versions and the fps numbers.
 | Slice | Needs | May run in parallel with |
 |---|---|---|
 | S0 | nothing | nothing (everything waits) |
-| S1a style board | S0 | S1b, S2 part A |
-| S1b music board | S0 | S1a, S2 part A |
+| S1a style board (done 2026-10-12: A Storybook) | S0 | S1b, S2 part A |
+| S1b music board (done 2026-10-12: B and C, A retired) | S0 | S1a, S2 part A |
 | S2 part A engine | S0 | S1a, S1b |
-| S2 part B renderer | S2 part A, Style Gate recorded | S3 steps 1 to 5 and 9 to 12 (they draw nothing) |
+| S2 part B renderer | S2 part A (the Style Gate it needs is recorded: A) | S3 steps 1 to 5 and 9 to 12 (they draw nothing) |
 | S3 | S2 part A (all), S2 part B (ghost and rail visuals) | S4 steps 1 to 11 (sim only) |
-| S4 | S3 (save of visitors, tool hooks) | S3's UI steps; S4 step 12 waits for the gate, which is long passed |
+| S4 | S3 (save of visitors, tool hooks) | S3's UI steps; S4 step 12 (the rig) needs only the Style Gate, recorded on 2026-10-12 (A) |
 | S5 | S4 | S6 steps 5 and 11 (progression rules, strings) |
 | S6 | S5 | S7 steps 1, 2, 5 (mode, commands) |
 | S7 | S6 | S8 (audio needs only the event names, fixed in S4 to S7) |
-| S8 | S1b, Music Gate recorded, S5 events | S7, S9 |
+| S8 | S1b, S5 events (the Music Gate it needs is recorded: B and C) | S7, S9 |
 | S9 | S2 part B, S6 (`c_sunbeam` data) | S8, S10 steps 1 to 2 that need no override visuals |
 | S10 | S7, S9 | S8 |
 | S11 | S0 to S10 | nothing (it audits everything) |
@@ -882,7 +909,7 @@ S0 -> S1a ---------\
                        \                 \-> S9 ---/
 ```
 
-Critical path: S0, S2A, S2B (after the Style Gate), S3, S4, S5, S6, S7, S10, S11. The two gates sit beside the path: the Style Gate must be recorded before S2B starts, the Music Gate before S8 starts. The owner's two picks are the only external waits; schedule S1 first so they are never on the critical path.
+Critical path: S0, S2A, S2B, S3, S4, S5, S6, S7, S10, S11. The two gates sat beside the path and both passed on 2026-10-12 (register section 4: Style A Storybook; Music B and C, A retired), so neither S2B nor S8 waits on the owner any more. The only owner waits left are those of S11 and S12 (section 14).
 
 Lanes with three models: lane 1 (Tier A) S1a, S2B, S5, S8, S9; lane 2 (Tier B) S2A, S3, S4, S6, S7, S10, S11; lane 3 (Tier C) names, strings, content test, ES table, aria keys, as the lane 2 slices release them.
 
@@ -895,7 +922,7 @@ One effort unit (EU) is one briefed working session that ends in a hand-back rep
 | Slice | Tier | EU | Of which waiting on the owner | Notes |
 |---|---|---|---|---|
 | S0 | B | 1 | 0 | 0.5 verify, 0.5 finish |
-| S1 | A | 4 | 2 gate waits | S1a 2, S1b 2; the waits are calendar time, not work |
+| S1 | A | 4 | 2 gate waits | S1a 2, S1b 2; the waits are calendar time, not work; done 2026-10-12, both gates passed |
 | S2 | B + A | 6 | 0 | part A 2.5, part B 3.5 |
 | S3 | B | 3 | 0 | |
 | S4 | B + A | 5 | 0 | sim 3.5, rig 1, names and strings 0.5 (Tier C) |
@@ -923,8 +950,8 @@ v1 is done when every row of brief section 9 passes and the project runner has t
 | 4 | Mid phone | the S11 or S12 report: 60 fps target, 50 fps floor |
 | 5 | Determinism | `tests/determinism.test.ts`: 64,800 steps twice equal in `stateHash`, `rngN`, `simSteps`; one extra command differs |
 | 6 | Save round trip | `tests/save.test.ts`; `parque:park-v1` under 1 MB; the v0 fixture migrates; Continue by hand |
-| 7 | Style Gate passed | register section 4 row holds the letter and date; `profile.stylePick` set by the board |
-| 8 | Music Gate passed | register section 4 row holds the letter, date and knobs; `profile.musicPick` set by the board |
+| 7 | Style Gate passed | Met 2026-10-12: the register section 4 row holds A Storybook and the date; `style()` in `src/render/ambient.ts` returns `STYLES.A` whatever `profile.stylePick` holds |
+| 8 | Music Gate passed | Met 2026-10-12: register section 4 row holds B Music-box lullaby and C Café swing (A retired), the date, the knobs (05 section 6.3, columns B and C) and the gate mix; `MUSIC_PICK` in `src/audio/music.ts` is `{ day: 'C', night: 'B' }` (the game reads this, not `profile.musicPick`, 05 section 6.5 item 1) |
 | 9 | Both languages complete | `tests/strings.test.ts`; by hand: intro, rail, chips, cards, sheets, feed, toasts in EN and ES; `<html lang>` follows |
 | 10 | Tone | `tests/tone.test.ts`: no child target, cap 3, ten kinds, items return, reaction lengths |
 | 11 | Content complete | `tests/content.test.ts`: 16 tools, 19 abilities, 6 avatars, 7 stages, 10 kinds, 8 weather kinds, 11 archetypes, exact spellings |
@@ -943,7 +970,7 @@ Values this document defines that the register does not (the owner may object to
 4. S0's verify table, including the Pages workflow text (register section 7 step 3 points here), `.gitignore` contents and the `data-day` wait in `tools/shot.mjs` (03 section 17 A21).
 5. Fonts: woff2 Latin and Latin Extended subsets under `src/fonts/`, both families at most 400 KB together (brief section 11 item 1 asked this document to confirm: confirmed), with a system-font fallback until S11 if the download fails.
 6. The board paths `style-board.html`, `music-board.html`, `src/debug/style-board.ts`, `src/debug/music-board.ts`, `src/debug/motifs.ts` as second and third Vite entries (04 section 13 item 4 and 05 section 9 item 8 asked this document to confirm: confirmed); `ls dist` therefore shows three files from S1 on.
-7. Recording a gate: the two `tokens.css` tokens `--theme-color` and `--body-bg`, the `DEFAULT_STYLE` and `DEFAULT_MOTIF` constants, and the register version bump to 1.1 by the S1 model (S1.6 steps 15 to 17).
+7. Recording the gates (done 2026-10-12): register rows 1 and 25, section 3.13 and section 4 (register version 1.2); in `tokens.css`, `--theme-color` and `--body-bg` `#DCE6EC` plus the direction A accents `--rose`, `--lawn`, `--gravel`, `--water`, `--awning` (04 section 13, 'Settled by the Style Gate' item 2); `DEFAULT_STYLE = 'A'`; `MUSIC_PICK = { day: 'C', night: 'B' }` and `DEFAULT_MOTIF = MUSIC_PICK.day`.
 8. The split of S2 into part A (engine, no gate) and part B (renderer, after the gate), and of S4 into sim and a Tier A rig sub-brief.
 9. `worldHash()` (layers and props only) on the harness for the tool and undo tests (S2 step 14, S3.7).
 10. The determinism fixture: seed 101, 64,800 steps, 12 scripted commands, extended by each later slice; the `S_HAPPILY` and `S_PARTED` seeds found by scanning 1 to 200 (S5.7).
@@ -951,8 +978,9 @@ Values this document defines that the register does not (the owner may object to
 12. The cross-slice hooks named in hand-backs (vendor spawn, sitter eviction, `openNear` on undo, the music state object, the umbrella harness flag) are listed per slice rather than owned by a shared document.
 13. The screenshot names `shots/<slice>-<name>.png` and the eighteen-file matrix of S9 (04 section 12 item 8, two viewports).
 14. S12's config choices (`webDir dist`, `androidScheme https`, icons under `resources/`).
+15. S8's code shape after the Music Gate: the clock rule as an exported `wantedMotif(f)` with the hours 0.20 and 0.80 as two named constants beside `MUSIC_PICK`; B's and C's planners as pure functions that take a random source; the waltz names exported from `src/debug/motifs.ts` under the names `tests/melody.test.ts` already imports; `tools/audio-smoke.mjs` checking B rising and C rising within 2 dB of each other (S8.6 steps 5 to 7 and 12, S8.7 item 3).
 
 Open points for the owner:
-1. Whether the owner wants the two gate picks on the same day (S1a and S1b in parallel, 4 EU, two Tier A models) or one after the other.
+1. Closed on 2026-10-12: both gate picks were made on the same day (Style A Storybook; Music B Music-box lullaby and C Café swing, A retired; register section 4). Still open after the gates, with their defaults standing: which motif plays when (C for `f` in [0.20, 0.80), B otherwise, a 2 s crossfade at a phrase start; ADVISED, 05 section 9 open point 1); music keeps playing while the game is paused (05 section 9 open point 2); the avatar-mode music mix (05 section 9 open point 3).
 2. Whether a Tier C model may own `tests/content.test.ts` and `strings.test.ts` (this plan says yes) or whether every test stays with the slice's tier.
 3. The three-lane schedule assumes three models can run at once; with one model the total is the 44.5 EU in order S0, S1, S2, S3, S4, S5, S6, S7, S9, S8, S10, S11.

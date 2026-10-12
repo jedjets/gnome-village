@@ -88,11 +88,11 @@ Fixed skeleton (never varies with the seed):
 | Item | Where | Notes |
 |---|---|---|
 | Fountain | 2×2 at (23,23)–(24,24) | flagstone ring 1 tile around it |
-| Inner gravel loop | the ring of tiles at Chebyshev distance 5 and 6 from (23.5,23.5) | 2 tiles wide |
-| Outer gravel loop | the ring at Chebyshev distance 13 and 14 | 2 tiles wide |
+| Inner gravel loop | every tile with floor(max(\|x − 23.5\|, \|y − 23.5\|)) in {5, 6}: the square ring x, y in 17..30 minus 19..28 | 2 tiles wide |
+| Outer gravel loop | the same with {13, 14}: the square ring x, y in 9..38 minus 11..36 | 2 tiles wide |
 | Spokes | gravel 1 wide from each gate to the nearest loop tile, straight | 5 spokes |
-| Pond | inside the box (30,8)–(37,13), about 26 tiles, with a 2-tile neck at (34,11) (34,12) | the outline inside the box varies with the seed |
-| Bridge | spans the neck, north to south, span 2 | |
+| Pond | inside x 30–36, y 11–13 (the part of the old box (30,8)–(37,13) inside the outer loop), 14 to 20 tiles, one 4-connected body; (34,11), (34,12) and their east and west neighbours (33,11), (33,12), (35,11), (35,12) are always water, (34,13) is always lawn | the seed removes other edge tiles, corners most often |
+| Bridge | spans the neck (34,11)–(34,12) north to south, span 2, landing on (34,10) (outer loop) and (34,13) | |
 | Benches | 6, on lawn tiles adjacent to the inner loop at angles 0°, 60°, 120°, 180°, 240°, 300° from the fountain | each faces the fountain |
 | Beds | 2 clusters of 2×2 bed tiles at (19,19)–(20,20) and (27,27)–(28,28) | colours rose and lavender |
 | Kiosk | 2×2 at (14,44)–(15,45) | spawns one vendor; two café tables on its east side |
@@ -641,7 +641,7 @@ Leading takes at most 20 s; if the led single is interrupted by rungs 2–5 the 
 1. Wear (GV `wearStep` 1674–1681): while a visitor is moving on a **lawn** tile: `WEAR[i] = min(4, WEAR[i] + dt × 0.42 × (1 + 0.6 × min(1, WEAR[i] / 1.2)))`. Not on gravel, flagstone, bed, mulch, water, bridge, or while `WET[i] > 0.5`.
 2. Decay (GV `decayWear` 1683–1687): once per second, `WEAR *= WEAR < 0.6 ? 0.9975 : 0.99945`.
 3. Look (`src/render/ground.ts`): `WEAR >= 1.6` draws a trodden ribbon; `WEAR >= 2.6` draws bare earth (hysteresis off at 2.1 as GV `WORN_T` 8637).
-4. Paving search, every 60 s (GV `planEmergent` habit block 3336–3395, the paving search at 3366–3395): find the lawn tile with the highest `WEAR >= 2.6` that is not within 2 tiles of a fountain or a lamp; follow the worn ground both ways up to 5 steps each way, stepping to the 8-neighbour with the highest `WEAR > 1.6` not yet in the run; a run of ≥ 3 tiles becomes the gardener's job.
+4. Paving search, every 60 s (GV `planEmergent` habit block 3336–3395, the paving search at 3366–3395): find the lawn tile with the highest `WEAR >= 2.6` that is unoccupied, not paved today and not within 2 tiles of a fountain or a lamp (the first in row order on a tie); follow the worn ground both ways up to 5 steps each way, stepping to the 8-neighbour with the highest `WEAR > 1.6` not yet in the run that is lawn, unoccupied and not paved today (the fountain and lamp exclusion applies to the seed tile only, so a run may pass a lamp); a run of ≥ 3 tiles becomes the gardener's job.
 5. The gardener walks to the run's first tile and lays gravel (`KIND = gravel, WEAR = 0`) 1.3 s per tile in order. Feed "The gardener is gravelling a worn track". At most 3 runs per day.
 6. The player can `lawn` over gardener gravel; the gardener does not redo a tile within the same day.
 
@@ -735,7 +735,7 @@ The v1 design must preserve these so a later co-op or versus mode (one side each
 
 Values this document defines that the register does not (the owner can object to any; if changed, change `06-Content-Tables.md` to match):
 1. Gate tile coordinates and arrival weights (2.4).
-2. Starter park coordinates: fountain at (23,23), loop radii 5–6 and 13–14, pond box (30,8)–(37,13), bridge over the 2-tile neck, bench angles, bed clusters, kiosk at (14,44), lamp positions, tree spacing (2.5).
+2. Starter park coordinates: fountain at (23,23), loop radii 5–6 and 13–14 (floor of the Chebyshev distance from (23.5,23.5)), pond in x 30–36, y 11–13 with 14 to 20 tiles (the old box (30,8)–(37,13) overlapped the outer loop, so its "about 26 tiles" could not be met), bridge over the 2-tile neck, bench angles, bed clusters, kiosk at (14,44), lamp positions, tree spacing (2.5).
 3. Flagstone exists only in the starter park; no v1 tool writes it (2.3).
 4. `WET` and `PETALS` rates (2.2); river-view charm defined as `y <= 5` (2.4).
 5. The `light` curve values per phase and the lamp rule `f >= 0.80 || f < 0.28` (3.2).

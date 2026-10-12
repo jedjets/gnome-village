@@ -1,5 +1,5 @@
 // tests/grid.test.ts
-// Locks register 3.1 and 03 3.2: N, NC, I, inB, the kinds, the layers; and the S0 starter park's fixed skeleton (02 2.5).
+// Locks register 3.1 and 03 3.2: N, NC, I, inB, the kinds, the layers; and the starter park's fixed skeleton (02 2.5; tests/gen.test.ts has the rest).
 import { describe, it, expect } from 'vitest';
 import { N, S, NC, I, inB, Kind, KIND, WATER, BEDC, BLOCK, rebuildBlock, layersState } from '../src/world/grid.ts';
 import { genPark } from '../src/world/gen.ts';
@@ -84,7 +84,7 @@ describe('world/gen starter park (02 2.5, S0 subset)', () => {
     expect(KIND[I(5, 5)]).toBe(Kind.lawn);
     expect(KIND[I(44, 44)]).toBe(Kind.lawn);
   });
-  it('the pond is 16 tiles of WATER 0.6 inside the box (30,8)-(37,13), never on the outer loop', () => {
+  it('the pond is WATER 0.6 inside the box (30,8)-(37,13), on rows 11-13 clear of the outer loop (S2: the S0 4 x 4 placeholder is gone)', () => {
     for (let s = 1; s <= 8; s++) {
       genPark(s);
       let n = 0;
@@ -96,8 +96,10 @@ describe('world/gen starter park (02 2.5, S0 subset)', () => {
             expect(x).toBeGreaterThanOrEqual(30);
             expect(x).toBeLessThanOrEqual(36);
             expect(y).toBeGreaterThanOrEqual(11);
+            expect(y).toBeLessThanOrEqual(13);
           }
-      expect(n).toBe(16);
+      expect(n).toBeGreaterThanOrEqual(14);
+      expect(n).toBeLessThanOrEqual(20);
     }
   });
   it('BLOCK marks beds and water, not lawn or gravel', () => {

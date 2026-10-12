@@ -1,8 +1,11 @@
 // src/core/math.ts
 // Small pure maths: clamps, lerp, smoothstep, value noise, colour triples, tile distance, a string hash.
 // Ported from GV 578-582 (clamp, clamp01, lerp, smooth, TAU) and 599-609 (noise2, fbm2, hx, mixc, css). PORT.
-// Changed: hx accepts 3-digit hex (review item), cheb and fnv1a are new (03 2.3).
-// TODO(S2): nothing; later slices only add callers.
+// Verdict: PORT. Changes: hx accepts 3-digit hex (GV 607 returned NaN for a short code); css clamps channels to 0-255 and alpha to 0-1
+// (GV 609 did not); cheb, fnv1a and the incremental fnvStep are new (03 2.3).
+// Not applied: 09 section 4 row 35 also asks css to round instead of truncate. tests/palette.test.ts (S1) fixes the truncating output
+// (shade of white at 0.5 is 127), so css still truncates; see the S2 hand-back, open questions.
+// Dropped from the range: nothing.
 import { mulberry32 } from './rng.ts';
 
 export type XY = { x: number; y: number };
@@ -57,10 +60,13 @@ export function hx(h: string): RGB {
 export function mixc(a: RGB, b: RGB, t: number): RGB {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 }
+function ch(v: number): number {
+  return v <= 0 ? 0 : v >= 255 ? 255 : v | 0;
+}
 export function css(c: RGB, al?: number): string {
   return al === undefined
-    ? `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`
-    : `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${al})`;
+    ? `rgb(${ch(c[0])},${ch(c[1])},${ch(c[2])})`
+    : `rgba(${ch(c[0])},${ch(c[1])},${ch(c[2])},${al <= 0 ? 0 : al >= 1 ? 1 : al})`;
 }
 
 /** Chebyshev tile distance. */
@@ -68,9 +74,11 @@ export function cheb(ax: number, ay: number, bx: number, by: number): number {
   return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 }
 
-/** 32-bit FNV-1a over a string or raw bytes; the state hash and tile grain use it. */
-export function fnv1a(input: string | Uint8Array): number {
-  let h = 0x811c9dc5;
+/** The FNV-1a offset basis: start of a hash that is fed in several parts with fnvStep. */
+export const FNV_SEED = 0x811c9dc5;
+
+/** Feed a string (its UTF-16 code units) or raw bytes into a running 32-bit FNV-1a hash; returns the new running value. */
+export function fnvStep(h: number, input: string | Uint8Array): number {
   if (typeof input === 'string') {
     for (let i = 0; i < input.length; i++) {
       h ^= input.charCodeAt(i);
@@ -82,5 +90,10 @@ export function fnv1a(input: string | Uint8Array): number {
       h = Math.imul(h, 0x01000193);
     }
   }
-  return h >>> 0;
+  return h;
+}
+
+/** 32-bit FNV-1a over a string or raw bytes; the state hash and tile grain use it. */
+export function fnv1a(input: string | Uint8Array): number {
+  return fnvStep(FNV_SEED | 0, input) >>> 0;
 }
