@@ -1,6 +1,6 @@
 // src/render/ambient.ts
 // The scene palettes (the only file in src/ with a scene colour literal, 04 4.5), the three StyleSpecs of the Style Gate,
-// the per-frame ambient light (AM, AT, AA, FOGA, lit, GC, shade, mix, faceLight), the season-tint hook, the sky keyframes and the
+// the per-frame ambient light (AM, AT, AA, FOGA, lit, GC, shade, mix, faceLight, lampGlow), the season-tint hook, the sky keyframes and the
 // per-direction brush: how a shape is filled and lined in A Storybook (soft contour, faceLight), B Pastel Postcard (flat two-tone, no
 // line) and C Line and Wash (jittered ink from nzAt, a misregistered wash, hatching) (04 3.2, 3.3).
 // Ported from GV 6445-6478 (C, computeAmbient, lit, GC), 6450 (SUNL), 6494 (nightW), 6539 (the grey of a clouded sky), 6630-6638
@@ -197,7 +197,7 @@ export let AM: RGB = [1, 1, 1];
 export let AT: RGB = AT_AM;
 export let AA = 0;
 export let FOGA = 0;
-let gkey = '|100,100,0a'; // the GC memo's ambient key
+let gkey = '|100,100,100,0a'; // the GC memo's ambient key
 /** The sun direction, normalised (GV 6450). */
 export const SUNL: RGB = (() => {
   const v: RGB = [-0.5, -0.3, 0.82];
@@ -214,12 +214,22 @@ export function computeAmbientAt(f: number, light: number, cloud = 0, mist = 0, 
   AA = clamp01(warm) * 0.22 * Math.max(0.25, light);
   AT = f < 0.5 ? AT_AM : AT_PM;
   FOGA = clamp01(mist * 0.3 + rain * 0.03 + snow * 0.14);
-  gkey = '|' + ((AM[0] * 100) | 0) + ',' + ((AM[2] * 100) | 0) + ',' + ((AA * 100) | 0) + (f < 0.5 ? 'a' : 'p');
+  // the memo key holds all of AM, AA and the warm tint (09 2.6 row ambient.ts; notes 13 12.5: GV keyed AM[0] and AA only)
+  gkey = '|' + ((AM[0] * 100) | 0) + ',' + ((AM[1] * 100) | 0) + ',' + ((AM[2] * 100) | 0) + ',' + ((AA * 100) | 0) + (f < 0.5 ? 'a' : 'p');
 }
 
 /** Once per frame: the ambient state from the clock and the weather (03 7.3). */
 export function computeAmbient(): void {
   computeAmbientAt(T.f, T.light, W.cloud, W.mist, W.rain, W.snow);
+}
+
+/**
+ * How lit the lamps and night windows look, 0 to 1 (04 10.1 item 4): lamps burn from f 0.80 to 0.28 (02 3.2) and fade in over the first
+ * 0.02 of a day and out over the last, so a glow never pops.
+ */
+export function lampGlow(f: number = T.f): number {
+  if (f >= 0.8) return clamp01((f - 0.8) / 0.02);
+  return f < 0.28 ? clamp01((0.28 - f) / 0.02) : 0;
 }
 
 /** Apply the time of day to an rgb triple (GV 6465-6469). */

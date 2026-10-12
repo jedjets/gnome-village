@@ -17,7 +17,7 @@
 import { clamp01, css, hx, mixc, TAU, type RGB, type XY } from '../core/math.ts';
 import { T } from '../core/clock.ts';
 import { now } from '../core/loop.ts';
-import { I, N, NC, KIND, Kind, OCC, PETALS, WEAR, WET, inB, worldVersion } from '../world/grid.ts';
+import { I, ICE, N, NC, KIND, Kind, OCC, PETALS, WEAR, WET, inB, worldVersion } from '../world/grid.ts';
 import { CTR, EH, TH, TW, VANCH, cam, rotVec, screenToWorld, view } from './camera.ts';
 import { screenInto } from './project.ts';
 import { drawBedTile } from './flora.ts';
@@ -111,7 +111,7 @@ export function viewBounds(m = 1): Readonly<typeof VB> {
 /* ---------- the colour epoch (GV 9449-9465, 9586-9587; 03 7.5 items 1-2) ---------- */
 export let colEpoch = 1;
 let colAt = -1e9, colAng = 0, colSeason = -1, colLamps = false, colWorld = -1, colAmb = '', builtEp = 0, quality = 0;
-const TILE_COL: string[] = new Array<string>(NC).fill('');
+const TILE_COL: string[] = Array.from({ length: NC }, () => '');
 const TILE_EP = new Int32Array(NC);
 /** Recolour on the next frame (a tool painted tiles, a restore). */
 export function bumpEpoch(): void {
@@ -143,7 +143,7 @@ function stepEpoch(): void {
 
 /* ---------- tile colours: groundCol reduced (GV 6665-6741 rule stack without slope, AO or gradients; 03 7.5 item 3) ---------- */
 const BASE: RGB[] = [];
-let EARTH: RGB = [0, 0, 0], ROSE: RGB = [0, 0, 0], LAWN_HEX = '';
+let EARTH: RGB = [0, 0, 0], ROSE: RGB = [0, 0, 0], ICEC: RGB = [0, 0, 0], LAWN_HEX = '';
 const GJ = new Float32Array(NC), GM = new Float32Array(NC); // grain and meadow mottle per tile: fixed noise, computed once
 let grainDone = false;
 function computeBase(): void {
@@ -152,6 +152,7 @@ function computeBase(): void {
   const lawn = hx(LAWN_HEX);
   EARTH = hx(P.bedEarth);
   ROSE = hx(P.rose);
+  ICEC = hx(P.ice);
   for (let k = 0; k <= Kind.canal; k++)
     BASE[k] = k === Kind.lawn ? lawn : k === Kind.pond || k === Kind.canal ? mixc(lawn, EARTH, 0.35) : hx(kindHex(spec, k, 0));
   if (!grainDone) {
@@ -167,7 +168,7 @@ function computeBase(): void {
 /**
  * Tile i's colour before the light: the kind's base (lawn by the season hook; a water tile shows its bank, which the water body covers
  * but for its rounded corners), GV's grain +-7.5 % and the lawn's mottle, broad trodden ground toward earth, WET darker by 14 % (gravel
- * 12 %, 04 6.5), PETALS toward rose by half.
+ * 12 %, 04 6.5), PETALS toward rose by half, ICE whitening a water tile's bank toward `ice` (03 7.5 item 3; water.ts draws the ice).
  */
 export function groundCol(i: number): RGB {
   if (!BASE.length) computeBase();
@@ -186,6 +187,11 @@ export function groundCol(i: number): RGB {
     r *= w;
     gg *= w;
     b *= w;
+  }
+  if (ICE[i] && (k === Kind.pond || k === Kind.canal)) {
+    r += (ICEC[0] - r) * 0.6;
+    gg += (ICEC[1] - gg) * 0.6;
+    b += (ICEC[2] - b) * 0.6;
   }
   const pe = (PETALS[i] as number) * 0.5;
   if (pe > 0) {

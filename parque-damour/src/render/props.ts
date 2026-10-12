@@ -2,17 +2,35 @@
 // The props of the Style Gate board in the three treatments: bench, the three-globe lamp with its halo and pool, the 2 x 2
 // fountain, the bistro table, and the Haussmann facade bay with the cafe awning, lit windows at night and the near-side cutaway
 // (04 6.1, 6.2, 6.4; 3.2). Every prop draws in world space through a Proj so it turns with the camera (GV `wp`).
-// Ported from GV 6953-6960 (wp, poly, faceVis, faceLight idea), 7978-8010 (drawLantern: post, bracket, the halo gradient
-// and the lit pane with its highlight). ADAPT: the hanging lantern became the three-globe Paris lamp (ref3); boxes are
-// iso quads lit by faceLight; the direction's brush draws every face.
-// TODO(S2): drawProp(p, s) dispatch, kiosk, bandstand, bridge, hedge, picnic, easel, the tree sprite cache (03 7.7); S9 the halo breath.
-import { EH, TH, TW } from './camera.ts';
+// The game side, direction A only (04 3.4): drawProp dispatching every placed kind (the kiosk, bandstand, picnic and bridge come from
+// props-park.ts, trees and hedges from flora.ts), and the props as painter drawables with their depth keys and culls (03 2.7 props.ts row,
+// 7.2, 7.7, 15.2 item 6; 04 6.1). The board's primitives are reused for the bench, lamp, fountain and table.
+// Ported from GV 6953-6960 (wp, poly, faceVis, faceLight idea), 7978-8010 (drawLantern: post, bracket, the halo gradient and the lit pane
+// with its highlight), 9540-9553 (drawProp: the kind dispatcher), 6837-6848 (the cull below a few pixels).
+// Verdict: ADAPT. Changes: the hanging lantern became the three-globe Paris lamp (ref3); boxes are iso quads lit by faceLight; the
+// direction's brush draws every face; the bench and the table order their parts by the projection, so all four facings and every camera
+// angle paint right (the board's own order is unchanged); a wet bench darkens to x 0.86; a lamp's glow fades in (glow); in the game the
+// fountain leaves its spray and ripples to effects.ambientFx (03 7.7 item 4); a bandstand and a bridge are two drawables, back and front,
+// so people inside paint between them (GV frontFix 8871 idea; 03 7.2).
+// Dropped from the range: the house kit beyond the box primitives (6952-8044), the gnome, critter and part branches of drawProp
+// (figures.ts, creatures.ts and effects.ts own those).
+// TODO(S4, S6): easel, crumbs, peel, sprinkler, rowboat, umbrella. TODO(S9): the halo breath, snow caps, a halo pool cap of 24 (04 10.2).
+import { EH, TH, TW, cam, view } from './camera.ts';
 import {
-  GC, faceLight, fillEllipse, fillPoly, h01, inkLine, mix, scaleHex, shade, skyRamp, strokeLine,
+  GC, faceLight, fillEllipse, fillPoly, h01, inkLine, lampGlow, mix, scaleHex, shade, skyRamp, strokeLine,
   type Pen, type Proj, type Pt,
 } from './ambient.ts';
 import { drawRipple, drawSprayDot } from './effects.ts';
-import { css, hx, mixc } from '../core/math.ts';
+import { css, hx, mixc, type XY } from '../core/math.ts';
+import { tick } from '../core/loop.ts';
+import { I, WET, inB, props, type Prop, type PropKind } from '../world/grid.ts';
+import { iceState } from '../world/water.ts';
+import { screenInto } from './project.ts';
+import { depthOf, footprintDepth, type Drawable } from './order.ts';
+import { SPECIES_HEIGHT, drawHedge, drawTreeProp, gamePen, gameProj, renderCtx, type Species } from './flora.ts';
+import { drawBandstand, drawBridge, drawKiosk, drawPicnic } from './props-park.ts';
+
+export { treeSprite } from './flora.ts';
 
 type W3 = readonly [number, number, number]; // world x, y, e
 
@@ -50,15 +68,20 @@ function cylinder(pen: Pen, proj: Proj, cx: number, cy: number, r: number, e0: n
 }
 
 /* ---------- the bench (04 6.1 row bench) ---------- */
-/** A bench on tile (x, y); rot 0 runs along world x and faces +y; height 0.45 EH; seat 0.2 EH. */
-export function drawBench(pen: Pen, proj: Proj, x: number, y: number, rot = 0): void {
+/**
+ * A bench on tile (x, y); rot 0 runs along world x and faces +y (south), each step a quarter turn on (1 west, 2 north, 3 east; the
+ * game's Prop.rot r is (r + 2) % 4 here); height 0.45 EH; seat 0.2 EH. The far end, the back and the seat, the near end paint in the order
+ * the projection puts them; wet slats darken to x 0.86 (04 6.1).
+ */
+export function drawBench(pen: Pen, proj: Proj, x: number, y: number, rot = 0, wet = 0): void {
   const P = pen.spec.palette;
   const q = Math.PI / 2 * rot;
   const cq = Math.cos(q), sq = Math.sin(q);
   // a local frame: u along the seat, v from the back (negative) to the front (positive)
   const W = (u: number, v: number, e: number): W3 => [x + u * cq - v * sq, y + u * sq + v * cq, e];
   const slat = scaleHex(P.bedEarth, [1.2, 1.2, 1.2]);
-  const lightTop = 1.0, lightFront = faceLight(-sq, cq);
+  const wk = 1 - 0.14 * wet;
+  const lightTop = 1.0 * wk, lightFront = faceLight(-sq, cq) * wk;
   const seatE = 0.2, thick = 0.035;
   // the cast-iron ends: two legs, a seat rail, the armrest curl (zinc, drawn as lines)
   const ironW = Math.max(0.8, 1.1 * pen.z);
@@ -73,23 +96,38 @@ export function drawBench(pen: Pen, proj: Proj, x: number, y: number, rot = 0): 
     }
     strokeLine(pen, [proj(...W(u, -0.2, seatE)), ...curl], P.zinc, ironW, { open: true, seed: seed + 2 });
   };
-  end(-0.46, 3); // the far end first
-  // the back: two slats standing at the rear
-  for (const [e0, e1] of [[0.27, 0.35], [0.37, 0.45]] as const) {
-    fillPoly(pen, quad(proj, W(-0.45, -0.2, e0), W(0.45, -0.2, e0), W(0.45, -0.2, e1), W(-0.45, -0.2, e1)), slat, { seed: 10 + e0 * 100, light: lightFront });
-    fillPoly(pen, quad(proj, W(-0.45, -0.23, e1), W(0.45, -0.23, e1), W(0.45, -0.2, e1), W(-0.45, -0.2, e1)), slat, { seed: 11 + e0 * 100, light: lightTop, noInk: true });
+  // which end is nearer, and whether the front faces the viewer, by where the projection puts them (screen y grows toward the viewer)
+  const uFar = proj(...W(-0.46, 0, 0)).y <= proj(...W(0.46, 0, 0)).y ? -0.46 : 0.46;
+  const frontNear = proj(...W(0, 0.2, 0)).y >= proj(...W(0, -0.2, 0)).y;
+  const back = (): void => {
+    // the back: two slats standing at the rear
+    for (const [e0, e1] of [[0.27, 0.35], [0.37, 0.45]] as const) {
+      fillPoly(pen, quad(proj, W(-0.45, -0.2, e0), W(0.45, -0.2, e0), W(0.45, -0.2, e1), W(-0.45, -0.2, e1)), slat, { seed: 10 + e0 * 100, light: lightFront });
+      fillPoly(pen, quad(proj, W(-0.45, -0.23, e1), W(0.45, -0.23, e1), W(0.45, -0.2, e1), W(-0.45, -0.2, e1)), slat, { seed: 11 + e0 * 100, light: lightTop, noInk: true });
+    }
+  };
+  const seat = (): void => {
+    // the seat: three slats along u, each 0.11 tile deep, with a thin front face where the viewer can see it
+    for (let k = 0; k < 3; k++) {
+      const v0 = -0.19 + k * 0.12, v1 = v0 + 0.11;
+      fillPoly(pen, quad(proj, W(-0.45, v0, seatE), W(0.45, v0, seatE), W(0.45, v1, seatE), W(-0.45, v1, seatE)), slat, { seed: 20 + k, light: lightTop });
+      if (frontNear) fillPoly(pen, quad(proj, W(-0.45, v1, seatE - thick), W(0.45, v1, seatE - thick), W(0.45, v1, seatE), W(-0.45, v1, seatE)), slat, { seed: 30 + k, light: lightFront * 0.92, noInk: true });
+    }
+  };
+  end(uFar, 3); // the far end first
+  if (frontNear) {
+    back();
+    seat();
+  } else {
+    seat();
+    back();
   }
-  // the seat: three slats along u, each 0.11 tile deep, with a thin front face
-  for (let k = 0; k < 3; k++) {
-    const v0 = -0.19 + k * 0.12, v1 = v0 + 0.11;
-    fillPoly(pen, quad(proj, W(-0.45, v0, seatE), W(0.45, v0, seatE), W(0.45, v1, seatE), W(-0.45, v1, seatE)), slat, { seed: 20 + k, light: lightTop });
-    fillPoly(pen, quad(proj, W(-0.45, v1, seatE - thick), W(0.45, v1, seatE - thick), W(0.45, v1, seatE), W(-0.45, v1, seatE)), slat, { seed: 30 + k, light: lightFront * 0.92, noInk: true });
-  }
-  end(0.46, 6); // the near end over the seat
+  end(-uFar, 6); // the near end over the seat
 }
 
 /* ---------- the three-globe lamp (04 6.2; ref3) ---------- */
-export type LampOpts = { lit: boolean; charm?: boolean; breath?: number };
+/** glow: how far the lamp has come on, 0 to 1 (ambient.lampGlow: a 0.02-day fade, 04 10.1 item 4); 1 when left out (the board). */
+export type LampOpts = { lit: boolean; charm?: boolean; breath?: number; glow?: number };
 
 /** The ground pool of a lit lamp standing at p: 1.6 x 0.8 tiles at alpha 0.16, fading to nothing at 3 tiles (04 6.1, 6.2 item 4). */
 export function drawLampPool(pen: Pen, p: Pt, o: LampOpts): void {
@@ -100,7 +138,7 @@ export function drawLampPool(pen: Pen, p: Pt, o: LampOpts): void {
   const inner = (1.6 / 3) * (1 + (o.breath ?? 0) * 0.05);
   const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, R);
   const halo = hx(spec.palette.halo);
-  const a = 0.16 * (o.charm ? 1.3 : 1);
+  const a = 0.16 * (o.charm ? 1.3 : 1) * (o.glow ?? 1);
   g.addColorStop(0, css(halo, a));
   g.addColorStop(inner, css(halo, a));
   g.addColorStop(1, css(halo, 0));
@@ -155,13 +193,14 @@ export function drawLamp(pen: Pen, p: Pt, o: LampOpts): void {
   strokeLine(pen, [{ x: p.x, y: top }, { x: p.x, y: top - armUp - 0.12 * tile }], P.zinc, armW, { open: true, seed: 48 });
   globes.push({ x: p.x, y: top - armUp - 0.12 * tile - 0.08 * tile });
   const gr = 0.11 * tile;
+  const gk = o.glow ?? 1; // a lamp coming on fades its glow in (04 10.1 item 4); the board's lamps are fully on
   if (o.lit) {
     // the halo round the head (GV 7995 recipe) and the glow on each globe
     const hr = 0.9 * tile * (o.charm ? 1.4 : 1) * (1 + (o.breath ?? 0) * 0.05);
     const halo = hx(P.halo);
     const hy = top - armUp - 0.08 * tile;
     const g = ctx.createRadialGradient(p.x, hy, 0, p.x, hy, hr);
-    g.addColorStop(0, css(halo, 0.32 * (o.charm ? 1.3 : 1)));
+    g.addColorStop(0, css(halo, 0.32 * (o.charm ? 1.3 : 1) * gk));
     g.addColorStop(1, css(halo, 0));
     ctx.fillStyle = g;
     ctx.fillRect(p.x - hr, hy - hr, hr * 2, hr * 2);
@@ -169,12 +208,12 @@ export function drawLamp(pen: Pen, p: Pt, o: LampOpts): void {
   for (const [i, gp] of globes.entries()) {
     if (o.lit) {
       const gg = ctx.createRadialGradient(gp.x, gp.y, 0, gp.x, gp.y, gr * 3);
-      gg.addColorStop(0, css(hx(P.lamp), 0.7));
-      gg.addColorStop(0.4, css(hx(P.lamp), 0.3));
+      gg.addColorStop(0, css(hx(P.lamp), 0.7 * gk));
+      gg.addColorStop(0.4, css(hx(P.lamp), 0.3 * gk));
       gg.addColorStop(1, css(hx(P.lamp), 0));
       ctx.fillStyle = gg;
       ctx.fillRect(gp.x - gr * 3, gp.y - gr * 3, gr * 6, gr * 6);
-      fillEllipse(pen, gp.x, gp.y, gr, gr, P.lamp, { seed: 50 + i, gapless: true, light: 1.02, lineW: thin, inkAlpha: 0.7 });
+      fillEllipse(pen, gp.x, gp.y, gr, gr, gk < 1 ? mix(P.paper, P.lamp, gk) : P.lamp, { seed: 50 + i, gapless: true, light: 1.02, lineW: thin, inkAlpha: 0.7 });
       ctx.fillStyle = GC(P.paper, 0.9);
       ctx.beginPath();
       ctx.arc(gp.x - gr * 0.35, gp.y - gr * 0.35, Math.max(0.6, gr * 0.22), 0, Math.PI * 2);
@@ -194,7 +233,8 @@ export function drawLamp(pen: Pen, p: Pt, o: LampOpts): void {
 }
 
 /* ---------- the fountain (04 6.1 row fountain) ---------- */
-export type FountainOpts = { frozen?: boolean; phase?: number };
+/** fx false leaves the spray and the ripple rings to effects.ambientFx (the game, 03 7.7 item 4); the board draws them here at `phase`. */
+export type FountainOpts = { frozen?: boolean; phase?: number; fx?: boolean };
 
 /** A 2 x 2 fountain whose north-west tile is (x, y): octagonal basin, water disc, pedestal, upper bowl, column, spray, ripples. */
 export function drawFountain(pen: Pen, proj: Proj, x: number, y: number, o: FountainOpts = {}): void {
@@ -251,10 +291,11 @@ export function drawFountain(pen: Pen, proj: Proj, x: number, y: number, o: Foun
     ctx.beginPath();
     ctx.ellipse(c0.x - 0.15 * TW * z, c0.y - 0.08 * TH * z, 0.42 * TW * z, 0.22 * TH * z, 0, 0, Math.PI * 2);
     ctx.fill();
-    for (const [k, rr] of [[0, 0.22], [1, 0.42]] as const) {
-      const ph = ((o.phase ?? 0) + k * 0.5) % 1;
-      drawRipple(pen, c0.x, c0.y, (rr + ph * 0.25) * TW * z, (rr + ph * 0.25) * TH * z, 0.5 * (1 - ph));
-    }
+    if (o.fx !== false)
+      for (const [k, rr] of [[0, 0.22], [1, 0.42]] as const) {
+        const ph = ((o.phase ?? 0) + k * 0.5) % 1;
+        drawRipple(pen, c0.x, c0.y, (rr + ph * 0.25) * TW * z, (rr + ph * 0.25) * TH * z, 0.5 * (1 - ph));
+      }
   }
   if (spec.line === 'ink') {
     inkLine(pen, quad(proj, ...hi), { seed: 83 });
@@ -278,7 +319,7 @@ export function drawFountain(pen: Pen, proj: Proj, x: number, y: number, o: Foun
   cylinder(pen, proj, cx, cy, 0.07, 0.88, 1.38, P.stone, 95);
   const fin = proj(cx, cy, 1.5);
   fillEllipse(pen, fin.x, fin.y, 0.08 * TW * z, 0.08 * TW * z, P.stone, { seed: 97, gapless: true, light: 1.02 });
-  if (!o.frozen) {
+  if (!o.frozen && o.fx !== false) {
     // the spray: dots on arcs from the finial into the upper bowl, and from its rim into the basin (12/s, 04 section 8)
     const ph = o.phase ?? 0;
     const s = 8 * z;
@@ -323,12 +364,13 @@ export function drawBistroTable(pen: Pen, proj: Proj, x: number, y: number): voi
     const bx = cxx + back;
     fillPoly(pen, quad(proj, [bx, y - 0.13, 0.3], [bx, y + 0.13, 0.3], [bx, y + 0.13, 0.62], [bx, y - 0.13, 0.62]), P.sky, { seed: seed + 1, away: back > 0, light: 0.92 });
   };
-  chair(-0.42, 100);
+  const first = proj(x - 0.42, y).y <= proj(x + 0.42, y).y ? -0.42 : 0.42; // the farther chair first, at any angle
+  chair(first, first < 0 ? 100 : 110);
   const legW = Math.max(0.8, 1.1 * pen.z);
   fillEllipse(pen, proj(x, y).x, proj(x, y).y, 0.14 * TW * pen.z, 0.14 * TH * pen.z, P.zinc, { seed: 103, noInk: true, light: 0.9 });
   strokeLine(pen, quad(proj, [x, y, 0], [x, y, 0.48]), P.zinc, legW, { open: true, seed: 104 });
   cylinder(pen, proj, x, y, 0.25, 0.46, 0.5, P.paper, 105, false);
-  chair(0.42, 110);
+  chair(-first, first < 0 ? 110 : 100);
 }
 
 /* ---------- the Haussmann facade bay (04 6.4 rows facades, cafe; the near-side cutaway) ---------- */
@@ -471,4 +513,118 @@ function drawAwning(pen: Pen, proj: Proj, x0: number, y1: number, seed: number):
   fillPoly(pen, [...pts, ...back], P.awningRed, { seed: seed + 99, light: 0.95 });
   // the two poles holding the awning's outer edge
   for (const u of [0.1, 1.9]) strokeLine(pen, quad(proj, [x0 + u, y1 + out, 0], [x0 + u, y1 + out, eEdge]), P.zinc, Math.max(0.6, 0.8 * z), { open: true, seed: seed + 100 + u });
+}
+
+/* ---------- the dispatcher and the painter drawables (03 2.7 props.ts row, 7.2, 7.7, 15.2 item 6; GV drawProp 9540-9553) ---------- */
+/** Drawn height in EH of each kind the game draws, for the size and screen culls (04 6.1; a tree's crown stands 1.5 x its height). */
+const PROP_H: Partial<Record<PropKind, number>> = {
+  bench: 0.6, lamp: 1.75, fountain: 1.6, kiosk: 1.65, table: 0.62, bandstand: 2.0, picnic: 0.35, basket: 0.35, bridge: 0.6, hedge: 0.5, tree: 3.8,
+};
+/** How far the lamp is on: the lamps' hours with their fade (ambient.lampGlow), or a c_lamplight litUntil still ahead (03 7.7 item 3). */
+function lampOn(p: Prop): number {
+  return (p.data.litUntil ?? 0) > tick() ? 1 : lampGlow();
+}
+/** The wet of a prop's north-west tile, 0 to 1 (04 6.1: wet slats and decks x 0.86). */
+function wetOf(p: Prop): number {
+  return inB(p.x, p.y) ? (WET[I(p.x, p.y)] ?? 0) : 0;
+}
+
+/**
+ * Draw one prop (03 2.7 drawProp(p, s)): s is its north-west tile's centre on screen, c the context (draw.ts's when left out), part 1 or 2
+ * the back or front half of a bandstand or bridge (0 the whole). Direction A through the camera's projection; a kind with no drawing yet
+ * (easel, crumbs, peel, sprinkler, rowboat, umbrella: S4, S6) draws nothing, and the apron kinds are backdrop.ts's.
+ */
+export function drawProp(p: Prop, s: XY, c?: CanvasRenderingContext2D, part: 0 | 1 | 2 = 0): void {
+  const ctx = renderCtx(c), pen = gamePen(ctx), proj = gameProj;
+  switch (p.kind) {
+    case 'bench':
+      drawBench(pen, proj, p.x, p.y, (p.rot + 2) % 4, wetOf(p));
+      break;
+    case 'lamp': {
+      const g = lampOn(p);
+      drawLamp(pen, s, { lit: g > 0, glow: g });
+      break;
+    }
+    case 'fountain':
+      drawFountain(pen, proj, p.x, p.y, { frozen: iceState().on === 1, fx: false });
+      break;
+    case 'kiosk':
+      drawKiosk(pen, proj, p.x, p.y, p.rot, lampGlow() > 0.5);
+      break;
+    case 'table':
+      drawBistroTable(pen, proj, p.x, p.y);
+      break;
+    case 'bandstand':
+      drawBandstand(pen, proj, p.x, p.y, part);
+      break;
+    case 'picnic':
+    case 'basket':
+      drawPicnic(pen, proj, p.x, p.y);
+      break;
+    case 'bridge':
+      drawBridge(pen, proj, p, part, wetOf(p));
+      break;
+    case 'hedge':
+      drawHedge(p, s, ctx);
+      break;
+    case 'tree':
+      drawTreeProp(p, s, ctx);
+      break;
+    default:
+      break;
+  }
+}
+
+type PropDrawable = Drawable & { p: Prop | null; part: 0 | 1 | 2 };
+const PROP_POOL: PropDrawable[] = [];
+const PROP_OUT: Drawable[] = [];
+const S0: XY = { x: 0, y: 0 }, S1: XY = { x: 0, y: 0 };
+function drawPropItem(d: Drawable, ctx: CanvasRenderingContext2D): void {
+  const pd = d as PropDrawable;
+  if (pd.p) drawProp(pd.p, screenInto(pd.p.x, pd.p.y, 0, S1), ctx, pd.part);
+}
+function addDrawable(p: Prop, part: 0 | 1 | 2, depth: number): void {
+  let d = PROP_POOL[PROP_OUT.length];
+  if (!d) {
+    d = { depth: 0, kind: 'prop', id: 0, x: 0, y: 0, z: 0, draw: drawPropItem, p: null, part: 0 };
+    PROP_POOL.push(d);
+  }
+  d.depth = depth;
+  d.id = p.id;
+  d.x = p.x + (p.w - 1) / 2;
+  d.y = p.y + (p.h - 1) / 2;
+  d.p = p;
+  d.part = part;
+  PROP_OUT.push(d);
+}
+/** The shallowest depth of a footprint (order.ts footprintDepth gives the deepest). */
+function shallowDepth(p: Prop): number {
+  const x1 = p.x + Math.max(1, p.w) - 1, y1 = p.y + Math.max(1, p.h) - 1;
+  return Math.min(depthOf(p.x, p.y), depthOf(x1, p.y), depthOf(p.x, y1), depthOf(x1, y1));
+}
+
+/**
+ * The props as painter drawables for this frame (03 7.2): depth is the deepest footprint tile; a bandstand or bridge gives a back half at
+ * its shallowest depth less 0.5 and a front half at its deepest plus 0.49, and a picnic blanket lies at its shallowest less 0.5, so people
+ * inside or on them paint between. Culled (03 15.2 item 6): trees under 2.5 px tall, other props under 1.5 px, and anything off screen.
+ * The objects and the array are reused: good for this frame only.
+ */
+export function propDrawables(): Drawable[] {
+  PROP_OUT.length = 0;
+  const z = cam.z, cw = view.cw, chh = view.chh;
+  for (const p of props) {
+    const hEH = PROP_H[p.kind];
+    if (hEH === undefined) continue;
+    const big = Math.max(p.w, p.h), tree = p.kind === 'tree';
+    if (tree ? (SPECIES_HEIGHT[(p.data.species ?? 0) as Species] ?? 2.5) * EH * z < 2.5 : Math.max(hEH * EH, big * TW * 0.5) * z < 1.5) continue;
+    screenInto(p.x + (p.w - 1) / 2, p.y + (p.h - 1) / 2, 0, S0);
+    const half = (big * 0.75 + (tree ? 1.9 : 0.4)) * TW * z, up = hEH * EH * z + 4, dn = big * TH * 0.75 * z + 4;
+    if (S0.x + half < 0 || S0.x - half > cw || S0.y + dn < 0 || S0.y - up > chh) continue;
+    if (p.kind === 'bandstand' || p.kind === 'bridge') {
+      addDrawable(p, 1, shallowDepth(p) - 0.5);
+      addDrawable(p, 2, footprintDepth(p.x, p.y, p.w, p.h) + 0.49);
+    } else if (p.kind === 'picnic' || p.kind === 'basket') addDrawable(p, 0, shallowDepth(p) - 0.5);
+    else addDrawable(p, 0, footprintDepth(p.x, p.y, p.w, p.h));
+  }
+  return PROP_OUT;
 }
