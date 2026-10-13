@@ -2,8 +2,9 @@
    The paper HUD shell: stage, chips, rail, card, sheets, toast, feed, intro, photo mode, confirm, safe areas, reduced motion.
    Ported from GV CSS 24-230. PORT; ids are Parque's (03 10.1), body.avatar replaces body.gnome, every colour is a token,
    no text under 11 px (04 5.2 type scale).
-   S3: the Park strip's pills (icon above the label, the --moss swatch border, 04 5.4 items 2 and 8), row 2 as one context bar (#depth,
-   #sizewrap, Place / Cancel; GV #gbar 184-195), Undo, and the New confirm (a paper card, scratch/s3-options.html variant 1).
+   S3: the Park strip's pills (icon above the label, the --moss swatch border, 04 5.4 items 2 and 8; the fills of icon set 3), row 2
+   as one context bar (#depth, #sizewrap, Place / Cancel; GV #gbar 184-195), Undo, and the New confirm (the centred paper card,
+   scratch/s3-options.html confirm 1; both picked by the owner on 2026-10-13, register section 4).
    TODO(S6): .tool.locked with the tier word, the #cdChip ring; TODO(S11): audit. */
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
@@ -52,6 +53,9 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
 .tool .sw{width:17px;height:17px;border-radius:6px;border:1.5px solid var(--swatch-line);display:flex;align-items:center;justify-content:center;overflow:hidden}
 .tool .sw svg{width:15px;height:15px;display:block}
 .tool.park .sw{border-color:var(--moss)}
+/* the icons' small fills (set 3, owner 2026-10-13): the direction A accents of tokens.css, the lines stay currentColor */
+.tool .sw svg .f-rose{fill:var(--rose)} .tool .sw svg .f-lawn{fill:var(--lawn)} .tool .sw svg .f-gravel{fill:var(--gravel)}
+.tool .sw svg .f-water{fill:var(--water)} .tool .sw svg .f-awning{fill:var(--awning)}
 .tool .lb{white-space:nowrap}
 .tool .tier{font-size:11px;font-weight:700;color:var(--stone)}
 .tool.locked{opacity:.6}

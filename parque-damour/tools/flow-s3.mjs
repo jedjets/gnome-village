@@ -8,8 +8,12 @@
 //      the lamp appears.
 //  3b. The path brush: finger 1 paints, a second finger touches and lifts, finger 1 paints on: one stroke id, and one Undo takes it
 //      all back (02 8.2, 8.5); the brush tapped on the apron toasts "outside the railings" (02 8.4 item 1).
+//  3c. A fast drag leaves no gap (owner 2026-10-13): one drag sample seven tiles on from the first paints all eight tiles, one `tool`
+//      command per centre under one stroke id, and one Undo takes them back.
 //   4. Tap New: the confirm appears; Yes: a fresh park (the stroke's tiles are not the restored park's), the #s= hash changes, the park
 //      key is gone and the profile counts one more park; Undo is disabled.
+//  4b. New confirmed while paused gives a fresh park at once and stays paused (03 4.6; owner 2026-10-13): the hash names a new seed and
+//      the tick is 0 at once, the pause holds (the tick stays 0), and the unpause runs the new park.
 //   5. Reload: Continue is offered again (the new park autosaved on pagehide); Begin asks the New confirm first; No keeps the intro.
 //  5b. Continue by the keyboard, Enter pressed twice: the game starts once (one Sound press toggles once, one pause is one command).
 //   6. A Spanish browser (navigator.language es-ES), a fresh profile: the intro is in Spanish; after Begin and a reload it still is;
@@ -141,6 +145,8 @@ async function run(base) {
 
     // 3b. A brush stroke is one stroke however many fingers join it, and a brush off the park says why (02 8.2, 8.4 item 1)
     await strokeChecks(page);
+    // 3c. A fast drag leaves no gap (02 8.2 brush row; owner 2026-10-13)
+    await fastDragCheck(page);
 
     // 4. New: the confirm, Yes, a fresh park and a new hash
     const world0 = await page.evaluate(() => window.__PD.worldHash());
@@ -159,6 +165,9 @@ async function run(base) {
     const parks1 = await page.evaluate(() => JSON.parse(localStorage.getItem('parque:profile-v1') || '{}').parksPlayed ?? 0);
     check(parks1 === parks0 + 1, `the profile counts one more park (${parks0} to ${parks1})`);
     check(await page.$eval('#bUndo', (b) => b.disabled), 'Undo is disabled in the new park');
+
+    // 4b. New confirmed while paused: the fresh park at once, still paused (03 4.6; owner 2026-10-13)
+    await pausedNewCheck(page, seed2);
 
     // 5. Reload: Continue again, and Begin asks first
     await page.reload({ waitUntil: 'load' });
@@ -261,6 +270,80 @@ async function strokeChecks(page) {
   const hint = await page.$eval('#hint', (h) => ({ on: h.classList.contains('on'), text: h.textContent }));
   check(hint.on && hint.text === 'outside the railings', `the path brush off the park toasts "${hint.text}"`);
   await page.click('.tool[data-id="hand"]');
+}
+
+/**
+ * 3c. A fast drag leaves no gap (02 8.2 brush row; owner 2026-10-13): with the path brush at size 1, the finger goes down on the first of
+ * eight free lawn tiles in a row and, past the first 0.14 s, moves to the eighth in a single pointer move. camera.ts paints the line of
+ * centres between (Bresenham): all eight tiles turn to gravel, through eight `tool` commands of one stroke id; one Undo takes them back.
+ */
+async function fastDragCheck(page) {
+  await page.click('.tool[data-id="path"]');
+  const row = await page.evaluate(() => {
+    const pd = window.__PD, K = pd.layers.KIND, O = pd.layers.OCC;
+    for (let y = 8; y < 40; y++) {
+      if (Math.abs(y - 33) < 3) continue;
+      for (let x = 6; x < 38; x++) {
+        let ok = true;
+        for (let k = 0; k < 8 && ok; k++) ok = K[y * 48 + x + k] === 0 && O[y * 48 + x + k] === 0;
+        const a = pd.screenOf(x, y), b = pd.screenOf(x + 7, y);
+        if (ok && a.x > 30 && b.x < innerWidth - 30 && a.y > 120 && a.y < innerHeight - 260) return Array.from({ length: 8 }, (_, k) => ({ x: x + k, y }));
+      }
+    }
+    return null;
+  });
+  check(row !== null, 'a free lawn row of eight tiles for the fast drag');
+  if (!row) return;
+  check((await page.$eval('#size', (el) => el.value)) === '1', 'the brush is at size 1 for the fast drag');
+  const seq0 = await page.evaluate(() => window.__PD.log().reduce((m, c) => Math.max(m, c.seq), 0));
+  const a = await screenOfTile(page, row[0].x, row[0].y), b = await screenOfTile(page, row[7].x, row[7].y);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await sleep(200); // past the first 0.14 s of the drag-paint throttle
+  await page.mouse.move(b.x, b.y); // one pointer move, seven tiles on
+  await sleep(60);
+  await page.mouse.up();
+  await sleep(500);
+  const gravel = async () => page.evaluate((r) => r.filter((t) => window.__PD.layers.KIND[t.y * 48 + t.x] === 1).length, row);
+  const cmds = await page.evaluate(
+    (s) => window.__PD.log().filter((c) => c.seq > s && c.kind === 'tool' && c.payload.tool === 'path').map((c) => c.payload.stroke),
+    seq0,
+  );
+  const g1 = await gravel();
+  check(g1 === 8 && cmds.length === 8 && new Set(cmds).size === 1, `a fast drag leaves no gap (${g1} of 8 tiles, ${cmds.length} commands, stroke ids ${JSON.stringify([...new Set(cmds)])})`);
+  await page.click('#bUndo');
+  await sleep(400);
+  check((await gravel()) === 0, 'one Undo takes the fast drag back');
+  await page.click('.tool[data-id="hand"]');
+}
+
+/**
+ * 4b. New confirmed while paused (03 4.6; owner 2026-10-13): the pause, New, Yes: the hash names a new seed and the tick is 0 at once
+ * (the paused frame applies `park.new`), the dial still reads the pause and no step runs; the unpause runs the fresh park.
+ */
+async function pausedNewCheck(page, seedBefore) {
+  await page.waitForFunction(() => window.__PD.tick() > 30, { timeout: 5_000 }).catch(() => {});
+  const world0 = await page.evaluate(() => window.__PD.worldHash());
+  await page.click('#bHalt');
+  await page.waitForFunction(() => window.__PD.T.speed === 0, { timeout: 5_000 });
+  const tick0 = await page.evaluate(() => window.__PD.tick());
+  await page.click('#bNew');
+  await page.waitForFunction(() => !document.getElementById('confirm').hidden, { timeout: 5_000 });
+  await page.click('#confirmYes');
+  await page.waitForFunction((s) => /s=(\d+)/.exec(location.hash)?.[1] !== s, { timeout: 2_000 }, seedBefore).catch(() => {});
+  const at = await page.evaluate(() => ({
+    seed: /s=(\d+)/.exec(location.hash)?.[1], tick: window.__PD.tick(), speed: window.__PD.T.speed, world: window.__PD.worldHash(),
+    halt: document.getElementById('bHalt').getAttribute('aria-pressed'),
+  }));
+  check(!!at.seed && at.seed !== seedBefore && at.tick === 0 && at.world !== world0,
+    `New confirmed while paused gives a fresh park at once (#s=${seedBefore} to #s=${at.seed}, tick ${tick0} to ${at.tick})`);
+  await sleep(600);
+  const still = await page.evaluate(() => ({ tick: window.__PD.tick(), speed: window.__PD.T.speed }));
+  check(at.speed === 0 && at.halt === 'true' && still.tick === 0 && still.speed === 0, `... and stays paused (speed ${still.speed}, tick ${still.tick} after 0.6 s)`);
+  check(await page.evaluate(() => localStorage.getItem('parque:park-v1') === null), 'New while paused clears the park key');
+  await page.click('#bHalt');
+  await page.waitForFunction(() => window.__PD.tick() > 0, { timeout: 5_000 }).catch(() => {});
+  check((await page.evaluate(() => window.__PD.tick())) > 0, 'the unpause runs the fresh park');
 }
 
 /**

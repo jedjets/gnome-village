@@ -448,7 +448,7 @@ Locked items show dimmed with their tier in the rail and the picker. Unlocking t
 ### 8.2 Tool classes
 | Class | Input | Commit | Undo entry | Failure |
 |---|---|---|---|---|
-| brush (`path`, `lawn`, `pond`) | tap or drag paints a disc of radius `size − 1` with the GV kernel (`paintTile` 11118–11126) | at once, per tile | one entry per stroke (GV `beginStroke` 11091) | invalid tiles are skipped silently; a stroke that changed 0 tiles toasts the top-ranked reason of its centre tile |
+| brush (`path`, `lawn`, `pond`) | tap or drag paints a disc of radius `size − 1` with the GV kernel (`paintTile` 11118–11126); a drag fills the tiles between samples along a straight line (owner, 2026-10-13) | at once, per tile | one entry per stroke (GV `beginStroke` 11091) | invalid tiles are skipped silently; a stroke that changed 0 tiles toasts the top-ranked reason of its centre tile |
 | stamp 1×1 (`bed`, `tree`, `bench`, `lamp`, `remove`) | one tap | at once if valid | one entry per tap | toast the ranked reason |
 | stamp big (`picnic` 2×2, `fountain` 2×2, `kiosk` 2×2, `bandstand` 3×3, `bridge` 1×span) | tap shows a ghost (GV `pbGhost` 5840–5989 → `drawGhost` 6037 green/red panes); tap **Place** or tap the same tile again | on Place | one entry | the ghost is red and row 2 shows the ranked reason; Place is disabled (GV `updateGbar` 11018) |
 | run (`hedge`, `canal`) | first tap starts; each next tap must share a row or column with the run's last tile and adds the straight segment; max 14 tiles (GV `pbTap` 5991) | on Place | one entry | a tap not in line toasts "in a straight line from the last piece"; invalid tiles turn the ghost red |

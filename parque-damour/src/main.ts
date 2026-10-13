@@ -4,13 +4,14 @@
 // Ported from GV 12127-12222 (boot) and 12101-12124 (newIsland: the hash and the start view) as a wiring pattern. ADAPT: modules instead
 // of closures; styles are linked from index.html; the frame runs 03 4.1 items 7 to 12 through loop.onFrame and loop.onFrameEnd.
 // S3: the creator-mode tap routing of 03 8.2 items 3 and 4 (1 x 1 stamps enqueue at once; big stamps and runs show a ghost the rail
-// holds and enqueue on Place or a second tap on the same tile; brushes paint on down and on the throttled drag of camera.ts, one stroke
-// id per pointer stroke, which ends when the last pointer leaves, and a stroke that would change no tile toasts its first centre's
-// reason, "outside the railings" when no park tile was reached, 02 8.2 and 8.4); the autosave on
-// visibilitychange to hidden, pagehide and every 30 sim seconds (store.stepAutosave from the frame-end hook); Continue restores the save
-// silently and fits the camera (03 11); New asks the confirm, then writes the park once more (03 17 A24) and enqueues `park.new` with a
-// fresh seed; when it applies, the park key goes, parksPlayed counts one more (store.clearPark), the hash names the new seed and the view
-// starts over. The language is the profile's once a profile was written, else the browser's.
+// holds and enqueue on Place or a second tap on the same tile; brushes paint on down and on the throttled drag of camera.ts, which
+// fills the gaps of a fast drag along a straight line (owner 2026-10-13), one `tool` command per centre and one stroke id per pointer
+// stroke, which ends when the last pointer leaves, and a stroke that would change no tile toasts its first centre's reason, "outside
+// the railings" when no park tile was reached, 02 8.2 and 8.4); the autosave on visibilitychange to hidden, pagehide and every 30 sim
+// seconds (store.stepAutosave from the frame-end hook); Continue restores the save silently and fits the camera (03 11); New asks the
+// confirm, then writes the park once more (03 17 A24) and enqueues `park.new` with a fresh seed (applied at once even while paused,
+// which stays paused: 03 4.6, owner 2026-10-13); when it applies, the park key goes, parksPlayed counts one more (store.clearPark), the
+// hash names the new seed and the view starts over. The language is the profile's once a profile was written, else the browser's.
 // TODO(S4): taps with the hand select (card.select(pickAt)); TODO(S6): an armed ability's target; TODO(S7): avatar.tap; TODO(S8):
 // initAudio on Begin and Continue.
 import { newPark as loopNewPark, onFrame, onFrameEnd, setSpeed, start } from './core/loop.ts';

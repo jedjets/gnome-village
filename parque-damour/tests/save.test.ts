@@ -2,9 +2,10 @@
 // Locks the park and profile save of register 3.11 and 03 sections 3.10, 11 and 17 A24: the two parque: keys and no other, JSON with the
 // layers as base64, the round trip that keeps the state hash, what the snapshot leaves out, the size, the autosave at 30 sim seconds,
 // every localStorage failure caught with one `warn` event, MODE and PLAYER restored, the derived caches rebuilt on a restore, New.
-// 08 2.6 save.test.ts rows (each `it` named as the row), plus the store contract of 07 S3 step 9.
-// Node has no localStorage: MemStorage below stands in for it, installed on globalThis by each test (never in src/).
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+// 08 2.6 save.test.ts rows (each `it` named as the row), plus the store contract of 07 S3 step 9. The store on a fresh page (one warn
+// per call before the profile is in memory) and the hold after a failed profile read are in tests/save-profile.test.ts.
+// Node has no localStorage: tests/mem-storage.ts's MemStorage stands in for it, installed on globalThis by each test (never in src/).
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SIM_DT, newPark, setSpeed, simulate, tick } from '../src/core/loop.ts';
 import { T } from '../src/core/clock.ts';
 import { applyNow, enqueue, log, type CommandInput, type Result, type ToolPayload } from '../src/core/commands.ts';
@@ -24,53 +25,10 @@ import {
 } from '../src/save/store.ts';
 import { migratePark } from '../src/save/migrate.ts';
 import type { ParkSaveV1 } from '../src/save/schema.ts';
-
-/** An in-memory Storage that records every key written and can be told to throw, as a full or blocked browser storage does. */
-class MemStorage {
-  map = new Map<string, string>();
-  writes: string[] = [];
-  failGet = false;
-  failSet = false;
-  failRemove = false;
-  get length(): number {
-    return this.map.size;
-  }
-  key(i: number): string | null {
-    return [...this.map.keys()][i] ?? null;
-  }
-  getItem(k: string): string | null {
-    if (this.failGet) throw new Error('SecurityError: the storage is blocked');
-    return this.map.get(k) ?? null;
-  }
-  setItem(k: string, v: string): void {
-    if (this.failSet) throw new Error('QuotaExceededError: the storage is full');
-    this.writes.push(k);
-    this.map.set(k, String(v));
-  }
-  removeItem(k: string): void {
-    if (this.failRemove) throw new Error('SecurityError: the storage is blocked');
-    this.map.delete(k);
-  }
-  clear(): void {
-    this.map.clear();
-  }
-}
+import { MemStorage, install, installBlocked } from './mem-storage.ts';
 
 let mem: MemStorage;
 let warns: GameEvent[];
-
-function install(value: unknown): void {
-  Object.defineProperty(globalThis, 'localStorage', { value, configurable: true, writable: true });
-}
-/** A browser that refuses the storage outright: reading the global throws (blocked site data). */
-function installBlocked(): void {
-  Object.defineProperty(globalThis, 'localStorage', {
-    configurable: true,
-    get() {
-      throw new Error('SecurityError: access denied');
-    },
-  });
-}
 
 const tool = (payload: ToolPayload): Result => applyNow({ side: 'park', kind: 'tool', payload });
 const at = (x: number, y: number): { x: number; y: number } => ({ x, y });
@@ -348,15 +306,20 @@ describe('keys, autosave and failures (08 2.6 row 6; register 3.11; 03 11; AGENT
     playSome();
     expect(savePark()).toBe(true);
     installBlocked();
+    // saveProfile before loadProfile: after the failed read the profile is held back and a write says nothing more (owner 2026-10-13)
     const calls: Array<[string, () => unknown]> = [
-      ['savePark', savePark], ['saveBeforeNew', saveBeforeNew], ['loadPark', loadPark], ['loadProfile', loadProfile],
-      ['saveProfile', saveProfile], ['clearPark', clearPark], ['clearAll', clearAll],
+      ['savePark', savePark], ['saveBeforeNew', saveBeforeNew], ['loadPark', loadPark], ['saveProfile', saveProfile],
+      ['loadProfile', loadProfile], ['clearPark', clearPark], ['clearAll', clearAll],
     ];
     for (const [name, fn] of calls) {
       warns = [];
       expect(fn, name).not.toThrow();
       expect([name, warns.length]).toEqual([name, 1]);
     }
+    loadProfile(); // the read fails: the profile is held back
+    warns = [];
+    expect(saveProfile()).toBe(false); // nothing written, and the read already said why: no second warn
+    expect(warns).toEqual([]);
     expect(() => hasPark()).not.toThrow();
     expect(hasPark()).toBe(false);
     expect(loadPark()).toBeNull();
@@ -395,63 +358,6 @@ describe('keys, autosave and failures (08 2.6 row 6; register 3.11; 03 11; AGENT
     mem.failSet = true;
     expect(saveProfile()).toBe(false);
     expect(getProfile().updatedAt).toBe(n + 2);
-  });
-});
-
-/**
- * The store as a page has it on its first call: fresh modules, the profile not read yet (main.ts reads only hasPark before the first
- * autosave). Its own events module carries the warns.
- */
-async function freshStore(): Promise<{ store: typeof import('../src/save/store.ts'); freshWarns: Array<GameEvent['params']> }> {
-  vi.resetModules();
-  const events = await import('../src/core/events.ts');
-  const loop = await import('../src/core/loop.ts');
-  const store = await import('../src/save/store.ts');
-  const freshWarns: Array<GameEvent['params']> = [];
-  events.on('warn', (e) => freshWarns.push(e.params));
-  loop.newPark(101);
-  return { store, freshWarns };
-}
-const warnOf = (op: 'read' | 'write' | 'remove', key: string): { what: string; key: string } => ({ what: 'save.' + op, key });
-
-describe('one warn per call before the profile is in memory (08 2.6 row 6; 07 S3 step 9: a failure emits one warn)', () => {
-  it('a storage that refuses every access: each call on a fresh page emits exactly one warn, naming what failed first', async () => {
-    type Store = typeof import('../src/save/store.ts');
-    const calls: Array<[string, (st: Store) => unknown, object]> = [
-      ['savePark', (st) => st.savePark(), warnOf('write', PARK_KEY)], // the profile read failed first; the park write is what matters
-      ['saveBeforeNew', (st) => st.saveBeforeNew(), warnOf('write', PARK_KEY)],
-      ['stepAutosave', (st) => st.stepAutosave(30 * Math.round(1 / SIM_DT)), warnOf('write', PARK_KEY)],
-      ['clearPark', (st) => st.clearPark(), warnOf('remove', PARK_KEY)],
-      ['saveProfile', (st) => st.saveProfile(), warnOf('write', PROFILE_KEY)],
-      ['setStylePick', (st) => st.setStylePick('A'), warnOf('write', PROFILE_KEY)],
-      ['setMusicPick', (st) => st.setMusicPick('B'), warnOf('write', PROFILE_KEY)],
-      ['getProfile', (st) => st.getProfile(), warnOf('read', PROFILE_KEY)],
-      ['loadProfile', (st) => st.loadProfile(), warnOf('read', PROFILE_KEY)],
-      ['loadPark', (st) => st.loadPark(), warnOf('read', PARK_KEY)],
-      ['clearAll', (st) => st.clearAll(), warnOf('remove', PARK_KEY)],
-    ];
-    for (const [name, call, first] of calls) {
-      const { store, freshWarns } = await freshStore();
-      installBlocked();
-      expect(() => call(store), name).not.toThrow();
-      expect([name, freshWarns]).toEqual([name, [first]]);
-      expect(store.getProfile().cp).toBe(0); // the defaults stand in for the profile it could not read
-    }
-    const { store, freshWarns } = await freshStore();
-    installBlocked();
-    expect(store.hasPark()).toBe(false); // the intro's question stays quiet
-    expect(freshWarns).toEqual([]);
-  });
-
-  it('a damaged profile key on a fresh page: savePark writes both keys with one save.parse warn, and the defaults replace it', async () => {
-    mem.map.set(PROFILE_KEY, '{"v":1,"cp":');
-    const { store, freshWarns } = await freshStore();
-    expect(store.savePark()).toBe(true);
-    expect(freshWarns).toEqual([{ what: 'save.parse', key: PROFILE_KEY }]);
-    expect([...mem.writes].sort()).toEqual([PARK_KEY, PROFILE_KEY]);
-    expect(JSON.parse(mem.map.get(PROFILE_KEY) ?? '{}')).toMatchObject({ v: 1, cp: 0, mp: 0, updatedAt: 1 });
-    expect(store.savePark()).toBe(true); // in memory now: no second warn
-    expect(freshWarns).toHaveLength(1);
   });
 });
 
@@ -566,14 +472,15 @@ describe('a restore leaves every derived cache consistent (07 S3 step 9; 03 3.1,
     expect([r.live.depth9, r.restored.depth9]).toEqual([UNDO_DEPTH, UNDO_DEPTH - 1]);
   });
 
-  // OPEN QUESTION for the owner (S3 part B hand-back): the restore empties the undo stack (register 3.11; owner 2026-10-13) but keeps the
-  // ids the snapshot holds reserved, as the round trip's hash needs (08 2.6 row 1). No entry on the restored path will ever release them,
-  // while the live path releases each when its entry leaves the stack (03 5.6 item 3: 10 more entries, or a clearUndo such as S7's
-  // avatar.enter). From then on the two paths hand out different PropIds and their state hashes part. Making them agree needs a change
-  // in play/undo.ts (outside this stage) and a decision: reservations that end only at park.new (part A's clearUndo test and 03 5.6 item 3
-  // change), or the release schedule saved with the ids (03 3.10 excludes the undo stack). `it.fails` pins the gap: once the paths
-  // agree this test fails, and it becomes a plain `it`.
-  it.fails('after a restore, 11 more tool entries on both paths give the same stateHash, worldHash and ids (open question)', () => {
+  // KNOWN LIMITATION, kept by the owner on 2026-10-13 (Slice 3 hand-back question 10, answered "N"; 03 section 17 open points): the
+  // restore empties the undo stack (register 3.11; owner 2026-10-13) but keeps the ids the snapshot holds reserved, as the round trip's
+  // hash needs (08 2.6 row 1). No entry on the restored path will ever release them, while the live path releases each when its entry
+  // leaves the stack (03 5.6 item 3: 10 more entries, or a clearUndo such as S7's avatar.enter). From then on the two paths hand out
+  // different PropIds and their state hashes part; the player sees no difference (the same props in the same places, only their ids
+  // differ). Making them agree would need reservations that end only at park.new, or the release schedule saved with the ids (03 3.10
+  // excludes the undo stack); the owner declined both. `it.fails` pins the gap as kept: should the paths ever agree this test fails, and
+  // the owner's decision is to be revisited before it becomes a plain `it`.
+  it.fails('after a restore, 11 more tool entries on both paths give the same stateHash, worldHash and ids (known limitation, owner 2026-10-13)', () => {
     const r = twoPaths();
     expect(r.restored.at11).toEqual(r.live.at11);
   });

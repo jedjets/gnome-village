@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 // tests/ui/rail.test.ts
 // Locks the S3 rows of 08 2.9 rail.test.ts (the Park strip is data driven: 16 pills from TOOLS, #size max 3; body.avatar hides the Park
-// strip, the size row and Undo) and the rail's row 2 of 02 8.1-8.2 and 04 5.4 item 4 (the tool's label or the ranked reason, the brush
-// size, Place disabled while the ghost is red, Undo disabled at undo depth 0, GV 11018 and 11116), and hard rule 2 / 03 4.6 for row 3
-// (the pause and Undo enqueue commands, they write no sim state). jsdom, on index.html with shell.css.
+// strip, the size row and Undo; icon set 3, the owner's pick of 2026-10-13, fills from the tokens.css accents) and the rail's row 2 of
+// 02 8.1-8.2 and 04 5.4 item 4 (the tool's label or the ranked reason, the brush size, Place disabled while the ghost is red, Undo
+// disabled at undo depth 0, GV 11018 and 11116), and hard rule 2 / 03 4.6 for row 3 (the pause and Undo enqueue commands, they write
+// no sim state). jsdom, on index.html with shell.css.
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -62,6 +63,25 @@ describe('08 2.9 rail.test.ts: the rail is data driven (03 10.4; GV buildTools 1
     const html = $('tools').innerHTML;
     expect(html).not.toMatch(/#[0-9A-Fa-f]{3,6}\b|rgba?\(/);
     expect(html).toContain('stroke="currentColor"');
+  });
+  it('icon set 3 (owner 2026-10-13): the small fills are classes that shell.css fills from the tokens.css accents, no token changed', () => {
+    const shell = readFileSync(join(ROOT, 'src', 'styles', 'shell.css'), 'utf8');
+    const tokens = readFileSync(join(ROOT, 'src', 'styles', 'tokens.css'), 'utf8');
+    const used = new Set<string>();
+    for (const el of document.querySelectorAll('#tools .tool .sw svg [class]')) used.add(el.getAttribute('class') as string);
+    expect([...used].sort()).toEqual(['f-awning', 'f-gravel', 'f-lawn', 'f-rose', 'f-water']);
+    // the 04 3.1 column A values the Style Gate wrote, unchanged
+    const want: Record<string, string> = { rose: '#EDA9C4', lawn: '#9CCB92', gravel: '#D9CBAE', water: '#6FB8DC', awning: '#D9636A' };
+    for (const cls of used) {
+      const tok = cls.slice(2);
+      expect(shell, cls).toContain(`.tool .sw svg .${cls}{fill:var(--${tok})}`);
+      expect(tokens, tok).toContain(`--${tok}:${want[tok]};`);
+    }
+    // every pill but the hand carries at least one fill; the lines stay in currentColor (stroke inherited from the svg)
+    for (const b of document.querySelectorAll<HTMLElement>('#tools .tool')) {
+      if (b.dataset.id !== 'hand') expect(b.querySelector('.sw svg [class^="f-"]'), b.dataset.id).not.toBeNull();
+      expect(b.querySelector('.sw svg')?.getAttribute('stroke')).toBe('currentColor');
+    }
   });
   it('a tap on a pill arms it (aria-pressed); the Cupid group empties the strip and disarms the park tool', () => {
     document.querySelector<HTMLButtonElement>('#tools .tool[data-id="lamp"]')?.click();

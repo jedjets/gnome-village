@@ -336,6 +336,26 @@ describe('gestures (03 8.1; GV 11168-11230)', () => {
     expect(c.taps).toHaveLength(0);
     expect(cam.ox).toBe(ox);
   });
+  it('a fast brush drag fills its gaps: a sample over one tile from the last painted centre paints the line to it (owner 2026-10-13)', () => {
+    const c = wire('brush');
+    const s0 = screenOf(10, 20), s1 = screenOf(16, 22), s2 = screenOf(17, 22), s3 = screenOf(17, 20);
+    c.fire('pointerdown', 1, s0.x, s0.y, 1000);
+    c.fire('pointermove', 1, s1.x, s1.y, 1140); // 6 tiles on in one sample: (11, 20) .. (16, 22) in Bresenham order
+    expect(c.paints).toEqual([
+      { x: 10, y: 20 }, { x: 11, y: 20 }, { x: 12, y: 21 }, { x: 13, y: 21 }, { x: 14, y: 21 }, { x: 15, y: 22 }, { x: 16, y: 22 },
+    ]);
+    c.fire('pointermove', 1, s2.x, s2.y, 1240); // a neighbour: the sample alone
+    expect(c.paints.slice(7)).toEqual([{ x: 17, y: 22 }]);
+    c.fire('pointermove', 1, s3.x, s3.y, 1340); // two tiles north: the tile between, then the sample
+    expect(c.paints.slice(8)).toEqual([{ x: 17, y: 21 }, { x: 17, y: 20 }]);
+    c.fire('pointerup', 1, s3.x, s3.y, 1350);
+    expect(c.strokes()).toBe(1);
+    // a new gesture starts its line afresh: no line from the last stroke's centre
+    const s4 = screenOf(30, 30);
+    c.fire('pointerdown', 1, s4.x, s4.y, 2000);
+    expect(c.paints.slice(10)).toEqual([{ x: 30, y: 30 }]);
+    c.fire('pointerup', 1, s4.x, s4.y, 2010);
+  });
   it('a stamp or ability tool waits for the tap and never pans or paints', () => {
     const c = wire('other');
     const ox = cam.ox;

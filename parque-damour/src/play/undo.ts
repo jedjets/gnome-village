@@ -12,8 +12,8 @@
 // Three fields beyond 03 5.6 item 2: `recycled` (which added ids came from the free queue, so the undo hands each back where it came from),
 // `propsChanged` (copies of props a command changed in place: a bench turned, a kiosk's table list) and `treeTurn` (the tree cycle of
 // tools.ts before a planting, so an undone tree hands its species back; 02 8.3).
-// A replay from a snapshot reproduces an undo only when its entry was recorded after that snapshot: the restore empties the stack, so an
-// undo that reached further back is `reason.nothing_to_undo` there (03 5.6 item 4 and 08 3.2 run 5 against register 3.11; an open question).
+// A replay that starts from a snapshot reproduces only the undos of entries recorded after that snapshot: the restore empties the stack, so
+// an undo of an earlier entry is `reason.nothing_to_undo` there (03 5.5 item 2, 5.6 item 4, 08 3.2 run 5; owner 2026-10-13).
 import type { PropId } from '../core/ids.ts';
 import { reclaimPropId, releasePropId, unallocPropId } from '../core/ids.ts';
 import { OK, fail, onResetCommands, onRestoreCommands, registerHandler } from '../core/commands.ts';
@@ -169,7 +169,8 @@ onResetCommands(() => clearUndo());
 /*
  * A restore loads another world, so the entries recorded against the old one go: one of them could remove a prop it never placed, because
  * the restored world may have handed the same PropId to another prop. The snapshot brought its own ids state, so the ids it holds reserved
- * stay reserved (false): the round trip keeps the state hash (08 2.6 row 1, 08 3.2 run 6). Those ids no longer belong to any entry; what
- * becomes of them is an open question for part B.
+ * stay reserved (false): the round trip keeps the state hash (08 2.6 row 1, 08 3.2 run 6). Those ids no longer belong to any entry and are
+ * never released, so a restored park hands out other PropIds than the live one would: a known limitation the owner kept on 2026-10-13
+ * (03 section 17; tests/save.test.ts pins it with it.fails).
  */
 onRestoreCommands(() => clearUndo(false));

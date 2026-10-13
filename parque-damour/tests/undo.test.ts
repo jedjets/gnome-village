@@ -1,8 +1,9 @@
 // tests/undo.test.ts
 // Locks the undo of the park tools: register 3.7 (10 deep, park tools only, command based), 02 8.5, 03 5.6 (inverse records grouped by
 // stroke, removed props back under their old ids, logged, cleared by a new park), 03 3.1 and 2.3 ids.ts (reserved ids), register 3.11
-// (never saved, so a restore empties it; owner 2026-10-13), 03 5.5 item 2 (a replay reproduces the undos inside its window), 02 8.3 (an
-// undone tree hands its species back). 08 2.5 undo.test.ts rows.
+// (never saved, so a restore empties it; owner 2026-10-13), 03 5.5 item 2 (a replay from a snapshot reproduces only the undos of entries
+// recorded after it; an undo of an earlier entry is reason.nothing_to_undo; owner 2026-10-13), 02 8.3 (an undone tree hands its species
+// back). 08 2.5 undo.test.ts rows.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SIM_DT, newPark, simulate, tick } from '../src/core/loop.ts';
 import { T } from '../src/core/clock.ts';
@@ -260,7 +261,7 @@ function then(c: CommandInput | null, n: number): void {
 const toolCmd = (payload: ToolPayload): CommandInput => ({ side: 'park', kind: 'tool', payload });
 const undoCmd: CommandInput = { side: 'park', kind: 'undo', payload: {} };
 
-describe('a replay reproduces the undo inside its window (03 5.5 item 2, 5.6 item 4; 08 3.2 run 5)', () => {
+describe('a replay from a snapshot reproduces only the undos of entries recorded after it (03 5.5 item 2, 5.6 item 4; 08 3.2 run 5)', () => {
   it('tools and an undo logged after the snapshot replay to the same hash, with no rejection', () => {
     then(null, 50);
     const s = snap();
@@ -280,7 +281,7 @@ describe('a replay reproduces the undo inside its window (03 5.5 item 2, 5.6 ite
     expect([propAt(5, 5)?.kind, KIND[I(3, 8)]]).toEqual(['bench', Kind.lawn]);
   });
 
-  it('an undo whose entry was recorded before the snapshot is reason.nothing_to_undo in the replay and removes nothing (open question)', () => {
+  it('an undo of an entry recorded before the snapshot is reason.nothing_to_undo in the replay and removes nothing (owner 2026-10-13)', () => {
     then(toolCmd({ tool: 'bench', at: at(5, 5) }), 50);
     const s = snap();
     then(undoCmd, 20); // live, it takes the bench back

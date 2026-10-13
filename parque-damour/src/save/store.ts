@@ -7,11 +7,14 @@
 // park and the profile together; loadPark gives the migrated save or null; clearPark for New; saveBeforeNew, the extra park write on
 // park.new (03 17 A24); stepAutosave counts sim time from the frame's step count and writes at 30 sim seconds. Every localStorage access
 // is inside try/catch and nothing throws; a public call emits at most one `warn` event, however many of its accesses failed (a write path
-// reads a profile not yet in memory quietly and reports through warnFirst). This layer reads no DOM and no wall clock and adds no listener:
+// reads a profile not yet in memory quietly and reports through warnFirst). A profile read that failed (the storage threw, or the text did
+// not parse or migrate) holds every profile write back until a later read succeeds, so a passing read error never overwrites the stored
+// points with the defaults (owner 2026-10-13); the park key is still written. This layer reads no DOM and no wall clock and adds no listener:
 // main.ts (part C) wires visibilitychange and pagehide to savePark, Continue to restore(loadPark()), New to saveBeforeNew and clearPark.
 // The undo stack is never saved; a restore empties it (play/undo.ts onRestoreCommands; owner 2026-10-13). The ids the snapshot holds
-// reserved stay reserved, so the round trip keeps the hash; no entry on the restored path releases them, so the paths part once the live
-// path would (an open question for the owner: save.test.ts pins it with it.fails).
+// reserved stay reserved, so the round trip keeps the hash; no entry on the restored path releases them, so the paths hand out other
+// PropIds once the live path would release one (a known limitation the owner kept on 2026-10-13, 03 section 17; save.test.ts pins it
+// with it.fails).
 // TODO(S5): the feed (ui/feed.ts, which this layer cannot import) joins the snapshot through a hook; the profile's cp and mp join the
 // state hash (03 11) in the slice that first awards points, which re-records the det fixtures (S3 must keep them: 07 S3.7 item 1).
 import { FNV_SEED, fnvStep } from '../core/math.ts';
@@ -90,6 +93,12 @@ function remove(key: string): boolean {
 /* ---------- the profile (03 3.9) ---------- */
 
 let prof: ProfileV1 | null = null;
+/**
+ * True from a profile read that failed (the storage threw, or the text did not parse or migrate) until a later read succeeds (or clearAll
+ * removed the key): the in-memory defaults stand in, but no call writes them to parque:profile-v1, so a passing read error never
+ * overwrites the stored Cupid and Mischief points (owner 2026-10-13).
+ */
+let held = false;
 
 /**
  * Read parque:profile-v1 into the in-memory profile: the migrated profile, or the defaults of 08 2.6 (no points, tier 0, English, sound
@@ -106,6 +115,7 @@ function readProfile(): Op | null {
     if (!p) failed = 'parse';
   }
   prof = p ?? defaultProfile();
+  held = failed !== null;
   return failed;
 }
 
@@ -130,11 +140,20 @@ function profileToWrite(): { p: ProfileV1; failed: Op | null } {
   return { p: prof as ProfileV1, failed };
 }
 
-/** Write profile `p`; its write serial (`updatedAt`) moves on only when the write lands. */
-function writeProfile(p: ProfileV1): boolean {
-  if (!write(PROFILE_KEY, JSON.stringify({ ...p, updatedAt: p.updatedAt + 1 }))) return false;
+/** How a profile write ended: it landed, a failed read held it back (nothing written, no new warn), or the storage refused it. */
+type Wrote = 'ok' | 'held' | 'fail';
+
+/** Write profile `p` unless a failed read holds the key back (`held`); its write serial (`updatedAt`) moves on only when the write lands. */
+function writeProfile(p: ProfileV1): Wrote {
+  if (held) return 'held';
+  if (!write(PROFILE_KEY, JSON.stringify({ ...p, updatedAt: p.updatedAt + 1 }))) return 'fail';
   p.updatedAt++;
-  return true;
+  return 'ok';
+}
+
+/** The warn entry of a profile write for warnFirst: only a refused write is a failure (a held one was reported by its read). */
+function wroteFail(w: Wrote): Op | null {
+  return w === 'fail' ? 'write' : null;
 }
 
 /** The one `warn` of a public call: the first failure of `fails` ([the operation that failed or null, its key], most important first). */
@@ -144,28 +163,29 @@ function warnFirst(...fails: Array<[Op | null, string]>): void {
 }
 
 /**
- * Write the in-memory profile to parque:profile-v1; false (and one `warn`) when it did not land. A profile not yet in memory is read
- * first; when that read fails the defaults are written, with one `warn` for the read if the write landed. Never throws.
+ * Write the in-memory profile to parque:profile-v1; true when it landed. A profile not yet in memory is read first. After a failed read
+ * nothing is written until a later read succeeds (`held`; owner 2026-10-13): false, with one `warn` for the read when this call made it,
+ * none when an earlier call did. A refused write is false with one `warn`. Never throws.
  */
 export function saveProfile(): boolean {
   const { p, failed } = profileToWrite();
-  const ok = writeProfile(p);
-  warnFirst([ok ? null : 'write', PROFILE_KEY], [failed, PROFILE_KEY]);
-  return ok;
+  const w = writeProfile(p);
+  warnFirst([wroteFail(w), PROFILE_KEY], [failed, PROFILE_KEY]);
+  return w === 'ok';
 }
 
-/** The Style Gate pick: 'A' | 'B' | 'C' (04 4.4 item 2). At most one `warn`, as saveProfile. */
+/** The Style Gate pick: 'A' | 'B' | 'C' (04 4.4 item 2). Kept in memory; written, held back and reported as saveProfile. */
 export function setStylePick(pick: string): void {
   const { p, failed } = profileToWrite();
   p.stylePick = pick;
-  warnFirst([writeProfile(p) ? null : 'write', PROFILE_KEY], [failed, PROFILE_KEY]);
+  warnFirst([wroteFail(writeProfile(p)), PROFILE_KEY], [failed, PROFILE_KEY]);
 }
 
-/** The Music Gate pick: 'A' | 'B' | 'C' (05 6.4). At most one `warn`, as saveProfile. */
+/** The Music Gate pick: 'A' | 'B' | 'C' (05 6.4). Kept in memory; written, held back and reported as saveProfile. */
 export function setMusicPick(pick: string): void {
   const { p, failed } = profileToWrite();
   p.musicPick = pick;
-  warnFirst([writeProfile(p) ? null : 'write', PROFILE_KEY], [failed, PROFILE_KEY]);
+  warnFirst([wroteFail(writeProfile(p)), PROFILE_KEY], [failed, PROFILE_KEY]);
 }
 
 /* ---------- the park key (register 3.11, 03 11) ---------- */
@@ -199,9 +219,10 @@ export function hasPark(): boolean {
 
 /**
  * The autosave (register 3.11): the park and the profile together, the dial (never the pause) copied into the profile's settings first
- * (03 4.6). Restarts the 30-second count. Returns true when both keys were written; on a failure false. Whatever failed, one call emits
- * at most one `warn`, naming the first failure of: the park write, the profile write, the profile read (a profile not yet in memory is
- * read here, quietly). Never throws.
+ * (03 4.6). Restarts the 30-second count. After a failed profile read only the park key is written (the profile is held back until a
+ * later read succeeds; owner 2026-10-13). Returns true when the park was written and the profile written or held back; on a failure
+ * false. Whatever failed, one call emits at most one `warn`, naming the first failure of: the park write, the profile write, the profile
+ * read (a profile not yet in memory is read here, quietly). Never throws.
  */
 export function savePark(): boolean {
   autoSteps = 0;
@@ -215,9 +236,9 @@ export function savePark(): boolean {
   const { p, failed } = profileToWrite();
   if (T.speed > 0) p.settings.speed = T.speed;
   const okPark = write(PARK_KEY, text);
-  const okProfile = writeProfile(p);
-  warnFirst([okPark ? null : 'write', PARK_KEY], [okProfile ? null : 'write', PROFILE_KEY], [failed, PROFILE_KEY]);
-  return okPark && okProfile;
+  const w = writeProfile(p);
+  warnFirst([okPark ? null : 'write', PARK_KEY], [wroteFail(w), PROFILE_KEY], [failed, PROFILE_KEY]);
+  return okPark && w !== 'fail';
 }
 
 /**
@@ -229,25 +250,29 @@ export function saveBeforeNew(): boolean {
 }
 
 /**
- * New (03 11): the park key goes and the profile counts one more park played (written at once). Returns false when the storage threw;
- * at most one `warn` per call, as savePark. Never throws.
+ * New (03 11): the park key goes and the profile counts one more park played (written at once, or held back after a failed read as
+ * savePark). Returns false when the storage threw; at most one `warn` per call, as savePark. Never throws.
  */
 export function clearPark(): boolean {
   autoSteps = 0;
   const { p, failed } = profileToWrite();
   const okPark = remove(PARK_KEY);
   p.parksPlayed++;
-  const okProfile = writeProfile(p);
-  warnFirst([okPark ? null : 'remove', PARK_KEY], [okProfile ? null : 'write', PROFILE_KEY], [failed, PROFILE_KEY]);
-  return okPark && okProfile;
+  const w = writeProfile(p);
+  warnFirst([okPark ? null : 'remove', PARK_KEY], [wroteFail(w), PROFILE_KEY], [failed, PROFILE_KEY]);
+  return okPark && w !== 'fail';
 }
 
-/** Both keys gone and the in-memory profile back to its defaults (the harness clearAll, 03 13). False (one `warn`) on a failure. */
+/**
+ * Both keys gone and the in-memory profile back to its defaults (the harness clearAll, 03 13). False (one `warn`) on a failure. Once the
+ * profile key is gone there is nothing left to protect, so a hold from a failed read ends with it.
+ */
 export function clearAll(): boolean {
   autoSteps = 0;
   prof = defaultProfile();
   const okPark = remove(PARK_KEY);
   const okProfile = remove(PROFILE_KEY);
+  if (okProfile) held = false;
   warnFirst([okPark ? null : 'remove', PARK_KEY], [okProfile ? null : 'remove', PROFILE_KEY]);
   return okPark && okProfile;
 }
@@ -355,7 +380,7 @@ export function snapshot(): ParkSaveV1 {
  * come back with it; every derived cache follows: BLOCK is rebuilt at once, the water bodies and the render caches see a new world version
  * (markBlockDirty), the charm field is marked dirty, the id counters, free list and reservations are the snapshot's, the undo stack is
  * emptied (setLog's restore hooks: never saved, register 3.11) and the tree cycle is the snapshot's. The ids reserved for the emptied
- * entries stay reserved for good (open question in the file header). Throws on a snapshot of another version or with a damaged layer,
+ * entries stay reserved for good (a known limitation, see the file header). Throws on a snapshot of another version or with a damaged layer,
  * before anything changes: loadPark() only hands over saves migrate.ts checked.
  */
 export function restore(s: ParkSaveV1): void {

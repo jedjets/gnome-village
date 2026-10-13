@@ -94,7 +94,8 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `events.test.ts` | on delivers at once and watch after drain | an `on` listener runs inside `emit`; a `watch` listener runs only at `drain` |
 | `events.test.ts` | lite bits drop only fx and cue events | with `lite = 3`, 20 steps emitting one `fx` each: the frame listener receives 8; a `stage` event is never dropped (03 §4.5) |
 | `loop.test.ts` | nsMax and budget follow GV 12082-12083 | `nsMax(8) === 22`, `nsMax(1) === 8`; `lite(8) === 3`, `lite(6) === 1`; budgets 26, 13, 9 ms for speed 8, 4, 1 |
-| `loop.test.ts` | while paused only speed applies | with `requestAnimationFrame` stubbed and the dial at 0: a cupid command enqueued in one frame and a park command in the next change nothing; a `speed 1` command applies in the paused frame; the first step applies park before cupid; `restore` of the tick-0 snapshot and `replay(log(), 1)` give the same `stateHash()` (03 §4.6) |
+| `loop.test.ts` | while paused only speed and park.new apply | `PAUSED_KINDS` is `speed` and `park.new` (owner 2026-10-13); with `requestAnimationFrame` stubbed and the dial at 0: a cupid command enqueued in one frame and a park command in the next change nothing; a `speed 1` command applies in the paused frame; the first step applies park before cupid; `restore` of the tick-0 snapshot and `replay(log(), 1)` give the same `stateHash()` (03 §4.6) |
+| `loop.test.ts` | a New confirmed while paused gives the fresh park at once and stays paused | paused at tick 300: a command queued for the old park, then `park.new` seed 5; one frame: tick 0, the seed is 5, `T.speed` 0, `stateHash()` equals a fresh `newPark(5)` (the old park's command was dropped), the `applied` event drained in that frame; a command queued now waits until the unpause's first step (03 §4.6) |
 
 ### 2.2 `src/world/` (files `gen.test.ts`, `park.test.ts`, `water.test.ts`, `wear.test.ts`, `charm.test.ts`)
 
@@ -241,6 +242,7 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `undo.test.ts` | a stroke is one entry | 7 brush commands with one `stroke` id undo in one `undo` |
 | `undo.test.ts` | undo restores ids and vendors | a removed kiosk comes back with its old `PropId`, its vendor and its tables; `OCC` matches |
 | `undo.test.ts` | undo is logged and cleared | `log()` contains the `undo` command; `park.new` and `avatar.enter` give `canUndo() === false` |
+| `undo.test.ts` | a replay from a snapshot reproduces only the undos after it | tools and an undo logged after a snapshot replay to the same `stateHash()` with no rejection; an undo of an entry recorded before the snapshot is `reason.nothing_to_undo` in the replay and removes nothing (03 §5.5 item 2, §5.6 item 4; owner 2026-10-13) |
 | `undo.test.ts` | undo never touches the rest | a Parted pair, a cooldown and the clock are unchanged by `undo` |
 | `avatar.test.ts` | enter sets mode and player, spawns only when absent | each of the six avatars: `getMode() === 'avatar'`, `getPlayer()` is a live actor id; a second enter with the actor present spawns nothing |
 | `avatar.test.ts` | locked avatars are refused | tier 0: `a_florist` → `reason.locked` |
@@ -252,7 +254,7 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `mode.test.ts` | one variable, one branch | `getMode`/`getPlayer` are the only mode reads in `entities/` (grep `MODE` and `PLAYER` under `src/entities/` returns only the cadence branch of 03 §4.4); `romance.ts`, `needs.ts`, `weather.ts` import nothing from `play/mode.ts` |
 | `mode.test.ts` | park.new forces creator | in avatar mode `park.new` → creator, `PLAYER 0`, a player-spawned actor discarded (GV 12107) |
 
-### 2.6 Save (files `save.test.ts`, `migrate.test.ts`)
+### 2.6 Save (files `save.test.ts`, `save-profile.test.ts`, `migrate.test.ts`)
 
 | File | Test | Assertion |
 |---|---|---|
@@ -262,6 +264,7 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `save.test.ts` | the excluded things are excluded | the snapshot has no undo stack, camera, selection, armed tool, toast, particles or `T.speed` (03 §3.10) |
 | `save.test.ts` | size under 1 MB | the starter park with 100 extra props and 30 visitors serialises under 1,048,576 bytes; the 600-entry log included |
 | `save.test.ts` | keys and autosave triggers | `savePark()` writes `parque:park-v1` and `parque:profile-v1`; `stepAutosave` writes at 30 sim s and not at 29; a thrown `localStorage` error is caught and emits one `warn` |
+| `save-profile.test.ts` | no profile write after a failed profile read | the profile read throws, or its text does not parse or migrate: `savePark` writes the park key only, `saveProfile`, `clearPark` and the picks write nothing to `parque:profile-v1`, the stored points stay, one `warn` (from the read); a later read that succeeds lifts the hold (owner 2026-10-13; 03 §11) |
 | `save.test.ts` | mode and player are restored | save in avatar mode: `restore` gives `getMode() === 'avatar'` and the same `PLAYER` |
 | `migrate.test.ts` | a v0 fixture migrates | `migratePark(fixtures/park-v0.json)` returns `v === 1` and `restore` succeeds; `migrateProfile` likewise |
 | `migrate.test.ts` | garbage is refused, not thrown | `migratePark('{bad')`, `migratePark({ v: 99 })`, `migratePark(null)` return null without throwing |
@@ -349,7 +352,7 @@ Browser check (not Vitest; 07 S8.7 item 3; 05 §7.2 item 3): `npm run audio-smok
 3. Run 2: the same from scratch; assert `hash`, `rngN` and `tick` equal run 1.
 4. Run 3: the same plus one extra `setWeather('rain')` at step 30,000; assert `hash` differs from run 1 (the test proves it is not vacuous).
 5. Run 4 (speed invariance, 03 §4.5): run 1 again but driving `simulate(SIM_DT, 3)` instead of `lite 1`, in batches of 22 steps (`nsMax` at 8×); assert `hash` equals run 1.
-6. Run 5 (replay): `snapshot()` at step 20,000 of run 1; continue to 21,000; `h1 = hash()`; keep `cmds = log().filter(c => c.tick > 20000)` (after `restore`, `log()` is the snapshot's log, whose commands are already applied); `restore(snapshot)`; `replay(cmds, 21000)`; assert `hash() === h1`, `rngN()` equal, and visitor positions and pair affinities equal to the last bit (design §14.5).
+6. Run 5 (replay): `snapshot()` at step 20,000 of run 1; continue to 21,000; `h1 = hash()`; keep `cmds = log().filter(c => c.tick > 20000)` (after `restore`, `log()` is the snapshot's log, whose commands are already applied); `restore(snapshot)`; `replay(cmds, 21000)`; assert `hash() === h1`, `rngN()` equal, and visitor positions and pair affinities equal to the last bit (design §14.5). The undo stack is not saved (register 3.11), so a replay that starts from a snapshot reproduces only the undos of entries recorded after that snapshot; an undo of an earlier entry is `reason.nothing_to_undo` in the replay (owner 2026-10-13; pinned in `tests/undo.test.ts`). The fixture's undo in run 5's window therefore takes back an entry recorded inside it (det-s3: the stroke at 20,200 to 20,212, undone at 20,800).
 7. Run 6 (save round trip inside the run): at step 40,000 `restore(JSON.parse(JSON.stringify(snapshot())))`, continue to 64,800; assert `hash` equals run 1.
 8. Run time budget: the whole file under 90 s on the CI machine; if it is slower, profile the sim, do not shorten the run.
 9. Done when: all six runs pass on the fixture of the current slice and the values are listed in the hand-back (07 §0.6 item 4).

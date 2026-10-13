@@ -9,15 +9,16 @@
 // with its highlight), 9540-9553 (drawProp: the kind dispatcher), 6837-6848 (the cull below a few pixels).
 // Verdict: ADAPT. Changes: the hanging lantern became the three-globe Paris lamp (ref3); boxes are iso quads lit by faceLight; the
 // direction's brush draws every face; the bench and the table order their parts by the projection, so all four facings and every camera
-// angle paint right (the board's own order is unchanged); a wet bench darkens to x 0.86; a lamp's glow fades in (glow); in the game the
-// fountain leaves its spray and ripples to effects.ambientFx (03 7.7 item 4); a bandstand and a bridge are two drawables, back and front,
-// so people inside paint between them (GV frontFix 8871 idea; 03 7.2).
+// angle paint right (the board's own order is unchanged); a wet bench darkens to x 0.86; a lamp's glow fades in (glow), and the game's lit
+// globes are free of the night tint (bright; owner 2026-10-13); in the game the fountain leaves its spray and ripples to effects.ambientFx
+// (03 7.7 item 4); a bandstand and a bridge are two drawables, back and front, so people inside paint between them (GV frontFix 8871
+// idea; 03 7.2).
 // Dropped from the range: the house kit beyond the box primitives (6952-8044), the gnome, critter and part branches of drawProp
 // (figures.ts, creatures.ts and effects.ts own those).
 // TODO(S4, S6): easel, crumbs, peel, sprinkler, rowboat, umbrella. TODO(S9): the halo breath, snow caps.
 import { EH, TH, TW, cam, view } from './camera.ts';
 import {
-  GC, faceLight, fillEllipse, fillPoly, h01, inkLine, lampGlow, mix, shade, skyRamp, strokeLine,
+  GC, faceLight, fillEllipse, fillPoly, h01, inkLine, lampGlow, lit as tinted, mix, shade, skyRamp, strokeLine,
   type Pen, type Proj, type Pt,
 } from './ambient.ts';
 import { drawRipple, drawSprayDot } from './effects.ts';
@@ -70,8 +71,19 @@ function cylinder(pen: Pen, proj: Proj, cx: number, cy: number, r: number, e0: n
 }
 
 /* ---------- the three-globe lamp (04 6.2; ref3) ---------- */
-/** glow: how far the lamp has come on, 0 to 1 (ambient.lampGlow: a 0.02-day fade, 04 10.1 item 4); 1 when left out (the board). */
-export type LampOpts = { lit: boolean; charm?: boolean; breath?: number; glow?: number };
+/**
+ * glow: how far the lamp has come on, 0 to 1 (ambient.lampGlow: a 0.02-day fade, 04 10.1 item 4); 1 when left out (the board).
+ * bright: the game's lamps, direction A (owner 2026-10-13): a lit globe and its highlight are free of the night tint, as the gate lamps'
+ * globes and the lit windows are (04 6.2 item 3, 10.2 item 4); the board leaves it out and draws its lamps as at the Style Gate.
+ */
+export type LampOpts = { lit: boolean; charm?: boolean; breath?: number; glow?: number; bright?: boolean };
+
+/** A palette colour scaled by L with the night tint (ambient.lit) taken off by the share k, 0 to 1: at k 1 the colour as the palette has
+ *  it, so a lamp coming on (k its glow) brightens out of the tinted colour over the fade instead of popping (04 10.1 item 4). */
+function untinted(hex: string, L: number, k: number, a = 1): string {
+  const c = hx(hex), raw: [number, number, number] = [c[0] * L, c[1] * L, c[2] * L];
+  return css(mixc(tinted(raw), raw, k), a);
+}
 
 /** The ground pool of a lit lamp standing at p: 1.6 x 0.8 tiles at alpha 0.16, fading to nothing at 3 tiles (04 6.1, 6.2 item 4). */
 export function drawLampPool(pen: Pen, p: Pt, o: LampOpts): void {
@@ -138,6 +150,7 @@ export function drawLamp(pen: Pen, p: Pt, o: LampOpts): void {
   globes.push({ x: p.x, y: top - armUp - 0.12 * tile - 0.08 * tile });
   const gr = 0.11 * tile;
   const gk = o.glow ?? 1; // a lamp coming on fades its glow in (04 10.1 item 4); the board's lamps are fully on
+  const bright = o.bright === true && spec.id === 'A'; // the globe untinted; the halo and the glow below were never tinted (css, not GC)
   if (o.lit) {
     // the halo round the head (GV 7995 recipe) and the glow on each globe
     const hr = 0.9 * tile * (o.charm ? 1.4 : 1) * (1 + (o.breath ?? 0) * 0.05);
@@ -157,8 +170,14 @@ export function drawLamp(pen: Pen, p: Pt, o: LampOpts): void {
       gg.addColorStop(1, css(hx(P.lamp), 0));
       ctx.fillStyle = gg;
       ctx.fillRect(gp.x - gr * 3, gp.y - gr * 3, gr * 6, gr * 6);
-      fillEllipse(pen, gp.x, gp.y, gr, gr, gk < 1 ? mix(P.paper, P.lamp, gk) : P.lamp, { seed: 50 + i, gapless: true, light: 1.02, lineW: thin, inkAlpha: 0.7 });
-      ctx.fillStyle = GC(P.paper, 0.9);
+      const globe = gk < 1 ? mix(P.paper, P.lamp, gk) : P.lamp;
+      if (bright) {
+        ctx.fillStyle = untinted(globe, 1.02, gk); // A's fillEllipse without the tint: the same disc, no contour
+        ctx.beginPath();
+        ctx.ellipse(gp.x, gp.y, gr, gr, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else fillEllipse(pen, gp.x, gp.y, gr, gr, globe, { seed: 50 + i, gapless: true, light: 1.02, lineW: thin, inkAlpha: 0.7 });
+      ctx.fillStyle = bright ? untinted(P.paper, 1, gk, 0.9) : GC(P.paper, 0.9);
       ctx.beginPath();
       ctx.arc(gp.x - gr * 0.35, gp.y - gr * 0.35, Math.max(0.6, gr * 0.22), 0, Math.PI * 2);
       ctx.fill();
@@ -489,7 +508,7 @@ export function drawProp(p: Prop, s: XY, c?: CanvasRenderingContext2D, part: 0 |
       break;
     case 'lamp': {
       const g = lampOn(p);
-      drawLamp(pen, s, { lit: g > 0, glow: g });
+      drawLamp(pen, s, { lit: g > 0, glow: g, bright: true });
       break;
     }
     case 'fountain':

@@ -60,11 +60,11 @@ describe('core/commands enqueue and applyPending (03 5.2)', () => {
     expect(applied).toEqual(['tool:' + p.seq, 'tool:' + p2.seq, 'ability:cupid:' + c.seq, 'ability:mischief:' + m.seq]);
     expect(pendingCount()).toBe(0);
   });
-  it('with a kind filter only that kind applies; the others stay queued in order (the paused frame, 03 4.6)', () => {
+  it('with a set of kinds only those kinds apply; the others stay queued in order (the paused frame, 03 4.6)', () => {
     const c = enqueue({ side: 'cupid', kind: 'ability', payload: { id: 'c_petals', target: { kind: 'park' } } });
     const p = enqueue(tool());
     enqueue({ side: 'park', kind: 'speed', payload: { speed: 3 } });
-    applyPending(1, 'speed');
+    applyPending(1, new Set(['speed', 'park.new'] as const));
     expect(T.speed).toBe(3);
     expect(applied).toEqual([]);
     expect(pendingCount()).toBe(2);

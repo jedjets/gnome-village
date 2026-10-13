@@ -10,8 +10,9 @@
 // BOULEVARD holds its knobs as a parameter table, as props-park.ts's, so a scratch page can show the other variants.
 // The street lamps on the tree pavement's kerb (register section 4 row Street lamps, the owner on 2026-10-13: "Yes Just generate an option
 // and use it"; park.streetLamps): the park's three-globe lamp (props.drawLamp, 04 6.2) as apron drawables sorted with the street trees,
-// lit by the lamps' hours and fade (ambient.lampGlow) with its halo and globe glow, never the c_lamplight boost; solid on every side
-// (thin posts hide nothing); their ground pools are draw.ts's pool pass (04 6.2 item 4, 10.2 item 2).
+// lit by the lamps' hours and fade (ambient.lampGlow) with its halo and globe glow, the lit globes free of the night tint as the park's
+// (owner 2026-10-13), never the c_lamplight boost; solid on every side (thin posts hide nothing); their ground pools are draw.ts's pool
+// pass (04 6.2 item 4, 10.2 item 2).
 // NEW: nothing ported (GV has no streets); the sprite blit is GV drawTree 6837-6848 through flora.treeSpriteOf.
 import type { XY } from '../core/math.ts';
 import { now } from '../core/loop.ts';
@@ -317,7 +318,7 @@ function lampSprite(): typeof LS | null {
   x.setTransform(d, 0, 0, d, 0, 0);
   x.imageSmoothingEnabled = false;
   x.save(); // drawLamp leaves its fill and stroke state behind: the next repaint starts from a reset canvas's state, as a resize does
-  drawLamp(gamePen(x), { x: half, y: up }, { lit: g > 0, glow: g });
+  drawLamp(gamePen(x), { x: half, y: up }, { lit: g > 0, glow: g, bright: true });
   x.restore();
   LS.ox = half;
   LS.oy = up;
@@ -349,7 +350,7 @@ function drawStreetLamp(d: Drawable, ctx: CanvasRenderingContext2D): void {
   const sp = sprite;
   if (!sp?.c) {
     const g = lampGlow();
-    drawLamp(gamePen(ctx), SL, { lit: g > 0, glow: g });
+    drawLamp(gamePen(ctx), SL, { lit: g > 0, glow: g, bright: true });
     return;
   }
   const k = view.dpr;

@@ -3,15 +3,16 @@
 // Ported from GV 12013-12096 (SP, simulate, SIM_DT, simAcc, frame). Verdict: PORT of the frame shape; ADAPT of the step.
 // Changes: simulate runs the phases of 03 4.2 (commands first, then clock, weather, ice; the water solver, surface rebuild, flora, critters,
 // particles and breeding of GV 12026-12039 are dropped); the lite bits only ever drop frame-side events (03 4.5, A12), they change no sim
-// value; particles step on the frame, not here (A11); speed 0-8 (GV 1-20). A paused frame applies pending `speed` commands only (03 4.6),
-// or the speed command that unpauses could never run; every other command waits for the first step, so live order equals replay order.
+// value; particles step on the frame, not here (A11); speed 0-8 (GV 1-20). A paused frame applies pending `speed` and `park.new` commands
+// (03 4.6; owner 2026-10-13): the speed command that unpauses could never run otherwise, and a New confirmed while paused gives the fresh
+// park at once and stays paused; every other command waits for the first step, so live order equals replay order.
 // Dropped from the range: 12026-12031 (water, slump, surface), 12033-12037 (materials, index, gnomes, flora, critters, parts), 12039 (breeding).
 // This is the one module allowed to read the wall clock (07 0.7 item 6). Frame listeners are registered by main.ts (03 2.1: L4 imports L0-L3).
 // Phases 5 to 10 and 12 are kept in order as empty calls: S4 to S6 fill them (listed in the S2 hand-back).
 import { clamp } from './math.ts';
 import { T, isNewDay, stepClock, syncClock } from './clock.ts';
 import { forceWeather, stepWeather, stepWet } from './weather.ts';
-import { OK, applyPending, clearPending, registerHandler, resetCommands, setStepper, setTickSource } from './commands.ts';
+import { OK, applyPending, clearPending, registerHandler, resetCommands, setStepper, setTickSource, type CommandKind } from './commands.ts';
 import { clearEvents, drain, markStep } from './events.ts';
 import { genPark } from '../world/gen.ts';
 import { props } from '../world/grid.ts';
@@ -21,6 +22,11 @@ import { charmDirty, markCharmDirty, rebuildCharm } from '../world/charm.ts';
 import { setMode } from '../play/mode.ts';
 
 export const SIM_DT = 1 / 60;
+/**
+ * The kinds a paused frame applies (03 4.6): `speed`, so the dial can unpause, and `park.new` (owner 2026-10-13: a New confirmed while
+ * paused gives the fresh park at once, still paused). Every other command waits for the first step after the unpause.
+ */
+export const PAUSED_KINDS: ReadonlySet<CommandKind> = new Set<CommandKind>(['speed', 'park.new']);
 /** Milliseconds spent per sim phase since boot (GV 12014; the names are the phases of 03 4.2). */
 export const SP: Record<string, number> = { cmd: 0, time: 0, weather: 0, day: 0, abilities: 0, arrivals: 0, visitors: 0, creatures: 0, romance: 0, wear: 0, plan: 0, charm: 0 };
 
@@ -166,7 +172,7 @@ function frame(ts: number): void {
     if (ns >= 8 && performance.now() > tBudget) break;
   }
   if (ns >= nm || simAcc > SIM_DT * nm) simAcc = 0; // a long stall drops steps rather than racing to catch up (GV 12086)
-  if (T.speed === 0) applyPending(tickN + 1, 'speed'); // paused: only `speed` applies, so the dial can unpause; the rest wait for the step (03 4.6)
+  if (T.speed === 0) applyPending(tickN + 1, PAUSED_KINDS); // paused: the dial and New apply; the rest wait for the first step (03 4.6)
   const f1 = performance.now();
   drain(lite); // 03 4.1 item 6
   for (const fn of frameFns) fn(dtr, ns);

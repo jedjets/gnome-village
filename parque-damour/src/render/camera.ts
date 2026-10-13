@@ -10,16 +10,17 @@
 // world point under the fingers or the view centre (GV pinned a tile centre and fell back to a plain zoom off the land, 11206); taps and
 // paints go to InputHandlers by tool class (03 8.1 items 2 and 5): a brush paints on down and never taps, and pointercancel never taps;
 // the tap clock and the drag-paint throttle use each event's own timeStamp (GV read the wall clock at 11173 and counted paintCool down
-// in the frame, 12075); follow takes the FollowTarget union and a lookup (GV duck-typed 11292); the pivot is released once the angle
-// equals its target, so the final sub-0.0015 rad snap is pinned too (GV released it one frame early, 11315: a hop of up to half a
-// pixel); focusY measures the DOM on a 0.35 s cadence (review 13); cam.follow is the followed id (0 none, -1 a point); Fit's second
-// press returns to the start view of 04 5.1 (zoom 1.3 on the fountain) where GV used its own start zoom clamp(max(fitZ * 2.6, 1.15),
-// 0.9, 1.6) (12152).
+// in the frame, 12075); a drag sample more than one tile from the stroke's last painted centre paints every centre on the straight line
+// to it first (lineTiles, Bresenham; owner 2026-10-13: a drag fills its gaps; GV painted the sample alone, 11212-11215); follow takes
+// the FollowTarget union and a lookup (GV duck-typed 11292); the pivot is released once the angle equals its target, so the final
+// sub-0.0015 rad snap is pinned too (GV released it one frame early, 11315: a hop of up to half a pixel); focusY measures the DOM on a
+// 0.35 s cadence (review 13); cam.follow is the followed id (0 none, -1 a point); Fit's second press returns to the start view of 04 5.1
+// (zoom 1.3 on the fountain) where GV used its own start zoom clamp(max(fitZ * 2.6, 1.15), 0.9, 1.6) (12152).
 // Dropped from the range: landBox 6385-6399 (the land test), the fitZ * 0.85 floor (6410), tileOrder and the coarse lattice 6359-6381
 // (order.ts sorts drawables), projectVerts and the quad walk 6417-6443 (09 section 3), pinchWorld (dead, 11166), the spring tool and the
 // terrain stroke (11176, 11212), tapSelect and the flyer box (11231-11250; project.ts pickAt), the flyer, boat and rabbit heights of
 // followStep (11294-11296), the toasts of Fit (the rail toasts through t()).
-import { clamp, TAU, type XY } from '../core/math.ts';
+import { cheb, clamp, TAU, type XY } from '../core/math.ts';
 import { N } from '../world/grid.ts';
 import { APRON } from '../world/park.ts';
 
@@ -75,6 +76,7 @@ let dragging = false;
 let pinch: Pinch | null = null;
 let down: Down | null = null;
 let paintNext = 0; // event time in ms from which the next drag paint may land
+let lastPaint: XY | null = null; // the centre the brush last painted in this gesture (lineTiles starts from it)
 let originX = 0; // canvas client offset, read once per gesture
 let originY = 0;
 const wired = new WeakSet<HTMLCanvasElement>();
@@ -386,7 +388,10 @@ export type InputHandlers = {
   toolClass?: () => ToolClass;
   /** A brush stroke begins on a park tile (one undo group, 03 5.6). */
   onStrokeStart?: () => void;
-  /** Paint one park tile: at once on down, then after 0.14 s, then every 0.10 s while the finger drags (GV 11176, 11212-11215). */
+  /**
+   * Paint one park tile: at once on down, then after 0.14 s, then every 0.10 s while the finger drags (GV 11176, 11212-11215); a drag
+   * sample more than one tile (Chebyshev) from the last painted centre is reached through every centre of lineTiles, one call each.
+   */
   onPaint?: (tile: XY) => void;
 };
 
@@ -400,6 +405,37 @@ export const TWIST_DEAD = 0.06;
 
 type PtrEvent = { pointerId: number; clientX: number; clientY: number; timeStamp: number };
 const tileScratch: XY = { x: 0, y: 0 };
+
+/**
+ * The tile centres on the straight line from a to b in Bresenham order, a left out and b included (owner 2026-10-13: a brush drag fills
+ * its gaps). Each centre is an 8-neighbour of the one before it, so a disc brush of any size leaves no gap; a equal to b gives none.
+ */
+export function lineTiles(a: XY, b: XY): XY[] {
+  const out: XY[] = [];
+  const dx = Math.abs(b.x - a.x), dy = -Math.abs(b.y - a.y), sx = a.x < b.x ? 1 : -1, sy = a.y < b.y ? 1 : -1;
+  let x = a.x, y = a.y, err = dx + dy;
+  while (x !== b.x || y !== b.y) {
+    const e2 = 2 * err;
+    if (e2 >= dy) {
+      err += dy;
+      x += sx;
+    }
+    if (e2 <= dx) {
+      err += dx;
+      y += sy;
+    }
+    out.push({ x, y });
+  }
+  return out;
+}
+
+/** Paint the drag sample t: through the line from the last painted centre when t is more than one tile from it, else t alone. */
+function paintTo(h: InputHandlers, t: XY): void {
+  const l = lastPaint;
+  if (l && cheb(l.x, l.y, t.x, t.y) > 1) for (const c of lineTiles(l, t)) h.onPaint?.(c);
+  else h.onPaint?.(t);
+  lastPaint = t;
+}
 
 /** A pointer's position in canvas CSS px. */
 function pos(e: PtrEvent): XY {
@@ -440,6 +476,7 @@ export function setupInput(canvas: HTMLCanvasElement, h: InputHandlers): void {
         if (cls === 'hand') dragging = true;
         else if (cls === 'brush') {
           const t = parkTileAt(p.x, p.y);
+          lastPaint = t;
           if (t) {
             h.onStrokeStart?.();
             h.onPaint?.(t);
@@ -503,7 +540,7 @@ export function setupInput(canvas: HTMLCanvasElement, h: InputHandlers): void {
         clampCam();
       } else if (down && down.cls === 'brush' && ptrs.size === 1 && e.timeStamp >= paintNext) {
         const t = parkTileAt(cur.x, cur.y);
-        if (t) h.onPaint?.(t);
+        if (t) paintTo(h, t);
         paintNext = e.timeStamp + PAINT_EVERY_MS;
       }
     },

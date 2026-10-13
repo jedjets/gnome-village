@@ -4,8 +4,8 @@
 // S2 fills ParkSaveV1 for everything the engine owns. The record lists that later slices own (visitors S4, pairs S5, creatures S4, effects S6,
 // regulars and alumni S4, feed S3) are typed as SaveRec until their slice replaces the type; the engine saves them as empty lists.
 // S3 part B: ProfileV1 gains the fields of 03 3.9 (points, tiers, unlocks, parks played, the write serial); ParkSaveV1 gains `treeTurn`,
-// the park tools' tree cycle (02 8.3), sim state that 03 3.10 does not list (a deviation of S3 part B: without it a reload or a replay
-// from a snapshot could plant the next tree as another species). It is saved, not hashed: 03 11 lists what the hash covers.
+// the park tools' tree cycle (02 8.3; without it a reload or a replay from a snapshot could plant the next tree as another species).
+// It is saved, not hashed: 03 3.10 lists it and 03 11 what the hash covers (docs synced with the owner's answers of 2026-10-13).
 import type { Command } from '../core/commands.ts';
 import type { IdsState, Side } from '../core/ids.ts';
 import type { Override, WeatherKind } from '../core/weather.ts';

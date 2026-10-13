@@ -108,15 +108,16 @@ export function applyNow(c: CommandInput): Result {
 
 /**
  * Apply every pending command with tick <= `tick`, ordered by (tick, side park < cupid < mischief, seq) (03 5.2 item 2).
- * With `only`, apply just the commands of that kind and leave the rest queued: a paused frame applies `speed` alone (03 4.6), so every
- * command that changes the sim waits for the first step and the live order always equals the replay order.
+ * With `only`, apply just the commands of those kinds and leave the rest queued: a paused frame applies `speed` and `park.new` (03 4.6;
+ * owner 2026-10-13), so the dial can unpause and a confirmed New starts the fresh park at once, while every other command waits for the
+ * first step and the live order always equals the replay order (a `park.new` starts a new log, so it is never replayed).
  */
-export function applyPending(tick: number, only?: CommandKind): void {
+export function applyPending(tick: number, only?: ReadonlySet<CommandKind>): void {
   if (pending.length === 0) return;
   pending.sort((a, b) => a.tick - b.tick || SIDE_ORDER[a.side] - SIDE_ORDER[b.side] || a.seq - b.seq);
   const batch: Command[] = [];
   const keep: Command[] = [];
-  for (const c of pending) (c.tick <= tick && (only === undefined || c.kind === only) ? batch : keep).push(c);
+  for (const c of pending) (c.tick <= tick && (only === undefined || only.has(c.kind)) ? batch : keep).push(c);
   if (batch.length === 0) return;
   pending = keep;
   const g = generation;

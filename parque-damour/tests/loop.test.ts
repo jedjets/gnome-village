@@ -1,14 +1,15 @@
 // tests/loop.test.ts
 // Locks 03 4.1, 4.2, 4.5 and 4.6 / 06 1.2 / 08 2.1 (GV 12082-12083): nsMax, the wall budget, the lite bits; the order of a step; the
-// once-a-second wear decay; the paused frame; newPark. Step cost is measured by tools/perf.mjs (08 5), never here (08 1.3 item 3).
-// The debug/perf tests are in tests/perf.test.ts.
+// once-a-second wear decay; the paused frame (speed and park.new apply while paused, owner 2026-10-13); newPark. Step cost is measured
+// by tools/perf.mjs (08 5), never here (08 1.3 item 3). The debug/perf tests are in tests/perf.test.ts.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { SIM_DT, SP, budgetMs, liteFor, newPark, nsMax, setSpeed, setTick, simulate, start, tick } from '../src/core/loop.ts';
-import { OK, enqueue, log, registerHandler, replay } from '../src/core/commands.ts';
-import { clearListeners, on } from '../src/core/events.ts';
+import { PAUSED_KINDS, SIM_DT, SP, budgetMs, liteFor, newPark, nsMax, setSpeed, setTick, simulate, start, tick } from '../src/core/loop.ts';
+import { OK, enqueue, log, pendingCount, registerHandler, replay } from '../src/core/commands.ts';
+import { clearListeners, on, watch } from '../src/core/events.ts';
 import { T, STEPS_PER_DAY } from '../src/core/clock.ts';
 import { W } from '../src/core/weather.ts';
 import { WEAR } from '../src/world/grid.ts';
+import { parkSeed } from '../src/world/gen.ts';
 import { restore, snapshot, stateHash } from '../src/save/store.ts';
 
 beforeEach(() => {
@@ -119,8 +120,29 @@ describe('core/loop newPark and setTick', () => {
   });
 });
 
+/* The frame driver: requestAnimationFrame stubbed so a test runs frames by hand; loop.start() wires the frame once per module, so the
+   callback it registered is kept here for every later test. */
+let rafCb: FrameRequestCallback | null = null;
+let rafTs = 1000;
+function stubRaf(): void {
+  vi.stubGlobal('requestAnimationFrame', (f: FrameRequestCallback) => {
+    rafCb = f;
+    return 1;
+  });
+  start();
+}
+/** One frame 0.02 s after the last (one step at 1x). */
+function frame(): void {
+  rafTs += 20;
+  rafCb?.(rafTs);
+}
+
 describe('core/loop the paused frame (03 4.6)', () => {
-  it('while paused only speed applies; the rest wait for the first step, so the live order equals the replay order', () => {
+  it('the kinds a paused frame applies are speed and park.new (owner 2026-10-13)', () => {
+    expect([...PAUSED_KINDS].sort()).toEqual(['park.new', 'speed']);
+  });
+
+  it('while paused only speed and park.new apply; the rest wait for the first step, so the live order equals the replay order', () => {
     // two order-dependent stand-ins for kinds later slices own: park first gives (0 + 1) * 3 = 3, cupid first gives 0 * 3 + 1 = 1
     registerHandler('visitor.call', () => {
       WEAR[0] = (WEAR[0] as number) + 1;
@@ -132,18 +154,8 @@ describe('core/loop the paused frame (03 4.6)', () => {
     });
     setSpeed(0);
     const snap = JSON.parse(JSON.stringify(snapshot())) as ReturnType<typeof snapshot>;
-    let cb: FrameRequestCallback | null = null;
-    vi.stubGlobal('requestAnimationFrame', (f: FrameRequestCallback) => {
-      cb = f;
-      return 1;
-    });
-    let ts = 1000;
-    const frame = (): void => {
-      ts += 20; // 0.02 s: one step at 1x
-      (cb as FrameRequestCallback | null)?.(ts);
-    };
     try {
-      start();
+      stubRaf();
       frame();
       enqueue({ side: 'cupid', kind: 'ability', payload: { id: 'c_petals', target: { kind: 'park' } } });
       frame();
@@ -167,5 +179,44 @@ describe('core/loop the paused frame (03 4.6)', () => {
     restore(snap);
     replay(cmds, 1);
     expect(stateHash()).toBe(h);
+  });
+
+  it('a New confirmed while paused gives the fresh park at once and stays paused; what was queued for the old park is dropped', () => {
+    registerHandler('visitor.call', () => {
+      WEAR[0] = (WEAR[0] as number) + 1;
+      return OK;
+    });
+    newPark(5);
+    const fresh = stateHash(); // seed 5 at tick 0, untouched
+    newPark(101);
+    for (let i = 0; i < 300; i++) simulate(SIM_DT, 1);
+    setSpeed(0);
+    const news: number[] = [];
+    watch('applied', (e) => {
+      if (e.params?.kind === 'park.new') news.push(tick());
+    });
+    try {
+      stubRaf();
+      frame();
+      enqueue({ side: 'park', kind: 'visitor.call', payload: { gate: null } }); // for the old park: it waits, then New drops it
+      enqueue({ side: 'park', kind: 'park.new', payload: { seed: 5 } });
+      frame();
+      expect(news).toEqual([0]); // applied in the paused frame, its event drained in the same frame (main.ts clears the key, the view)
+      expect([tick(), parkSeed(), T.speed]).toEqual([0, 5, 0]); // the fresh park, still paused
+      expect(stateHash()).toBe(fresh); // the visitor.call queued before New never reached the new park
+      expect(pendingCount()).toBe(0);
+      enqueue({ side: 'park', kind: 'visitor.call', payload: { gate: null } }); // for the new park: waits for the unpause
+      frame();
+      frame();
+      expect([tick(), WEAR[0]]).toEqual([0, 0]);
+      enqueue({ side: 'park', kind: 'speed', payload: { speed: 1 } });
+      frame();
+      expect([T.speed, tick()]).toEqual([1, 0]);
+      frame();
+      expect([tick(), WEAR[0]]).toEqual([1, 1]); // the first step applies it
+      expect(log().map((c) => c.kind)).toEqual(['speed', 'visitor.call']); // park.new starts the log and is not in it
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

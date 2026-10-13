@@ -15,7 +15,7 @@
 // build constructors), 5998-6003 (pbPick, pbClear), 6006-6017's project staging, 6018-6035 (pbStop, pbStatus).
 // The kiosk's vendor, the sitters of a removed bench, the someone-on-it test and openNear are calls into entities/staff.ts and
 // entities/visitor.ts that S4 fills (no-ops now). The tree species cycle is a counter that each planting moves on and its undo moves back
-// (02 8.3); part B saves and hashes it (nextSpecies, setNextSpecies).
+// (02 8.3); the park save holds it, outside the state hash (nextSpecies, setNextSpecies; ParkSaveV1.treeTurn, 03 3.10).
 import type { XY } from '../core/math.ts';
 import { propIdRecycles } from '../core/ids.ts';
 import { OK, fail, onResetCommands, onRestoreCommands, registerHandler, type ReasonKey, type Result, type ToolPayload } from '../core/commands.ts';
@@ -339,7 +339,7 @@ export function nextSpecies(): 0 | 1 | 2 {
   return treeTurn;
 }
 
-/** Set the cycle: part B restores the saved value with it (S3 part B saves and hashes nextSpecies(); until then a restore derives it). */
+/** Set the cycle: a restore puts the saved value back with it (ParkSaveV1.treeTurn: saved, not in stateHash; 03 3.10). */
 export function setNextSpecies(s: number): void {
   treeTurn = (Number.isFinite(s) ? ((Math.trunc(s) % 3) + 3) % 3 : 0) as 0 | 1 | 2;
 }

@@ -1,7 +1,10 @@
 // tests/camera.test.ts
-// Locks 03 7.1: the iso constants, fitCam on the park plus apron, clampCam, the projection and its inverse.
+// Locks 03 7.1: the iso constants, fitCam on the park plus apron, clampCam, the projection and its inverse; and 02 8.2's brush row: the
+// line a drag fills between two samples (owner 2026-10-13).
 import { describe, it, expect } from 'vitest';
-import { TW, TH, EH, VANCH, CTR, ZMIN, ZMAX, cam, view, setViewport, setAngle, fitCam, clampCam, turn, apronBox, rotXY, invRot, centreOn } from '../src/render/camera.ts';
+import {
+  TW, TH, EH, VANCH, CTR, ZMIN, ZMAX, cam, view, setViewport, setAngle, fitCam, clampCam, turn, apronBox, rotXY, invRot, centreOn, lineTiles,
+} from '../src/render/camera.ts';
 import { screenOf, screenToTile, sxOf, syOf } from '../src/render/project.ts';
 
 describe('iso constants (register 3.1)', () => {
@@ -125,5 +128,35 @@ describe('projection and its inverse (03 7.1 items 2 and 6)', () => {
   it('view holds the viewport the tests set', () => {
     setViewport(390, 844, 2);
     expect(view).toEqual({ cw: 390, chh: 844, dpr: 2 });
+  });
+});
+
+const cheb = (a: { x: number; y: number }, b: { x: number; y: number }): number => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+
+describe('lineTiles: a brush drag fills its gaps (02 8.2 brush row; owner 2026-10-13)', () => {
+  it('a row, a column and a diagonal: every centre after the start, in order, the end included', () => {
+    expect(lineTiles({ x: 2, y: 5 }, { x: 6, y: 5 })).toEqual([3, 4, 5, 6].map((x) => ({ x, y: 5 })));
+    expect(lineTiles({ x: 4, y: 9 }, { x: 4, y: 6 })).toEqual([8, 7, 6].map((y) => ({ x: 4, y })));
+    expect(lineTiles({ x: 0, y: 0 }, { x: 3, y: -3 })).toEqual([1, 2, 3].map((k) => ({ x: k, y: -k })));
+  });
+  it('a shallow line in Bresenham order: (0, 0) to (6, 2)', () => {
+    expect(lineTiles({ x: 0, y: 0 }, { x: 6, y: 2 })).toEqual([
+      { x: 1, y: 0 }, { x: 2, y: 1 }, { x: 3, y: 1 }, { x: 4, y: 1 }, { x: 5, y: 2 }, { x: 6, y: 2 },
+    ]);
+  });
+  it('in every octant: max(|dx|, |dy|) centres, each an 8-neighbour of the one before, ending on b; none when a is b', () => {
+    expect(lineTiles({ x: 7, y: 7 }, { x: 7, y: 7 })).toEqual([]);
+    const a = { x: 20, y: 20 };
+    for (let dx = -9; dx <= 9; dx++)
+      for (let dy = -9; dy <= 9; dy++) {
+        const b = { x: a.x + dx, y: a.y + dy }, line = lineTiles(a, b);
+        expect(line.length).toBe(Math.max(Math.abs(dx), Math.abs(dy)));
+        let prev = a;
+        for (const c of line) {
+          expect(cheb(prev, c)).toBe(1);
+          prev = c;
+        }
+        if (line.length) expect(line[line.length - 1]).toEqual(b);
+      }
   });
 });
