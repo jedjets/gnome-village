@@ -14,16 +14,17 @@
 // ghosts), 5959-5971 (garden, hive, well, fold, kennel, stable and cart rules), 5973-5975's sea, rock and slope reasons, 5978-5988 (the
 // build constructors), 5998-6003 (pbPick, pbClear), 6006-6017's project staging, 6018-6035 (pbStop, pbStatus).
 // The kiosk's vendor, the sitters of a removed bench, the someone-on-it test and openNear are calls into entities/staff.ts and
-// entities/visitor.ts that S4 fills (no-ops now).
+// entities/visitor.ts that S4 fills (no-ops now). The tree species cycle is a counter that each planting moves on and its undo moves back
+// (02 8.3); part B saves and hashes it (nextSpecies, setNextSpecies).
 import type { XY } from '../core/math.ts';
 import { propIdRecycles } from '../core/ids.ts';
-import { OK, fail, registerHandler, type ReasonKey, type Result, type ToolPayload } from '../core/commands.ts';
+import { OK, fail, onResetCommands, onRestoreCommands, registerHandler, type ReasonKey, type Result, type ToolPayload } from '../core/commands.ts';
 import { BEDC, I, KIND, Kind, N, OCC, WATER, WEAR, addProp, inB, propById, props, removeProp, type Prop, type PropData, type PropKind } from '../world/grid.ts';
 import { isBoundary, isGateTile } from '../world/park.ts';
 import { findCrossing } from '../world/water.ts';
 import { vendorArrive, vendorLeave } from '../entities/staff.ts';
 import { someoneOn, standUpFrom } from '../entities/visitor.ts';
-import { keepTile, newInverse, record, settle, type Inverse } from './undo.ts';
+import { keepTile, newInverse, onRevert, record, settle, type Inverse } from './undo.ts';
 
 /* ---------- the table (register 3.7, 06 3.1) ---------- */
 
@@ -329,12 +330,32 @@ export function servingTile(kiosk: Pick<Prop, 'x' | 'y' | 'h'>): XY {
   return { x: kiosk.x, y: kiosk.y + kiosk.h };
 }
 
-/** The species of the next tree the tool plants: plane, chestnut, lime in turn, counted from the player's trees standing (02 8.3). */
+/* ---------- the tree cycle (02 8.3 tree row: "species cycle plane → chestnut → lime on each placement") ---------- */
+
+let treeTurn: 0 | 1 | 2 = 0;
+
+/** The species of the next tree the tool plants: plane 0, chestnut 1, lime 2 in turn. Each placement moves it on; a removal does not. */
 export function nextSpecies(): 0 | 1 | 2 {
+  return treeTurn;
+}
+
+/** Set the cycle: part B restores the saved value with it (S3 part B saves and hashes nextSpecies(); until then a restore derives it). */
+export function setNextSpecies(s: number): void {
+  treeTurn = (Number.isFinite(s) ? ((Math.trunc(s) % 3) + 3) % 3 : 0) as 0 | 1 | 2;
+}
+
+/** The player's trees standing, mod 3: the cycle as far as a restored world can tell (exact unless a player tree was removed before the save). */
+function derivedSpecies(): number {
   let n = 0;
   for (const p of props) if (p.kind === 'tree' && p.placedBy === 'player') n++;
-  return (n % 3) as 0 | 1 | 2;
+  return n;
 }
+
+onResetCommands(() => setNextSpecies(0)); // a new park starts the cycle at plane
+onRestoreCommands(() => setNextSpecies(derivedSpecies())); // the save does not hold the cycle yet (part B)
+onRevert((inv) => {
+  if (inv.treeTurn !== null) setNextSpecies(inv.treeTurn); // an undone planting hands its species back
+});
 
 /* ---------- applyTool ---------- */
 
@@ -393,8 +414,10 @@ function stamp(tool: 'bed' | 'tree' | 'bench' | 'lamp', at: XY, inv: Inverse): R
     take(propAt(at.x, at.y) as Prop, inv);
   } else if (tool === 'tree') {
     const species = nextSpecies();
+    inv.treeTurn = species;
     KIND[i] = Kind.mulch;
     place('tree', at.x, at.y, 1, 1, inv, { species });
+    setNextSpecies(species + 1);
   } else {
     place(tool, at.x, at.y, 1, 1, inv);
   }

@@ -6,14 +6,17 @@
 // never references (notes 20 11.4); a stroke is the brush commands sharing a stroke id (GV began an entry on each pointerdown, 11091); the
 // undo is a logged command (03 5.6 item 4) and "Undone" is toasted by the shell from the `applied` event (no toast here, 03 5.4); a removed
 // prop comes back under its old id (ids.ts reserve), a placed one hands its id back (ids.ts unallocPropId); the stack is never saved, so a
-// reload starts it empty (register 3.11; owner 2026-10-13), and a new park clears it (03 5.6 item 5).
+// load (store.ts restore) empties it (register 3.11; owner 2026-10-13), and a new park clears it (03 5.6 item 5).
 // Dropped from the range: 11087-11090 (snapshotWorld), 11099-11111 (u.fallen: collapsed builds), 11112-11113 (initWater, setMaterials,
 // rebuildSurface, the gnomes' ground heights), 11114's toast and 11116's DOM (the rail reads canUndo and depth).
-// Two fields beyond 03 5.6 item 2: `recycled` (which added ids came from the free queue, so the undo hands each back where it came from)
-// and `propsChanged` (copies of props a command changed in place: a bench turned, a kiosk's table list).
+// Three fields beyond 03 5.6 item 2: `recycled` (which added ids came from the free queue, so the undo hands each back where it came from),
+// `propsChanged` (copies of props a command changed in place: a bench turned, a kiosk's table list) and `treeTurn` (the tree cycle of
+// tools.ts before a planting, so an undone tree hands its species back; 02 8.3).
+// A replay from a snapshot reproduces an undo only when its entry was recorded after that snapshot: the restore empties the stack, so an
+// undo that reached further back is `reason.nothing_to_undo` there (03 5.6 item 4 and 08 3.2 run 5 against register 3.11; an open question).
 import type { PropId } from '../core/ids.ts';
 import { reclaimPropId, releasePropId, unallocPropId } from '../core/ids.ts';
-import { OK, fail, onResetCommands, registerHandler } from '../core/commands.ts';
+import { OK, fail, onResetCommands, onRestoreCommands, registerHandler } from '../core/commands.ts';
 import { BEDC, BLOCK, KIND, OCC, WATER, WEAR, markBlockDirty, propById, putProp, rebuildBlock, removeProp, type Prop } from '../world/grid.ts';
 import { syncIce } from '../world/water.ts';
 import { markCharmDirty } from '../world/charm.ts';
@@ -34,16 +37,23 @@ export type Inverse = {
   propsRemoved: Prop[]; // copies, in the order they were removed; their ids are reserved (ids.ts) while the entry is on the stack
   propsChanged: Prop[]; // copies as they were before the command
   vendorRemoved: VendorRecord | null; // a removed kiosk's vendor (S4)
+  treeTurn: number | null; // the tree cycle before the command when it planted a tree (tools.ts), else null
   strokeId: number; // the brush stroke, 0 for every other tool
 };
 
 type Entry = { strokeId: number; invs: Inverse[] };
 
 let stack: Entry[] = [];
+const revertHooks: Array<(inv: Inverse) => void> = [];
 
 /** An empty inverse for a command of stroke `strokeId` (0: not a brush stroke). */
 export function newInverse(strokeId: number): Inverse {
-  return { tiles: [], propsAdded: [], recycled: [], propsRemoved: [], propsChanged: [], vendorRemoved: null, strokeId };
+  return { tiles: [], propsAdded: [], recycled: [], propsRemoved: [], propsChanged: [], vendorRemoved: null, treeTurn: null, strokeId };
+}
+
+/** A module that keeps its own sim state in an inverse puts it back here (tools.ts: the tree cycle); this file never imports tools.ts. */
+export function onRevert(fn: (inv: Inverse) => void): void {
+  revertHooks.push(fn);
 }
 
 /** Note tile `i` as it is now, once per inverse: the first value is the one before the command. */
@@ -139,6 +149,7 @@ function revert(inv: Inverse, touched: number[]): boolean {
     BEDC[t.i] = t.BEDC;
     touched.push(t.i);
   }
+  for (const fn of revertHooks) fn(inv);
   return kinds;
 }
 
@@ -154,3 +165,11 @@ registerHandler('undo', () => {
 });
 
 onResetCommands(() => clearUndo());
+
+/*
+ * A restore loads another world, so the entries recorded against the old one go: one of them could remove a prop it never placed, because
+ * the restored world may have handed the same PropId to another prop. The snapshot brought its own ids state, so the ids it holds reserved
+ * stay reserved (false): the round trip keeps the state hash (08 2.6 row 1, 08 3.2 run 6). Those ids no longer belong to any entry; what
+ * becomes of them is an open question for part B.
+ */
+onRestoreCommands(() => clearUndo(false));

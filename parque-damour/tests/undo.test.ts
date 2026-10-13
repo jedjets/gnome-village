@@ -1,19 +1,21 @@
 // tests/undo.test.ts
 // Locks the undo of the park tools: register 3.7 (10 deep, park tools only, command based), 02 8.5, 03 5.6 (inverse records grouped by
 // stroke, removed props back under their old ids, logged, cleared by a new park), 03 3.1 and 2.3 ids.ts (reserved ids), register 3.11
-// (never saved). 08 2.5 undo.test.ts rows.
+// (never saved, so a restore empties it; owner 2026-10-13), 03 5.5 item 2 (a replay reproduces the undos inside its window), 02 8.3 (an
+// undone tree hands its species back). 08 2.5 undo.test.ts rows.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { newPark, tick } from '../src/core/loop.ts';
+import { SIM_DT, newPark, simulate, tick } from '../src/core/loop.ts';
 import { T } from '../src/core/clock.ts';
 import { W } from '../src/core/weather.ts';
-import { applyNow, log, type Result, type ToolPayload } from '../src/core/commands.ts';
+import { applyNow, enqueue, log, replay, type Command, type CommandInput, type Result, type ToolPayload } from '../src/core/commands.ts';
 import { clearListeners, on, type GameEvent } from '../src/core/events.ts';
 import { rngN } from '../src/core/rng.ts';
 import { idsState } from '../src/core/ids.ts';
-import { stateHash, worldHash } from '../src/save/store.ts';
+import { restore, snapshot, stateHash, worldHash } from '../src/save/store.ts';
+import type { ParkSaveV1 } from '../src/save/schema.ts';
 import { I, KIND, Kind, OCC, propById, props, removeProp } from '../src/world/grid.ts';
 import { setMode } from '../src/play/mode.ts';
-import { propAt } from '../src/play/tools.ts';
+import { nextSpecies, propAt } from '../src/play/tools.ts';
 import { UNDO_DEPTH, canUndo, clearUndo, depth } from '../src/play/undo.ts';
 
 const tool = (payload: ToolPayload): Result => applyNow({ side: 'park', kind: 'tool', payload });
@@ -80,6 +82,20 @@ describe('every tool undoes to the same hash (03 5.6 item 3; 08 2.5 undo row 1)'
     undo();
     expect(idsState()).toEqual(ids0);
     expect(stateHash()).toBe(h0);
+  });
+
+  it('an undone planting hands its species back to the tree cycle; an undone felling leaves the cycle alone (02 8.3 tree row)', () => {
+    tool({ tool: 'tree', at: at(3, 5) });
+    tool({ tool: 'tree', at: at(5, 5) });
+    expect([propAt(3, 5)?.data.species, propAt(5, 5)?.data.species, nextSpecies()]).toEqual([0, 1, 2]);
+    undo(); // the chestnut goes: the next tree is a chestnut again
+    expect(nextSpecies()).toBe(1);
+    tool({ tool: 'tree', at: at(7, 5) });
+    expect(propAt(7, 5)?.data.species).toBe(1);
+    tool({ tool: 'tree', at: at(3, 5) }); // fell the plane
+    expect(nextSpecies()).toBe(2);
+    undo(); // the plane stands again; the cycle did not move either way
+    expect([propAt(3, 5)?.data.species, nextSpecies()]).toEqual([0, 2]);
   });
 
   it('a stack of commands undoes back to the park it started from', () => {
@@ -198,6 +214,85 @@ describe('undo is logged and cleared (03 5.6 items 4 and 5; 02 8.5 item 4; regis
   });
 
   it.todo('avatar.enter gives canUndo() === false (needs the avatar command: S7 play/avatar.ts calls clearUndo; 07 S7)');
+});
+
+const snap = (): ParkSaveV1 => JSON.parse(JSON.stringify(snapshot())) as ParkSaveV1;
+
+describe('a restore empties the undo stack (register 3.11 "undo-irrelevant"; 03 3.10; owner 2026-10-13: a load clears the history)', () => {
+  it('an entry recorded before the restore never reverts the restored world, even where a PropId was handed out again', () => {
+    tool({ tool: 'lamp', at: at(5, 5) });
+    const lampId = propAt(5, 5)?.id;
+    const s = snap();
+    undo();
+    tool({ tool: 'bench', at: at(7, 7) });
+    expect(propAt(7, 7)?.id).toBe(lampId); // the lamp's id went back to the counter and on to the bench
+    restore(s);
+    expect([canUndo(), depth()]).toEqual([false, 0]);
+    expect(reasonOf(undo())).toBe('reason.nothing_to_undo');
+    expect([propAt(5, 5)?.kind, propAt(5, 5)?.id]).toEqual(['lamp', lampId]); // the stale bench entry did not remove it
+  });
+
+  it('the ids the snapshot holds reserved stay reserved, so the round trip keeps the state hash (08 2.6 row 1)', () => {
+    tool({ tool: 'tree', at: at(9, 2) }); // fells starter tree 17: its id is reserved
+    const h = stateHash();
+    restore(snap());
+    expect(depth()).toBe(0);
+    expect(idsState().propReserved).toEqual([17]);
+    expect(stateHash()).toBe(h);
+  });
+
+  it('the tree cycle after a restore is the restored player trees mod 3 (part B saves the cycle itself)', () => {
+    tool({ tool: 'tree', at: at(3, 5) });
+    tool({ tool: 'tree', at: at(5, 5) });
+    const s = snap();
+    tool({ tool: 'tree', at: at(7, 5) });
+    expect(nextSpecies()).toBe(0);
+    restore(s);
+    expect(nextSpecies()).toBe(2);
+  });
+});
+
+/** Enqueue `c` (applied in the next step), then run `n` steps. */
+function then(c: CommandInput | null, n: number): void {
+  if (c) enqueue(c);
+  for (let k = 0; k < n; k++) simulate(SIM_DT, 1);
+}
+const toolCmd = (payload: ToolPayload): CommandInput => ({ side: 'park', kind: 'tool', payload });
+const undoCmd: CommandInput = { side: 'park', kind: 'undo', payload: {} };
+
+describe('a replay reproduces the undo inside its window (03 5.5 item 2, 5.6 item 4; 08 3.2 run 5)', () => {
+  it('tools and an undo logged after the snapshot replay to the same hash, with no rejection', () => {
+    then(null, 50);
+    const s = snap();
+    then(toolCmd({ tool: 'bench', at: at(5, 5) }), 20);
+    then(toolCmd({ tool: 'path', at: at(3, 8), size: 2, stroke: 9 }), 6);
+    then(toolCmd({ tool: 'path', at: at(4, 8), size: 2, stroke: 9 }), 20);
+    then(undoCmd, 20); // takes the stroke back, not the bench
+    const h1 = stateHash(), t1 = tick();
+    const after: Command[] = log().filter((c) => c.tick > s.tick).map((c) => ({ ...c }));
+    expect(after.map((c) => c.kind)).toEqual(['tool', 'tool', 'tool', 'undo']);
+    const rejected: string[] = [];
+    on('rejected', (e) => rejected.push(String(e.params?.reason)));
+    restore(s);
+    replay(after, t1);
+    expect(rejected).toEqual([]);
+    expect(stateHash()).toBe(h1);
+    expect([propAt(5, 5)?.kind, KIND[I(3, 8)]]).toEqual(['bench', Kind.lawn]);
+  });
+
+  it('an undo whose entry was recorded before the snapshot is reason.nothing_to_undo in the replay and removes nothing (open question)', () => {
+    then(toolCmd({ tool: 'bench', at: at(5, 5) }), 50);
+    const s = snap();
+    then(undoCmd, 20); // live, it takes the bench back
+    expect(propAt(5, 5)).toBeUndefined();
+    const after: Command[] = log().filter((c) => c.tick > s.tick).map((c) => ({ ...c }));
+    const rejected: string[] = [];
+    on('rejected', (e) => rejected.push(String(e.params?.reason)));
+    restore(s);
+    replay(after, s.tick + 20);
+    expect(rejected).toEqual(['reason.nothing_to_undo']); // the stack is not in the snapshot (03 3.10), so the replay cannot reach it
+    expect(propAt(5, 5)?.kind).toBe('bench');
+  });
 });
 
 describe('undo never touches the rest (02 8.5 item 3)', () => {

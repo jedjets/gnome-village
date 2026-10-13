@@ -3,7 +3,8 @@
 // same draw count over 3 sim days (64,800 steps); one extra command makes them differ; lite 1 and lite 3 give the same hash; a replay from a
 // snapshot and a save round trip in the middle of the run both land on the same hash. Also the state hash itself (03 11).
 // Two fixtures run the six runs of 08 3.2: det-s2 (S2: speed and weather only; it must keep rngN 912 and stateHash 2925709919, which proves
-// a later slice changed no S2 path) and det-s3 (S3 part A: det-s2 plus park tools and an undo, 08 3.2 item 1).
+// a later slice changed no S2 path) and det-s3 (S3 part A: det-s2 plus park tools and an undo, 08 3.2 item 1; its bench, stroke and undo
+// fall inside run 5's window, so the replay reproduces an undo, 03 5.6 item 4).
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -32,6 +33,9 @@ type Hook = (step: number) => void;
 function propKindAt(x: number, y: number): string | undefined {
   return props.find((p) => x >= p.x && x < p.x + p.w && y >= p.y && y < p.y + p.h)?.kind;
 }
+
+/** A park command's tool, or its kind. */
+const toolName = (c: FixtureCommand): string => (c.kind === 'tool' ? c.payload.tool : c.kind);
 
 /** Run `steps` steps; each fixture command is enqueued while the tick is one before its own, so it applies in its tick. */
 function run(
@@ -74,13 +78,15 @@ describe('the fixtures (08 3.2 item 1)', () => {
     expect(fixture.expect).toEqual({ rngN: 912, stateHash: 2925709919 }); // S2's values: no later slice may move them
   });
 
-  it('det-s3 is det-s2 plus 7 park commands (a bench, a tree, a bandstand, a 3-centre stroke, an undo) between 21,000 and 40,000', () => {
+  it('det-s3 is det-s2 plus 7 park commands: a bench, a 3-centre stroke and an undo inside run 5\'s window, a tree and a bandstand before 40,000', () => {
     const s3 = FIXTURES['det-s3'];
     expect([s3.seed, s3.steps]).toEqual([fixture.seed, fixture.steps]);
     expect(s3.commands.filter((c) => c.kind !== 'tool' && c.kind !== 'undo')).toEqual(fixture.commands);
     const park = s3.commands.filter((c) => c.kind === 'tool' || c.kind === 'undo');
-    expect(park.map((c) => (c.kind === 'tool' ? c.payload.tool : 'undo'))).toEqual(['bench', 'tree', 'bandstand', 'path', 'path', 'path', 'undo']);
-    expect(park.every((c) => c.tick > 21000 && c.tick < 40000)).toBe(true); // outside run 5's window and before run 6's round trip
+    expect(park.map(toolName)).toEqual(['bench', 'path', 'path', 'path', 'undo', 'tree', 'bandstand']);
+    // run 5 replays tools and an undo whose entry was recorded after its snapshot (03 5.6 item 4); all before run 6's round trip
+    expect(park.filter((c) => c.tick > 20000 && c.tick <= 21000).map(toolName)).toEqual(['bench', 'path', 'path', 'path', 'undo']);
+    expect(park.every((c) => c.tick > 20000 && c.tick < 40000)).toBe(true);
     expect(new Set(park.filter((c) => c.kind === 'tool' && c.payload.tool === 'path').map((c) => (c.payload as { stroke: number }).stroke)).size).toBe(1);
     expect(s3.commands.at(-1)).toEqual({ tick: 64800, side: 'park', kind: 'speed', payload: { speed: 0 } });
   });
@@ -89,7 +95,7 @@ describe('the fixtures (08 3.2 item 1)', () => {
     const s3 = FIXTURES['det-s3'];
     const rejected: string[] = [];
     on('rejected', (e) => rejected.push(String(e.params?.reason)));
-    run(s3, { steps: 26001 });
+    run(s3, { steps: 24001 });
     expect(rejected).toEqual([]);
     expect([propKindAt(5, 40), propKindAt(30, 41), propKindAt(2, 3), propKindAt(4, 5)]).toEqual(['bench', 'tree', 'bandstand', 'bandstand']);
     for (const [x, y] of [[2, 12], [3, 12], [4, 12], [5, 12], [6, 12], [4, 11], [4, 13]] as const) expect(KIND[I(x, y)]).toBe(Kind.lawn);
@@ -133,10 +139,14 @@ for (const name of ['det-s2', 'det-s3'] as const) {
       const n1 = rngN();
       const after: Command[] = log().filter((c) => c.tick > 20000).map((c) => ({ ...c }));
       expect(after.length).toBeGreaterThan(0);
+      if (name === 'det-s3') expect(after.filter((c) => c.kind === 'tool' || c.kind === 'undo').map((c) => c.kind)).toEqual(['tool', 'tool', 'tool', 'tool', 'undo']);
+      const rejected: string[] = [];
+      on('rejected', (e) => rejected.push(String(e.params?.reason)));
       restore(snap);
       expect(tick()).toBe(20000);
       replay(after, 21000);
       expect(tick()).toBe(21000);
+      expect(rejected).toEqual([]); // every replayed command applies again, the undo included
       expect(stateHash()).toBe(h1);
       expect(rngN()).toBe(n1);
     }, LONG);

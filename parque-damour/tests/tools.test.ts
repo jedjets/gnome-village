@@ -12,7 +12,8 @@ import { stateHash, worldHash } from '../src/save/store.ts';
 import { BEDC, I, KIND, Kind, OCC, WATER, WEAR, addProp, layersState, markBlockDirty, propById, props } from '../src/world/grid.ts';
 import { setMode } from '../src/play/mode.ts';
 import {
-  CAP_BANDSTANDS, CAP_KIOSKS, CAP_PROPS_SOFT, CAP_RUN_TILES, TOOLS, TOOL_IDS, ghost, propAt, servingTile, toolById, type ToolId,
+  CAP_BANDSTANDS, CAP_KIOSKS, CAP_PROPS_SOFT, CAP_RUN_TILES, TOOLS, TOOL_IDS, ghost, nextSpecies, propAt, servingTile, setNextSpecies, toolById,
+  type ToolId,
 } from '../src/play/tools.ts';
 
 const tool = (payload: ToolPayload): Result => applyNow({ side: 'park', kind: 'tool', payload });
@@ -276,6 +277,29 @@ describe('repeat taps (02 8.3 bed, bench and tree rows)', () => {
       species.push(propAt(x, 5)?.data.species ?? -1);
     }
     expect(species).toEqual([0, 1, 2, 0]);
+  });
+
+  it('the cycle moves on with each placement: a felled or removed tree does not step it back, and a new park starts at plane', () => {
+    const species: number[] = [];
+    const plant = (x: number): void => {
+      expect(reasonOf(tool({ tool: 'tree', at: at(x, 5) }))).toBe('ok');
+      species.push(propAt(x, 5)?.data.species ?? -1);
+    };
+    plant(3);
+    plant(5);
+    expect(reasonOf(tool({ tool: 'tree', at: at(3, 5) }))).toBe('ok'); // a tree tap fells the plane
+    plant(7);
+    expect(reasonOf(tool({ tool: 'remove', at: at(5, 5) }))).toBe('ok'); // remove takes the chestnut
+    plant(9);
+    plant(11);
+    expect(species).toEqual([0, 1, 2, 0, 1]);
+    expect(nextSpecies()).toBe(2);
+    newPark(101);
+    expect(nextSpecies()).toBe(0);
+    for (const [v, want] of [[4, 1], [-1, 2], [Number.NaN, 0]] as const) {
+      setNextSpecies(v); // part B's restore path: any number lands on 0, 1 or 2
+      expect(nextSpecies()).toBe(want);
+    }
   });
 });
 
