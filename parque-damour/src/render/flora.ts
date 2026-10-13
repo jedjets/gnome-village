@@ -103,8 +103,10 @@ function treeTint(seed: number, c: RGB): RGB {
   return [c[0] * (1 + u * 0.1 + v * 0.05), c[1] * (1 + u * 0.1), c[2] * (1 + u * 0.08 - v * 0.05)];
 }
 
-/** seedBalls: the winter plane's two seed balls per branch (04 6.3; the game passes it, the board's record does not). */
-export type TreeOpts = { scale?: number; snow?: number; mulch?: boolean; seedBalls?: boolean };
+/** seedBalls: the winter plane's two seed balls per branch (04 6.3; the game passes it, the board's record does not). layer: the game's
+ *  street trees only (direction A, 03 7.4 item 5): 'trunk' paints the mulch, the trunk, its bark and a bare tree's three limbs and stops;
+ *  'crown' skips them and paints the rest (twigs, buds, the crown), so a near-side crown can go see-through over a solid trunk. Left out, both, as always. */
+export type TreeOpts = { scale?: number; snow?: number; mulch?: boolean; seedBalls?: boolean; layer?: 'trunk' | 'crown' };
 
 /** Draw a tree standing at screen point p (its tile centre), season and day in season (04 6.3), in the direction's manner. */
 export function drawTree(pen: Pen, p: Pt, t: TreeShape, season: number, dayInSeason: number, o: TreeOpts = {}): void {
@@ -116,7 +118,8 @@ export function drawTree(pen: Pen, p: Pt, t: TreeShape, season: number, dayInSea
   const bare = cp.ph === 'bare' || cp.ph === 'bud', thin = cp.ph === 'thin';
   const trunk = P.trunk[t.species];
   const X = (fx: number): number => p.x + fx * H, Y = (fy: number): number => p.y + fy * H;
-  if (o.mulch !== false) fillEllipse(pen, p.x, p.y, 0.42 * TW * z, 0.42 * TH * z, scaleHex(P.bedEarth, [0.95, 0.95, 0.95]), { noInk: true, alpha: spec.id === 'C' ? 0.5 : 0.85 });
+  const trunkLayer = o.layer !== 'crown';
+  if (o.mulch !== false && trunkLayer) fillEllipse(pen, p.x, p.y, 0.42 * TW * z, 0.42 * TH * z, scaleHex(P.bedEarth, [0.95, 0.95, 0.95]), { noInk: true, alpha: spec.id === 'C' ? 0.5 : 0.85 });
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   // the trunk and the branches
@@ -127,10 +130,10 @@ export function drawTree(pen: Pen, p: Pt, t: TreeShape, season: number, dayInSea
     trunkPts.push({ x: X(bx * (1 + 0.3 * (1 - u))), y: Y(by) });
   }
   const trunkW = Math.max(1.4, H * 0.058);
-  if (spec.id === 'B') {
+  if (trunkLayer && spec.id === 'B') {
     const topY = Math.min(...t.blobs.map((b) => b.y)) + 0.25;
     fillPoly(pen, [{ x: X(-0.035), y: p.y }, { x: X(0.035), y: p.y }, { x: X(0.02), y: Y(topY) }, { x: X(-0.02), y: Y(topY) }], trunk, {});
-  } else {
+  } else if (trunkLayer) {
     strokeLine(pen, trunkPts, trunk, trunkW, { open: true, seed: t.seed, noInk: spec.id === 'A' });
     if (spec.id === 'A' && t.species === 0) {
       // the plane's mottled bark: pale patches along the trunk
@@ -149,7 +152,8 @@ export function drawTree(pen: Pen, p: Pt, t: TreeShape, season: number, dayInSea
     { x: X(Math.sin(b.a) * b.len), y: Y(b.y - Math.cos(b.a) * b.len * 0.55) },
   ];
   const showSkeleton = spec.id === 'C' || bare || thin;
-  if (showSkeleton && spec.id !== 'B') for (const b of t.branches) strokeLine(pen, branchPts(b), trunk, Math.max(1, H * 0.033), { open: true, seed: t.seed + 3, noInk: spec.id === 'A' });
+  if (showSkeleton && spec.id !== 'B' && trunkLayer) for (const b of t.branches) strokeLine(pen, branchPts(b), trunk, Math.max(1, H * 0.033), { open: true, seed: t.seed + 3, noInk: spec.id === 'A' });
+  if (o.layer === 'trunk') return;
   if (bare || thin) {
     // the bare crown: twigs off the branches and the fan off the top (GV 6805-6812)
     const tw = spec.id === 'B' ? Math.max(1.2, H * 0.03) : Math.max(0.8, H * 0.02);
@@ -384,10 +388,16 @@ function crownSnow(): number {
  * season, phase (in thirds), light and warm tint (in eighths), the cloud dim, snow and dpr; the whole cache clears at 1400 entries (GV 6788).
  */
 export function treeSprite(p: Prop): TreeSprite {
-  const sp = (p.data.species ?? 0) as Species, seed = treeSeed(p), zb = zoomBucket(), ds = seasonDay();
+  return treeSpriteOf((p.data.species ?? 0) as Species, treeSeed(p));
+}
+/** The layers a sprite may hold: the whole tree with its mulch (a park tree), or a street tree with no mulch, whole, trunk or crown. */
+export type SpriteLayer = 'tree' | 'street' | 'trunk' | 'crown';
+/** treeSprite for a species and seed (the street trees have no Prop): `layer` as SpriteLayer, part of the cache key. */
+export function treeSpriteOf(sp: Species, seed: number, layer: SpriteLayer = 'tree'): TreeSprite {
+  const zb = zoomBucket(), ds = seasonDay();
   const cp = crownPhase(T.season, ds), snow = crownSnow(), dpr = view.dpr;
   const key = sp + '|' + seed + '|' + zb + '|' + T.season + '|' + cp.ph + Math.round(cp.f * 3) + '|' + Math.round(T.light * 8) + '|' +
-    Math.round(AA * 8) + '|' + Math.round(AM[2] * 24) + '|' + snow + '|' + dpr;
+    Math.round(AA * 8) + '|' + Math.round(AM[2] * 24) + '|' + snow + '|' + dpr + '|' + layer;
   const hit = SPRITES.get(key);
   if (hit) return hit;
   const sk = sp + '|' + seed;
@@ -404,7 +414,9 @@ export function treeSprite(p: Prop): TreeSprite {
   const g = c.getContext('2d');
   if (g) {
     g.scale(dpr, dpr);
-    drawTree({ ctx: g, spec: style(), z: zb }, { x: w / 2, y: top }, shape, T.season, ds, { snow, seedBalls: true });
+    const o: TreeOpts = { snow, seedBalls: true, mulch: layer === 'tree' };
+    if (layer === 'trunk' || layer === 'crown') o.layer = layer;
+    drawTree({ ctx: g, spec: style(), z: zb }, { x: w / 2, y: top }, shape, T.season, ds, o);
   }
   const s: TreeSprite = { c, w, h: top + pad, base: top, zb };
   if (SPRITES.size >= SPRITE_CAP) SPRITES.clear();

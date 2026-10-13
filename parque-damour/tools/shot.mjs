@@ -44,7 +44,8 @@ const STEPS_PER_DAY = 21600; // 360 sim seconds x 60 steps
 const START_ABS = 0.3; // a new park's T.abs (register 3.2)
 
 /**
- * Scene sets by slice. A scene: `turn` quarter turns (0-3), `z` a zoom centred on the fountain (moved by `ox`, `oy` CSS px when given),
+ * Scene sets by slice. A scene: `turn` quarter turns (0-3), `z` a zoom centred on the fountain (moved by `ox`, `oy` CSS px when given, or
+ * centred on the world point `at` = [x, y]),
  * or `fit` for fitCam() (the Fit button from a moved camera), and `abs` a later T.abs (whole days plus f) to simulate to first. Scenes run in order on one page; a scene with
  * `abs` must come after every scene at an earlier time.
  * s2: 07 S2.7 items 2 to 4, and the deviation of 07 0.3 item 5 recorded in the S2 hand-back: the overview at zoom 0.8 (the river, the
@@ -68,6 +69,17 @@ const SCENE_SETS = {
     { name: 'zoom-24', turn: 0, z: 2.4 },
     { name: 'summer', turn: 0, fit: true, abs: 3.45 },
     { name: 'summer-13', turn: 0, z: 1.3, ox: 270, oy: -20, abs: 3.45 },
+  ],
+  // bv: the boulevard round the park, variant 1 of the boulevard gate (register 3.1 and section 4): Fit and the two overviews on day 1
+  // (spring buds), then summer day 4 at midday at zoom 1.3 on g_south_w's pavement, from the default side (the south faces the camera:
+  // see-through crowns, low blocks) and from the opposite one (full crowns and facades), and the overview at f 0.90 with the lamps lit
+  bv: [
+    { name: 'fit', turn: 0, fit: true },
+    { name: 'overview-0', turn: 0, z: 0.8, ox: -60, oy: 130 },
+    { name: 'overview-2', turn: 2, z: 0.8, ox: 120, oy: 120 },
+    { name: 'street-13', turn: 0, z: 1.3, at: [12.5, 49], abs: 3.5 },
+    { name: 'street-13-far', turn: 2, z: 1.3, at: [12.5, 49], abs: 3.5 },
+    { name: 'night', turn: 0, z: 0.8, ox: -60, oy: 130, abs: 3.9 },
   ],
 };
 
@@ -166,14 +178,22 @@ async function frame(page, sc) {
       document.getElementById('bFit').click();
     });
   } else {
-    // the fountain's centre is the rotation centre (23.5, 23.5): centred on it means no pan at any angle and zoom (03 7.1 item 2)
+    // the fountain's centre is the rotation centre (23.5, 23.5): centred on it means no pan at any angle and zoom (03 7.1 item 2); `at`
+    // centres a world point instead, by the projection of 03 7.1 item 2 at the scene's quarter turn
+    let { ox = 0, oy = 0 } = sc;
+    if (sc.at) {
+      const a = ((sc.turn ?? 0) * Math.PI) / 2, dx = sc.at[0] - 23.5, dy = sc.at[1] - 23.5;
+      const rx = 23.5 + dx * Math.cos(a) - dy * Math.sin(a), ry = 23.5 + dx * Math.sin(a) + dy * Math.cos(a);
+      ox = -(rx - ry) * 13 * sc.z;
+      oy = -(rx + ry - 47) * 6.5 * sc.z;
+    }
     await page.evaluate((z, ox, oy) => {
       const cam = window.__PD.cam;
       cam.z = z;
       cam.ox = ox;
       cam.oy = oy;
       cam.free = true;
-    }, sc.z, sc.ox ?? 0, sc.oy ?? 0);
+    }, sc.z, ox, oy);
   }
 }
 

@@ -70,7 +70,7 @@ Railings: the boundary is the outer edge of row 0, row 47, column 0 and column 4
 
 ### 2.4 Edges and gates
 1. North (y < 0): quay wall at y = −1, river from y = −2 to −8, far bank with facades beyond. The quay is scenery and gives **river view** charm: +1 to any tile with y ≤ 5 (within 6 tiles of the quay).
-2. East, south, west: railings on the boundary, pavement at 1 tile, Haussmann facades at 2 to 8 tiles. Skyline band beyond with the Eiffel Tower silhouette, drawn by camera angle (`src/render/backdrop.ts`).
+2. East, south, west: a Paris boulevard (register 3.1): railings on the boundary; a tree pavement with a row of plane trees 1 to 2 tiles out; the road 3 to 4 tiles out; the far pavement at 5; Haussmann facades at 6 to 7; a back pavement at 8 (04 §6.4, 03 §7.4). Skyline band beyond with the Eiffel Tower silhouette, drawn by camera angle (`src/render/backdrop.ts`, `apron.ts`, `boulevard.ts`).
 3. Gates are fixed. Each gate has two boundary tiles and one `outside` apron tile where visitors appear and vanish.
 
 | Gate id | Side | Tiles | `outside` | Arrival weight |

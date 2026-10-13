@@ -1,8 +1,9 @@
 // src/render/backdrop.ts
 // What lies round the park (03 7.4; 04 6.4): the sky, cached offscreen and repainted at most every 260 ms, the skyline band in a strip
-// cache on the horizon, the distant city in haze below it; and the apron ground (the street and pavement east, south and west, the quay,
-// the river 0.3 EH below it, the far bank), run on past the apron on the sides that face the camera. The apron drawables the painter
-// sorts with the props (railings, gates, facade blocks, boats) are apron.ts's, which shares the apron's edges and the wall helpers below.
+// cache on the horizon, the distant city in haze below it; and the apron ground (the street east, south and west, with the boulevard
+// boulevard.ts paints on it, the quay, the river 0.3 EH below it, the far bank), run on past the apron on the sides that face the camera.
+// The apron drawables the painter sorts with the props (railings, gates, street trees, facade blocks, boats) are apron.ts's, which shares
+// the apron's edges and the wall helpers below.
 // The board's sky band (04 4.2 tile 12) is kept as it was: its B and C branches are frozen for style-board.html (04 3.4).
 // Ported from GV 6497-6507 (initBackdrop, rampSky), 6511 (horizonY), 6525-6534 (drawSky: the offscreen cache), 6535-6618 (paintSky,
 // drawClouds), 6574-6579 (the far-shore bands, as the skyline), 6953-6965 (wp, faceVis, faceLight, shade, h01: the iso box kit).
@@ -28,8 +29,10 @@ import { N } from '../world/grid.ts';
 import { APRON, BACKDROP, GATES, SKYLINE } from '../world/park.ts';
 import { BOX, EH, TH, TW, cam, rotVec, view } from './camera.ts';
 import { screenInto } from './project.ts';
+import type { Drawable } from './order.ts';
 import { ctxOf, setWorldTransform } from './ground.ts';
 import { drawRiver } from './water.ts';
+import { boulevardGround } from './boulevard.ts';
 import {
   AT, AA, FOGA, GC, MOON, SKY_GREY, SUN, WHITE, faceLight, h01, inkLine, lampGlow, lit, mix, shade, skyRamp, style,
   type Pen, type Pt,
@@ -429,7 +432,7 @@ function beacon(ctx: CanvasRenderingContext2D, hy: number): void {
   }
 }
 
-/* ---------- the apron ground (03 7.4 item 3; 04 6.4 rows pavement, quay, river, far bank) ---------- */
+/* ---------- the apron ground (03 7.4 item 3; 04 6.4 rows boulevard, quay, river, far bank) ---------- */
 /** A face visible to the viewer, who looks in along (1, 1, 0.5) in the turned frame (GV faceVis 6958). */
 export function vis(nx: number, ny: number, nz = 0): boolean {
   const r = rotVec(nx, ny);
@@ -449,6 +452,24 @@ export function xy(p: XY): [number, number] {
   return [p.x, p.y];
 }
 
+/** A prism on a world polygon (apron.ts's boxes) (clockwise, north-west first) between heights e0 and e1: its visible sides by faceLight, then the top. */
+export function prism(ctx: CanvasRenderingContext2D, pts: readonly number[], e0: number, e1: number, hex: string, top = hex, a?: number): void {
+  const n = pts.length / 2;
+  for (let i = 0; i < n; i++) {
+    const ax = pts[i * 2] as number, ay = pts[i * 2 + 1] as number, bx = pts[((i + 1) % n) * 2] as number, by = pts[((i + 1) % n) * 2 + 1] as number;
+    const l = Math.hypot(bx - ax, by - ay) || 1;
+    if (vis((by - ay) / l, (ax - bx) / l)) wall(ctx, ax, ay, bx, by, e0, e1, hex, 1, a);
+  }
+  ctx.fillStyle = shade(top, 1.06, a);
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) ctx.lineTo(...xy(screenInto(pts[i * 2] as number, pts[i * 2 + 1] as number, e1, SP)));
+  ctx.closePath();
+  ctx.fill();
+}
+export function sq(x: number, y: number, r: number, ry = r): number[] {
+  return [x - r, y - ry, x + r, y - ry, x + r, y + ry, x - r, y + ry];
+}
+
 /** How far the street, the quay, the river and the far bank run on past the apron on the sides that face the camera (tiles). */
 const RUN_ON = 120;
 /** The flat street, pavement and quay phase 3 paints at e = 0, world [x0, x1] x [qy, y1], run on past the apron on the camera's sides. */
@@ -458,7 +479,7 @@ function streetBox(): [number, number, number, number] {
 
 /**
  * Phase 3 (03 7.9): the river 0.3 EH down, the quay wall seen from the north and the far bank's wall seen from the south, then the
- * flat ground at e = 0: the street east, south and west, the pavement ring with its kerb, the quay with its coping and mooring rings,
+ * flat ground at e = 0: the street east, south and west with the boulevard on it (boulevard.ts), the quay with its coping and mooring rings,
  * the steps down to the water at g_north, the far bank in the haze of 0.35 (04 6.4). On each side that faces the camera the street, the
  * quay, the river and the far bank run on RUN_ON tiles past the apron, so no edge of the apron shows below the park (the far sides end at
  * the horizon, where the city haze takes over).
@@ -482,12 +503,9 @@ export function apronGround(c?: CanvasRenderingContext2D): void {
   }
   ctx.save();
   setWorldTransform(ctx);
-  ctx.fillStyle = shade(P.flagstone, 0.9); // the street beyond the pavement
+  ctx.fillStyle = shade(P.flagstone, 0.9); // the street under the blocks and beyond the apron
   ctx.fillRect(x0, qy + 1, x1 - x0, y1 - qy - 1);
-  ctx.fillStyle = shade(P.flagstone, 1); // the pavement, a tile wide outside the railings
-  ctx.fillRect(-1.5, -0.5, 1, N + 1);
-  ctx.fillRect(N - 0.5, -0.5, 1, N + 1);
-  ctx.fillRect(-1.5, N - 0.5, N + 2, 1);
+  boulevardGround(ctx); // the tree pavement, the road, the far and back pavements, the kerbs and the grates (boulevard.ts)
   ctx.fillStyle = shade(P.flagstone, 0.97); // the quay, then its paler coping along the water
   ctx.fillRect(x0, qy, x1 - x0, 1);
   ctx.fillStyle = shade(P.flagstone, 1.07);
@@ -496,16 +514,8 @@ export function apronGround(c?: CanvasRenderingContext2D): void {
   ctx.fillRect(x0, y0, x1 - x0, ry - y0);
   ctx.lineCap = 'round';
   if (z >= 0.7) {
-    // paving joints a tile apart on the pavement and the quay
+    // paving joints a tile apart on the quay
     const j = new Path2D();
-    for (let k = 0; k <= N + 1; k++) {
-      j.moveTo(-1.5, k - 0.5);
-      j.lineTo(-0.5, k - 0.5);
-      j.moveTo(N - 0.5, k - 0.5);
-      j.lineTo(N + 0.5, k - 0.5);
-      j.moveTo(k - 1.5, N - 0.5);
-      j.lineTo(k - 1.5, N + 0.5);
-    }
     for (let x = Math.ceil(LO); x <= HI; x++) {
       j.moveTo(x + 0.5, qy + 0.14);
       j.lineTo(x + 0.5, qy + 1);
@@ -514,14 +524,6 @@ export function apronGround(c?: CanvasRenderingContext2D): void {
     ctx.lineWidth = 0.03;
     ctx.stroke(j);
   }
-  ctx.strokeStyle = shade(P.zinc, 0.95); // the kerb along the pavement's outer edge
-  ctx.lineWidth = 0.06;
-  ctx.beginPath();
-  ctx.moveTo(-1.5, -0.5);
-  ctx.lineTo(-1.5, N + 0.5);
-  ctx.lineTo(N + 0.5, N + 0.5);
-  ctx.lineTo(N + 0.5, -0.5);
-  ctx.stroke();
   if (z >= 0.6) {
     // mooring rings on the coping every 4 tiles
     ctx.strokeStyle = shade(P.zinc, 0.9);
@@ -534,4 +536,55 @@ export function apronGround(c?: CanvasRenderingContext2D): void {
     ctx.stroke();
   }
   ctx.restore();
+}
+
+/* ---------- on the river: the moored peniche and the day's sailboat (04 6.4 row river; apron.ts lists them as drawables) ---------- */
+/** The sailboat crosses the river once a day, west to east, from f 0.36 to 0.64 (04 6.4 row river). */
+export function sailX(): number | null {
+  return T.f < 0.36 || T.f > 0.64 ? null : LO + 1 + (HI - LO - 2) * ((T.f - 0.36) / 0.28);
+}
+
+const BARGE: readonly number[] = [43.6, -3.6, 47.3, -3.6, 48.1, -2.85, 47.3, -2.1, 43.6, -2.1];
+const CABIN: readonly number[] = [44.2, -3.3, 46.8, -3.3, 46.8, -2.4, 44.2, -2.4];
+
+/** The peniche, 4 x 1.5 tiles, moored by the quay near the east end: an `ink` hull, an `awningRed` cabin, bobbing +-0.5 px. */
+export function drawBarge(_d: Drawable, ctx: CanvasRenderingContext2D): void {
+  const P = style().palette, glow = lampGlow();
+  ctx.save();
+  ctx.translate(0, 0.5 * Math.sin(T.abs * DAYLEN * 1.3));
+  prism(ctx, BARGE, -RIVER_DROP - 0.05, 0.1, P.ink, mix(P.bedEarth, P.ink, 0.25));
+  prism(ctx, CABIN, 0.1, 0.48, P.awningRed, P.paper);
+  for (const [y, ny] of [[-3.3, -1], [-2.4, 1]] as const) {
+    if (!vis(0, ny)) continue;
+    ctx.fillStyle = glow > 0.5 ? css(hx(P.lamp), 0.9) : shade(P.sky, 0.95);
+    ctx.beginPath();
+    for (let k = 0; k < 3; k++) {
+      const x0 = 44.45 + 0.8 * k;
+      for (const [x, e] of [[x0, 0.22], [x0 + 0.42, 0.22], [x0 + 0.42, 0.38], [x0, 0.38]] as const) ctx.lineTo(...xy(screenInto(x, y + ny * 0.01, e, SP)));
+      ctx.closePath();
+    }
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** A small sailboat with a `paper` sail crossing west to east (sailX). */
+export function drawSail(d: Drawable, ctx: CanvasRenderingContext2D): void {
+  const P = style().palette, x = d.x, y = d.y, z = cam.z;
+  prism(ctx, [x - 0.55, y - 0.16, x + 0.35, y - 0.16, x + 0.6, y, x + 0.35, y + 0.16, x - 0.55, y + 0.16], -RIVER_DROP - 0.04, -0.14, P.paper, P.bedEarth);
+  const m0 = screenInto(x, y, -0.14, { x: 0, y: 0 }), m1 = screenInto(x, y, 1.5, { x: 0, y: 0 });
+  ctx.strokeStyle = shade(P.ink, 1);
+  ctx.lineWidth = Math.max(0.6, 0.9 * z);
+  ctx.beginPath();
+  ctx.moveTo(m0.x, m0.y);
+  ctx.lineTo(m1.x, m1.y);
+  ctx.stroke();
+  ctx.fillStyle = shade(P.paper, 0.98, 0.95); // the mainsail aft of the mast and the jib forward, in the hull's plane
+  ctx.beginPath();
+  for (const tri of [[-0.04, 0, -0.04, 1.42, -0.6, 0.05], [0.04, 0, 0.04, 1.25, 0.55, -0.06]]) {
+    ctx.moveTo(...xy(screenInto(x + (tri[0] as number), y, tri[1] as number, SP)));
+    for (let i = 1; i < 3; i++) ctx.lineTo(...xy(screenInto(x + (tri[i * 2] as number), y, tri[i * 2 + 1] as number, SP)));
+    ctx.closePath();
+  }
+  ctx.fill();
 }

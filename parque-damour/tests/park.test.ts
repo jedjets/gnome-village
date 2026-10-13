@@ -3,7 +3,7 @@
 // (the quay, the river, the pavement, the railing pieces, the facade blocks, the skyline). Also the empty charm API (03 6.7, S2 stub).
 import { describe, it, expect } from 'vitest';
 import { N, inB } from '../src/world/grid.ts';
-import { APRON, BACKDROP, GATES, SKYLINE, facadeBlocks, gateById, isBoundary, isGateTile, nearestGate, railPieces } from '../src/world/park.ts';
+import { APRON, BACKDROP, GATES, SKYLINE, bandRects, facadeBlocks, gateById, isBoundary, isGateTile, nearestGate, railPieces, streetTrees } from '../src/world/park.ts';
 import { addSource, charmAt, charmDirty, markCharmDirty, rebuildCharm } from '../src/world/charm.ts';
 
 describe('world/park gates (02 2.4)', () => {
@@ -60,12 +60,24 @@ describe('world/park bounds (02 2.1, 2.3)', () => {
   });
 });
 
-describe('world/park backdrop (register 3.1, 03 7.4)', () => {
-  it('the bands: quay at y -1, river -2 to -8, pavement 1 tile, facades 2 to 8 tiles out; facades 6.0 EH, railings 0.5 EH (04 6.4)', () => {
-    expect(BACKDROP).toMatchObject({ quayY: -1, riverFrom: -2, riverTo: -8, pavement: 1, facadesFrom: 2, facadesTo: 8 });
+describe('world/park backdrop (register 3.1 the boulevard, 03 7.4)', () => {
+  it('the bands: quay at y -1, river -2 to -8; on E, S, W rings 1-2 tree pavement, 3-4 road, 5 far pavement, 6-7 facades; 8 deep', () => {
+    expect(BACKDROP).toMatchObject({ quayY: -1, riverFrom: -2, riverTo: -8, treePavement: [1, 2], road: [3, 4], farPavement: 5 });
+    expect(BACKDROP).toMatchObject({ facadesFrom: 6, facadesTo: 7, treeLine: 1.5, treeStep: 2, gateClear: 2 });
     expect(BACKDROP).toMatchObject({ facadeAlong: 3, facadeDepth: 2, facadeHeight: 6, railHeight: 0.5, farBankFrom: -9 });
-    expect(BACKDROP.facadesTo).toBe(APRON);
+    expect(BACKDROP.facadesTo + 1).toBe(APRON); // ring 8, the back pavement behind the blocks, is the apron's edge
     expect(-BACKDROP.riverTo).toBe(APRON);
+    // the rings follow each other with no gap
+    expect(BACKDROP.treePavement[1] + 1).toBe(BACKDROP.road[0]);
+    expect(BACKDROP.road[1] + 1).toBe(BACKDROP.farPavement);
+    expect(BACKDROP.farPavement + 1).toBe(BACKDROP.facadesFrom);
+  });
+  it('a band is an L round the two southern corners: west, south with both corner squares, east, up to the quay', () => {
+    expect(bandRects(2, 4)).toEqual([
+      [-4.5, -0.5, -2.5, 49.5],
+      [-4.5, 49.5, 51.5, 51.5],
+      [49.5, -0.5, 51.5, 49.5],
+    ]);
   });
   it('the Eiffel Tower stands to the north-west at 2.2 times the facade height', () => {
     expect(SKYLINE.towerAngle).toBeCloseTo(Math.atan2(-1, -1), 12);
@@ -86,23 +98,59 @@ describe('world/park backdrop (register 3.1, 03 7.4)', () => {
       if (r.side === 'east') expect(r.x).toBe(47);
     }
   });
-  it('the facade blocks are 3 along x 2 deep and 6.0 EH high, 2 tiles beyond the railings on E, S and W and at y -10 to -9 beyond the river', () => {
+  it('a street tree every 2 tiles 1.5 beyond the boundary, on both southern corners, none within 2 tiles of a gate: 64 in all', () => {
+    const t = streetTrees();
+    expect(t).toHaveLength(64);
+    expect(new Set(t.map((q) => q.id)).size).toBe(64);
+    const bySide = (s: string): number => t.filter((q) => q.side === s).length;
+    expect([bySide('south'), bySide('east'), bySide('west'), bySide('north')]).toEqual([20, 22, 22, 0]);
+    expect(t.some((q) => q.x === -1.5 && q.y === 48.5)).toBe(true);
+    expect(t.some((q) => q.x === 48.5 && q.y === 48.5)).toBe(true);
+    for (const q of t) {
+      if (q.side === 'south') expect(q.y).toBe(48.5);
+      if (q.side === 'east') expect(q.x).toBe(48.5);
+      if (q.side === 'west') expect(q.x).toBe(-1.5);
+      expect(Math.min(q.x, q.y)).toBeGreaterThanOrEqual(-1.5); // never past the quay's edge, never in the river
+      expect(q.x > -0.5 && q.x < 47.5 && q.y > -0.5 && q.y < 47.5).toBe(false); // never on the park
+      expect(((q.side === 'south' ? q.x : q.y) + 1.5) % 2).toBe(0); // on the 2-tile step from the corners
+      for (const g of GATES) {
+        if (g.side !== q.side) continue;
+        const c = q.side === 'south' ? (g.tiles[0].x + g.tiles[1].x) / 2 : (g.tiles[0].y + g.tiles[1].y) / 2;
+        expect(Math.abs((q.side === 'south' ? q.x : q.y) - c)).toBeGreaterThan(2);
+      }
+    }
+    // each gate's outside tile is on the tree pavement (ring 1), and no tree stands on it
+    for (const g of GATES.filter((o) => o.side !== 'north')) {
+      const ring = Math.max(-g.outside.x, -g.outside.y, g.outside.x - 47, g.outside.y - 47);
+      expect(ring).toBe(1);
+      for (const q of t) expect(Math.abs(q.x - g.outside.x) < 1 && Math.abs(q.y - g.outside.y) < 1).toBe(false);
+    }
+  });
+  it('the facade blocks stand in rings 6-7 (3 along x 2 deep, 2 x 2 on the corners and the ends), 6.0 EH high, and at y -10 to -9 beyond the river', () => {
     const f = facadeBlocks();
-    expect(f.filter((b) => !b.far)).toHaveLength(16 + 16 + 21);
+    expect(f.filter((b) => !b.far)).toHaveLength(22 + 18 + 18);
     expect(f.filter((b) => b.far)).toHaveLength(21);
     for (const b of f) {
-      expect([b.w, b.h].sort()).toEqual([2, 3]);
+      expect([[2, 3], [2, 2]]).toContainEqual([b.w, b.h].sort());
       expect(b.height).toBe(6);
-      expect(b.x0).toBeGreaterThanOrEqual(-APRON - 2);
+      expect(b.x0).toBeGreaterThanOrEqual(-APRON);
       expect(b.x0 + b.w - 1).toBeLessThanOrEqual(N + APRON - 1);
-      if (b.side === 'east') expect(b.x0).toBe(N - 1 + 2);
-      if (b.side === 'west') expect(b.x0 + b.w - 1).toBe(-2);
-      if (b.side === 'south') expect(b.y0).toBe(N - 1 + 2);
+      if (b.side === 'east') expect([b.x0, b.x0 + b.w - 1]).toEqual([N - 1 + 6, N - 1 + 7]);
+      if (b.side === 'west') expect([b.x0, b.x0 + b.w - 1]).toEqual([-7, -6]);
+      if (b.side === 'south') expect([b.y0, b.y0 + b.h - 1]).toEqual([N - 1 + 6, N - 1 + 7]);
       if (b.side === 'north') expect([b.y0, b.y0 + b.h - 1]).toEqual([-10, -9]);
       expect(b.far).toBe(b.side === 'north');
     }
+    // the south row runs corner to corner (x -7 .. 54), the east and west rows from the quay (y 0) to the corner squares (y 52)
+    const span = (side: string, k: 'x0' | 'y0', w: 'w' | 'h'): [number, number] => {
+      const r = f.filter((b) => b.side === side);
+      return [Math.min(...r.map((b) => b[k])), Math.max(...r.map((b) => b[k] + b[w] - 1))];
+    };
+    expect(span('south', 'x0', 'w')).toEqual([-7, 54]);
+    expect(span('east', 'y0', 'h')).toEqual([0, 52]);
+    expect(span('west', 'y0', 'h')).toEqual([0, 52]);
   });
-  it('no two facade blocks overlap, and none stands on the park, the pavement, the quay or the river', () => {
+  it('no two facade blocks overlap, and none stands on the park, the tree pavement, the road, the far pavement, the quay or the river', () => {
     const taken = new Set<string>();
     for (const b of facadeBlocks())
       for (let y = b.y0; y < b.y0 + b.h; y++)
@@ -111,8 +159,8 @@ describe('world/park backdrop (register 3.1, 03 7.4)', () => {
           expect(taken.has(key), 'overlap at ' + key).toBe(false);
           taken.add(key);
           expect(inB(x, y)).toBe(false);
-          const pavement = (x === N && y >= -1 && y <= N) || (x === -1 && y >= -1 && y <= N) || (y === N && x >= -1 && x <= N);
-          expect(pavement).toBe(false); // the pavement, 1 tile outside the railings, stays clear
+          const ring = Math.max(-x, x - (N - 1), y - (N - 1)); // the ring of a tile beside the park on E, S or W
+          if (y >= 0) expect(ring === 6 || ring === 7, 'ring of ' + key).toBe(true);
           expect(y >= -8 && y <= -1).toBe(false); // the river and the quay
         }
   });
