@@ -113,7 +113,9 @@ export function drawChatBubble(pen: Pen, x: number, y: number, hr: number, face:
     const a = (i / 18) * Math.PI * 2;
     pts.push({ x: x + Math.cos(a) * rx, y: y + Math.sin(a) * ry });
   }
-  pts.splice(13, 0, { x: x - face * rx * 0.15, y: y + ry * 1.55 }); // the tail toward the mouth
+  // the tail toward the mouth, spliced in on the lower edge between 100 and 120 degrees (the speaker's side when facing +1); at index 13
+  // (260 degrees, the top) the outline ran from the top down to the tail and back, a stick through the bubble (the S4 options page)
+  pts.splice(6, 0, { x: x - face * rx * 0.55, y: y + ry * 1.6 });
   fillPoly(pen, pts, P.paper, { seed: 3, contour: true, lineW: Math.max(0.6, 0.5 * z), inkAlpha: 0.8, gapless: true, jitterK: 0.35 });
   ctx.fillStyle = GC(P.ink, 0.9);
   for (let k = -1; k <= 1; k++) {

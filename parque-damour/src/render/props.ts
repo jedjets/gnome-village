@@ -1,21 +1,20 @@
 // src/render/props.ts
-// The props of the Style Gate board in the three treatments: the three-globe lamp with its halo and pool, the 2 x 2 fountain, the
-// bistro table, and the Haussmann facade bay with the cafe awning, lit windows at night and the near-side cutaway (04 6.1, 6.2, 6.4;
-// 3.2); the board's bench is props-park.ts's, re-exported here. Every prop draws in world space through a Proj so it turns with the camera (GV `wp`).
-// The game side, direction A only (04 3.4): drawProp dispatching every placed kind (the kiosk, bandstand, picnic and bridge come from
-// props-park.ts, trees and hedges from flora.ts), and the props as painter drawables with their depth keys and culls (03 2.7 props.ts row,
-// 7.2, 7.7, 15.2 item 6; 04 6.1). The board's primitives are reused for the bench, lamp, fountain and table.
+// The props of the Style Gate board in the three treatments: the three-globe lamp with its halo and pool, the 2 x 2 fountain, the bistro
+// table, and the Haussmann facade bay with the cafe awning, lit windows at night and the near-side cutaway (04 6.1, 6.2, 6.4; 3.2); the
+// board's bench is props-park.ts's, re-exported here. Every prop draws in world space through a Proj so it turns with the camera (GV `wp`).
+// The game side, direction A only (04 3.4): drawProp dispatching every placed kind (the kiosk, bandstand, picnic and bridge from
+// props-park.ts, trees and hedges from flora.ts, the easel from figure-props.ts), and the props as painter drawables with their depth keys
+// and culls (03 2.7 props.ts row, 7.2, 7.7, 15.2 item 6; 04 6.1). The board's primitives are reused for the bench, lamp, fountain and table.
 // Ported from GV 6953-6960 (wp, poly, faceVis, faceLight idea), 7978-8010 (drawLantern: post, bracket, the halo gradient and the lit pane
 // with its highlight), 9540-9553 (drawProp: the kind dispatcher), 6837-6848 (the cull below a few pixels).
 // Verdict: ADAPT. Changes: the hanging lantern became the three-globe Paris lamp (ref3); boxes are iso quads lit by faceLight; the
 // direction's brush draws every face; the bench and the table order their parts by the projection, so all four facings and every camera
 // angle paint right (the board's own order is unchanged); a wet bench darkens to x 0.86; a lamp's glow fades in (glow), and the game's lit
 // globes are free of the night tint (bright; owner 2026-10-13); in the game the fountain leaves its spray and ripples to effects.ambientFx
-// (03 7.7 item 4); a bandstand, a bridge and a cafe table are two drawables, back and front (the table's far chair, then its top and
-// near chair), so people inside or seated paint between them (GV frontFix 8871 idea; 03 7.2, 16 risk 8).
-// Dropped from the range: the house kit beyond the box primitives (6952-8044), the gnome, critter and part branches of drawProp
-// (figures.ts, creatures.ts and effects.ts own those).
-// TODO(S4-rig): the easel (04 6.1, 7.2; act.ts puts it in OCC). TODO(S6): crumbs, peel, sprinkler, rowboat, umbrella. TODO(S9): halo breath, snow caps.
+// (03 7.7 item 4); a bandstand, a bridge and a cafe table are two drawables, back and front, so people inside or seated paint between them
+// (GV frontFix 8871 idea; 03 7.2, 16 risk 8). Dropped from the range: the house kit beyond the box primitives (6952-8044), the gnome,
+// critter and part branches of drawProp (figures.ts, creatures.ts, effects.ts). TODO(S6): crumbs, peel, sprinkler, rowboat, umbrella.
+// TODO(S9): halo breath, snow caps.
 import { EH, TH, TW, cam, view } from './camera.ts';
 import {
   GC, faceLight, fillEllipse, fillPoly, h01, inkLine, lampGlow, lit as tinted, mix, shade, skyRamp, strokeLine,
@@ -30,6 +29,7 @@ import { screenInto } from './project.ts';
 import { depthOf, footprintDepth, type Drawable } from './order.ts';
 import { SPECIES_HEIGHT, drawHedge, drawTreeProp, gamePen, gameProj, renderCtx, type Species } from './flora.ts';
 import { drawBandstand, drawBench, drawBridge, drawKiosk, drawPicnic } from './props-park.ts';
+import { drawEasel } from './figure-props.ts';
 
 export { treeSprite } from './flora.ts';
 /** The bench lives in props-park.ts (AGENTS rule 9); the Style Gate board imports it from here. */
@@ -485,7 +485,7 @@ function drawAwning(pen: Pen, proj: Proj, x0: number, y1: number, seed: number):
 export const LAMP_H = 1.75;
 /** Drawn height in EH of each kind the game draws, for the size and screen culls (04 6.1; a tree's crown stands 1.5 x its height). */
 const PROP_H: Partial<Record<PropKind, number>> = {
-  bench: 0.6, lamp: LAMP_H, fountain: 1.6, kiosk: 1.65, table: 0.62, bandstand: 3.0, picnic: 0.35, basket: 0.35, bridge: 0.6, hedge: 0.5, tree: 3.8,
+  bench: 0.6, lamp: LAMP_H, fountain: 1.6, kiosk: 1.65, table: 0.62, bandstand: 3.0, picnic: 0.35, basket: 0.35, bridge: 0.6, hedge: 0.5, tree: 3.8, easel: 0.85,
 };
 /** How far the lamp is on: the lamps' hours with their fade (lampGlow), or a c_lamplight litUntil ahead (03 7.7 item 3; draw.ts's pools). */
 export function lampOn(p: Prop): number {
@@ -496,11 +496,8 @@ function wetOf(p: Prop): number {
   return inB(p.x, p.y) ? (WET[I(p.x, p.y)] ?? 0) : 0;
 }
 
-/**
- * Draw one prop (03 2.7 drawProp(p, s)): s is its north-west tile's centre on screen, c the context (draw.ts's when left out), part 1 or 2
- * the back or front half of a bandstand, bridge or table (0 the whole). Direction A through the camera's projection; a kind with no
- * drawing yet (easel, crumbs, peel, sprinkler, rowboat, umbrella: S4 rig, S6) draws nothing, and the apron kinds are backdrop.ts's.
- */
+/** Draw one prop (03 2.7 drawProp(p, s)): s its north-west tile's centre on screen, c the context (draw.ts's when left out), part 1 or 2
+ *  the back or front half of a bandstand, bridge or table (0 the whole); a kind with no drawing yet (S6) draws nothing. */
 export function drawProp(p: Prop, s: XY, c?: CanvasRenderingContext2D, part: 0 | 1 | 2 = 0): void {
   const ctx = renderCtx(c), pen = gamePen(ctx), proj = gameProj;
   switch (p.kind) {
@@ -536,6 +533,9 @@ export function drawProp(p: Prop, s: XY, c?: CanvasRenderingContext2D, part: 0 |
       break;
     case 'tree':
       drawTreeProp(p, s, ctx);
+      break;
+    case 'easel':
+      drawEasel(pen, s);
       break;
     default:
       break;

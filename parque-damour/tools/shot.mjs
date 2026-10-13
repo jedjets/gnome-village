@@ -99,7 +99,10 @@ const SCENE_SETS = {
   // (twelve sitting, the jogger Léo on the outer loop's west side clear of the trees, pigeons at the crumbs by the bench at (19, 31));
   // the pair at the cafe table (16, 44) at zoom 2.4 at each quarter turn (03 16 risk 8: the far sitter between the far chair and the
   // top, the near one after the near chair); a single's card from a real tap on her head point (zoom 1.8 and the follow, settled); the Census sheet from the chip (the card hidden
-  // under it); and f 0.90 at the fountain, the lamps lit, after Close and a tap on empty ground cleared the selection
+  // under it); then (the S4 rig stage, register section 4 rows Figure rig and Crowd palette) the busy midday of day 1 at f 0.5725 at zoom 1.8
+  // on the spot that shows the most of the 14 body-language states in real sim time (states), at zoom 2.4 on the busiest spot (close)
+  // and at zoom 0.30 (fit); f 0.90 at the fountain, the lamps lit, after Close and a tap on empty ground cleared the selection; and day 2
+  // at f 0.6725 at zoom 2.0 between the two walkers' dogs, the poodle trotting on a taut lead and the terrier standing on a slack one (dogs)
   s4: [
     { name: 'crowd', turn: 0, z: 1.3, at: [22.5, 25.2], abs: 0.552, pre: 'callCrowd' },
     { name: 'table-0', turn: 0, z: 2.4, at: [16, 44] },
@@ -108,7 +111,11 @@ const SCENE_SETS = {
     { name: 'table-3', turn: 3, z: 2.4, at: [16, 44] },
     { name: 'card', turn: 0, z: 1.3, at: [22.5, 25.2], act: 'selectSingle' },
     { name: 'census', keep: true, act: 'openCensus' },
+    { name: 'states', turn: 0, z: 1.8, abs: 0.5725, act: 'mostStates' },
+    { name: 'close', turn: 0, z: 2.4, act: 'busiest' },
+    { name: 'fit', turn: 0, z: 0.3 },
     { name: 'night', turn: 0, z: 1.3, at: [22, 25], abs: 0.9, act: 'clearSelection' },
+    { name: 'dogs', turn: 0, z: 2.0, at: [33, 28.6], abs: 1.6725 },
   ],
   s3: [
     { name: 'rail', turn: 0, z: 1.3 },
@@ -136,6 +143,40 @@ async function runBriefly(page, ms = 250) {
   await sleep(ms);
   await page.click('#bHalt');
   await page.waitForFunction(() => window.__PD.T.speed === 0, { timeout: 5_000 });
+}
+
+/**
+ * Centre the camera (turn 0, the scene's zoom) on the visitor whose view scores best: `states` the number of distinct body-language states
+ * (render/figures.ts stateOf, read from the live sim, nothing poked) among the visitors in the clear band between the chips and the rail,
+ * the count of them on a tie; `count` the count alone. The camera only: the sim is not touched.
+ */
+async function centreBest(page, by) {
+  await page.evaluate(async (mode) => {
+    const pd = window.__PD, z = pd.cam.z;
+    const fg = await import('/src/render/figures.ts');
+    const vs = pd.visitors.map((v) => ({ x: v.x, y: v.y, st: fg.stateOf(v) }));
+    let best = null, bs = -1;
+    for (const c of vs) {
+      const seen = new Set();
+      let n = 0, mx = 0, my = 0;
+      for (const v of vs) {
+        const sx = 195 + ((v.x - c.x) - (v.y - c.y)) * 13 * z, sy = 388 + ((v.x - c.x) + (v.y - c.y)) * 6.5 * z;
+        if (sx < 40 || sx > 350 || sy < 170 || sy > 580) continue;
+        seen.add(v.st);
+        n++;
+        mx += v.x;
+        my += v.y;
+      }
+      const score = mode === 'states' ? seen.size * 100 + n : n;
+      if (score > bs) {
+        bs = score;
+        best = { x: mx / n, y: my / n }; // the group's middle, so it sits in the middle of the view
+      }
+    }
+    if (!best) return;
+    pd.cam.ox = -((best.x - 23.5) - (best.y - 23.5)) * 13 * z;
+    pd.cam.oy = -((best.x - 23.5) + (best.y - 23.5)) * 6.5 * z;
+  }, by);
 }
 
 /** Scene actions (s3, s4), run after the camera is set and before the capture; `pre` actions (s4) run before the scene's simulate. */
@@ -182,6 +223,15 @@ const ACTIONS = {
     const t = await screenOfTile(page, 21, 27);
     await page.mouse.click(t.x, t.y);
     await page.waitForFunction(() => !document.getElementById('card').classList.contains('on'), { timeout: 5_000 });
+  },
+  /** s4: the selection cleared, then the camera on the visitor whose view at this zoom holds the most distinct body-language states. */
+  async mostStates(page) {
+    await ACTIONS.clearSelection(page);
+    await centreBest(page, 'states');
+  },
+  /** s4: the camera on the visitor whose view at this zoom holds the most visitors (a busy spot). */
+  async busiest(page) {
+    await centreBest(page, 'count');
   },
   /** The bandstand armed and a tap on the lawn tile (25, 33): the 3 x 3 ghost (24..26, 32..34) centred on it, green. */
   async ghostOk(page) {

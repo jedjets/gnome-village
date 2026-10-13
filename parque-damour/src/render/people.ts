@@ -16,21 +16,31 @@
 // A figure drawn under 12 px (the tiers below the expression's, 04 7.1 item 5; zoom under 0.55 for a grown visitor) is blitted from a
 // sprite of drawFigure's own output, keyed by its look, pose, facing, one of 8 walk frames, the zoom to 1/64 and the light (the tree
 // sprite cache's idiom, GV 6782-6790; 03 15.2): 30 figures at Fit cost 30 blits instead of 30 rigs (S4 part C perf, 03 7.9).
+// S4 rig stage (register section 4, Figure rig and Crowd palette): each figure is the Tailored rig (figures.ts), with its seat's height
+// and the slope of the seat's front on screen (04 7.1 item 6), and the lamp warmth of 03 7.3 item 5 (its colours toward AT by
+// 0.18 (1 - d / 3) for the nearest lit lamp, park or street, within 3 tiles); a dog is its walker's terrier or poodle (figure-look.ts
+// breedOf) on a lead from the walker's hand on the dog's side, taut while it trots and slack while it stands; a pigeon on a bench perches
+// on the bench's back rail. Static figures (idle, seated) at any zoom and every figure under 12 px come from sprites (perf, 03 7.9).
 // Dropped from the range: GV's crews, riders, boats and balloons, the inside skip, the wary and blink timers.
 import { DAYLEN, T } from '../core/clock.ts';
 import { TAU } from '../core/math.ts';
 import type { XY } from '../core/math.ts';
-import { propById, type Prop } from '../world/grid.ts';
+import { propById, props, type Prop } from '../world/grid.ts';
 import { byId, visitors, type Visitor } from '../entities/visitor.ts';
 import { creatureById, creatures, type Creature } from '../entities/creatures.ts';
 import { NO_TARGET } from '../entities/move.ts';
-import { AA, AM, GC, style } from './ambient.ts';
-import { EH, cam, view, type FollowPos } from './camera.ts';
+import { AA, AM, AT, lampGlow, style } from './ambient.ts';
+import { EH, TH, TW, cam, view, type FollowPos } from './camera.ts';
 import { screenInto, type PickCreature, type PickPerson } from './project.ts';
 import { depthOf, footprintDepth, type Drawable } from './order.ts';
 import { gamePen } from './flora.ts';
-import { FH, drawVisitor, figureScale, lookOf, poseOf, type Look, type Pose } from './figures.ts';
-import { DOG_EH, drawDogOf, drawPigeonOf } from './creatures.ts';
+import { streetLamps } from '../world/park.ts';
+import { lampOn } from './props.ts';
+import { BREATH_RAD, FH, drawVisitor, figureScale, handOf, poseOf } from './figures.ts';
+import { opts, type Ink, type Opts, type RigLook } from './figure-rig.ts';
+import { breedOf, lookOf, newLook } from './figure-look.ts';
+import { DOG_EH, DOG_TROT_HZ, PIGEON_FLAP_HZ, PIGEON_WALK_HZ, drawDog, drawDogOf, drawLead, drawPigeonOf, drawPigeonState, pigeonStateOf } from './creatures.ts';
+import { blit, spriteFor, type Sprite } from './figure-sprites.ts';
 
 /** A seat's height in EH units (props-park.ts drawBench seatE 0.2; props.ts drawBistroTable's chair seat 0.3; a blanket on the ground). */
 export const SEAT_E: Readonly<Partial<Record<Prop['kind'], number>>> = { bench: 0.2, table: 0.3, picnic: 0 };
@@ -125,6 +135,12 @@ function headingOf(v: Visitor, out: XY): XY {
     }
     return out;
   }
+  const easel = v.st === 'paint' ? propById(v.job.propId ?? 0) : undefined;
+  if (easel) {
+    out.x = easel.x - v.x; // the artist faces the easel (02 4.3 artist)
+    out.y = easel.y - v.y;
+    return out;
+  }
   if (v.path) {
     const wp = v.path[v.pi];
     const tx = wp ? wp.x : v.ptx, ty = wp ? wp.y : v.pty;
@@ -144,116 +160,180 @@ function sweep(): void {
 
 /* ---------- the drawables (03 7.2, 7.9 phase 6) ---------- */
 
-type PersonDrawable = Drawable & { v: Visitor | null; c: Creature | null; face: 1 | -1; sx: number; sy: number; h: number };
+type PersonDrawable = Drawable & {
+  v: Visitor | null; c: Creature | null; face: 1 | -1; sx: number; sy: number; h: number; e: number; slope: number; warm: number;
+};
 
 const OUT: PersonDrawable[] = [];
 const POOL: PersonDrawable[] = [];
-const P0: XY = { x: 0, y: 0 }, HD: XY = { x: 0, y: 0 };
+const P0: XY = { x: 0, y: 0 }, P1: XY = { x: 0, y: 0 }, C1: XY = { x: 0, y: 0 }, HD: XY = { x: 0, y: 0 };
 const A0: Anchor = { x: 0, y: 0, gx: 0, gy: 0, h: 0, e: 0, sit: false };
-const LOOK: Look = { seed: 0, sex: 'f', skin: 0, hair: 0, coat: 0, signature: -1, hat: 'none' };
-const POSE: Pose = { state: 'idle', face: 1, expr: 'idle' };
+const LOOK: RigLook = newLook();
+const POSE: Opts = opts();
+const INK: Ink = { pen: { ctx: null as unknown as CanvasRenderingContext2D, spec: style(), z: 1 }, warm: 0 };
 
 function tSim(): number {
   return T.abs * DAYLEN;
 }
 
+/** The look and options of a drawable's visitor into LOOK and POSE: its seat, slope and lamp warmth from the drawable. */
+function prepare(pd: PersonDrawable, v: Visitor): void {
+  lookOf(v, style().palette, figureScale(v), LOOK);
+  poseOf(v, pd.face, tSim(), POSE);
+  POSE.seatPx = pd.e * EH * cam.z;
+  POSE.slope = pd.slope;
+  POSE.warm = pd.warm;
+}
+
 function drawPerson(d: Drawable, c: CanvasRenderingContext2D): void {
   const pd = d as PersonDrawable, v = pd.v;
   if (!v) return;
-  const pen = gamePen(c);
-  lookOf(v, pen.spec.palette, LOOK);
-  poseOf(v, pd.face, tSim(), POSE);
-  if (pd.h < SPRITE_H && typeof document !== 'undefined') {
-    const sp = figureSprite(v, pd.h);
-    const k = cam.z / sp.zq;
-    c.drawImage(sp.c, pd.sx - sp.ax * k, pd.sy - sp.ay * k, sp.w * k, sp.hh * k);
+  prepare(pd, v);
+  // from sprites, except while the zoom moves (figures from 12 px) and for a walker in a lamp's warmth (it changes at every step)
+  const sprite = (pd.h < SPRITE_H || !zooming) && !(POSE.state === 'walk' && POSE.warm > 0);
+  if (sprite && typeof document !== 'undefined') {
+    blit(c, figureSprite(v, pd.h), pd.sx, pd.sy, cam.z, view.dpr);
     return;
   }
+  INK.pen = gamePen(c);
+  INK.warm = pd.warm;
   P0.x = pd.sx;
   P0.y = pd.sy;
-  drawVisitor(pen, P0, LOOK, POSE);
+  drawVisitor(INK, P0, LOOK, POSE);
 }
 
-/* ---------- small figures from sprites (03 15.2; the tree sprite cache's idiom, GV 6782-6790) ---------- */
+/* ---------- figures and creatures from sprites (figure-sprites.ts; 03 15.2, 7.9) ---------- */
 
-/** Figures drawn under this height (px) come from sprites: below the expression tier of 04 7.1 item 5 (eyes only from 8 px). */
+/** Under this drawn height (px) a stride holds 8 sprite frames, from it 16 (below the expression tier of 04 7.1 item 5 eyes only). */
 export const SPRITE_H = 12;
-/** Walk frames a sprite stride holds; sprites kept before the cache is cleared. */
-const WALK_FRAMES = 8;
-const SPRITE_CAP = 600;
-type FigureSprite = { c: HTMLCanvasElement; w: number; hh: number; ax: number; ay: number; zq: number };
-const SPRITES = new Map<string, FigureSprite>();
+const WALK_FRAMES_FAR = 8, WALK_FRAMES = 16, BEAST_FRAMES = 8;
+/** Breathing levels a still figure's sprites hold: -1, 0 and 1 steps of BREATH_RAD (the hand's 0.6 px either way at zoom 1.3). */
+const BREATH_STEPS = 1;
+/** Is the zoom moving this frame (a pinch, the follow's zoom-in)? Then figures from 12 px draw straight, not one sprite per frame. */
+let zooming = false, lastZ = 0;
+/** The frame's light and pixel ratio in a sprite key (as flora.ts treeSpriteOf keys the light). */
+let LK = '';
+const zqOf = (h: number): number => (h < SPRITE_H ? Math.max(1, Math.round(cam.z * 64)) / 64 : cam.z);
+const frameOf = (t: number, n: number): number => Math.floor((((t % 1) + 1) % 1) * n) % n;
 
 /**
- * The sprite of `v` in LOOK and POSE (set by the caller) at drawn height h: drawFigure's output at the zoom rounded to 1/64, with the walk
- * phase snapped to one of 8 frames a stride; keyed by the look (lookSeed, archetype, hat), the pose, the facing, the frame, the zoom,
- * the dpr and the light (as flora.ts treeSpriteOf keys it). The anchor (ax, ay) is the figure's drawn point inside the sprite.
+ * The sprite of `v` in LOOK and POSE (set by the caller) at drawn height h: the rig's own drawing at this zoom, the walk phase snapped to
+ * one of 16 frames a stride (8 under 12 px), the breathing to one of 3 levels (none under 12 px, nor the glance: below a pixel there) and
+ * the lamp warmth to 0.01; keyed by everything the drawing reads (lookSeed, archetype, carried things, state, face, frame, glance, seat,
+ * warmth, zoom, light).
  */
-function figureSprite(v: Visitor, h: number): FigureSprite {
-  const zq = Math.max(1, Math.round(cam.z * 64)) / 64, dpr = view.dpr;
-  const walking = POSE.state === 'walk';
-  const frame = walking ? Math.floor((((POSE.walkPh ?? 0) % TAU) + TAU) % TAU / (TAU / WALK_FRAMES)) % WALK_FRAMES : 0;
-  const key = v.lookSeed + '|' + v.archetype + '|' + LOOK.hat + '|' + POSE.state + '|' + POSE.face + '|' + frame + '|' + zq + '|' + dpr + '|' +
-    Math.round(T.light * 16) + '|' + Math.round(AA * 16) + '|' + Math.round(AM[2] * 32);
-  const hit = SPRITES.get(key);
-  if (hit) return hit;
+function figureSprite(v: Visitor, h: number): Sprite {
+  const zq = zqOf(h), far = h < SPRITE_H;
+  const walking = POSE.state === 'walk', nf = far ? WALK_FRAMES_FAR : WALK_FRAMES;
+  const frame = walking ? frameOf(POSE.ph / TAU, nf) : 0;
+  if (far) POSE.lookAt = 0;
+  // a glance holds the arms at the breath's middle, so a still figure keeps four sprites: three breaths and the glance
+  const br = far || POSE.lookAt !== 0 ? 0 : Math.round((POSE.breath / BREATH_RAD) * BREATH_STEPS);
+  const warm = Math.round(POSE.warm * 100);
+  const key = v.lookSeed + '|' + v.archetype + '|' + LOOK.hat + LOOK.carry + LOOK.top + LOOK.pairScarf + '|' + POSE.state + POSE.expr + '|' +
+    POSE.face + POSE.lookAt + '|' + nf + ':' + frame + '|' + br + '|' + Math.round(POSE.seatPx * 8) + '|' + Math.round(POSE.slope * 16) + '|' +
+    warm + '|' + zq + LK;
   const hq = (h * zq) / cam.z;
-  const w = Math.ceil(hq * 1.4) + 4, ay = Math.ceil(hq * 1.25) + 3, hh = ay + Math.ceil(hq * 0.35) + 3, ax = w / 2;
-  const c = document.createElement('canvas');
-  c.width = Math.max(1, Math.ceil(w * dpr));
-  c.height = Math.max(1, Math.ceil(hh * dpr));
-  const g = c.getContext('2d');
-  if (g) {
-    g.scale(dpr, dpr);
-    if (walking) POSE.walkPh = (frame + 0.5) * (TAU / WALK_FRAMES);
-    drawVisitor({ ctx: g, spec: style(), z: zq }, { x: ax, y: ay }, LOOK, POSE);
-  }
-  const sp: FigureSprite = { c, w, hh, ax, ay, zq };
-  if (SPRITES.size >= SPRITE_CAP) SPRITES.clear();
-  SPRITES.set(key, sp);
-  return sp;
+  const w = Math.ceil(hq * 1.6) + 6, ay = Math.ceil(hq * 1.3) + 4;
+  return spriteFor(key, zq, view.dpr, w, ay + Math.ceil(hq * 0.35) + 3, w / 2, ay, (g, at) => {
+    if (walking) POSE.ph = ((frame + 0.5) / nf) * TAU;
+    POSE.breath = (br / BREATH_STEPS) * BREATH_RAD;
+    POSE.warm = warm / 100;
+    drawVisitor({ pen: { ctx: g, spec: style(), z: zq }, warm: POSE.warm }, at, LOOK, POSE);
+    return null;
+  });
 }
 
 function drawCreature(d: Drawable, c: CanvasRenderingContext2D): void {
   const pd = d as PersonDrawable, cr = pd.c;
   if (!cr) return;
-  const pen = gamePen(c);
+  INK.pen = gamePen(c);
+  INK.warm = pd.warm;
   P0.x = pd.sx;
   P0.y = pd.sy;
+  const z = cam.z, zq = cam.z, dpr = view.dpr, still = !zooming && typeof document !== 'undefined';
   if (cr.kind === 'pigeon') {
-    drawPigeonOf(pen, P0, cr.st, pd.face, cr.id, tSim());
+    // a pigeon from a sprite: its bob (3 Hz) or flap (5 Hz) in 8 frames; peck and perch hold still
+    const st = cr.st, fl = st === 'fly' || st === 'scatter', walk = st === 'walk';
+    const ph = fl ? tSim() * PIGEON_FLAP_HZ + cr.id * 0.37 : tSim() * PIGEON_WALK_HZ + cr.id * 0.37;
+    const fr = fl ? frameOf(ph, BEAST_FRAMES) : walk ? frameOf(ph * 3, BEAST_FRAMES) : 0;
+    if (!still) return drawPigeonOf(INK, P0, st, pd.face, cr.id, tSim());
+    const s = pd.h, w = Math.ceil(2.8 * s) + 6, ay = Math.ceil(1.8 * s) + 4;
+    blit(c, spriteFor('pg|' + st + pd.face + fr + '|' + zq + LK, zq, dpr, w, ay + Math.ceil(0.8 * s) + 4, w / 2, ay, (g, at) => {
+      const phase = fl ? (fr + 0.5) / BEAST_FRAMES : walk ? (fr + 0.5) / BEAST_FRAMES / 3 : 0.15;
+      drawPigeonState({ pen: { ctx: g, spec: style(), z: zq }, warm: 0 }, at, pd.face, pigeonStateOf(st), phase);
+      return null;
+    }), pd.sx, pd.sy, z, dpr);
     return;
   }
-  drawDogOf(pen, P0, pd.face, cr.st === 'walk', cr.id, tSim());
   const o = byId(cr.ownerId);
-  if (o) drawLead(c, pd, o);
+  const trot = cr.st === 'walk', breed = breedOf(o ? o.lookSeed : cr.id);
+  let collar: XY;
+  if (still && !(trot && pd.warm > 0)) {
+    // a dog from a sprite: its trot in 8 frames, its warmth to 0.01 (a trotting dog in a lamp's warmth is drawn straight)
+    const fr = trot ? frameOf(tSim() * DOG_TROT_HZ + cr.id * 0.29, BEAST_FRAMES) : 0, warm = Math.round(pd.warm * 100);
+    const s = pd.h, w = Math.ceil(1.5 * s) + 6, ay = Math.ceil(1.2 * s) + 4;
+    const sp = spriteFor('dg|' + breed + pd.face + trot + fr + '|' + warm + '|' + zq + LK, zq, dpr, w, ay + Math.ceil(0.3 * s) + 4, w / 2, ay, (g, at) =>
+      drawDog({ pen: { ctx: g, spec: style(), z: zq }, warm: warm / 100 }, at, pd.face, breed, trot, (fr + 0.5) / BEAST_FRAMES));
+    blit(c, sp, pd.sx, pd.sy, z, dpr);
+    const k = z / sp.zq;
+    C1.x = pd.sx + sp.ox * k;
+    C1.y = pd.sy + sp.oy * k;
+    collar = C1;
+  } else collar = drawDogOf(INK, P0, pd.face, breed, trot, cr.id, tSim());
+  if (o) lead(collar, o, trot);
 }
 
 /**
- * The lead (04 7.2 dog walker: a 1 px ink line) from the dog's collar (the pomeranian shape's neck at the dog's size) to the walker's hand
- * on the dog's side, sagging a little.
+ * The lead (04 7.2 dog walker: a 1 px ink line) from the dog's collar to the walker's hand on the dog's side (the front hand when the dog
+ * is ahead of the walker on screen, else the back one): taut (a 1 px sag) while the dog trots, slack (4 px at zoom 1.3) while it stands.
  */
-function drawLead(c: CanvasRenderingContext2D, pd: PersonDrawable, o: Visitor): void {
+function lead(collar: XY, o: Visitor, trot: boolean): void {
   anchorOf(o, A0);
-  const s = DOG_EH * EH * cam.z;
-  if (s < 2) return;
-  const cx = pd.sx + pd.face * 0.55 * s, cy = pd.sy - 0.42 * s;
-  const side = cx < A0.x ? -1 : 1;
-  const hx = A0.x + side * 0.1 * A0.h, hy = A0.y - 0.42 * A0.h;
-  const mx = (cx + hx) / 2, my = Math.max(cy, hy) + 0.12 * Math.hypot(hx - cx, hy - cy);
-  c.strokeStyle = GC(style().palette.ink, 0.9);
-  c.lineWidth = 1;
-  c.lineCap = 'round';
-  c.beginPath();
-  c.moveTo(cx, cy);
-  c.quadraticCurveTo(mx, my, hx, hy);
-  c.stroke();
+  const face = faceOf(V_HEAD, o.id, 0, 0, o.face);
+  const pd: PersonDrawable = { ...LEAD_PD, face, e: A0.e, slope: 0.5, warm: INK.warm };
+  prepare(pd, o);
+  P0.x = A0.x;
+  P0.y = A0.y;
+  handOf(P0, LOOK, POSE, cam.z, (collar.x - A0.x) * face > 0, P1);
+  drawLead(INK, P1, collar, trot ? 1 : (4 * cam.z) / 1.3);
+}
+const LEAD_PD: PersonDrawable = { depth: 0, kind: '', id: 0, x: 0, y: 0, z: 0, draw: drawPerson, v: null, c: null, face: 1, sx: 0, sy: 0, h: 0, e: 0, slope: 0.5, warm: 0 };
+
+/* ---------- the lamp warmth (03 7.3 item 5) ---------- */
+const LIT: number[] = []; // x, y, on, for the lit lamps of this frame
+/** Gather this frame's lit lamps: the park's (lampOn: the hours with their fade, or a c_lamplight) and the street's (lampGlow). */
+function litLamps(): void {
+  LIT.length = 0;
+  for (const p of props) {
+    if (p.kind !== 'lamp') continue;
+    const on = lampOn(p);
+    if (on > 0) LIT.push(p.x, p.y, on);
+  }
+  const g = lampGlow();
+  if (g > 0) for (const l of streetLamps()) LIT.push(l.x, l.y, g);
+}
+/** A figure's warmth: 0.18 (1 - d / 3) toward AT for the nearest lit lamp within 3 tiles (03 7.3 item 5), by how far that lamp is on. */
+export function warmthAt(x: number, y: number): number {
+  let best = 0;
+  for (let i = 0; i < LIT.length; i += 3) {
+    const d = Math.hypot((LIT[i] as number) - x, (LIT[i + 1] as number) - y);
+    if (d < 3) best = Math.max(best, 0.18 * (1 - d / 3) * (LIT[i + 2] as number));
+  }
+  return best;
+}
+
+/** How far the screen drops per px forward along a heading (hx, hy) in world units: 0.5 straight down a tile axis toward the camera. */
+function slopeOf(hx: number, hy: number): number {
+  const rx = hx * rc - hy * rs, ry = hx * rs + hy * rc;
+  const sx = (rx - ry) * (TW / 2), sy = (rx + ry) * (TH / 2);
+  return Math.max(-0.6, Math.min(0.6, sy / Math.max(1e-6, Math.abs(sx))));
 }
 
 function take(): PersonDrawable {
   let d = POOL[OUT.length];
   if (!d) {
-    d = { depth: 0, kind: '', id: 0, x: 0, y: 0, z: 0, draw: drawPerson, v: null, c: null, face: 1, sx: 0, sy: 0, h: 0 };
+    d = { depth: 0, kind: '', id: 0, x: 0, y: 0, z: 0, draw: drawPerson, v: null, c: null, face: 1, sx: 0, sy: 0, h: 0, e: 0, slope: 0.5, warm: 0 };
     POOL.push(d);
   }
   OUT.push(d);
@@ -275,6 +355,10 @@ export function peopleDrawables(): Drawable[] {
   OUT.length = 0;
   rc = Math.cos(cam.ang);
   rs = Math.sin(cam.ang);
+  zooming = cam.z !== lastZ;
+  lastZ = cam.z;
+  LK = '|' + view.dpr + '|' + Math.round(T.light * 16) + '|' + Math.round(AA * 16) + '|' + Math.round(AM[2] * 32) + '|' + AT[1];
+  litLamps();
   for (const v of visitors) {
     anchorOf(v, A0);
     if (!onScreen(A0.x, A0.y, A0.h) || A0.h < 3) continue; // 04 7.1 item 5: under 3 px nothing is drawn
@@ -295,16 +379,23 @@ export function peopleDrawables(): Drawable[] {
     d.sx = A0.x;
     d.sy = A0.y;
     d.h = A0.h;
+    d.e = A0.e;
+    d.slope = seat ? slopeOf(HD.x, HD.y) : 0.5; // the sitting pose keyed to the seat's front on screen (04 7.1 item 6)
+    d.warm = warmthAt(v.x, v.y);
   }
   for (const c of creatures) {
     if (c.outside || c.kind === 'pomeranian') continue; // S6 brings the pomeranian into the park
     const pigeon = c.kind === 'pigeon';
-    screenInto(c.x, c.y, pigeon ? c.z : 0, P0);
+    const perch = pigeon && c.perchPropId !== 0 && c.st === 'perch' ? propById(c.perchPropId) : undefined;
+    if (perch?.kind === 'bench') {
+      // on the bench's back rail (props-park.ts drawBench: the back at local v -0.215, drawn with rot (r + 2) % 4), spread along it
+      const q = (Math.PI / 2) * ((perch.rot + 2) % 4), u = ((c.id * 0.37) % 1) * 0.6 - 0.3, bv = -0.215;
+      screenInto(perch.x + u * Math.cos(q) - bv * Math.sin(q), perch.y + u * Math.sin(q) + bv * Math.cos(q), c.z, P0);
+    } else screenInto(c.x, c.y, pigeon ? c.z : 0, P0);
     const s = (pigeon ? 0.18 : DOG_EH) * EH * cam.z;
     if (!onScreen(P0.x, P0.y, s) || s < 1.6) continue;
     const d = take();
     const moving = c.st === 'walk' || c.st === 'fly' || c.st === 'scatter';
-    const perch = pigeon && c.perchPropId !== 0 && c.st === 'perch' ? propById(c.perchPropId) : undefined;
     d.kind = c.kind;
     d.id = c.id;
     d.x = c.x;
@@ -318,6 +409,8 @@ export function peopleDrawables(): Drawable[] {
     d.sx = P0.x;
     d.sy = P0.y;
     d.h = s;
+    d.e = 0;
+    d.warm = pigeon ? 0 : warmthAt(c.x, c.y); // the dogs warm by the lamps as the crowd page draws them; the pigeons do not
   }
   sweep();
   return OUT;

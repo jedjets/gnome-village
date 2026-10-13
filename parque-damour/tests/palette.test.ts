@@ -75,3 +75,26 @@ describe('04 3.2 and 4.5 item 4: the StyleSpecs', () => {
     computeAmbientAt(0.5, 1);
   });
 });
+
+describe('register section 4, Crowd palette: palette A Parisian chic as named tokens (04 4.5, 7.1 rule 8)', () => {
+  it('10 tops, a stripe, 5 lowers, 4 hats and 2 couple hues, the same in every direction (the style board keeps its coat)', () => {
+    for (const id of STYLE_IDS) {
+      const P = PALETTES[id];
+      expect(P.crowdTop.length).toBe(10);
+      expect(P.crowdLow.length).toBe(5);
+      expect(P.crowdHat.length).toBe(4);
+      expect(P.crowdPair.length).toBe(2);
+      expect(P.crowdTop).toEqual(PALETTES.A.crowdTop);
+      expect(P.coat.length).toBe(8);
+    }
+  });
+  it('the picked hexes: navy, camel, cream, black, burgundy, bottle green, grey marl, the Breton, trench, cognac', () => {
+    const P = PALETTES.A;
+    expect(P.crowdTop).toEqual(['#2E4170', '#C29A6B', '#EFE6D2', '#3B3533', '#7E2F45', '#2F5B47', '#A9A6AE', '#F1EADB', '#CDB58E', '#8B5A3C']);
+    expect(P.crowdStripe).toBe('#7E2F45'); // burgundy on cream, never navy and white (04 7.4)
+    expect(P.crowdLow).toEqual(['#2A3A60', '#3B3533', '#8A8790', '#B48A5E', '#E9E0CC']);
+    expect(P.crowdHat).toEqual(['#2A3A60', '#7E2F45', '#B48A5E', '#2F5B47']); // no black beret: the avatars' (04 7.4)
+    expect(P.crowdPair).toEqual(['#7E2F45', '#C29A6B']);
+    expect(P.matchmakerBlue).not.toBe(P.crowdStripe);
+  });
+});

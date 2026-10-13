@@ -333,7 +333,7 @@ Picked: **A Storybook**, on 2026-10-12, in the owner's words (register row 1 and
 4. The pick is A, so the game runs direction A and `style()` returns `STYLES.A` (4.5 item 1, 3.4).
 
 ### 4.5 One source of truth for colour
-1. `src/render/ambient.ts` exports `PALETTES: Record<'A'|'B'|'C', Palette>`, `STYLES: Record<'A'|'B'|'C', StyleSpec>`, and `style(): StyleSpec` which returns `STYLES.A`, the direction picked at the Style Gate (register §4, 2026-10-12). The B and C entries stay for the board only (3.4). Every scene colour in `src/render/*` is read as `style().palette.lawn` and passed through `lit()`. `ambient.ts` is the one home of every scene colour, primary and secondary (3.1); `tests/palette.test.ts` (07 S1.8) checks every key of `Palette` in all three palettes (a string value is a 7-character hex; an array value holds only such strings), not a fixed count of 16.
+1. `src/render/ambient.ts` exports `PALETTES: Record<'A'|'B'|'C', Palette>`, `STYLES: Record<'A'|'B'|'C', StyleSpec>`, and `style(): StyleSpec` which returns `STYLES.A`, the direction picked at the Style Gate (register §4, 2026-10-12). The B and C entries stay for the board only (3.4). Every scene colour in `src/render/*` is read as `style().palette.lawn` and passed through `lit()`. `ambient.ts` is the one home of every scene colour, primary and secondary (3.1); `tests/palette.test.ts` (07 S1.8) checks every key of `Palette` in all three palettes (a string value is a 7-character hex; an array value holds only such strings), not a fixed count of 16. The crowd's clothes (register section 4, Crowd palette, 2026-10-13: A Parisian chic) are named tokens in `ambient.ts` (`PARIS`: navy `#2E4170`, camel `#C29A6B`, cream `#EFE6D2`, black `#3B3533`, burgundy `#7E2F45`, bottle green `#2F5B47`, grey marl `#A9A6AE`, the Breton's cream `#F1EADB`, trench `#CDB58E`, cognac `#8B5A3C`; lowers navy `#2A3A60`, black, flannel `#8A8790`, camel `#B48A5E`, ecru `#E9E0CC`), read as `crowdTop`, `crowdStripe` (burgundy), `crowdLow`, `crowdHat` (navy, burgundy, camel, bottle green) and `crowdPair` (burgundy, camel), the same in every direction like the third table of 3.1; `coat` stays for the frozen board figures (3.4), which the game no longer draws.
 2. `src/styles/tokens.css` holds every HUD colour as a custom property. `shell.css` uses only `var(--...)`.
 3. No other file in `src/` may contain a colour literal (hex, `rgb(`, `rgba(`, `hsl(`). `08-Test-Plan.md` adds a grep test for this; GV's ~180 scattered literals are the reason (review §7.2).
 4. Type signatures:
@@ -353,7 +353,10 @@ export interface Palette {
   halo: string; rain: string; snowflake: string;
   // secondary (3.1, third table): the same in every direction
   teal: string; crumbs: string; skin: string[]; hair: string[]; elderHair: string; eye: string;
-  coat: string[]; signature: string[];
+  coat: string[]; signature: string[]; // coat: the Style Gate board's figures only (frozen, 3.4)
+  // the crowd palette A Parisian chic (register section 4, Crowd palette; 7.1 rule 8): 10 tops, the Breton's stripe, 5 lowers,
+  // 4 hats, the 2 couple hues; the same in every direction
+  crowdTop: string[]; crowdStripe: string; crowdLow: string[]; crowdHat: string[]; crowdPair: [string, string];
   dust: string; splash: string; waspStripe: string;
   pigeon: string; beak: string; pomeranian: [string, string, string];
   matchmakerBlue: string; baguette: string; straw: string; wicker: string;
@@ -575,7 +578,8 @@ Puddles (`WET`): an ellipse 0.6×0.3 tile per tile with `WET > 0.3`, filled with
 
 ## 7. Characters
 
-### 7.1 The visitor rig (`src/render/figures.ts`)
+### 7.1 The visitor rig (`src/render/figures.ts`, `figure-rig.ts`, `figure-garments.ts`, `figure-props.ts`, `figure-look.ts`)
+The owner picked **2 Tailored** on 2026-10-13 (register section 4, row Figure rig): filled garments after ref2 (tapered trousers, an A-line skirt, shorts, a jacket with a hem; close up lapels, buttons, cuffs and pointed flats), a fine `ink` rim behind every piece, natural motion; the rules below are what it draws.
 1. Base height `FH = 22` px at zoom 1 for a grown visitor (0.85 EH). Child 0.65·FH = 14.3 px (GV's gnome height, 8047); elder 0.95·FH. Drawn height `h = FH·z·scale`.
 2. Proportions (fractions of `h`, up from the feet, after ref2): hip −0.38, shoulder −0.66, head centre −0.82, head radius 0.10, neck 0.04, upper arm 0.16 and forearm 0.14 (arm 0.30), leg 0.38, shoulder width 0.16, line width `max(0.9, 0.06h)`. Compare GV 8240: hip −0.30, shoulder −0.56, head −0.72, head r 0.135. The Parque figure is longer in the leg and smaller in the head.
 3. Walk: leg swing `sin(walkPh)·0.15h`; `walkPh += dt·speed·2.1` (one stride every 0.46 s at 3.0 tiles/s); arms counter-swing ±0.55 rad (GV default idle arm −1.18 ± 0.55, review notes 15 line 123); bob 0.02h at twice the stride.
@@ -585,38 +589,40 @@ Puddles (`WET`): an ellipse 0.6×0.3 tile per tile with `WET > 0.3`, filled with
 | h | Zoom at FH 22 | Drawn |
 |---|---|---|
 | < 3 | < 0.14 | nothing |
-| ≥ 3 | 0.14 | body stroke, head disc, coat colour |
+| ≥ 3 | 0.14 | body, head disc, the top and lower colours |
 | ≥ 4 | 0.18 | archetype signifier (7.2) |
 | ≥ 8 | 0.36 | eyes |
 | ≥ 12 | 0.55 | expression: brows, mouth, blush (7.5) |
-| ≥ 18 | 0.82 | close: clothing stripes, hands, hat band, basket weave, buttons |
+| ≥ 18 | 0.82 | close: clothing stripes (the Breton), hands, cuffs, shoes' shine, lapels and buttons, hat band, the scarf's fringe, a profile nose |
 
 At the default zoom 1.3, `h = 28.6`: every tier shows. At Fit (0.30), `h = 6.6`: body and signifier only.
 6. Sitting: crouch 0.24h, legs folded forward (GV 8248); kneeling (proposal): crouch 0.30h, one knee down.
 7. Facing: `face = ±1` by movement; a courting member faces its partner on screen (computed from `screenOf`, never written back to the sim, GV 8172 comment).
-8. Colour: skin `#F0DCCB` (GV `SKIN` 8046) with 3 alternatives `#E8C9A8`, `#C9A07C`, `#8E6B4E` by seed; hair 6 tones; coat from the crowd palette: `#B9B7C6`, `#C7B8A6`, `#A6B4C2`, `#B5C2A8`, `#C9B2B8`, `#9E9AAE`, `#D1C3A2`, `#8F9AA8`; `ink` contour per 3.2.
+8. Colour: skin `#F0DCCB` (GV `SKIN` 8046) with 3 alternatives `#E8C9A8`, `#C9A07C`, `#8E6B4E` by seed; hair the first 5 tones by seed, an elder's `elderHair`; the clothes from the crowd palette **A Parisian chic** (register section 4, row Crowd palette, 2026-10-13; it replaces the muted coat palette, which stays only for the frozen board figures, 4.5): a top of 10 (`crowdTop`: navy, camel, cream, black, burgundy, bottle green, grey marl, the Breton, trench, cognac) and a lower of 5 (`crowdLow`: navy, black, flannel, camel, ecru), each picked by lookSeed as the crowd page picked them (`figure-look.ts`: the page's hash with slot 6 the top, 7 the lower, 9 the hat colour), a beret's or cap's colour from `crowdHat` (navy, burgundy, camel, bottle green; never black: the avatars', 7.4), the sunhat and the vendor's cap `paper`; `ink` contour per 3.2. A figure near a lit lamp warms toward `AT` by 0.18 (1 − d/3) within 3 tiles (03 7.3 item 5), as the crowd page's night showed.
 9. Selection ring: GV 8435 recipe in `paper` at alpha 0.5–0.75; the **featured pair** wears the same ring in `rose` on both members at alpha 0.35–0.55 so they are found in a crowd and at night.
-10. Do not: draw more than one coat colour per figure; give children any item; draw hats as GV's pointed gnome hats (hats are berets, flat caps, sunhats, headbands only).
+10. Do not: draw more than one top colour per figure (the Breton's stripes are its own); give children any item but the family child's balloon (`rose` or `sky` by seed) or, once bought, its ice cream (register section 4, row Figure rig: 7.2 wins over this rule); draw hats as GV's pointed gnome hats (hats are berets, flat caps, sunhats, the artist's floppy hat and headbands only).
 
 ### 7.2 Archetype signifiers (visible from `h ≥ 4`)
 | Archetype | Signifier (one prop or garment) | Colours |
 |---|---|---|
 | single | a scarf in the signature colour (7.3) | signature |
-| couple | matching scarves (same hue) | one hue |
-| family parent | a tote bag; the child beside at 0.65 scale with an ice cream or balloon | bag `bedEarth`; balloon `rose` or `sky` |
+| couple | matching scarves in one crowd colour, the rig's own scarf with no paper rim, so the rim always means "single" (register section 4, row Crowd palette) | `crowdPair`: burgundy or camel by the lead member's lookSeed, never either member's top colour |
+| family parent | a tote bag; the child beside at 0.65 scale with a balloon, or its ice cream once bought (register section 4, row Figure rig) | bag `bedEarth`; balloon `rose` or `sky` by seed |
 | elder | a cane and a flat cap; grey hair `#E4E1EA` (GV elder hair 8399) | cane `ink` |
 | tourist | a camera at the chest and a sunhat; a flash particle when photographing | camera `ink`, hat `paper` |
 | jogger | a headband and a bright band across the shirt; shorts | band `awningRed` or `sky` |
-| artist | a floppy hat and a palette in the hand; the easel prop | palette `paper` with 4 dots |
+| artist | a floppy hat and a palette in the hand; the easel prop (`figure-props.ts`, drawn by `props.ts`) | palette `paper` with 4 dots; hat from `crowdHat` |
 | busker | an accordion held at the chest; notes particles while playing | bellows `awningRed`, keys `paper` |
 | dog walker | a lead to the dog, drawn as a 1 px `ink` line | none |
 | gardener | a green apron and a rake over the shoulder | apron `foliageSummer` ×0.8 |
 | vendor | a white apron and a cap, behind the kiosk counter | `paper` |
 | charming stranger (`m_rival`) | a long coat and a bouquet; hair slicked | coat `ink` ×1.3 |
 
+The striped top in the crowd is the Breton of palette A: **burgundy on cream** (`crowdStripe` on `crowdTop[7]`), its stripes shown from the close tier, never under a beret; navy and white stripes stay unique to the matchmaker and the mime (7.4; register section 4, row Crowd palette).
+
 ### 7.3 The lovers' colour axis
-1. The crowd wears the muted coat palette (7.1 rule 8) and no saturated accent.
-2. Every `single` gets one **signature colour** from 8 saturated tones at arrival: `#E25B5F`, `#F2C14E`, `#5FA8D3`, `#7DBF7A`, `#EDA9C4`, `#B9A6E0`, `#F08A4B`, `#4A4458`; drawn as the scarf. Singles are the romance candidates, so the eye finds them.
+1. The crowd wears the colourful crowd palette A Parisian chic (7.1 rule 8; register section 4, rows Figure rig and Crowd palette, 2026-10-13), which keeps clear of the 8 signature tones: a single never wears a top close to its own signature colour (closer than `SIG_NEAR` 20 in CIEDE2000, the crowd page's measure; the allowed tops are precomputed per signature in `figure-look.ts` and a top that is not allowed is re-rolled from lookSeed).
+2. Every `single` gets one **signature colour** from 8 saturated tones at arrival: `#E25B5F`, `#F2C14E`, `#5FA8D3`, `#7DBF7A`, `#EDA9C4`, `#B9A6E0`, `#F08A4B`, `#4A4458`; drawn as the scarf. Singles are the romance candidates, so the eye finds them: the single's scarf is drawn 1.2× the rig's with a light `paper` rim 0.55 line widths outside its ink rim, full up to zoom 1.3 and fading to 0.4 by zoom 2.4 (register section 4, row Crowd palette; the crowd page's cue). Couples' scarves have no rim (7.2).
 3. When a `Pair` forms, nothing changes on the figures; the pair card shows both signatures as two dots beside the names, and the hearts between a pair are two-tone (left lobe one signature, right lobe the other) from stage 3 on.
 4. The featured pair wears the rose ring (7.1 rule 9). A pinned pair keeps it.
 5. The couple archetype arrives already paired (register 3.4) and shares one hue, so the two read as "already together".
@@ -629,9 +635,9 @@ At the default zoom 1.3, `h = 28.6`: every tier shows. At Fit (0.30), `h = 6.6`:
 | `a_florist` | 1.0 FH | straw hat (`#E9D7AE`), green apron, a wicker basket (`#C98F4C`) of flowers (3 dots in rose, marigold, lavender; the same basket is the `c_bouquet` cameo's); petals scatter from the hand | none |
 | `a_busker` | 1.0 FH | as the busker archetype, flat cap | none |
 | `a_mime` | 1.0 FH | white face (`paper` disc over the skin), black beret, black and white horizontal stripes, red scarf, white gloves | differs from the matchmaker by the white face, the black stripes and no hair showing |
-| `a_pigeon`, pigeons | 0.18 EH (4.7 px at zoom 1) | GV bird recipe (8575–8598): body ellipse `#8E8AA0`, head disc, beak `#E7B97A`, a neck sheen ellipse in `teal` `#86BBB3` at alpha 0.6 (as the style board draws it, kept at the gate; GV's `#8CBE85` is the HUD token `--moss`, not a scene colour), tail stroke; walking: bob 0.08·s at 3 Hz and a head peck; flying: two-stroke wings flapping at 5 Hz, arc height 46·z px (GV 8591–8592) | culled below 1.6 px; `m_flock` adds 20 visual pigeons |
+| `a_pigeon`, pigeons | 0.18 EH (4.7 px at zoom 1) | GV bird recipe (8575–8598): body ellipse `#8E8AA0`, head disc, beak `#E7B97A`, a neck sheen ellipse in `teal` `#86BBB3` at alpha 0.6 (as the style board draws it, kept at the gate; GV's `#8CBE85` is the HUD token `--moss`, not a scene colour), tail stroke; walking: bob 0.08·s at 3 Hz and a head peck; flying: two-stroke wings flapping at 5 Hz, arc height 46·z px (GV 8591–8592). The sim's five states (register section 4, row Figure rig; the picked options page): `walk` as above; `peck` the body tipped forward over its feet, the beak at the ground; `perch` the feet tucked, a rounder body settled on the perch (on a bench, on the back rail); `fly`; `scatter` the take-off, the body tipped up, both wings thrown high, feet dangling, the tail fanned | culled below 1.6 px; `m_flock` adds 20 visual pigeons |
 | `a_pomeranian` | 0.3 EH | three overlapping fluff ellipses (`#F2C98A` body, `#F7DFB0` chest, `#E8B06C` ears), a curled tail, black dot eyes and nose, a tiny red collar; running: body stretches 1.15× along the heading, legs as 4 short strokes at 8 Hz; the snatched item drawn in the mouth | never drawn outside the park |
-| dogs (walkers') | 0.45 EH | GV fox/dog recipe (8506) at 11.7·z (0.45 EH): trotting body, collar `awningRed`, lead to the walker | on a lead 1 tile behind |
+| dogs (walkers') | 0.45 EH | GV fox/dog recipe (8506) at 11.7·z (0.45 EH), two breeds, one per dog walker by its lookSeed (register section 4, row Figure rig: "both dogs"): **A the white terrier** (a Jack Russell: `paper` with a `hair[2]` tan head and saddle, folded ears, a docked tail held up) and **B the black poodle** (a continental clip in `hair[0]`, its clipped legs and waist a shade toward `zinc`, pom-poms, a topknot, a `paper` glint in the eye); collar `awningRed`; trotting legs at 2 cycles a second; the lead a 1 px `ink` line from the walker's hand on the dog's side, taut (1 px sag) while the dog trots and slack (4 px at zoom 1.3) while it stands | on a lead 1 tile behind |
 | wasp | particle | GV bee recipe (8617): jittering `ink` ellipse with a `#E8C64A` stripe | none |
 
 ### 7.5 Expressions readable at the default zoom

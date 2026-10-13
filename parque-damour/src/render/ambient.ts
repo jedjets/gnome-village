@@ -1,19 +1,18 @@
 // src/render/ambient.ts
-// The scene palettes (the only file in src/ with a scene colour literal, 04 4.5), the three StyleSpecs of the Style Gate,
-// the per-frame ambient light (AM, AT, AA, FOGA, lit, GC, shade, mix, faceLight, lampGlow), the season-tint hook, the sky keyframes and the
-// per-direction brush: how a shape is filled and lined in A Storybook (soft contour, faceLight), B Pastel Postcard (flat two-tone, no
-// line) and C Line and Wash (jittered ink from nzAt, a misregistered wash, hatching) (04 3.2, 3.3).
+// The scene palettes (the only file in src/ with a scene colour literal, 04 4.5), the three StyleSpecs of the Style Gate, the per-frame
+// ambient light (AM, AT, AA, FOGA, lit, GC, shade, mix, faceLight, lampGlow), the season-tint hook, the sky keyframes and the per-direction
+// brush: how a shape is filled and lined in A Storybook (soft contour, faceLight), B Pastel Postcard (flat two-tone, no line) and C Line
+// and Wash (jittered ink from nzAt, a misregistered wash, hatching) (04 3.2, 3.3); and the crowd's clothes, palette A Parisian chic
+// (register section 4, Crowd palette, 2026-10-13; 04 7.1 rule 8), the same in every direction like the other figure tokens.
 // Ported from GV 6445-6478 (C, computeAmbient, lit, GC), 6450 (SUNL), 6494 (nightW), 6539 (the grey of a clouded sky), 6630-6638
 // (NZ, nzAt, grain), 6959-6965 (faceLight, shade, h01), 6480-6488 (SKYR), 10774 (WCOLD).
 // Verdict: PORT. Changes: the golden-hour windows follow the register (peaks 0.24 and 0.76, half-widths 0.08 and 0.10, 03 7.3 item 2;
-// GV 0.26 and 0.74 +- 0.11); the storm cover of GV 6458 is dropped (no storm front); the GC key carries a separator and the warm tint
-// (GV 6472 could collide and reused a dawn colour at dusk); nightW mixes toward the palette's `night` (GV recomputed NIGHTC from the
-// ramp each epoch: the same colour at night); nzAt lives here instead of ground.ts (03 2.7) because the brush needs it; the game's light
+// GV 0.26 and 0.74 +- 0.11); the GC key carries a separator and the warm tint (GV 6472 could collide and reused a dawn colour at dusk);
+// nightW mixes toward the palette's `night`; nzAt lives here instead of ground.ts (03 2.7) because the brush needs it; the game's light
 // (computeAmbient) is neutral by day and dims only from fair to cloudy, computeAmbientAt keeps 03 7.3's curve for the board (S2 hand-back).
 // The Style Gate passed with A Storybook (register section 4, 2026-10-12): style() returns STYLES.A whatever profile.stylePick holds
 // (04 3.4 item 4, 4.5 item 1); the style board passes each column's own StyleSpec, and the B and C branches below are frozen for it.
-// Dropped from the range: the storm cover (6458), seaPlaneCol and wRGBA (6495-6523: no sea).
-// TODO(S9): lamp warmth on figures (03 7.3 item 5); snow cover on the season tint (04 10.3 winter).
+// Dropped from the range: the storm cover (6458), seaPlaneCol and wRGBA (6495-6523: no sea). TODO(S9): snow on the season tint (04 10.3).
 import { clamp01, css, hx, mixc, type RGB } from '../core/math.ts';
 import { SEASON_DAYS, T, type Season } from '../core/clock.ts';
 import { W } from '../core/weather.ts';
@@ -36,7 +35,8 @@ export interface Palette {
   halo: string; rain: string; snowflake: string;
   // secondary (04 3.1, third table): the same in every direction
   teal: string; crumbs: string; skin: string[]; hair: string[]; elderHair: string; eye: string;
-  coat: string[]; signature: string[];
+  coat: string[]; signature: string[]; // coat: the Style Gate board's figures only (frozen, 04 3.4); the game's crowd wears crowd*
+  crowdTop: string[]; crowdStripe: string; crowdLow: string[]; crowdHat: string[]; crowdPair: [string, string];
   dust: string; splash: string; waspStripe: string;
   pigeon: string; beak: string; pomeranian: [string, string, string];
   matchmakerBlue: string; baguette: string; straw: string; wicker: string;
@@ -56,7 +56,15 @@ export const PRIMARY_KEYS = [
   'stone', 'zinc', 'awningRed', 'ink', 'paper', 'rose', 'sky', 'lamp',
 ] as const;
 
-/** The tokens that are the same in every direction (04 3.1, third table). */
+/** The crowd palette A Parisian chic by name (register section 4, Crowd palette; 04 7.1 rule 8): tops, then lowers. */
+const PARIS = {
+  navy: '#2E4170', camel: '#C29A6B', cream: '#EFE6D2', black: '#3B3533', burgundy: '#7E2F45', bottle: '#2F5B47', marl: '#A9A6AE',
+  breton: '#F1EADB', trench: '#CDB58E', cognac: '#8B5A3C', navyLow: '#2A3A60', flannel: '#8A8790', camelLow: '#B48A5E', ecru: '#E9E0CC',
+} as const;
+/** The index in crowdTop of the Breton: `breton` ground with `crowdStripe` (burgundy) stripes, never navy and white (04 7.4). */
+export const CROWD_BRETON = 7;
+
+/** The tokens that are the same in every direction (04 3.1, third table; the crowd's clothes, 04 7.1 rule 8). */
 const SHARED = {
   teal: '#86BBB3', crumbs: '#E7D7B0',
   skin: ['#F0DCCB', '#E8C9A8', '#C9A07C', '#8E6B4E'],
@@ -64,6 +72,11 @@ const SHARED = {
   elderHair: '#E4E1EA', eye: '#5A5468',
   coat: ['#B9B7C6', '#C7B8A6', '#A6B4C2', '#B5C2A8', '#C9B2B8', '#9E9AAE', '#D1C3A2', '#8F9AA8'],
   signature: ['#E25B5F', '#F2C14E', '#5FA8D3', '#7DBF7A', '#EDA9C4', '#B9A6E0', '#F08A4B', '#4A4458'],
+  crowdTop: [PARIS.navy, PARIS.camel, PARIS.cream, PARIS.black, PARIS.burgundy, PARIS.bottle, PARIS.marl, PARIS.breton, PARIS.trench, PARIS.cognac],
+  crowdStripe: PARIS.burgundy,
+  crowdLow: [PARIS.navyLow, PARIS.black, PARIS.flannel, PARIS.camelLow, PARIS.ecru],
+  crowdHat: [PARIS.navyLow, PARIS.burgundy, PARIS.camelLow, PARIS.bottle], // berets, caps, the artist's hat: never black (04 7.4)
+  crowdPair: [PARIS.burgundy, PARIS.camel] as [string, string], // the couples' matching scarves, no rim (register: Crowd palette)
   dust: '#CFC6C0', splash: '#A9D3E6', waspStripe: '#E8C64A',
   pigeon: '#8E8AA0', beak: '#E7B97A',
   pomeranian: ['#F2C98A', '#F7DFB0', '#E8B06C'] as [string, string, string],
@@ -118,9 +131,7 @@ export const STYLES: Record<StyleId, StyleSpec> = {
 /** The direction picked at the Style Gate: A Storybook (register section 4, 2026-10-12; 04 4.4 item 4). */
 export const DEFAULT_STYLE: StyleId = 'A';
 
-export function isStyleId(v: unknown): v is StyleId {
-  return v === 'A' || v === 'B' || v === 'C';
-}
+export const isStyleId = (v: unknown): v is StyleId => v === 'A' || v === 'B' || v === 'C';
 
 /** The game's direction: always A, whatever profile.stylePick holds (04 3.4 item 4, 4.5 item 1); the board passes its own specs. */
 export function style(): StyleSpec {
@@ -132,10 +143,8 @@ export function style(): StyleSpec {
 export const SEASON_BLEND = 0.5;
 export type SeasonMix = { from: Season; to: Season; k: number };
 const SMIX: SeasonMix = { from: 0, to: 0, k: 0 };
-/**
- * The season a tint is drawn in at day count `abs` (T.abs): `from`, blended toward `to` by k over the half day centred on a season
- * change. A park's first season has no change before it, so a new park (abs 0.30) draws pure spring. Reused object: copy it to keep it.
- */
+/** The season a tint is drawn in at day count `abs` (T.abs): `from`, blended toward `to` by k over the half day centred on a season
+ *  change; a new park (abs 0.30) draws pure spring. Reused object: copy it to keep it. */
 export function seasonMix(abs: number = T.abs): SeasonMix {
   const s = (Math.floor(Math.floor(abs) / SEASON_DAYS) % 4) as Season;
   const edge = Math.round(abs / SEASON_DAYS) * SEASON_DAYS; // the nearest season change, in days
@@ -212,20 +221,14 @@ export function computeAmbientAt(f: number, light: number, cloud = 0, mist = 0, 
   setAmbient(f, light, mixc(NIGHT_AM, ONE, Math.pow(clamp01(light), 0.7)), cloud * 0.12, mist, rain, snow);
 }
 
-/**
- * Once per frame: the game's light from the clock and the weather. Daytime is neutral, as the board showed direction A (light 0.75 and
- * up draws the palette as picked), easing to GV's night tint at the night light 0.06; the cloud dim follows 04 10.5 (clear and fair
- * undimmed, cloudy 12 %), where 03 7.3 item 1's cloud x 0.12 dimmed fair weather by 4 % (07 0.3 item 5; the S2 hand-back).
- */
+/** Once per frame: the game's light from the clock and the weather; neutral by day (light 0.75 and up draws the palette as picked),
+ *  easing to GV's night tint at 0.06; the cloud dim of 04 10.5 (clear and fair undimmed, cloudy 12 %; the S2 hand-back). */
 export function computeAmbient(): void {
   const k = Math.pow(clamp01((T.light - 0.06) / 0.69), 0.7);
   setAmbient(T.f, T.light, mixc(AM_NIGHT, ONE, k), 0.12 * clamp01((W.cloud - 0.34) / 0.4), W.mist, W.rain, W.snow);
 }
 
-/**
- * How lit the lamps and night windows look, 0 to 1 (04 10.1 item 4): lamps burn from f 0.80 to 0.28 (02 3.2) and fade in over the first
- * 0.02 of a day and out over the last, so a glow never pops.
- */
+/** How lit the lamps and night windows look, 0 to 1 (04 10.1 item 4): from f 0.80 to 0.28 (02 3.2), fading over 0.02 at each end. */
 export function lampGlow(f: number = T.f): number {
   if (f >= 0.8) return clamp01((f - 0.8) / 0.02);
   return f < 0.28 ? clamp01((0.28 - f) / 0.02) : 0;
@@ -391,11 +394,8 @@ export function inkWidth(pen: Pen): number {
   return Math.max(0.8, 0.9 * pen.z);
 }
 
-/**
- * The loose ink line of direction C (04 3.2): width max(0.8, 0.9 z), jittered +-0.6 z px by nzAt along its length,
- * 8 % of the segments left as gaps, corners overshooting 1.5 z px. Direction A draws its soft contour here too
- * (one steady stroke); direction B draws nothing unless `rim`.
- */
+/** The loose ink line of direction C (04 3.2): width max(0.8, 0.9 z), jittered +-0.6 z px by nzAt, 8 % of the segments left as gaps,
+ *  corners overshooting 1.5 z px. Direction A draws its soft contour here too (one steady stroke); B draws nothing unless `rim`. */
 export function inkLine(pen: Pen, pts: Pt[], o: ShapeOpts = {}): void {
   const { ctx, spec, z } = pen;
   const close = !o.open;
