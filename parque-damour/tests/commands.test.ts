@@ -105,12 +105,15 @@ describe('core/commands the log and rejection (03 5.2 item 3, 5.4)', () => {
     expect(first?.kind === 'tool' && 'at' in first.payload ? first.payload.at.x : -1).toBe(50);
   });
   it('a command no module applies is rejected reason.not_here, not logged, and emits one rejected event', () => {
-    const r = applyNow({ side: 'park', kind: 'visitor.call', payload: { gate: null } });
+    // `avatar.leave` waits for S7 (visitor.call, the example until S4 part B, now has its handler in entities/visitor.ts)
+    setMode('avatar', 'a_pigeon', 1);
+    const r = applyNow({ side: 'mischief', kind: 'avatar.leave', payload: {} });
+    setMode('creator');
     expect(r).toEqual({ ok: false, reason: 'reason.not_here' });
     expect(log()).toHaveLength(0);
     drain(0);
     expect(rejected).toHaveLength(1);
-    expect(rejected[0]?.params).toMatchObject({ reason: 'reason.not_here', side: 'park', kind: 'visitor.call' });
+    expect(rejected[0]?.params).toMatchObject({ reason: 'reason.not_here', side: 'mischief', kind: 'avatar.leave' });
   });
   it('a handler that refuses is rejected with its reason and not logged', () => {
     const r = applyNow({ side: 'park', kind: 'undo', payload: {} });

@@ -8,6 +8,7 @@ import { en } from '../src/ui/strings/en.ts';
 import { es } from '../src/ui/strings/es.ts';
 import { t, plural, setLang } from '../src/ui/i18n.ts';
 import { TOOLS } from '../src/play/tools.ts';
+import { DOING } from '../src/entities/act.ts';
 
 const ROOT = join(import.meta.dirname, '..');
 
@@ -58,7 +59,7 @@ describe('string tables', () => {
 function table06(): Map<string, string> {
   const out = new Map<string, string>();
   const md = readFileSync(join(ROOT, 'docs', '06-Content-Tables.md'), 'utf8');
-  for (const m of md.matchAll(/^\| `([a-z0-9_.]+)` \| (.*?) \| (.*?) \|$/gm)) out.set(m[1] as string, m[2] as string);
+  for (const m of md.matchAll(/^\| `([a-zA-Z0-9_.]+)` \| (.*?) \| (.*?) \|$/gm)) out.set(m[1] as string, m[2] as string);
   return out;
 }
 
@@ -92,5 +93,22 @@ describe('the park tools\' strings (03 5.4 tools block; 06 16.5, 16.12, 16.13; 0
       for (const m of readFileSync(f, 'utf8').matchAll(/'(reason\.[a-z_]+)'/g)) if (!(m[1] as string in en)) missing.push(m[1] as string);
     }
     expect(missing).toEqual([]);
+  });
+});
+
+describe('the doing lines and the park\'s feed lines (06 16.9, 16.11; 03 2.5 act.ts DOING; S4 part B)', () => {
+  const keys = [
+    ...DOING.map((st) => 'doing.' + st), 'doing.perch', 'doing.peck', 'doing.scatter', 'feed.gardener', 'feed.pigeons', 'feed.regular_return',
+  ];
+  it('every state act.ts runs, the pigeon\'s states and the three feed lines have a key in both tables', () => {
+    expect(keys).toHaveLength(DOING.length + 6);
+    for (const k of keys) {
+      expect(en[k], k).toBeTruthy();
+      expect(es[k], k).toBeTruthy();
+    }
+  });
+  it('the English wording is 06\'s, copied exactly', () => {
+    const doc = table06();
+    for (const k of keys) expect(en[k], k).toBe(doc.get(k));
   });
 });

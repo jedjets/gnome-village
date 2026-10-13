@@ -14,6 +14,9 @@
 // tools.ts before a planting, so an undone tree hands its species back; 02 8.3).
 // A replay that starts from a snapshot reproduces only the undos of entries recorded after that snapshot: the restore empties the stack, so
 // an undo of an earlier entry is `reason.nothing_to_undo` there (03 5.5 item 2, 5.6 item 4, 08 3.2 run 5; owner 2026-10-13).
+// A kiosk's vendor (S4): the undo of a placement sends the vendor away and hands its VisitorId back while it is still the last one handed
+// out (staff.ts vendorLeave with handBack; the vendor's spawn draws nothing), and the undo of a removal brings the kept record back under
+// its own id (vendorReturn), so a kiosk and its undo leave the state hash as it was (08 2.5 undo row 1).
 import type { PropId } from '../core/ids.ts';
 import { reclaimPropId, releasePropId, unallocPropId } from '../core/ids.ts';
 import { OK, fail, onResetCommands, onRestoreCommands, registerHandler } from '../core/commands.ts';
@@ -126,7 +129,7 @@ function revert(inv: Inverse, touched: number[]): boolean {
     const p = propById(id);
     if (!p) continue;
     standUpFrom(id);
-    if (p.kind === 'kiosk') vendorLeave(id);
+    if (p.kind === 'kiosk') vendorLeave(id, true); // the vendor goes, and its VisitorId back when nobody came after it (staff.ts)
     removeProp(id, 'keep');
     unallocPropId(id, inv.recycled.includes(id));
   }

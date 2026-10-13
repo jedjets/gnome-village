@@ -6,12 +6,21 @@
 // S3 part B: ProfileV1 gains the fields of 03 3.9 (points, tiers, unlocks, parks played, the write serial); ParkSaveV1 gains `treeTurn`,
 // the park tools' tree cycle (02 8.3; without it a reload or a replay from a snapshot could plant the next tree as another species).
 // It is saved, not hashed: 03 3.10 lists it and 03 11 what the hash covers (docs synced with the owner's answers of 2026-10-13).
+// S4 part B: `visitors` are Visitor records (03 3.3, plus `plan`), `creatures` Creature records (03 3.5), `regulars` the regulars' visit
+// table and memory (names.ts RegularState: 03 3.10's RegularMemory with the return day and f beside it), `paving` gains the pending run
+// and the tile reached (`run`, `at`), and `sched` (new, optional) holds what the schedulers count between steps: the arrivals timer, the
+// names held, the regulars arrived today, the pigeon gatherings announced. Without them a restored park would not reach the same hash
+// (08 3.2 run 6). A save written before part B has none of them and restores to the empty values.
 import type { Command } from '../core/commands.ts';
 import type { IdsState, Side } from '../core/ids.ts';
 import type { Override, WeatherKind } from '../core/weather.ts';
 import type { Prop } from '../world/grid.ts';
 import type { IceState } from '../world/water.ts';
 import type { AvatarId, Mode } from '../play/mode.ts';
+import type { XY } from '../core/math.ts';
+import type { Visitor } from '../entities/visitor.ts';
+import type { Creature } from '../entities/creatures.ts';
+import type { RegularState } from '../entities/names.ts';
 
 export const SCHEMA_VERSION = 1;
 
@@ -73,18 +82,28 @@ export type ParkSaveV1 = {
   layers: LayersSave;
   ids: IdsState;
   props: Prop[];
-  visitors: SaveRec[];
+  visitors: Visitor[];
   pairs: SaveRec[];
-  creatures: SaveRec[];
+  creatures: Creature[];
   effects: SaveRec[];
   sides: { cooldowns: Record<Side, Record<string, number>>; charges: Record<Side, Record<string, number>> };
-  regulars: Array<Record<string, unknown>>;
+  regulars: RegularState[];
   alumni: Array<Record<string, unknown>>;
   pinnedPair: number;
-  paving: { runsToday: number; day: number };
+  paving: { runsToday: number; day: number; run?: XY[]; at?: number };
+  sched?: SchedSave;
   mode: { mode: Mode; player: number; avatar: AvatarId | null };
   tally: { day: number; cp: number; mp: number };
   feed: Array<Record<string, unknown>>; // last 40
   log: Command[]; // last 600
   treeTurn: number; // the species the tree tool plants next: 0 plane, 1 chestnut, 2 lime (02 8.3; play/tools.ts nextSpecies)
+};
+
+/** The schedulers' counters between steps (S4 part B): saved and hashed so a round trip lands on the same hash (08 3.2 run 6). */
+export type SchedSave = {
+  arrivalT: number; // s until the next arrival may come (visitor.ts)
+  held: string[]; // the generated names in use (names.ts)
+  arrivedDay: number; // the day arrivedToday counts (names.ts)
+  arrivedToday: number; // regulars arrived that day, at most 3 (02 4.5 item 3)
+  gathered: number[]; // crumbs props whose gathering was announced (creatures.ts)
 };

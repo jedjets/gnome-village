@@ -14,7 +14,8 @@
 // ghosts), 5959-5971 (garden, hive, well, fold, kennel, stable and cart rules), 5973-5975's sea, rock and slope reasons, 5978-5988 (the
 // build constructors), 5998-6003 (pbPick, pbClear), 6006-6017's project staging, 6018-6035 (pbStop, pbStatus).
 // The kiosk's vendor, the sitters of a removed bench, the someone-on-it test and openNear are calls into entities/staff.ts and
-// entities/visitor.ts that S4 fills (no-ops now). The tree species cycle is a counter that each planting moves on and its undo moves back
+// entities/visitor.ts (S4): a placed kiosk's vendor arrives at once (vendorArrive) and a removed kiosk's vendor leaves with it, its record
+// kept in the undo entry (vendorLeave). The tree species cycle is a counter that each planting moves on and its undo moves back
 // (02 8.3); the park save holds it, outside the state hash (nextSpecies, setNextSpecies; ParkSaveV1.treeTurn, 03 3.10).
 import type { XY } from '../core/math.ts';
 import { propIdRecycles } from '../core/ids.ts';

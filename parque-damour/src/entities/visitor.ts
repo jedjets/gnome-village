@@ -25,21 +25,27 @@
 //     parent's)), decideT (1). So an elder makes 8 draws, a generated single 10 (12 with the re-roll), a returning regular 6.
 // lookSeed: the low 3 bits are the signature colour index (04 7.3; signatureOf); bit 3 a hat and bit 4 a purse for those whose
 // archetype does not fix them; the renderer reads the rest (lookSeed >>> 5) for hair, coat and skin.
-// Part A of S4 (07 S4.6 steps 1-5): the running loop calls none of the scheduler, the factory or the cadence yet (part B wires
-// stepArrivals, the cadence, the visitor.call command and the save); the park tools already call the three hooks at the end of the file,
-// on a list that stays empty until then, and a new park or a restore empties it (resetVisitors) without a draw.
+// Part B of S4 (07 S4.6 steps 6-11, 17): core/loop.ts runs stepArrivals (phase 7) and stepVisitors (phase 8: spaceOut, then per visitor
+// stepNeeds, the cadence, act, moveStep with wearAt, removal at the outside tile); brain.ts hands in decide, act and BUSY at load
+// (setBrain), so this file never imports brain.ts or act.ts; this file registers the `visitor.call` command (03 5.1); save/store.ts saves
+// and restores the list (visitorsState, setVisitorsState) and the arrivals timer. A new park empties the list (resetVisitors) without a
+// draw. Two fields beyond 03 3.3: `plan`, the routine's progress that survives an interruption (a tourist's next viewpoint, a jogger's
+// or dog walker's finished laps, an artist who has painted, the gardener's next tidy), and the Job counters `step` and `left` (the
+// corner of a loop and the legs or crumbs left). A spawn with `drawless` makes no draw (a kiosk's vendor, so the kiosk and its undo
+// leave the sim stream as it was: 08 2.5 undo row 1).
 import type { XY } from '../core/math.ts';
 import { START_ABS, STEPS_PER_DAY, T, type Phase } from '../core/clock.ts';
 import { chance, rnd, rng } from '../core/rng.ts';
 import { nextVisitorId, type CreatureId, type GateId, type PairId, type PropId, type VisitorId } from '../core/ids.ts';
 import { emit } from '../core/events.ts';
-import { OK, fail, onResetCommands, onRestoreCommands, type Result } from '../core/commands.ts';
+import { OK, fail, onResetCommands, registerHandler, type Result } from '../core/commands.ts';
 import { W, type WeatherKind } from '../core/weather.ts';
 import { I, inB, propById, props } from '../world/grid.ts';
 import { GATES, gateById } from '../world/park.ts';
 import { getMode, getPlayer } from '../play/mode.ts';
 import { GARDENER_NAME, regularArrived, regularDue, regularLeft, releaseName, resetNames, takeName, type RegularDef, type Seeks, type Sex } from './names.ts';
-import { NO_TARGET, R_OPEN_NEAR, goTo, openNear } from './move.ts';
+import { NO_TARGET, R_OPEN_NEAR, goTo, moveStep, openNear, spaceOut } from './move.ts';
+import { stepNeeds } from './needs.ts';
 
 export type { Prop, PropKind } from '../world/grid.ts'; // 03 3.6: the Prop type, re-exported here
 export type { Seeks, Sex } from './names.ts';
@@ -50,7 +56,11 @@ export type Archetype =
 export type AgeWord = 'young' | 'grown' | 'elder';
 /** The ten kinds of register section 5; embarrass.ts (S5) owns the list. */
 export type EmbKind = 'poop' | 'soaked' | 'trip' | 'snatched' | 'wasp' | 'drenched' | 'rival' | 'mime' | 'fog' | 'flock';
-export type Job = { propId?: PropId; tile?: XY; pairId?: PairId; visitorId?: VisitorId; creatureId?: CreatureId; kind?: string };
+export type Job = {
+  propId?: PropId; tile?: XY; pairId?: PairId; visitorId?: VisitorId; creatureId?: CreatureId; kind?: string;
+  step?: number; // a loop's next corner (0-3)
+  left?: number; // what is left: a loop's legs, a feeder's crumbs
+};
 export type Items = { hat: boolean; purse: boolean; baguette: boolean; iceCream: boolean };
 
 /** 03 3.3. */
@@ -66,6 +76,7 @@ export type Visitor = {
   items: Items;
   embToday: number; embDay: number; pendingEmb: EmbKind | null; regularId: number; decideT: number;
   sitPropId: PropId; basket: number; shares: number; cdUntil: number; spawnedForPlayer: boolean;
+  plan: number; // the routine's progress (see the file header); 0 at arrival
 };
 
 /* ---------- numbers (02 4.2, 06 1.4, 1.8, 5.1, 14.1, 15) ---------- */
@@ -131,7 +142,7 @@ export function signatureOf(lookSeed: number): number {
 }
 
 /** The step count now, from the clock (entities do not import the conductor; T.abs is START_ABS + tick / STEPS_PER_DAY). */
-function nowTick(): number {
+export function nowTick(): number {
   return Math.round((T.abs - START_ABS) * STEPS_PER_DAY);
 }
 
@@ -212,6 +223,7 @@ export type SpawnOpts = {
   signature?: number; // share this signature colour (a couple's second member, 04 7.3 item 5)
   spawnedForPlayer?: boolean; // summoned by an ability (c_musician's busker): not an AI busker
   at?: XY; // appear here, idle, instead of on the gate's outside tile (a vendor on its serving tile)
+  drawless?: { lookSeed: number }; // no draw at all: this lookSeed, the middle of each starting need, decideT 0 (sex and name must be given)
 };
 
 function rollSex(): Sex {
@@ -229,7 +241,8 @@ function rollSeeks(): Seeks {
 export function spawnVisitor(arch: Archetype, gate: GateId, opts: SpawnOpts = {}): Visitor | null {
   if (arch !== 'cameo' && people() >= CAP_PEOPLE) return null;
   const g = gateById(gate);
-  let lookSeed = Math.floor(rng() * 4294967296);
+  const still = opts.drawless;
+  let lookSeed = still ? still.lookSeed >>> 0 : Math.floor(rng() * 4294967296);
   if (opts.signature !== undefined) lookSeed = lookSeed - (lookSeed % SIGNATURES) + (opts.signature % SIGNATURES);
   const reg = opts.regular;
   let sex: Sex = reg?.sex ?? opts.sex ?? (arch === 'gardener' ? 'm' : rollSex());
@@ -246,13 +259,13 @@ export function spawnVisitor(arch: Archetype, gate: GateId, opts: SpawnOpts = {}
   const ageWord: AgeWord =
     reg?.ageWord ?? opts.ageWord ?? (AGE_ROLLED.has(arch) ? (chance(0.5) ? 'young' : 'grown') : arch === 'elder' ? 'elder' : arch === 'child' ? 'young' : 'grown');
   const name = reg?.name ?? opts.name ?? (arch === 'gardener' ? GARDENER_NAME : takeName(sex));
-  const hunger = rnd(0.2, 0.5);
-  const energy = rnd(0.5, 0.9);
-  const social = rnd(0.2, 0.6);
+  const hunger = still ? 0.35 : rnd(0.2, 0.5);
+  const energy = still ? 0.7 : rnd(0.5, 0.9);
+  const social = still ? 0.4 : rnd(0.2, 0.6);
   const arrivedAt = T.abs;
   const leaveAt =
     opts.leaveAt ?? (STAFF.has(arch) ? NEVER : arch === 'tourist' ? arrivedAt + VISIT_TOURIST : arrivedAt + rnd(VISIT_MIN, VISIT_MAX));
-  const decideT = rnd(0, 0.6); // GV 1391: the first decisions are staggered
+  const decideT = still ? 0 : rnd(0, 0.6); // GV 1391: the first decisions are staggered
   const plain = arch !== 'child' && !STAFF.has(arch);
   const items: Items = {
     hat: HAT_ALWAYS.has(arch) || (plain && ((lookSeed >>> 3) & 1) === 1),
@@ -272,6 +285,7 @@ export function spawnVisitor(arch: Archetype, gate: GateId, opts: SpawnOpts = {}
     items,
     embToday: 0, embDay: 0, pendingEmb: null, regularId: reg?.regularId ?? 0, decideT,
     sitPropId: 0, basket: 0, shares: 0, cdUntil: 0, spawnedForPlayer: opts.spawnedForPlayer ?? false,
+    plan: 0,
   };
   visitors.push(v);
   index.set(v.id, v);
@@ -446,7 +460,7 @@ function seatedOn(v: Visitor, x: number, y: number): boolean {
  * Tiles (indices) that a tool or an undo just made blocked: a visitor standing on one moves to the nearest open tile within 3 (GV openNear
  * 1559, two draws for the jitter) and replans its walk (02 8.5 item 3). A sitter on its own seat stays: undo.ts settle passes every
  * touched tile that is blocked after the change, so a turned bench (02 8.3 "tap an existing bench: rotate 90°") lists the tile it
- * already blocked. Creatures follow in part B (creatures.ts).
+ * already blocked. A pigeon or a dog on such a tile moves off it in its own step (creatures.ts).
  */
 export function moveOffBlocked(tiles: readonly number[]): void {
   const set = new Set(tiles);
@@ -470,7 +484,88 @@ export function someoneOn(tiles: readonly XY[]): boolean {
   return false;
 }
 
+/* ---------- phase 8 (03 4.2): spaceOut, then per visitor needs, the cadence, act, moveStep ---------- */
+
+/** What brain.ts hands in at load (setBrain): this file never imports brain.ts or act.ts, which import it. */
+export type BrainFns = { decide: (v: Visitor) => void; act: (v: Visitor, dt: number) => void; busy: Readonly<Record<string, true>> };
+let brain: BrainFns | null = null;
+export function setBrain(fns: BrainFns): void {
+  brain = fns;
+}
+
+/** A family parent stops while its child is further behind than this (tiles): the child walks at 2.6, the parent at 3.0 (assumption). */
+export const PARENT_WAIT = 3.5;
+
+/** True while `v` walks ahead of its child by more than PARENT_WAIT: the parent stands still for that step. */
+function waitsForChild(v: Visitor): boolean {
+  if (v.parentOf === 0 || !v.path) return false;
+  const c = index.get(v.parentOf);
+  return !!c && Math.hypot(c.x - v.x, c.y - v.y) > PARENT_WAIT;
+}
+
+/**
+ * Phase 8 of a step (03 4.2, 6.3): spaceOut over everyone not seated and not serving (a seated reader, feeder or snacker keeps the seat:
+ * 02 5.3 lists sit; a vendor stays at its counter: 02 4.3 "static"), then for each visitor in list order: stepNeeds, the decide cadence, act, moveStep (with wearAt), and removal on its gateOut's
+ * outside tile. A visitor removed in the step (act's leave, a parent's child) is skipped from then on.
+ */
+const spacing: Visitor[] = []; // reused every step: no garbage per step (03 15.2)
+const order: Visitor[] = [];
+export function stepVisitors(dt: number): void {
+  if (!brain) return;
+  spacing.length = 0;
+  order.length = 0;
+  for (const v of visitors) {
+    order.push(v);
+    if (v.sitPropId === 0 && v.st !== 'serve') spacing.push(v);
+  }
+  spaceOut(spacing, dt);
+  for (const v of order) {
+    if (!index.has(v.id)) continue;
+    stepNeeds(v, dt);
+    decideCadence(v, dt, brain.decide, brain.busy);
+    brain.act(v, dt);
+    if (!index.has(v.id)) continue;
+    if (!waitsForChild(v)) moveStep(v, dt);
+    leaveIfOutside(v);
+  }
+}
+
+/* ---------- the visitor.call command (03 5.1; 02 12.2) ---------- */
+
+registerHandler('visitor.call', (c) => callVisitor(c.payload.gate));
+
 /* ---------- state ---------- */
+
+/**
+ * Put a visitor record back under its own id (a removed kiosk's vendor, by the undo: staff.ts vendorReturn), in id order so the list is
+ * as it was (the caller holds its name again: names.ts). False when the id is listed already.
+ */
+export function putVisitor(rec: Visitor): boolean {
+  if (index.has(rec.id)) return false;
+  const v = JSON.parse(JSON.stringify(rec)) as Visitor;
+  let k = visitors.length;
+  while (k > 0 && (visitors[k - 1] as Visitor).id > v.id) k--;
+  visitors.splice(k, 0, v);
+  index.set(v.id, v);
+  return true;
+}
+
+/** A deep copy of the list for a snapshot, in list (id) order. */
+export function visitorsState(): Visitor[] {
+  return JSON.parse(JSON.stringify(visitors)) as Visitor[];
+}
+
+/** Replace the list (a restore); the names, the regulars and the timer come back through their own setters. */
+export function setVisitorsState(list: readonly Visitor[]): void {
+  visitors.length = 0;
+  index.clear();
+  for (const r of list) {
+    const v = JSON.parse(JSON.stringify(r)) as Visitor;
+    if (typeof v.plan !== 'number') v.plan = 0; // a record saved before the field existed
+    visitors.push(v);
+    index.set(v.id, v);
+  }
+}
 
 export type ArrivalsState = { arrivalT: number };
 export function arrivalsState(): ArrivalsState {
@@ -481,8 +576,8 @@ export function setArrivalsState(s: ArrivalsState): void {
 }
 
 /**
- * A new park (or a restore, whose save holds no visitors before part B): nobody in the park, no name held, the regulars on their first
- * visit table, the first arrival due at once. No draw, so a new park moves no stream (det-s2, det-s3).
+ * A new park: nobody in the park, no name held, the regulars on their first visit table, the first arrival due at once. No draw. A
+ * restore puts the saved list, names and timer back instead (save/store.ts, after setLog).
  */
 export function resetVisitors(): void {
   visitors.length = 0;
@@ -492,4 +587,3 @@ export function resetVisitors(): void {
 }
 
 onResetCommands(resetVisitors);
-onRestoreCommands(resetVisitors);

@@ -11,7 +11,8 @@ import { idsState } from '../src/core/ids.ts';
 import { stateHash, worldHash } from '../src/save/store.ts';
 import { BEDC, I, KIND, Kind, OCC, WATER, WEAR, addProp, layersState, markBlockDirty, propById, props } from '../src/world/grid.ts';
 import { setMode } from '../src/play/mode.ts';
-import { spawnVisitor, type Visitor } from '../src/entities/visitor.ts';
+import { NEVER, byId, spawnVisitor, visitors, type Visitor } from '../src/entities/visitor.ts';
+import { vendorFor } from '../src/entities/staff.ts';
 import {
   CAP_BANDSTANDS, CAP_KIOSKS, CAP_PROPS_SOFT, CAP_RUN_TILES, TOOLS, TOOL_IDS, ghost, nextSpecies, propAt, servingTile, setNextSpecies, toolById,
   type ToolId,
@@ -376,8 +377,35 @@ describe('kiosk and remove side effects (02 8.3 kiosk and remove rows)', () => {
     expect(props.some((p) => p.kind === 'bridge')).toBe(false);
   });
 
-  it.todo('placing a kiosk spawns one vendor; remove on it sends the vendor away (needs staff: S4 entities/staff.ts vendorArrive, vendorLeave; 07 S4)');
-  it.todo('remove on a bench stands its sitters up (needs visitors: S4 entities/visitor.ts standUpFrom; 07 S4)');
+  it('placing a kiosk spawns one vendor on its serving tile, serving; remove on it sends the vendor away (02 4.2 item 8, 8.3; S4)', () => {
+    expect(reasonOf(tool({ tool: 'kiosk', at: at(3, 3) }))).toBe('ok');
+    const k = propAt(3, 3);
+    const vendors = visitors.filter((v) => v.archetype === 'vendor');
+    expect(vendors).toHaveLength(1);
+    const v = vendors[0] as Visitor;
+    expect(k?.data.vendorId).toBe(v.id);
+    expect(vendorFor(k?.id ?? 0)).toBe(v.id);
+    const s = servingTile(k as NonNullable<typeof k>);
+    expect([Math.round(v.x), Math.round(v.y), v.st, v.leaveAt]).toEqual([s.x, s.y, 'serve', NEVER]);
+    expect(reasonOf(tool({ tool: 'remove', at: at(4, 4) }))).toBe('ok');
+    expect(visitors.some((o) => o.archetype === 'vendor')).toBe(false);
+    expect(byId(v.id)).toBeUndefined();
+  });
+  it('remove on a bench stands its sitters up: they go idle and decide at once (02 8.3 remove row, "sitters stand"; S4)', () => {
+    const b = propAt(31, 24);
+    expect(b?.kind).toBe('bench');
+    const v = spawnVisitor('single', 'g_east') as Visitor;
+    v.x = 31;
+    v.y = 24;
+    v.path = null;
+    v.st = 'sit';
+    v.t = 30;
+    v.sitPropId = b?.id ?? 0;
+    v.job = { propId: b?.id ?? 0, kind: 'sit' };
+    if (b) b.data.sitters = [v.id];
+    expect(reasonOf(tool({ tool: 'remove', at: at(31, 24) }))).toBe('ok');
+    expect([v.st, v.sitPropId, v.job, v.decideT]).toEqual(['idle', 0, {}, 0]);
+  });
   it('remove on a bridge with someone on it is reason.someone_on_it; once they step off it goes (02 8.3 remove row, 8.4)', () => {
     const v = spawnVisitor('single', 'g_north') as Visitor;
     v.x = 34;

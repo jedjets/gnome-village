@@ -7,6 +7,8 @@
 // PAVE), occupied and water tiles; a followed tile must be lawn, unoccupied and not paved today, and may pass a fountain or lamp (the
 // exclusion is the seed's only, 02 11.1 item 4); paving is free (GV needed stone) and the stone/work bookkeeping is dropped.
 // Dropped from the range: 3367-3369 (stone, hearth gate), 3390-3394 (mkProj and the cost), 1686 (swim marks).
+// S4 part B: entities/staff.ts calls findPavingRun every 60 s from the planning tick (03 4.3 item 2) and act.ts calls markPaved as the
+// gardener lays each tile; move.ts calls wearAt on every step a visitor moves.
 import type { XY } from '../core/math.ts';
 import { I, inB, KIND, Kind, N, NC, OCC, PAVEDAY, WATER, WEAR, WET, markBlockDirty, props } from './grid.ts';
 

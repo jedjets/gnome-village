@@ -10,6 +10,8 @@
 // S3 part A: this file imports play/tools.ts (and with it play/undo.ts) for their `tool` and `undo` handlers, so `apply` and `enqueue` place
 // tools in the dev page (09 5.4, tools/det.mjs on det-s3) before part C's rail imports them from main.ts; no member is added (03 13).
 // S3 part B: the Save group gains savePark, loadPark and clearAll (03 13): the two parque: keys through save/store.ts, nothing else.
+// S4 part B: the State group gains visitors and creatures (the live lists, read only), the Park group callVisitor (it enqueues the logged
+// `visitor.call` command, 03 5.1, as setWeather does).
 import { T } from '../core/clock.ts';
 import { seedVisual, rngN } from '../core/rng.ts';
 import { SIM_DT, SP, setSpeed, simulate, tick } from '../core/loop.ts';
@@ -24,6 +26,8 @@ import { clearParticles, fxStep } from '../render/effects.ts';
 import { SCHEMA_VERSION } from '../save/schema.ts';
 import { clearAll, loadPark, restore, savePark, snapshot, stateHash, worldHash } from '../save/store.ts';
 import '../play/tools.ts';
+import { visitors } from '../entities/visitor.ts';
+import { creatures } from '../entities/creatures.ts';
 import { FT, qualityLevel } from './perf.ts';
 
 export type HarnessApi = { newPark: (seed: number) => void };
@@ -33,6 +37,8 @@ export function buildHarness(api: HarnessApi) {
     T,
     W,
     layers: { KIND, WEAR, OCC, WATER, ICE, WET, PETALS, BEDC, PAVEDAY },
+    visitors,
+    creatures,
     props,
     cam,
   };
@@ -71,6 +77,10 @@ export function buildHarness(api: HarnessApi) {
     /** Enqueues the logged `debug.weather` command; it applies on the next step. */
     setWeather: (kind: WeatherKind): void => {
       enqueue({ side: 'park', kind: 'debug.weather', payload: { kind } });
+    },
+    /** Enqueues the logged `visitor.call` command (the "+" on the Visitors chip, 02 12.2); a park at 30 rejects it with reason.park_full. */
+    callVisitor: (): void => {
+      enqueue({ side: 'park', kind: 'visitor.call', payload: { gate: null } });
     },
   };
   const render = {

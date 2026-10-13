@@ -1,10 +1,12 @@
 // tests/caps.test.ts
 // Locks register 3.3 and 03 3.11 (the people part: 30 people in the park, cameos excluded, enforced in spawnVisitor and callVisitor;
-// reason.park_full at 30, GV addVillager 4489) / 08 2.3 caps.test.ts row / 07 S4.6 step 1. Pigeons and dogs are part B (creatures.ts).
+// reason.park_full at 30, GV addVillager 4489) / 08 2.3 caps.test.ts row / 07 S4.6 step 1; and the creatures' part (12 pigeons, 4 dogs with
+// the pomeranian, creatures.ts; 07 S4.6 step 9).
 import { describe, it, expect, beforeEach } from 'vitest';
 import { newPark } from '../src/core/loop.ts';
 import { rngN } from '../src/core/rng.ts';
-import { CAP_PEOPLE, arriveGroup, callVisitor, people, spawnVisitor, visitors } from '../src/entities/visitor.ts';
+import { CAP_PEOPLE, arriveGroup, callVisitor, people, spawnVisitor, visitors, type Visitor } from '../src/entities/visitor.ts';
+import { CAP_DOGS, CAP_PIGEONS, count, dogCount, spawnDog, spawnPigeon, spawnPigeonAt, thePomeranian } from '../src/entities/creatures.ts';
 
 beforeEach(() => {
   newPark(101);
@@ -61,5 +63,26 @@ describe('30 people, cameos excluded (register 3.3; 03 3.11; 08 2.3)', () => {
   it('callVisitor never takes the park past 30', () => {
     for (let k = 0; k < 60; k++) callVisitor();
     expect(people()).toBe(30);
+  });
+});
+
+describe('12 pigeons, 4 dogs with the pomeranian (register 3.3; 03 3.11; 08 2.3)', () => {
+  it('force-spawning 20 pigeons leaves 12; a refused spawn draws nothing', () => {
+    expect(CAP_PIGEONS).toBe(12);
+    for (let k = 0; k < 10; k++) spawnPigeon();
+    for (let k = 0; k < 10; k++) spawnPigeonAt(23, 23);
+    expect(count('pigeon')).toBe(12);
+    const n0 = rngN();
+    expect(spawnPigeon()).toBeNull();
+    expect(spawnPigeonAt(10, 10)).toBeNull();
+    expect(rngN()).toBe(n0);
+  });
+  it('dogs stop at 4 counting the pomeranian: three walkers\' dogs and the pomeranian, a fourth walker\'s dog is refused', () => {
+    expect(CAP_DOGS).toBe(4);
+    thePomeranian();
+    const walkers = Array.from({ length: 5 }, () => spawnVisitor('dogwalker', 'g_west') as Visitor);
+    const dogs = walkers.map((w) => spawnDog(w.id));
+    expect(dogs.filter((d) => d !== null)).toHaveLength(3);
+    expect([count('dog'), count('pomeranian'), dogCount()]).toEqual([3, 1, 4]);
   });
 });

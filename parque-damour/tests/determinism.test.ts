@@ -2,9 +2,12 @@
 // Locks register 2.9 / brief 9 row 5 / 03 P1, 4.5, 5.5, 11 / 08 3.2: the same seed and the same command log give the same state hash and the
 // same draw count over 3 sim days (64,800 steps); one extra command makes them differ; lite 1 and lite 3 give the same hash; a replay from a
 // snapshot and a save round trip in the middle of the run both land on the same hash. Also the state hash itself (03 11).
-// Two fixtures run the six runs of 08 3.2: det-s2 (S2: speed and weather only; it must keep rngN 912 and stateHash 2925709919, which proves
-// a later slice changed no S2 path) and det-s3 (S3 part A: det-s2 plus park tools and an undo, 08 3.2 item 1; its bench, stroke and undo
-// fall inside run 5's window, so the replay reproduces an undo, 03 5.6 item 4).
+// Three fixtures run the six runs of 08 3.2: det-s2 (S2: speed and weather only), det-s3 (S3 part A: det-s2 plus park tools and an
+// undo, 08 3.2 item 1; its bench, stroke and undo fall inside run 5's window, so the replay reproduces an undo, 03 5.6 item 4) and det-s4
+// (S4 part B: det-s3 plus 22 visitor.call commands that fill the park to 30 people by midday of day 1, 07 S4.7 item 1). S4 part B turned
+// the arrivals on, so det-s2 and det-s3 changed by design and were re-recorded once (07 S4.7 item 1; each fixture's note holds the old and
+// the new values); det-s2 still proves that no later slice moves an S4 path. Runs 4 and 6 compare against run 1's numbers, kept per
+// fixture, instead of running the same 64,800 steps again (the file's time budget, 08 3.2 item 8).
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -17,6 +20,7 @@ import { I, KIND, Kind, WEAR, props } from '../src/world/grid.ts';
 import { idsState, nextEffectId } from '../src/core/ids.ts';
 import { W } from '../src/core/weather.ts';
 import '../src/play/tools.ts'; // registers the `tool` and `undo` handlers (S3)
+import { CAP_PEOPLE, people } from '../src/entities/visitor.ts';
 
 /** The 64,800-step runs take seconds each; vitest's default is 5 s. */
 const LONG = 120_000;
@@ -24,10 +28,13 @@ const LONG = 120_000;
 type FixtureCommand = { tick: number } & CommandInput;
 type Fixture = { seed: number; steps: number; commands: FixtureCommand[]; expect: { rngN: number; stateHash: number } };
 const load = (name: string): Fixture => JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures', name + '.json'), 'utf8')) as Fixture;
-const FIXTURES = { 'det-s2': load('det-s2'), 'det-s3': load('det-s3') } as const;
+const FIXTURES = { 'det-s2': load('det-s2'), 'det-s3': load('det-s3'), 'det-s4': load('det-s4') } as const;
 const fixture = FIXTURES['det-s2']; // the state-hash tests below run on det-s2's park
 
 type Hook = (step: number) => void;
+
+/** det-s2's values since S4 part B (see the test that reads it). */
+const DET_S2_S4 = { rngN: 27245, stateHash: 3065084456 };
 
 /** The kind of the prop whose footprint covers (x, y). */
 function propKindAt(x: number, y: number): string | undefined {
@@ -75,7 +82,8 @@ describe('the fixtures (08 3.2 item 1)', () => {
     expect(fixture.commands.filter((c) => c.kind === 'debug.weather')).toHaveLength(6);
     expect(fixture.commands.some((c) => c.tick > 20000 && c.tick <= 21000)).toBe(true); // 08 3.2 item 1
     expect(fixture.commands.at(-1)).toEqual({ tick: 64800, side: 'park', kind: 'speed', payload: { speed: 0 } });
-    expect(fixture.expect).toEqual({ rngN: 912, stateHash: 2925709919 }); // S2's values: no later slice may move them
+    // S2 recorded rngN 912, stateHash 2925709919; S4 part B re-recorded them once, the arrivals on (07 S4.7 item 1). No later slice may move these.
+    expect(fixture.expect).toEqual(DET_S2_S4);
   });
 
   it('det-s3 is det-s2 plus 7 park commands: a bench, a 3-centre stroke and an undo inside run 5\'s window, a tree and a bandstand before 40,000', () => {
@@ -101,18 +109,56 @@ describe('the fixtures (08 3.2 item 1)', () => {
     for (const [x, y] of [[2, 12], [3, 12], [4, 12], [5, 12], [6, 12], [4, 11], [4, 13]] as const) expect(KIND[I(x, y)]).toBe(Kind.lawn);
     expect(log().filter((c) => c.kind === 'tool' || c.kind === 'undo')).toHaveLength(7);
   }, LONG);
+
+  it('det-s4 is det-s3 plus 22 visitor.call commands between ticks 2,400 and 3,240 (07 S4.7 item 1)', () => {
+    const s3 = FIXTURES['det-s3'], s4 = FIXTURES['det-s4'];
+    expect([s4.seed, s4.steps]).toEqual([s3.seed, s3.steps]);
+    expect(s4.commands.filter((c) => c.kind !== 'visitor.call')).toEqual(s3.commands);
+    const calls = s4.commands.filter((c) => c.kind === 'visitor.call');
+    expect(calls).toHaveLength(22);
+    expect(calls.every((c) => c.tick >= 2400 && c.tick <= 3240 && c.side === 'park')).toBe(true);
+    expect(s4.commands.at(-1)).toEqual({ tick: 64800, side: 'park', kind: 'speed', payload: { speed: 0 } });
+  });
+
 });
 
-for (const name of ['det-s2', 'det-s3'] as const) {
+/** Run 1's numbers per fixture, kept for runs 4 and 6 (the same steps from the same seed and log give the same numbers: runs 1 and 2). */
+const RUN1 = new Map<string, { hash: number; rngN: number; tick: number }>();
+function run1(name: keyof typeof FIXTURES): { hash: number; rngN: number; tick: number } {
+  const got = RUN1.get(name);
+  if (got) return got;
+  newPark(FIXTURES[name].seed);
+  const a = run(FIXTURES[name]);
+  RUN1.set(name, a);
+  return a;
+}
+
+for (const name of ['det-s2', 'det-s3', 'det-s4'] as const) {
   const fx = FIXTURES[name];
   describe(`determinism over 3 sim days, ${name} (brief 9 row 5; 08 3.2)`, () => {
     it('runs 1 and 2: the same seed and commands give the same hash, draw count and tick; run 3: one extra setWeather differs', () => {
-      const a = run(fx);
+      // run 1 also watches the park fill: det-s4 reaches 30 people by midday of day 1 (f 0.45, tick 3,240) and never more; its calls past
+      // 30 are reason.park_full and nothing else is refused (07 S4.7 item 1)
+      const rejected: string[] = [];
+      on('rejected', (e) => rejected.push(String(e.params?.reason)));
+      let most = 0, atMidday = 0;
+      const a = run(fx, {
+        hook: (step) => {
+          most = Math.max(most, people());
+          if (step === 3240) atMidday = people();
+        },
+      });
+      if (name === 'det-s4') {
+        expect([atMidday, most]).toEqual([CAP_PEOPLE, CAP_PEOPLE]);
+        expect(rejected.length).toBeGreaterThan(0);
+        expect(new Set(rejected)).toEqual(new Set(['reason.park_full']));
+      } else expect(most).toBeLessThanOrEqual(CAP_PEOPLE);
       console.log(name + ': seed ' + fx.seed + ' steps ' + a.tick + ' rngN ' + a.rngN + ' stateHash ' + a.hash + ' (0x' + a.hash.toString(16) + ')');
       expect(a.tick).toBe(64800);
       expect(a.rngN).toBeGreaterThan(0);
       expect(a.rngN).toBe(fx.expect.rngN);
       expect(a.hash).toBe(fx.expect.stateHash);
+      RUN1.set(name, a);
       newPark(fx.seed);
       const b = run(fx);
       expect(b).toEqual(a);
@@ -122,7 +168,7 @@ for (const name of ['det-s2', 'det-s3'] as const) {
     }, LONG);
 
     it('run 4: lite 3 in batches of 22 steps with a drain between gives the same hash as lite 1 (03 4.5)', () => {
-      const a = run(fx);
+      const a = run1(name);
       newPark(fx.seed);
       let seen = 0;
       for (const k of ['applied', 'newday', 'season', 'rejected'] as const) watch(k, () => seen++);
@@ -139,7 +185,7 @@ for (const name of ['det-s2', 'det-s3'] as const) {
       const n1 = rngN();
       const after: Command[] = log().filter((c) => c.tick > 20000).map((c) => ({ ...c }));
       expect(after.length).toBeGreaterThan(0);
-      if (name === 'det-s3') expect(after.filter((c) => c.kind === 'tool' || c.kind === 'undo').map((c) => c.kind)).toEqual(['tool', 'tool', 'tool', 'tool', 'undo']);
+      if (name !== 'det-s2') expect(after.filter((c) => c.kind === 'tool' || c.kind === 'undo').map((c) => c.kind)).toEqual(['tool', 'tool', 'tool', 'tool', 'undo']);
       const rejected: string[] = [];
       on('rejected', (e) => rejected.push(String(e.params?.reason)));
       restore(snap);
@@ -152,7 +198,7 @@ for (const name of ['det-s2', 'det-s3'] as const) {
     }, LONG);
 
     it('run 6: a save round trip through JSON at step 40,000 does not change the final hash', () => {
-      const a = run(fx);
+      const a = run1(name);
       newPark(fx.seed);
       const b = run(fx, {
         hook: (step) => {

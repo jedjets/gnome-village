@@ -8,7 +8,10 @@
 // park at once and stays paused; every other command waits for the first step, so live order equals replay order.
 // Dropped from the range: 12026-12031 (water, slump, surface), 12033-12037 (materials, index, gnomes, flora, critters, parts), 12039 (breeding).
 // This is the one module allowed to read the wall clock (07 0.7 item 6). Frame listeners are registered by main.ts (03 2.1: L4 imports L0-L3).
-// Phases 5 to 10 and 12 are kept in order as empty calls: S4 to S6 fill them (listed in the S2 hand-back).
+// S4 part B fills phases 5 (the regulars' day), 7 (arrivals and the gardener's entry), 8 (visitors), 9 (creatures) and 12 (the 1.2 s
+// planning tick in the order of 03 4.3: the facility index, the staff's paving search, the vendor check, the pigeon top-up; every 72
+// steps, counted in whole ticks like the wear so no float sum drifts); a new park also seeds its creatures (six pigeons and the
+// pomeranian's record) and clears the staff. Phases 6 and 10 stay empty for S5 and S6, as does the rest of phase 5.
 import { clamp } from './math.ts';
 import { T, isNewDay, stepClock, syncClock } from './clock.ts';
 import { forceWeather, stepWeather, stepWet } from './weather.ts';
@@ -20,8 +23,15 @@ import { stepIce } from '../world/water.ts';
 import { decayWear } from '../world/wear.ts';
 import { charmDirty, markCharmDirty, rebuildCharm } from '../world/charm.ts';
 import { setMode } from '../play/mode.ts';
+import { stepRegularReturns } from '../entities/names.ts';
+import { stepArrivals, stepVisitors } from '../entities/visitor.ts';
+import { ensureGardener, ensureVendors, facilities, resetStaff, stepStaffPlanning } from '../entities/staff.ts';
+import { seedCreatures, stepCreatures, topUpPigeons } from '../entities/creatures.ts';
+import '../entities/brain.ts'; // hands decide, act and BUSY to visitor.ts (setBrain) at load
 
 export const SIM_DT = 1 / 60;
+/** The planning tick: every 1.2 s, 72 steps (03 4.3; GV planT 12038). */
+export const PLAN_STEPS = 72;
 /**
  * The kinds a paused frame applies (03 4.6): `speed`, so the dial can unpause, and `park.new` (owner 2026-10-13: a New confirmed while
  * paused gives the fresh park at once, still paused). Every other command waits for the first step after the unpause.
@@ -65,14 +75,18 @@ export function setTick(n: number): void {
 }
 
 /**
- * Start a park from `seed`: the world, creator mode with no possessed actor, an empty command log, tick 0. Every state object is rebuilt
- * through its module's factory (09 4 row 7); MODE and PLAYER are saved and hashed, so a park.new issued in avatar mode must not carry over.
+ * Start a park from `seed`: the world, creator mode with no possessed actor, an empty command log, tick 0, nobody in the park, the staff
+ * cleared, six pigeons. Every state object is rebuilt through its module's factory (09 4 row 7); MODE and PLAYER are saved and hashed, so
+ * a park.new issued in avatar mode must not carry over. The starter kiosk's vendor comes at the first planning tick (1.2 s), the gardener
+ * at 10 s.
  */
 export function newPark(seed: number): void {
   genPark(seed);
   setMode('creator');
-  resetCommands();
+  resetCommands(); // its hooks empty the visitors and the undo stack
   setTick(0);
+  resetStaff();
+  seedCreatures(); // six pigeons round the fountain (02 11.2 item 1) and the pomeranian's record: sim draws after gen's
 }
 
 /** One fixed step (03 4.2). `lite` is accepted for the frame's calls but changes nothing here: it only trims events at drain (03 4.5). */
@@ -99,22 +113,30 @@ export function simulate(dt: number, _lite: number): void {
   stepIce(dt);
   lap('weather');
   if (isNewDay()) {
-    /* 5 day reset: abilities.resetCharges, embarrass.resetDay, names.stepRegularReturns, the progression tally (S4, S5, S6) */
+    stepRegularReturns(); // 5 day reset: the regulars' memory; abilities.resetCharges, embarrass.resetDay, the tally (S5, S6)
   }
   lap('day');
   /* 6 stepAbilities (S6) */
   lap('abilities');
-  /* 7 stepArrivals (S4) */
+  stepArrivals(dt); // 7 arrivals (02 4.2) and the gardener 10 s after a new park (02 4.2 item 8)
+  ensureGardener(tickN);
   lap('arrivals');
-  /* 8 stepVisitors (S4) */
+  stepVisitors(dt); // 8 visitors: spaceOut, needs, the decide cadence, act, moveStep, wearAt, removal at a gate
   lap('visitors');
-  /* 9 stepCreatures (S4) */
+  stepCreatures(dt); // 9 pigeons, dogs, crumbs
   lap('creatures');
   /* 10 stepRomance (S5) */
   lap('romance');
   if (tickN % 60 === 0) decayWear(); // 11 wear: once per sim second, counted in whole steps so no float sum drifts
   lap('wear');
-  /* 12 the 1.2 s planning tick (S4) */
+  if (tickN % PLAN_STEPS === 0) {
+    // 12 the planning tick (03 4.3): (1) the facility index, (2) the staff (the paving search every 60 s), (3) a vendor per kiosk,
+    // (4) the pigeon top-up every 90 s; (5) the alumni roll and (6) the featured pair are S5's
+    facilities();
+    stepStaffPlanning(tickN);
+    ensureVendors();
+    topUpPigeons(tickN);
+  }
   lap('plan');
   if (charmDirty()) rebuildCharm(props, T.lamps); // 13 charm
   lap('charm');

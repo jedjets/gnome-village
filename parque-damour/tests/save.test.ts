@@ -183,7 +183,7 @@ describe('what a snapshot holds (08 2.6 rows 2 to 5; 03 3.2, 3.10, 11; register 
     const s = snapshot();
     expect(Object.keys(s).sort()).toEqual(
       ['alumni', 'creatures', 'effects', 'feed', 'ids', 'layers', 'log', 'mode', 'paving', 'pairs', 'pinnedPair', 'props', 'regulars',
-        'rng', 'seed', 'sides', 'tally', 'tick', 'treeTurn', 'v', 'visitors', 'weather'].sort(),
+        'rng', 'sched', 'seed', 'sides', 'tally', 'tick', 'treeTurn', 'v', 'visitors', 'weather'].sort(),
     );
     const banned = /^(undo|stack|cam|camera|selection|selected|armed|tool|toast|particles|parts|speed)$/i;
     const found: string[] = [];
@@ -238,8 +238,7 @@ describe('what a snapshot holds (08 2.6 rows 2 to 5; 03 3.2, 3.10, 11; register 
     }
     expect(log()).toHaveLength(600);
     const s = snapshot();
-    // the 30 people arrive in S4 (entities/visitor.ts); the save takes plain records (schema SaveRec), so 30 records of the 03 3.3 shape
-    // with a 40-tile path each stand in for them
+    // 30 records of the 03 3.3 shape (with S4's `plan`) and a 40-tile path each stand in for a full park's people (entities/visitor.ts)
     for (let id = 1; id <= 30; id++)
       s.visitors.push({
         id, name: 'Amélie-Joséphine ' + id, sex: id % 2 ? 'f' : 'm', archetype: 'single', ageWord: 'grown', seeks: 'any', lookSeed: 123456789 + id,
@@ -250,7 +249,7 @@ describe('what a snapshot holds (08 2.6 rows 2 to 5; 03 3.2, 3.10, 11; register 
         hunger: 0.123456789, energy: 0.87654321, comfort: 0.5555555, social: 0.33333333,
         arrivedAt: 1.3333333, leaveAt: 1.7777777, gateIn: 'g_south_w', gateOut: null, pairId: id, coupleOf: 0, parentOf: 0, childOf: 0,
         items: { hat: true, purse: false, baguette: true, iceCream: false }, embToday: 1, embDay: 2, pendingEmb: null, regularId: 0,
-        decideT: 0.98765, sitPropId: 4, basket: 0, shares: 0, cdUntil: 1234, spawnedForPlayer: false,
+        decideT: 0.98765, sitPropId: 4, basket: 0, shares: 0, cdUntil: 1234, spawnedForPlayer: false, plan: 2,
       });
     const text = JSON.stringify(s);
     expect(new TextEncoder().encode(text).length).toBeLessThan(1_048_576);

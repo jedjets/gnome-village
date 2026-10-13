@@ -18,6 +18,8 @@ import { I, KIND, Kind, OCC, propById, props, removeProp } from '../src/world/gr
 import { setMode } from '../src/play/mode.ts';
 import { nextSpecies, propAt } from '../src/play/tools.ts';
 import { UNDO_DEPTH, canUndo, clearUndo, depth } from '../src/play/undo.ts';
+import { byId, spawnVisitor, visitors, type Visitor } from '../src/entities/visitor.ts';
+import { vendorFor } from '../src/entities/staff.ts';
 
 const tool = (payload: ToolPayload): Result => applyNow({ side: 'park', kind: 'tool', payload });
 const undo = (): Result => applyNow({ side: 'park', kind: 'undo', payload: {} });
@@ -172,8 +174,44 @@ describe('undo restores ids and vendors (03 5.6 item 3)', () => {
     expect(idsState().propReserved).toEqual([]);
   });
 
-  it.todo('the kiosk\'s vendor comes back with the kiosk (needs staff: S4 entities/staff.ts vendorReturn; 07 S4)');
-  it.todo('a visitor on a tile the undo made water or occupied moves to the nearest open tile (needs visitors: S4 entities/visitor.ts moveOffBlocked, GV openNear 1559; 07 S4)');
+  it('the kiosk\'s vendor comes back with the kiosk: the same record under its own VisitorId, and the hash as before the removal (S4)', () => {
+    tool({ tool: 'kiosk', at: at(3, 3) });
+    const k = propAt(3, 3);
+    const v = visitors.find((o) => o.archetype === 'vendor') as Visitor;
+    const rec = JSON.stringify(v);
+    const h0 = stateHash();
+    tool({ tool: 'remove', at: at(3, 3) });
+    expect(byId(v.id)).toBeUndefined();
+    undo();
+    expect(JSON.stringify(byId(v.id))).toBe(rec);
+    expect([propById(k?.id ?? 0)?.data.vendorId, vendorFor(k?.id ?? 0)]).toEqual([v.id, v.id]);
+    expect(stateHash()).toBe(h0);
+  });
+
+  it('the undo of a kiosk placement hands its vendor\'s VisitorId back: the next visitor gets it again (S4; 08 2.5 undo row 1)', () => {
+    const id0 = idsState().visitor;
+    const n0 = rngN();
+    tool({ tool: 'kiosk', at: at(3, 3) });
+    expect(idsState().visitor).toBe(id0 + 1);
+    expect(rngN()).toBe(n0); // the vendor's spawn draws nothing
+    undo();
+    expect([idsState().visitor, visitors.length, rngN()]).toEqual([id0, 0, n0]);
+    expect((spawnVisitor('elder', 'g_west') as Visitor).id).toBe(id0 + 1);
+  });
+
+  it('a visitor on a tile the undo made occupied moves to the nearest open tile within 3 (02 8.5 item 3; GV openNear 1559)', () => {
+    tool({ tool: 'remove', at: at(31, 24) }); // a starter bench
+    const v = spawnVisitor('single', 'g_east') as Visitor;
+    v.x = 31;
+    v.y = 24;
+    v.path = null;
+    undo(); // the bench is back on (31, 24)
+    expect(propAt(31, 24)?.kind).toBe('bench');
+    const [x, y] = [Math.round(v.x), Math.round(v.y)];
+    expect([x, y]).not.toEqual([31, 24]);
+    expect(Math.max(Math.abs(x - 31), Math.abs(y - 24))).toBeLessThanOrEqual(3);
+    expect(OCC[I(x, y)]).toBe(0);
+  });
 });
 
 describe('undo is logged and cleared (03 5.6 items 4 and 5; 02 8.5 item 4; register 3.11)', () => {

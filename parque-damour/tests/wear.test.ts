@@ -1,10 +1,16 @@
 // tests/wear.test.ts
 // Locks 02 11.1 items 1-6 (desire paths and the gardener's paving search) / 08 2.2 / 07 S2.6 item 13 (GV 1674-1687, 3366-3395): wearAt,
-// decayWear, findPavingRun, markPaved.
+// decayWear, findPavingRun, markPaved; and 07 S4.7 item 5 (S4 part B): walkers wear a line, the search finds it and the gardener paves it.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { I, KIND, Kind, OCC, PAVEDAY, WATER, WEAR, WET, addProp, clearLayers } from '../src/world/grid.ts';
 import { PAVE_MIN_RUN, WEAR_MAX, decayWear, findPavingRun, markPaved, wearAt } from '../src/world/wear.ts';
 import { resetIds } from '../src/core/ids.ts';
+import { SIM_DT, newPark, simulate } from '../src/core/loop.ts';
+import { T } from '../src/core/clock.ts';
+import { on, type GameEvent } from '../src/core/events.ts';
+import { goTo, moveStep } from '../src/entities/move.ts';
+import { PAVE_STEPS, pavingState } from '../src/entities/staff.ts';
+import { NEVER, removeVisitor, spawnVisitor, type Visitor } from '../src/entities/visitor.ts';
 
 const DT = 1 / 60;
 
@@ -145,4 +151,41 @@ describe('world/wear paving (02 11.1 items 4-6)', () => {
     expect(findPavingRun(4)).toBeNull();
     expect(findPavingRun(5)).toHaveLength(4);
   });
+});
+
+describe('walkers wear a line and the gardener paves it (07 S4.7 item 5; 02 11.1 items 1, 4-5; 08 2.2)', () => {
+  it('20 singles along one lawn line for 200 s wear tiles to 2.6; the search returns a run of 3 or more; the gardener lays it within 60 s', () => {
+    newPark(101);
+    for (let x = 2; x <= 9; x++) expect(KIND[I(x, 1)], 'x ' + x).toBe(Kind.lawn);
+    const walkers = Array.from({ length: 20 }, (_, k) => {
+      const v = spawnVisitor('single', 'g_north') as Visitor;
+      Object.assign(v, { x: 2 + (k % 8), y: 1, path: null, st: 'idle' });
+      return v;
+    });
+    for (let step = 1; step <= 200 * 60; step++) {
+      for (const v of walkers) {
+        if (!v.path) goTo(v, v.x < 5.5 ? 9 : 2, 1); // back and forth along the line, scripted (no brain)
+        moveStep(v, SIM_DT);
+      }
+      if (step % 60 === 0) decayWear();
+    }
+    let worn = 0;
+    for (let x = 2; x <= 9; x++) if ((WEAR[I(x, 1)] as number) >= 2.6) worn++;
+    expect(worn).toBeGreaterThanOrEqual(3);
+    const run = findPavingRun(T.day) ?? [];
+    expect(run.length).toBeGreaterThanOrEqual(PAVE_MIN_RUN);
+    expect(run.every((t) => t.y === 1 && t.x >= 2 && t.x <= 9)).toBe(true);
+    for (const v of walkers) removeVisitor(v.id);
+    const g = spawnVisitor('gardener', 'g_west') as Visitor; // he is in the park before the first search (60 s)
+    g.plan = NEVER; // no tidy due
+    const feed: GameEvent[] = [];
+    on('step', (e) => e.params?.feed && feed.push(e));
+    for (let k = 0; k < PAVE_STEPS; k++) simulate(SIM_DT, 0); // to the first paving search
+    const job = pavingState();
+    expect(job.run.length).toBeGreaterThanOrEqual(PAVE_MIN_RUN);
+    expect(job.runsToday).toBe(1);
+    for (let k = 0; k < 60 * 60; k++) simulate(SIM_DT, 0); // 60 sim seconds
+    for (const t of job.run) expect([KIND[I(t.x, t.y)], WEAR[I(t.x, t.y)], PAVEDAY[I(t.x, t.y)]], `(${t.x}, ${t.y})`).toEqual([Kind.gravel, 0, T.day]);
+    expect(feed.map((e) => e.params?.feed)).toEqual(['feed.gardener']);
+  }, 60_000);
 });

@@ -15,6 +15,9 @@
 // reserved stay reserved, so the round trip keeps the hash; no entry on the restored path releases them, so the paths hand out other
 // PropIds once the live path would release one (a known limitation the owner kept on 2026-10-13, 03 section 17; save.test.ts pins it
 // with it.fails).
+// S4 part B: the visitors, the creatures, the regulars, the paving job and the schedulers' counters (`sched`: the arrivals timer, the names
+// held, the regulars arrived today, the gatherings announced) are in the snapshot and the hash; a restore puts them back after setLog, whose
+// hooks clear the undo stack. The ids state was already both.
 // TODO(S5): the feed (ui/feed.ts, which this layer cannot import) joins the snapshot through a hook; the profile's cp and mp join the
 // state hash (03 11) in the slice that first awards points, which re-records the det fixtures (S3 must keep them: 07 S3.7 item 1).
 import { FNV_SEED, fnvStep } from '../core/math.ts';
@@ -34,8 +37,12 @@ import {
 import { parkSeed, setParkSeed } from '../world/gen.ts';
 import { iceState, setIceState } from '../world/water.ts';
 import { markCharmDirty } from '../world/charm.ts';
+import { arrivalsState, setArrivalsState, setVisitorsState, visitorsState } from '../entities/visitor.ts';
+import { namesState, regularsState, resetNames, setNamesState } from '../entities/names.ts';
+import { creaturesState, gatheredState, setCreaturesState, setGatheredState } from '../entities/creatures.ts';
+import { pavingState, resetStaff, setPavingState } from '../entities/staff.ts';
 import { defaultProfile, migratePark, migrateProfile } from './migrate.ts';
-import { SCHEMA_VERSION, type LayersSave, type ParkSaveV1, type ProfileV1, type WeatherSave } from './schema.ts';
+import { SCHEMA_VERSION, type LayersSave, type ParkSaveV1, type ProfileV1, type SchedSave, type WeatherSave } from './schema.ts';
 
 export const PROFILE_KEY = 'parque:profile-v1';
 export const PARK_KEY = 'parque:park-v1';
@@ -346,12 +353,21 @@ function weatherBlock(): WeatherSave {
   };
 }
 
-/** What the engine owns beyond the layers; the lists the later slices fill are empty until then. */
-function lists(): Pick<ParkSaveV1, 'visitors' | 'pairs' | 'creatures' | 'effects' | 'sides' | 'regulars' | 'alumni' | 'pinnedPair' | 'paving' | 'mode' | 'tally' | 'feed'> {
+/** The schedulers' counters (schema.ts SchedSave). */
+function schedState(): SchedSave {
+  const n = namesState();
+  return { arrivalT: arrivalsState().arrivalT, held: n.held, arrivedDay: n.arrivedDay, arrivedToday: n.arrivedToday, gathered: gatheredState() };
+}
+
+/** What the engine owns beyond the layers; the lists the later slices fill (pairs, effects, alumni, feed) are empty until then. */
+function lists(): Pick<
+  ParkSaveV1,
+  'visitors' | 'pairs' | 'creatures' | 'effects' | 'sides' | 'regulars' | 'alumni' | 'pinnedPair' | 'paving' | 'sched' | 'mode' | 'tally' | 'feed'
+> {
   return {
-    visitors: [], pairs: [], creatures: [], effects: [],
+    visitors: visitorsState(), pairs: [], creatures: creaturesState(), effects: [],
     sides: { cooldowns: { park: {}, cupid: {}, mischief: {} }, charges: { park: {}, cupid: {}, mischief: {} } },
-    regulars: [], alumni: [], pinnedPair: 0, paving: { runsToday: 0, day: 0 },
+    regulars: regularsState(), alumni: [], pinnedPair: 0, paving: pavingState(), sched: schedState(),
     mode: { mode: getMode(), player: getPlayer(), avatar: getAvatar() },
     tally: { day: 1, cp: 0, mp: 0 },
     feed: [],
@@ -410,8 +426,28 @@ export function restore(s: ParkSaveV1): void {
   setTick(s.tick);
   setLog(s.log); // runs the restore hooks: undo.ts empties its stack, tools.ts derives a tree cycle ...
   if (typeof s.treeTurn === 'number') setNextSpecies(s.treeTurn); // ... which the saved one replaces
+  restoreLife(s);
   rebuildBlock();
   markCharmDirty();
+}
+
+/** The visitors, the creatures, the regulars, the paving job and the schedulers' counters (S4 part B); a save without them (S3) has none. */
+function restoreLife(s: ParkSaveV1): void {
+  setVisitorsState(s.visitors ?? []);
+  resetNames();
+  const n = namesState();
+  const sc = s.sched;
+  setNamesState({
+    held: sc?.held ?? [],
+    regulars: Array.isArray(s.regulars) && s.regulars.length > 0 ? s.regulars : n.regulars,
+    arrivedDay: sc?.arrivedDay ?? 0,
+    arrivedToday: sc?.arrivedToday ?? 0,
+  });
+  setArrivalsState({ arrivalT: sc?.arrivalT ?? 0 });
+  setCreaturesState(s.creatures ?? []);
+  setGatheredState(sc?.gathered ?? []);
+  resetStaff();
+  setPavingState(s.paving);
 }
 
 /** Key-sorted JSON, so two equal records hash alike whatever order their fields were written in. */
@@ -448,8 +484,9 @@ class Hasher {
 
 /**
  * FNV-1a over tick, the sim stream's state and draw count, the full weather block with the ice timers, the id counters and free lists,
- * the paving tally, the nine layers' bytes and the canonical JSON of the props and the rest of the engine's lists, each sorted by id
- * (03 11). Not hashed: the seed, the feed, the log, the pinned pair, the visual stream, T.speed.
+ * the paving tally and job, the nine layers' bytes and the canonical JSON of the props and the rest of the engine's lists (visitors,
+ * creatures, regulars and the schedulers' counters among them), each sorted by id (03 11). Not hashed: the seed, the feed, the log, the
+ * pinned pair, the visual stream, T.speed.
  */
 export function stateHash(): number {
   const hs = new Hasher();
@@ -464,6 +501,7 @@ export function stateHash(): number {
   hs.part('visitors', canon(byId(l.visitors)));
   hs.part('pairs', canon(byId(l.pairs)));
   hs.part('creatures', canon(byId(l.creatures)));
+  hs.part('sched', canon(l.sched));
   hs.part('effects', canon(byId(l.effects)));
   hs.part('sides', canon(l.sides));
   hs.part('regulars', canon(l.regulars));

@@ -3,10 +3,19 @@
 // caps, starting needs, leaveAt, the complementary-sex re-roll of GV addVillager 4488-4503), 02 4.3 couple and family, 02 4.5 item 3
 // (a due regular replaces a generated single), 02 12.2 ("+": single 60 %), 03 4.4 (the decide cadence and its one MODE branch) and the
 // draw order the visitor.ts header documents / 08 2.3 arrivals.test.ts rows that need no running loop / 07 S4.6 step 1.
-// Part A drives the scheduler directly (stepArrivals with the clock held); the seeded-day rows (16 +- 3 by f 0.45, the gardener, one
-// vendor per kiosk) run in part B once the loop calls it.
+// Part A drives the scheduler directly (stepArrivals with the clock held); part B runs the seeded day through the loop (the counts by
+// f 0.45 and 0.70, never above 30, the gardener from 10 s, one vendor per kiosk, the visitor.call command). 07 S4.7 item 2 asks for
+// 16 +- 3 people by f 0.45 and 24 +- 3 by f 0.70; with 02 4.2's 6-14 s gap (06 1.8) and register 3.4's 0.25-0.5 day visit that cannot
+// happen: 54 s bring about 6 arrivals of 1.29 people each (couple and family 12 % each bring two, a tourist pair 12 % x 40 %), so about
+// 8 visitors and the 2 staff by f 0.45, and about 17 in the park by f 0.70 once the first leave. The rows below pin what the rules give,
+// +- 3 as 07 allows (a deviation in the hand-back; the owner may shorten the gap or change 07's numbers).
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SIM_DT, newPark, setTick } from '../src/core/loop.ts';
+import { SIM_DT, newPark, setSpeed, setTick, simulate, tick } from '../src/core/loop.ts';
+import { applyNow, log } from '../src/core/commands.ts';
+import { clearListeners, on } from '../src/core/events.ts';
+import { props } from '../src/world/grid.ts';
+import { gardener, vendorFor } from '../src/entities/staff.ts';
+import '../src/play/tools.ts';
 import { STEPS_PER_DAY, T } from '../src/core/clock.ts';
 import { mulberry32, rngN, seedSim } from '../src/core/rng.ts';
 import { W } from '../src/core/weather.ts';
@@ -300,5 +309,75 @@ describe('the decide cadence and its one MODE branch (03 4.4; GV 5696)', () => {
     expect(calls).toEqual(['avatar ' + v.id, 'decide ' + o.id]);
     setMode('creator');
     setAvatarDecide(() => {});
+  });
+});
+
+const kiosks = (): typeof props => props.filter((p) => p.kind === 'kiosk');
+const vendors = (): Visitor[] => visitors.filter((v) => v.archetype === 'vendor');
+
+describe('the seeded day through the loop (07 S4.7 item 2; 02 4.2 items 1-2, 8; 08 2.3 arrivals rows)', () => {
+  it('at 8x from f 0.30 on seed 101: 10 +- 3 people by f 0.45, 17 +- 3 by f 0.70, never above 30 all day', () => {
+    clearListeners();
+    newPark(101);
+    setSpeed(8);
+    let at45 = -1, at70 = -1, most = 0;
+    for (let step = 1; step <= 21600; step++) {
+      simulate(SIM_DT, 3); // the real loop's lite bits at 8x (03 4.1 item 3)
+      most = Math.max(most, people());
+      if (step === tickAt(1, 0.45)) at45 = people();
+      if (step === tickAt(1, 0.7)) at70 = people();
+    }
+    expect(at45).toBeGreaterThanOrEqual(10 - 3);
+    expect(at45).toBeLessThanOrEqual(10 + 3);
+    expect(at70).toBeGreaterThanOrEqual(17 - 3);
+    expect(at70).toBeLessThanOrEqual(17 + 3);
+    expect(most).toBeLessThanOrEqual(30);
+  }, 60_000);
+
+  it('the gardener exists from 10 s, came in at g_west, and is the same one three days later', () => {
+    clearListeners();
+    newPark(101);
+    for (let k = 0; k < 599; k++) simulate(SIM_DT, 0);
+    expect(gardener()).toBeUndefined();
+    simulate(SIM_DT, 0);
+    const g = gardener() as Visitor;
+    expect([tick(), g.gateIn, g.name, g.leaveAt]).toEqual([600, 'g_west', 'Gustave', NEVER]);
+    for (let k = 0; k < 3 * 21600 - 600; k++) simulate(SIM_DT, 0);
+    expect(gardener()?.id).toBe(g.id);
+    expect(visitors.filter((v) => v.archetype === 'gardener')).toHaveLength(1);
+  }, 120_000);
+
+  it('one vendor per kiosk: the starter kiosk\'s at the first planning tick, a placed kiosk\'s at once, a removed kiosk takes its own away', () => {
+    clearListeners();
+    newPark(101);
+    for (let k = 0; k < 71; k++) simulate(SIM_DT, 0);
+    expect(vendors()).toHaveLength(0);
+    simulate(SIM_DT, 0); // tick 72: the planning tick (1.2 s)
+    expect(vendors()).toHaveLength(1);
+    expect(applyNow({ side: 'park', kind: 'tool', payload: { tool: 'kiosk', at: { x: 3, y: 3 } } }).ok).toBe(true);
+    expect(applyNow({ side: 'park', kind: 'tool', payload: { tool: 'kiosk', at: { x: 40, y: 3 } } }).ok).toBe(true);
+    for (let k = 0; k < 600; k++) simulate(SIM_DT, 0);
+    expect(vendors()).toHaveLength(3);
+    for (const k of kiosks()) expect(vendorFor(k.id), 'kiosk ' + k.id).not.toBe(0);
+    expect(new Set(kiosks().map((k) => vendorFor(k.id))).size).toBe(3);
+    expect(applyNow({ side: 'park', kind: 'tool', payload: { tool: 'remove', at: { x: 40, y: 3 } } }).ok).toBe(true);
+    for (let k = 0; k < 600; k++) simulate(SIM_DT, 0);
+    expect([kiosks().length, vendors().length]).toEqual([2, 2]);
+  }, 30_000);
+
+  it('the visitor.call command brings one arrival and is logged; at 30 it is reason.park_full, not logged (03 5.1, 5.4; 02 12.2)', () => {
+    clearListeners();
+    newPark(101);
+    const reasons: string[] = [];
+    on('rejected', (e) => reasons.push(String(e.params?.reason)));
+    expect(applyNow({ side: 'park', kind: 'visitor.call', payload: { gate: 'g_north' } }).ok).toBe(true);
+    expect(visitors[0]?.gateIn).toBe('g_north');
+    expect(log().map((c) => c.kind)).toEqual(['visitor.call']);
+    while (people() < 30) spawnVisitor('single', 'g_west');
+    expect(applyNow({ side: 'park', kind: 'visitor.call', payload: { gate: null } })).toEqual({ ok: false, reason: 'reason.park_full' });
+    expect(reasons).toEqual(['reason.park_full']);
+    expect(log()).toHaveLength(1);
+    const wrong = { side: 'cupid', kind: 'visitor.call', payload: { gate: null } } as unknown as Parameters<typeof applyNow>[0];
+    expect(applyNow(wrong)).toEqual({ ok: false, reason: 'reason.wrong_side' }); // a caller that ignores the types (03 5.3)
   });
 });
