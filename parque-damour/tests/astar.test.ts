@@ -6,7 +6,7 @@ import { newPark } from '../src/core/loop.ts';
 import { mulberry32, rngN } from '../src/core/rng.ts';
 import { resetIds } from '../src/core/ids.ts';
 import type { XY } from '../src/core/math.ts';
-import { BLOCK, I, KIND, Kind, N, OCC, addProp, clearLayers, inB, propById, props, rebuildBlock, removeProp } from '../src/world/grid.ts';
+import { BLOCK, I, KIND, Kind, N, OCC, addProp, clearLayers, inB, markBlockDirty, propById, props, rebuildBlock, removeProp } from '../src/world/grid.ts';
 import { GATES } from '../src/world/park.ts';
 import {
   ASTAR_NODES, BRIDGE_COST, DIAG, H_SCALE, PFSTAT, STEP_COST, findPath, pathCost, stepCost, walkable,
@@ -158,6 +158,33 @@ describe('partial paths and the node budget (02 5.5; GV 1475, 1498, 1504)', () =
     expect(Math.min(Math.abs(last.x - 5), Math.abs(last.y - 5))).toBe(0); // straight out from the target: the lowest estimate
     expect(PFSTAT.last).toBeGreaterThan(0);
     expect(PFSTAT.last).toBeLessThanOrEqual(2600);
+  });
+  it('the budget can run out on a reachable target: partial at 2600 nodes, so partial never proves a target unreachable', () => {
+    bare();
+    for (let x = 0; x < N - 1; x++) KIND[I(x, 24)] = Kind.bed; // a wall across the park, open only at x 47
+    markBlockDirty();
+    rebuildBlock();
+    // a flood fill from (0, 47) reaches (0, 0) through the gap at (47, 24)
+    const seen = new Uint8Array(N * N), queue = [I(0, 47)];
+    seen[I(0, 47)] = 1;
+    for (let q = 0; q < queue.length; q++) {
+      const c = queue[q] as number, cx = c % N, cy = (c / N) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const x = cx + dx, y = cy + dy;
+        if (!open(x, y) || seen[I(x, y)]) continue;
+        seen[I(x, y)] = 1;
+        queue.push(I(x, y));
+      }
+    }
+    expect(seen[I(0, 0)]).toBe(1);
+    const r = findPath(0, 47, 0, 0);
+    expect(PFSTAT.last).toBe(ASTAR_NODES);
+    expect(r.partial).toBe(true);
+    expect(r.path.length).toBeGreaterThan(40); // most of the way round: toward the gap, then back along the wall's far side
+    checkPath({ x: 0, y: 47 }, r.path);
+    const short = findPath(0, 40, 0, 8); // the same detour from nearer the wall fits the budget
+    expect(short.partial).toBe(false);
+    expect(short.path.at(-1)).toEqual({ x: 0, y: 8 });
   });
   it('the start is the target: one step onto it; A* never draws on the sim stream', () => {
     const n0 = rngN();

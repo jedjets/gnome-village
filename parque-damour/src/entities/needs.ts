@@ -6,13 +6,14 @@
 // per second asleep, 09 4 row 12), social +0.3/day for a single not in a Pair, comfort eased at 0.2/s (GV warmth 0.22/s) toward the
 // target of 02 4.4: 0.7, +0.15 with a lamp within 3 at night (the lamps' hours, f >= 0.80 or f < 0.28, when every lamp is lit), -0.15
 // at night with none, -0.35 rain, -0.30 snow, -0.10 mist (weatherAt at the visitor), +0.10 inside a sunbeam, the season term (summer
-// -0.05 at midday, winter -0.15) and the weather term of the global kind (clear +0.05, cloudy -0.05, snow -0.30), clamped to 0-1; in a
-// SHELTERED state rain lowers nothing (02 5.3). This module never reads MODE or PLAYER (03 1, Do not 3).
+// -0.05 at midday, winter -0.15) and the weather term (clear +0.05, cloudy -0.05, snow -0.30) of the kind weatherAt gives at the visitor
+// (02 4.4 and 06 7 "using weatherAt(v)": inside a sunbeam the sky is clear, under a raincloud rain, under fog mist; weather.ts maps
+// them), clamped to 0-1; in a SHELTERED state rain lowers nothing (02 5.3). This module never reads MODE or PLAYER (03 1, Do not 3).
 // Dropped from the range: 5554-5562 (age, stages, setOff), 5564-5566 (sleep, baby, child and cold hunger factors), 5568 (the sleep
 // regeneration per second), 5570-5578 (the light, rain, snow, cold, swim, fire, indoors and huddle warmth terms), 5580 (the baby auto-eat).
 import { clamp, clamp01, cheb } from '../core/math.ts';
 import { DAYLEN, T } from '../core/clock.ts';
-import { W, overrides, weatherAt, type WeatherKind } from '../core/weather.ts';
+import { overrides, weatherAt, type WeatherKind } from '../core/weather.ts';
 import { propById, props } from '../world/grid.ts';
 import type { Visitor } from './visitor.ts';
 
@@ -28,7 +29,7 @@ export const RAIN_K = 0.35;
 export const SNOW_K = 0.3;
 export const MIST_K = 0.1;
 export const SUNBEAM_K = 0.1;
-/** The weather term of 02 3.3 / 06 14.1 by the global kind; rain, shower and mist act through the formula only. */
+/** The weather term of 02 3.3 / 06 14.1 by the kind at the visitor (weatherAt); rain, shower and mist act through the formula only. */
 export const WEATHER_TERM: Readonly<Record<WeatherKind, number>> = { clear: 0.05, fair: 0, cloudy: -0.05, breeze: 0, rain: 0, shower: 0, mist: 0, snow: -0.3 };
 
 /** States in which rain lowers no comfort (02 5.3 SHELTERED: shelter, and eat at a kiosk). brain.ts re-exports the set (03 2.5). */
@@ -73,7 +74,7 @@ export function comfortTarget(v: Visitor): number {
   if (!sheltered(v)) t -= RAIN_K * w.rain;
   t -= SNOW_K * w.snow + MIST_K * w.mist;
   if (inSunbeam(x, y)) t += SUNBEAM_K;
-  t += seasonTerm(T.season, T.phase) + WEATHER_TERM[W.kind];
+  t += seasonTerm(T.season, T.phase) + WEATHER_TERM[w.kind];
   return clamp01(t);
 }
 

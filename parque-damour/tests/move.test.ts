@@ -7,14 +7,15 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { SIM_DT, newPark, setTick } from '../src/core/loop.ts';
 import { STEPS_PER_DAY, T } from '../src/core/clock.ts';
 import { resetIds } from '../src/core/ids.ts';
+import { rngN } from '../src/core/rng.ts';
 import { applyNow } from '../src/core/commands.ts';
-import { I, WEAR, addProp, clearLayers, BLOCK, props, rebuildBlock, removeProp } from '../src/world/grid.ts';
+import { I, KIND, Kind, WEAR, addProp, clearLayers, BLOCK, markBlockDirty, props, rebuildBlock, removeProp, type Prop } from '../src/world/grid.ts';
 import { PFSTAT } from '../src/entities/astar.ts';
 import {
   BLOCKED_MEMORY_T, CAP_BLOCKED_MEMORY, GIVE_UP_STEPS, ISO_TH, ISO_TW, NO_SPACE, R_ARRIVE, R_OPEN_NEAR, R_WAYPOINT, REPLAN_T, SEP_RX, SEP_RY,
   SPD_ADULT, SPD_CHASE, SPD_CHILD, SPD_ELDER, SPD_JOGGER, SPD_PAIR, blockTarget, blockedFor, goTo, moveStep, nudge, openNear, spaceOut,
 } from '../src/entities/move.ts';
-import { moveOffBlocked, someoneOn, spawnVisitor, standUpFrom, visitors, type Archetype, type Visitor } from '../src/entities/visitor.ts';
+import { moveOffBlocked, removeVisitor, someoneOn, spawnVisitor, standUpFrom, visitors, type Archetype, type Visitor } from '../src/entities/visitor.ts';
 import '../src/play/tools.ts'; // registers the `tool` handler (S3)
 
 /** An empty all-lawn park: no props, every tile open. */
@@ -96,17 +97,35 @@ describe('arrival, waypoints and route reuse (02 5.4; GV 1569-1621)', () => {
     expect(Math.hypot(v.x - 15.3, v.y - 9.8)).toBeLessThan(R_ARRIVE);
     expect(moveStep(v, SIM_DT)).toBe(false);
   });
-  it('the same target within 1.2 tiles keeps the route; a force replans', () => {
+  it('a new target on the walk\'s target tile keeps the route and becomes its end; another tile or a force replans', () => {
     bare();
     const v = at('single', 3, 3);
     goTo(v, 30, 30);
     const c0 = PFSTAT.calls;
-    goTo(v, 30.5, 29.6);
+    expect(goTo(v, 30.4, 29.7)).toBe(true);
     expect(PFSTAT.calls).toBe(c0);
+    expect([v.ptx, v.pty]).toEqual([30.4, 29.7]);
+    expect(v.path?.at(-1)).toEqual({ x: 30.4, y: 29.7 }); // the walk ends on the new target, not the old one
     goTo(v, 30, 30, true);
     expect(PFSTAT.calls).toBe(c0 + 1);
-    goTo(v, 33, 30);
+    goTo(v, 30.5, 29.6); // within GV's 1.2 tiles, but on tile (31, 30): a new route
     expect(PFSTAT.calls).toBe(c0 + 2);
+    expect(v.path?.at(-1)).toEqual({ x: 30.5, y: 29.6 });
+    goTo(v, 33, 30);
+    expect(PFSTAT.calls).toBe(c0 + 3);
+  });
+  it('sent on mid-walk to a target 1 to 2 tiles from the first, the walker stops within 0.7 of the new one (GV 1572 kept it in g.tx)', () => {
+    for (const [nx, ny] of [[21.1, 10.9], [20.3, 9.8], [18.9, 11.2]] as const) {
+      bare();
+      const v = at('single', 3, 3);
+      goTo(v, 20, 10);
+      for (let k = 0; k < 60; k++) moveStep(v, SIM_DT);
+      expect(goTo(v, nx, ny)).toBe(true);
+      let k = 0;
+      while (v.path && k++ < 2000) moveStep(v, SIM_DT);
+      expect(v.path).toBeNull();
+      expect(Math.hypot(v.x - nx, v.y - ny), `${nx},${ny}`).toBeLessThan(R_ARRIVE);
+    }
   });
 });
 
@@ -158,6 +177,21 @@ describe('blocked steps, replans and giving up (02 5.4, 5.5; GV 1511-1524, 1610-
     expect(v.st).toBe('idle');
     expect(Math.round(v.x)).toBe(28);
     expect(blockedFor(v, 30, 30)).toBe(true);
+  });
+  it('a reachable target the budget cut short: goTo says partial, the walker replans at the path\'s end and arrives (02 5.5)', () => {
+    bare();
+    for (let x = 0; x < 47; x++) KIND[I(x, 24)] = Kind.bed; // a wall across the park, open only at x 47
+    markBlockDirty();
+    rebuildBlock();
+    const v = at('single', 0, 47);
+    expect(goTo(v, 0, 0)).toBe(false); // partial: the 2600 nodes ran out on the long way round (astar.test.ts pins it)
+    expect(PFSTAT.last).toBe(2600);
+    let k = 0;
+    while (v.path && k++ < 6000) moveStep(v, SIM_DT);
+    expect(v.path).toBeNull();
+    expect(Math.hypot(v.x, v.y)).toBeLessThan(R_ARRIVE);
+    expect(v.st).toBe('wander'); // not given up
+    expect(blockedFor(v, 0, 0)).toBe(false);
   });
   it('a target is remembered 60 s; at most 8 are kept', () => {
     expect([BLOCKED_MEMORY_T, CAP_BLOCKED_MEMORY]).toEqual([60, 8]);
@@ -268,6 +302,35 @@ describe('the park tools\' hooks that need visitor records (02 8.3 "sitters stan
     expect(BLOCK[I(tx, ty)]).toBe(0);
     expect(v.path?.at(-1)).toEqual({ x: 20, y: 10 });
     expect([u.x, u.y]).toEqual([15, 15]);
+  });
+  it('turning an occupied bench, or undoing the turn, leaves its sitter seated where it is with no draw (02 8.3, 8.5 item 3)', () => {
+    const bench = props.find((p) => p.kind === 'bench') as Prop;
+    const rot0 = bench.rot;
+    const s = at('single', bench.x + 0.2, bench.y);
+    s.st = 'sit';
+    s.sitPropId = bench.id;
+    bench.data.sitters = [s.id];
+    const n0 = rngN();
+    expect(applyNow({ side: 'park', kind: 'tool', payload: { tool: 'bench', at: { x: bench.x, y: bench.y } } })).toEqual({ ok: true });
+    expect(bench.rot).toBe((rot0 + 1) % 4);
+    expect([s.x, s.y, s.st, s.sitPropId, bench.data.sitters]).toEqual([bench.x + 0.2, bench.y, 'sit', bench.id, [s.id]]);
+    expect(applyNow({ side: 'park', kind: 'undo', payload: {} })).toEqual({ ok: true });
+    expect(bench.rot).toBe(rot0);
+    expect([s.x, s.y, s.st, s.sitPropId]).toEqual([bench.x + 0.2, bench.y, 'sit', bench.id]);
+    expect(rngN() - n0).toBe(0);
+    // only its own seat keeps a sitter: one whose seat is elsewhere still moves off a tile that became blocked
+    const w = at('single', 10, 10);
+    w.sitPropId = bench.id;
+    hedge(10, 10);
+    moveOffBlocked([I(10, 10)]);
+    expect(BLOCK[I(Math.round(w.x), Math.round(w.y))]).toBe(0);
+  });
+  it('a visitor who leaves is dropped from every seat that lists it, not only its sitPropId (an undo restores a prop with its sitters)', () => {
+    const benches = props.filter((p) => p.kind === 'bench');
+    const s = at('single', 5, 5), o = at('single', 6, 6);
+    for (const b of benches) b.data.sitters = [s.id, o.id]; // listed though s sits nowhere (sitPropId 0)
+    removeVisitor(s.id);
+    for (const b of benches) expect(b.data.sitters).toEqual([o.id]);
   });
   it('someoneOn: true for a visitor whose rounded tile is listed', () => {
     const v = at('single', 7.4, 8.6);

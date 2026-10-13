@@ -18,10 +18,11 @@
 //   stepArrivals, when an arrival is due: the gate (1), the archetype (1); then the group: a tourist rolls alone or pair (1); a couple
 //     draws its shared leaveAt (1); then each member's own draws below; last, the gap to the next arrival (1).
 //   callVisitor: the gate (1, unless given), single 60 % (1), the archetype when not single (1); then the group as above (no gap).
-//   spawnVisitor, per person: lookSeed (1), sex (1, unless fixed), seeks (1, singles only; a re-roll draws sex and seeks again), ageWord
-//     (1, for single, tourist, jogger, artist, busker, dog walker), the name (1, names.ts takeName; none for a regular or the gardener),
-//     hunger, energy, social (3), leaveAt (1, unless fixed: a tourist's, staff's, a couple's (its one draw comes before the two
-//     members), a child's (the parent's)), decideT (1).
+//   spawnVisitor, per person: lookSeed (1), sex (1, unless fixed: a regular's, a couple member's, a given one, the gardener's m), seeks
+//     (1, singles only and not a regular; a re-roll draws sex and seeks again), ageWord (1, for single, tourist, jogger, artist, busker,
+//     dog walker; not a regular), the name (1, names.ts takeName; none for a regular, a given name or the gardener), hunger, energy,
+//     social (3), leaveAt (1, unless fixed: a tourist's, staff's, a couple's (its one draw comes before the two members), a child's (the
+//     parent's)), decideT (1). So an elder makes 8 draws, a generated single 10 (12 with the re-roll), a returning regular 6.
 // lookSeed: the low 3 bits are the signature colour index (04 7.3; signatureOf); bit 3 a hat and bit 4 a purse for those whose
 // archetype does not fix them; the renderer reads the rest (lookSeed >>> 5) for hair, coat and skin.
 // Part A of S4 (07 S4.6 steps 1-5): the running loop calls none of the scheduler, the factory or the cadence yet (part B wires
@@ -34,7 +35,7 @@ import { nextVisitorId, type CreatureId, type GateId, type PairId, type PropId, 
 import { emit } from '../core/events.ts';
 import { OK, fail, onResetCommands, onRestoreCommands, type Result } from '../core/commands.ts';
 import { W, type WeatherKind } from '../core/weather.ts';
-import { I, inB, propById } from '../world/grid.ts';
+import { I, inB, propById, props } from '../world/grid.ts';
 import { GATES, gateById } from '../world/park.ts';
 import { getMode, getPlayer } from '../play/mode.ts';
 import { GARDENER_NAME, regularArrived, regularDue, regularLeft, releaseName, resetNames, takeName, type RegularDef, type Seeks, type Sex } from './names.ts';
@@ -362,16 +363,16 @@ export function callVisitor(gate?: GateId | null): Result {
 }
 
 /**
- * Take a visitor out of the park (02 4.5 item 1, 6.5): the name is free again, a regular schedules the return (two draws), a seat is
- * freed, and every link to the visitor drops to 0. romance.ts (S5) dissolves a Pair before its member leaves.
+ * Take a visitor out of the park (02 4.5 item 1, 6.5): the name is free again, a regular schedules the return (two draws), every seat
+ * that lists it is freed, and every link to the visitor drops to 0. romance.ts (S5) dissolves a Pair before its member leaves.
  */
 export function removeVisitor(id: VisitorId): void {
   const v = index.get(id);
   if (!v) return;
   releaseName(v.name);
   if (v.regularId !== 0) regularLeft(v.regularId, T.day);
-  const seat = v.sitPropId !== 0 ? propById(v.sitPropId) : undefined;
-  if (seat?.data.sitters) seat.data.sitters = seat.data.sitters.filter((s) => s !== id);
+  // every seat drops the id, not only v.sitPropId's: an undo puts a removed or turned prop back with the sitters it had then
+  for (const p of props) if (p.data.sitters?.includes(id)) p.data.sitters = p.data.sitters.filter((s) => s !== id);
   for (const o of visitors) {
     if (o.coupleOf === id) o.coupleOf = 0;
     if (o.parentOf === id) o.parentOf = 0;
@@ -434,15 +435,24 @@ export function standUpFrom(propId: PropId): void {
   if (p?.data.sitters) p.data.sitters = [];
 }
 
+/** True while `v` sits on a prop that still stands and covers its tile (x, y): a seat is a blocked tile it may stay on. */
+function seatedOn(v: Visitor, x: number, y: number): boolean {
+  if (v.sitPropId === 0) return false;
+  const p = propById(v.sitPropId);
+  return !!p && x >= p.x && x < p.x + p.w && y >= p.y && y < p.y + p.h;
+}
+
 /**
  * Tiles (indices) that a tool or an undo just made blocked: a visitor standing on one moves to the nearest open tile within 3 (GV openNear
- * 1559, two draws for the jitter) and replans its walk (02 8.5 item 3). Creatures follow in part B (creatures.ts).
+ * 1559, two draws for the jitter) and replans its walk (02 8.5 item 3). A sitter on its own seat stays: undo.ts settle passes every
+ * touched tile that is blocked after the change, so a turned bench (02 8.3 "tap an existing bench: rotate 90°") lists the tile it
+ * already blocked. Creatures follow in part B (creatures.ts).
  */
 export function moveOffBlocked(tiles: readonly number[]): void {
   const set = new Set(tiles);
   for (const v of visitors) {
     const x = Math.round(v.x), y = Math.round(v.y);
-    if (!inB(x, y) || !set.has(I(x, y))) continue;
+    if (!inB(x, y) || !set.has(I(x, y)) || seatedOn(v, x, y)) continue;
     const o = openNear(v.x, v.y, R_OPEN_NEAR);
     if (!o) continue;
     v.x = o.x;

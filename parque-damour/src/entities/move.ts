@@ -9,12 +9,16 @@
 // waypoint hands over to the next in the same step (GV 1621 stood still for a step at each, about 3 % of the speed, which the 08 2.3
 // speed rows forbid); the Visitor record of 03 3.3 holds the walk: ptx, pty are the target (-99 none), `path` null means arrived or no
 // errand, `blocked` counts blocked steps, `blockedList` holds [x, y, untilAbs] triples; partial is read off the path's last tile, not kept
-// (GV g.partial); route reuse needs only the same target within 1.2 tiles (GV 0.6*S; the 4 s path age is dropped: the record has no
-// field for it, and each tile entered is checked against the world); positions are not clamped to 1..N-2 (the boundary is walkable, a
-// gate's outside tile is the walker's own, 02 2.3); openNear searches the boundary ring too and jitters by 0.3 tile (GV 0.3*S rounds into
-// the next tile); `face` is the sign of the screen x of the heading at camera angle 0 (the sim never reads the camera, 03 A5); spaceOut
-// works on the unrotated iso axes with TW/2 and TH/2 (03 6.3 item 5, A5; GV read rotC, rotS: 09 4 row 32) and nudge refuses a blocked
-// tile, the apron and a bridge edge. wearAt is called on every step that moved (02 11.1 item 1).
+// (GV g.partial); route reuse needs a new target on the tile of the walk's target, which then becomes ptx, pty and the path's last
+// waypoint (GV kept the route for any target within 0.6*S = 1.2 tiles for 4 s, remembered the new one in g.tx and replanned toward it
+// at the path's end; the 03 3.3 record holds only ptx, pty, so a target on another tile replans at once; the 4 s path age is dropped:
+// the record has no field for it, and each tile entered is checked against the world); goTo's false means "partial", which a budget
+// run out on a long detour to a reachable target also gives (astar.ts), so moveStep replans from the path's end before it gives up;
+// positions are not clamped to 1..N-2 (the boundary is walkable, a gate's outside tile is the walker's own, 02 2.3); openNear searches
+// the boundary ring too and jitters by 0.3 tile (GV 0.3*S rounds into the next tile); `face` is the sign of the screen x of the heading
+// at camera angle 0 (the sim never reads the camera, 03 A5); spaceOut works on the unrotated iso axes with TW/2 and TH/2 (03 6.3 item 5,
+// A5; GV read rotC, rotS: 09 4 row 32) and nudge refuses a blocked tile, the apron and a bridge edge. wearAt is called on every step
+// that moved (02 11.1 item 1).
 // Dropped from the range: 1518-1521 (gorgeSpan and the gorges), 1522 (clearMarks), 1573's 4 s path age, 1575 (PF_SWIM), 1581
 // (detourCheck), 1583-1597 (detourCheck), 1599 (bridgeAt), 1602-1606 (float, swept, boat, adventure, inside, swim blend), 1624-1629
 // (ride, cart, swim, wade, climb and slope speed factors), 1640 (walkPh: the renderer's), 1641-1642 (screenOf facing), 1647-1672 (the
@@ -44,8 +48,6 @@ export const CAP_BLOCKED_MEMORY = 8;
 export const R_OPEN_NEAR = 3;
 /** GV 1.6*S: a remembered target blocks any target within this box. */
 export const BLOCKED_NEAR = 3.2;
-/** GV 0.6*S: a new target this close to the path's target keeps the route. */
-export const REUSE_NEAR = 1.2;
 /** GV 1.5*S: a walker whose replanned path is empty this far from its target gives up rather than counting as arrived. */
 export const GIVE_UP_FAR = 3;
 /** The jitter openNear adds so walkers sent to one blocked spot do not all stand on one point (GV 1566). */
@@ -162,8 +164,11 @@ function partial(v: Visitor): boolean {
 
 /**
  * Send `v` toward (tx, ty) (GV goTo 1569): the target is clamped into the park (unless it is the walker's own gate's outside tile) and
- * moved off a blocked tile (openNear); the same target within 1.2 tiles keeps the route unless `force`; otherwise A* from the walker's
- * tile, the last waypoint snapped to the exact target. True when the path reaches the target, false when it is partial.
+ * moved off a blocked tile (openNear); a new target on the tile of the walk's target keeps the route unless `force` (the new target
+ * becomes ptx, pty and, when the path reaches that tile, its last waypoint); otherwise A* from the walker's tile, the last waypoint
+ * snapped to the exact target. True when the path reaches the target, false when it is partial. False does not mean unreachable: the
+ * 2600-node budget can run out on a long detour to a reachable target (findPath), and moveStep then replans from the path's end, so a
+ * caller must not give the errand up (blockTarget) on false alone; moveStep gives up when a replan from there is still short.
  */
 export function goTo(v: Visitor, tx: number, ty: number, force = false): boolean {
   let x = tx, y = ty;
@@ -176,7 +181,14 @@ export function goTo(v: Visitor, tx: number, ty: number, force = false): boolean
       y = o.y;
     }
   }
-  if (!force && v.path && Math.abs(x - v.ptx) < REUSE_NEAR && Math.abs(y - v.pty) < REUSE_NEAR) return !partial(v); // same errand
+  if (!force && v.path && Math.round(x) === Math.round(v.ptx) && Math.round(y) === Math.round(v.pty)) {
+    // the same errand: keep the route, but walk to the new target (GV kept it in g.tx, 1572; the record holds only ptx, pty)
+    const p = v.path, last = p[p.length - 1];
+    if (last && Math.round(last.x) === Math.round(x) && Math.round(last.y) === Math.round(y)) p[p.length - 1] = { x, y };
+    v.ptx = x;
+    v.pty = y;
+    return !partial(v);
+  }
   const r = findPath(v.x, v.y, x, y, v);
   const last = r.path[r.path.length - 1];
   if (last && last.x === Math.round(x) && last.y === Math.round(y)) r.path[r.path.length - 1] = { x, y };

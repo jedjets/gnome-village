@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SIM_DT, newPark, setTick } from '../src/core/loop.ts';
 import { STEPS_PER_DAY, T } from '../src/core/clock.ts';
-import { OVERRIDE_TARGETS, W, addOverride, type WeatherKind } from '../src/core/weather.ts';
+import { OVERRIDE_TARGETS, W, addOverride, weatherAt, type WeatherKind } from '../src/core/weather.ts';
 import { props } from '../src/world/grid.ts';
 import { spawnVisitor, type Visitor } from '../src/entities/visitor.ts';
 import { COMFORT_EASE, ENERGY_AWAKE_DAY, ENERGY_BENCH_DAY, HUNGER_DAY, SOCIAL_DAY, comfortTarget, stepNeeds } from '../src/entities/needs.ts';
@@ -114,9 +114,12 @@ describe('the comfort target (02 4.4 formula, 3.3 weather term, 3.4 season term,
     v.y = 14;
     expect(comfortTarget(v)).toBeCloseTo(0.7, 10); // by day the lamps count for nothing
   });
-  it('inside a sunbeam: +0.10; the summer midday -0.05; winter -0.15', () => {
+  it('inside a sunbeam on a clear day: +0.10 (08 2.3); the summer midday -0.05; winter -0.15', () => {
+    weather('clear');
+    expect(comfortTarget(v)).toBeCloseTo(0.75, 10);
     addOverride({ kind: 'sunbeam', x: 6, y: 6, r: 3, until: 1e9, targets: OVERRIDE_TARGETS.sunbeam });
-    expect(comfortTarget(v)).toBeCloseTo(0.8, 10);
+    expect(comfortTarget(v)).toBeCloseTo(0.85, 10);
+    weather('fair');
     v.x = 10; // 4 from the beam's centre: outside its 7 x 7 square
     expect(comfortTarget(v)).toBeCloseTo(0.7, 10);
     setTick(tickAt(4, 0.5)); // summer midday
@@ -126,6 +129,19 @@ describe('the comfort target (02 4.4 formula, 3.3 weather term, 3.4 season term,
     expect(comfortTarget(v)).toBeCloseTo(0.7, 10);
     setTick(tickAt(11, 0.65)); // winter afternoon
     expect(comfortTarget(v)).toBeCloseTo(0.55, 10);
+  });
+  it('the weather term is the kind weatherAt gives at the visitor (02 4.4, 06 7 "using weatherAt(v)"), not the global kind', () => {
+    weather('cloudy');
+    expect(comfortTarget(v)).toBeCloseTo(0.65, 10);
+    addOverride({ kind: 'sunbeam', x: 6, y: 6, r: 3, until: 1e9, targets: OVERRIDE_TARGETS.sunbeam });
+    expect(weatherAt(5, 5).kind).toBe('clear');
+    expect(comfortTarget(v)).toBeCloseTo(0.85, 10); // 0.7 + 0.10 sunbeam + 0.05 clear: the beam clears the sky (not 0.75 with cloudy's -0.05)
+    v.x = 10;
+    expect(comfortTarget(v)).toBeCloseTo(0.65, 10); // outside the beam: cloudy
+    weather('clear');
+    addOverride({ kind: 'fog', x: 24, y: 24, r: 99, until: 1e9, targets: OVERRIDE_TARGETS.fog });
+    expect(weatherAt(10, 5).kind).toBe('mist');
+    expect(comfortTarget(v)).toBeCloseTo(0.7 - 0.1 * 0.9, 10); // fog over a clear day: mist 0.9, and clear's +0.05 is gone
   });
   it('rain lowers nothing in a SHELTERED state: sheltering, or eating at a kiosk (not a bench snack)', () => {
     weather('rain', { rain: 0.8 });

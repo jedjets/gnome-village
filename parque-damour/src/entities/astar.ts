@@ -186,7 +186,9 @@ function search(sx: number, sy: number, tx: number, ty: number): PathResult {
  * A path of tile centres from (sx, sy) to (tx, ty), the start excluded (GV findPath 1466). A start or target on the walker's own gate's
  * outside tile goes through that gate's first tile (one step to the gate, 02 2.4); any other target off the park is refused with an
  * empty partial path; any other start off the park is clamped into it (GV 1469). `partial` is true when the target was not reached: the
- * path then leads to the reachable tile closest to it (GV 1498, 1504).
+ * path then leads to the reachable tile closest to it (GV 1498, 1504). That covers two cases: the target is out of reach, or the
+ * 2600-node budget ran out first (PFSTAT.last 2600) on a long detour to a reachable target, as GV's fixed budget does (02 5.5). Partial
+ * therefore never proves a target unreachable: the walker replans from the path's end (move.ts moveStep) and gets there.
  */
 export function findPath(sx: number, sy: number, tx: number, ty: number, who: PathWho = {}): PathResult {
   PFSTAT.calls++;

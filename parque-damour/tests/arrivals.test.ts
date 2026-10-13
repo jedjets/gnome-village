@@ -171,7 +171,7 @@ describe('the visitor record at arrival (02 4.2 items 3, 5-6; 4.5 item 6; 03 3.3
     const g = spawnVisitor('gardener', 'g_west') as Visitor;
     expect([g.name, g.sex, g.ageWord, g.leaveAt]).toEqual(['Gustave', 'm', 'grown', NEVER]);
   });
-  it('the draws per person follow the documented order: an elder 8, a single 10 (12 with the re-roll)', () => {
+  it('the draws per person follow the documented order: an elder 8, a single 10 (12 with the re-roll), a returning regular 6', () => {
     seedSim(3);
     let n0 = rngN();
     spawnVisitor('elder', 'g_west');
@@ -179,6 +179,10 @@ describe('the visitor record at arrival (02 4.2 items 3, 5-6; 4.5 item 6; 03 3.3
     n0 = rngN();
     spawnVisitor('single', 'g_west'); // the park holds no single yet: no re-roll
     expect(rngN() - n0).toBe(10); // + seeks, ageWord
+    n0 = rngN();
+    const r = spawnVisitor('single', 'g_west', { regular: REGULARS[0] }) as Visitor; // sex, seeks, ageWord and name from 06 6.2
+    expect(rngN() - n0).toBe(6); // lookSeed, hunger, energy, social, leaveAt, decideT
+    expect([r.name, r.sex, r.seeks]).toEqual(['Amélie', 'f', 'm']);
   });
   it('a couple: one f and one m, linked, one signature colour, one leaveAt, one gate; a family: parent and child, linked', () => {
     const [f, m] = arriveGroup('couple', 'g_east') as [Visitor, Visitor];
