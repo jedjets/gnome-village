@@ -272,27 +272,53 @@ const LAMPS: Drawable[] = [];
 const SL: XY = { x: 0, y: 0 };
 /**
  * props.drawLamp draws in screen space round the lamp's foot (one orientation, no world point but the foot), so every street lamp of a
- * frame looks the same: drawLamp paints it once into this sprite at the frame's zoom, glow, light and dpr, and each lamp blits it at its
- * foot snapped to the device pixel (03 15.2: a cache like the tree sprites', exact to half a device pixel). Redrawn when any key moves.
+ * frame looks the same: drawLamp paints it once into this sprite, and each lamp blits it at its foot snapped to the device pixel (03 15.2:
+ * a cache like the tree sprites', exact to half a device pixel). The key has two parts. `form` (the zoom, the dpr, lit or not, the warm
+ * tint's target) repaints at once. `light` (the glow and the ambient AM and AA, each in 8-bit colour steps, as css() rounds every
+ * channel) repaints at most once per colour epoch, 220 ms (ground.ts; 03 15.2 item 4), so a running clock, whose light moves a little
+ * every frame, does not repaint the sprite every frame; with no frame clock running (a test, a scripted draw) a change counts as the
+ * time having passed, as ground.ts's epoch does. The canvas is resized only when its size moves, and cleared otherwise.
  */
-const LS = { c: null as HTMLCanvasElement | null, key: '', ox: 0, oy: 0 };
+const LS = { c: null as HTMLCanvasElement | null, form: '', light: '', at: -1e9, ox: 0, oy: 0 };
+/** The colour epoch's cadence (ground.ts stepEpoch; 03 15.2 item 4). */
+const LAMP_EPOCH_MS = 220;
+/** A value 0 to 1 in 8-bit colour steps. */
+const q8 = (v: number): number => Math.round(v * 255);
 let sprite: typeof LS | null = null; // this frame's, set by streetLampDrawables
+/** Whether the street-lamp sprite repaints on a frame stamped t (ms; core/loop.now): its form moved, or its light moved and a colour
+ *  epoch has passed since the last repaint (or t did not advance). Records the keys and t when it says yes. */
+export function lampSpriteDue(t: number): boolean {
+  const g = lampGlow();
+  const form = cam.z + '|' + view.dpr + '|' + (g > 0 ? 1 : 0) + '|' + AT.join();
+  const light = q8(g) + '|' + q8(AM[0]) + ',' + q8(AM[1]) + ',' + q8(AM[2]) + '|' + q8(AA);
+  if (form === LS.form && (light === LS.light || (t - LS.at < LAMP_EPOCH_MS && t > LS.at))) return false;
+  LS.form = form;
+  LS.light = light;
+  LS.at = t;
+  return true;
+}
 function lampSprite(): typeof LS | null {
-  const z = cam.z, g = lampGlow(), d = view.dpr;
-  const key = z + '|' + g + '|' + d + '|' + AM.join() + '|' + AA + '|' + AT.join();
-  if (LS.key === key) return LS.c ? LS : null;
-  LS.key = key;
+  if (!lampSpriteDue(now())) return LS.c ? LS : null;
   if (typeof document === 'undefined') return (LS.c = null);
+  const z = cam.z, g = lampGlow(), d = view.dpr;
   // the halo (r 0.9 tile round the head, 0.2 tile over the post's top) sets the width and the top; the base disc the bottom
   const tile = TW * z, half = Math.ceil(0.9 * tile + 3), up = Math.ceil(1.4 * EH * z + 1.1 * tile + 3), dn = Math.ceil(0.08 * tile + 3);
   const c = LS.c ?? (LS.c = document.createElement('canvas'));
-  c.width = Math.ceil(2 * half * d);
-  c.height = Math.ceil((up + dn) * d);
+  const w = Math.ceil(2 * half * d), h = Math.ceil((up + dn) * d);
   const x = c.getContext('2d');
   if (!x) return (LS.c = null);
+  if (c.width !== w || c.height !== h) {
+    c.width = w; // a new size resets the canvas and its state
+    c.height = h;
+  } else {
+    x.setTransform(1, 0, 0, 1, 0, 0);
+    x.clearRect(0, 0, w, h);
+  }
   x.setTransform(d, 0, 0, d, 0, 0);
   x.imageSmoothingEnabled = false;
+  x.save(); // drawLamp leaves its fill and stroke state behind: the next repaint starts from a reset canvas's state, as a resize does
   drawLamp(gamePen(x), { x: half, y: up }, { lit: g > 0, glow: g });
+  x.restore();
   LS.ox = half;
   LS.oy = up;
   return LS;

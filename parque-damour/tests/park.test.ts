@@ -1,13 +1,17 @@
 // tests/park.test.ts
 // Locks register 3.1 / 02 2.3-2.4 / 08 2.2 / 03 7.4: the five gates, the boundary predicates, nearestGate, and the backdrop specification
 // (the quay, the river, the pavement, the railing pieces, the street trees and lamps, the facade blocks, the skyline). Also the empty
-// charm API (03 6.7, S2 stub).
+// charm API (03 6.7, S2 stub). And the street-lamp sprite's repaint gate (03 15.2 item 4), which the street lamps' draw budget rests on.
 import { describe, it, expect } from 'vitest';
 import { N, inB } from '../src/world/grid.ts';
 import {
   APRON, BACKDROP, GATES, SKYLINE, bandRects, facadeBlocks, gateById, isBoundary, isGateTile, nearestGate, railPieces, streetLamps, streetTrees,
 } from '../src/world/park.ts';
 import { addSource, charmAt, charmDirty, markCharmDirty, rebuildCharm } from '../src/world/charm.ts';
+import { STEPS_PER_DAY, T, lightOf } from '../src/core/clock.ts';
+import { AA, AM, computeAmbientAt, lampGlow } from '../src/render/ambient.ts';
+import { cam, view } from '../src/render/camera.ts';
+import { lampSpriteDue } from '../src/render/boulevard.ts';
 
 describe('world/park gates (02 2.4)', () => {
   it('the five gates have the design\'s ids, tiles, outside tiles and weights exactly', () => {
@@ -230,6 +234,67 @@ describe('world/park street lamps (register 3.1 and section 4 row Street lamps, 
   });
   it('fixed: the same list on every call (cached, no seed)', () => {
     expect(streetLamps()).toBe(streetLamps());
+  });
+});
+
+/** Frames of a running clock at `speed` from day fraction f0, 60 a second: the light set as computeAmbient sets it, then the sprite asked.
+ *  Returns the sprite's repaints and how many frames the raw values drawLamp reads (glow, AM, AA) moved. */
+function runLamps(f0: number, speed: number, frames: number, t0: number): { repaints: number; moved: number } {
+  let repaints = 0, moved = 0, prev = '';
+  for (let i = 0; i < frames; i++) {
+    const f = (f0 + (i * speed) / STEPS_PER_DAY) % 1;
+    T.f = f;
+    computeAmbientAt(f, lightOf(f), 0.5);
+    const raw = lampGlow() + '|' + AM.join() + '|' + AA;
+    if (i > 0 && raw !== prev) moved++;
+    prev = raw;
+    if (lampSpriteDue(t0 + (i * 1000) / 60)) repaints++;
+  }
+  return { repaints, moved };
+}
+
+describe('render/boulevard the street-lamp sprite repaints (03 15.2 item 4 colour epoch 220 ms; 03 7.9 draw budget; S3 Lamps item 6)', () => {
+  it('paused, it paints once and then holds, frame after frame', () => {
+    cam.z = 1.31;
+    view.dpr = 2;
+    expect(runLamps(0.9, 0, 120, 1e6)).toEqual({ repaints: 1, moved: 0 });
+  });
+  it('running, at most one repaint per 220 ms epoch, though the light moves every frame: 1x and 8x, through golden hour, the fade, dusk, dawn', () => {
+    for (const [f0, speed] of [[0.7, 1], [0.795, 1], [0.81, 1], [0.255, 1], [0.7, 8], [0.795, 8], [0.85, 8]] as const) {
+      cam.z = 1.3 + f0 / 100 + speed / 1000; // a new form: the first frame repaints at once
+      const r = runLamps(f0, speed, 600, 2e6 + f0 * 1e5); // 10 s
+      expect(r.moved).toBeGreaterThan(300); // the raw light moved on most frames (a raw key repainted each time; 8x reaches the night)
+      expect(r.repaints).toBeLessThanOrEqual(1 + Math.ceil(10_000 / 220) + 1); // the first frame, the epochs, the lamps coming on
+    }
+  });
+  it('in the lamps\' fade the sprite still follows the glow, one repaint per epoch, so the look is never more than 220 ms behind', () => {
+    cam.z = 1.37;
+    const r = runLamps(0.8, 1, 600, 3e6); // the 0.02-day fade in takes 7.2 s at 1x
+    expect(r.repaints).toBeGreaterThanOrEqual(40);
+    expect(r.repaints).toBeLessThanOrEqual(47);
+  });
+  it('the lamps coming on and a new zoom repaint at once; a light step under one 8-bit colour level does not repaint at all', () => {
+    cam.z = 1.39;
+    T.f = 0.7999;
+    computeAmbientAt(0.7999, lightOf(0.7999));
+    expect(lampSpriteDue(5e6)).toBe(true);
+    T.f = 0.80001; // lit, glow 0.0005: inside the epoch, but a new form
+    expect(lampSpriteDue(5e6 + 17)).toBe(true);
+    cam.z = 1.4;
+    expect(lampSpriteDue(5e6 + 34)).toBe(true);
+    T.f = 0.800011; // glow and light move by far less than 1/255
+    computeAmbientAt(0.800011, lightOf(0.800011));
+    expect(lampSpriteDue(5e6 + 1000)).toBe(false);
+  });
+  it('with no frame clock running (a test, a scripted draw), a change of light counts as the time having passed', () => {
+    cam.z = 1.41;
+    T.f = 0.9;
+    computeAmbientAt(0.9, lightOf(0.9));
+    expect(lampSpriteDue(6e6)).toBe(true);
+    T.f = 0.95; // still lit at full glow: only the light moves
+    computeAmbientAt(0.95, lightOf(0.95));
+    expect(lampSpriteDue(6e6)).toBe(true);
+    expect(lampSpriteDue(6e6)).toBe(false);
   });
 });
 
