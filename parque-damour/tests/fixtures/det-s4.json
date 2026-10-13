@@ -2,7 +2,7 @@
   "slice": "S4",
   "seed": 101,
   "steps": 64800,
-  "note": "det-s3's seed, steps and 19 commands, plus 22 visitor.call commands (S4 part B; 07 S4.7 item 1), one every 40 ticks from 2,400 to 3,240 (f 0.41 to 0.45, in the rain det-s2 brings at 1,800, when the scheduler's own target is 8 to 10): the park fills to the cap of 30 people by midday of day 1 (f 0.45, tick 3,240), the calls past 30 are rejected reason.park_full and not logged, and nobody else comes in until people leave. Run 5's window and run 6's round trip hold the same tools, undo and weather as det-s3, now among a full park. Each command's tick is the step it is applied in. expect.rngN and expect.stateHash are the Vitest values after the run (03 11): rngN 31085, stateHash 1104045870; tools/det.mjs det-s4 checks them in Chromium.",
+  "note": "det-s3's seed, steps and 19 commands, plus 22 visitor.call commands (S4 part B; 07 S4.7 item 1), one every 40 ticks from 2,400 to 3,240 (f 0.41 to 0.45, in the rain det-s2 brings at 1,800, when the scheduler's own target is 8 to 10): the park fills to the cap of 30 people by midday of day 1 (f 0.45, tick 3,240), the calls past 30 are rejected reason.park_full and not logged, and nobody else comes in until people leave. Run 5's window and run 6's round trip hold the same tools, undo and weather as det-s3, now among a full park. Each command's tick is the step it is applied in. expect.rngN and expect.stateHash are the Vitest values after the run (03 11); tools/det.mjs det-s4 checks them in Chromium. First recorded in S4 part B as rngN 31085, stateHash 1104045870; moved once by S4 part B's review fixes (the same stage's re-record; 07 S4.7 item 1): a couple's second who reaches the shared seat first stays seated until the first has sat down and stood up (act.ts seatedStep), and a pigeon bound for crumbs that went no longer pecks new crumbs elsewhere that took their recycled PropId (creatures.ts targetCrumbs), which happened in this busy park; now rngN 30562, stateHash 1904304510. The park still reaches 30 people at tick 3,120 and holds 30 at 3,240.",
   "commands": [
     { "tick": 100, "side": "park", "kind": "speed", "payload": { "speed": 8 } },
     { "tick": 1800, "side": "park", "kind": "debug.weather", "payload": { "kind": "rain" } },
@@ -46,5 +46,5 @@
     { "tick": 55000, "side": "park", "kind": "debug.weather", "payload": { "kind": "clear" } },
     { "tick": 64800, "side": "park", "kind": "speed", "payload": { "speed": 0 } }
   ],
-  "expect": { "rngN": 31085, "stateHash": 1104045870 }
+  "expect": { "rngN": 30562, "stateHash": 1904304510 }
 }

@@ -7,7 +7,9 @@
 // Verdict: ADAPT. Changes: the `goX -> X (timer) -> idle` idiom (GV) keeps its shape, with the states of 02 4.3 and 06 16.9 instead of
 // GV's jobs; arrival is `v.path === null` (move.ts) instead of g.arrived; a finished activity idles rnd(2, 5) s before the routine picks
 // again (02 4.3); a seat (bench, table, picnic blanket) is promised in the prop's `sitters` when the walk starts and taken on arrival
-// (first come, first served, 02 6.6 item 3); the kiosk serves one eater at a time and a second waits 5 s (02 4.3 vendor); the feeder drops
+// (first come, first served, 02 6.6 item 3), and a listed id that no longer holds the seat does not count (staff.ts holdsSeat); a
+// couple's second sits until the first has sat down and stood up (02 4.3 couple item 2); an easel goes when its artist stops painting at
+// it (dropStrayEasels, the planning tick); the kiosk serves one eater at a time and a second waits 5 s (02 4.3 vendor); the feeder drops
 // crumbs every 10 s for 40 s (06 1.8); the gardener lays 1.3 s per tile (GV LAY_T 4554); a `default` case logs one `warn` per unknown
 // state and sets `idle` (03 6.3 item 4; GV had none, review 6.3). Particles and cues are events (`fx`, `sit`, `stand`, `eat`); their
 // timing comes from the timers, never from a draw. The reaction states of 02 6.4 and the romance stages are S5's (07 S4.6 step 7).
@@ -18,13 +20,13 @@ import { DAYLEN, T } from '../core/clock.ts';
 import { emit } from '../core/events.ts';
 import { weatherAt } from '../core/weather.ts';
 import type { GateId } from '../core/ids.ts';
-import { BLOCK, I, KIND, Kind, OCC, PAVEDAY, inB, addProp, propById, rebuildBlock, removeProp, type Prop } from '../world/grid.ts';
+import { BLOCK, I, KIND, Kind, OCC, PAVEDAY, inB, addProp, propById, props, rebuildBlock, removeProp, type Prop } from '../world/grid.ts';
 import { gateById, isGateTile } from '../world/park.ts';
 import { markPaved } from '../world/wear.ts';
 import { goTo } from './move.ts';
 import { creatureById, dropCrumbs } from './creatures.ts';
 import {
-  LAY_T, LOOP_CORNERS, TIDY_EVERY, approachOf, freeSeats, paveAdvance, paveNext, paveStarted, seatPos, servingTile, vendorFor,
+  LAY_T, LOOP_CORNERS, TIDY_EVERY, approachOf, freeSeats, liveSitters, paveAdvance, paveNext, paveStarted, seatPos, servingTile, vendorFor,
 } from './staff.ts';
 import { byId, nowTick, someoneOn, visitors, type Job, type Visitor } from './visitor.ts';
 import { rnd } from '../core/rng.ts';
@@ -115,11 +117,15 @@ export function startWalk(v: Visitor, st: string, job: Job, x: number, y: number
   goTo(v, x, y);
 }
 
-/** Promise one of the prop's seats and walk to it: `st` while walking (goBench, goSit, goPicnic), `kind` says what happens seated. */
+/**
+ * Promise one of the prop's seats and walk to it: `st` while walking (goBench, goSit, goPicnic), `kind` says what happens seated. The list
+ * drops its stale ids first (staff.ts holdsSeat), so a seat a walker gave up or an undo listed again is promised afresh.
+ */
 export function startSeat(v: Visitor, p: Prop, st: string, kind: string, t: number, partner = 0): boolean {
   const a = approachOf(p);
   if (!a || freeSeats(p) <= 0) return false;
-  (p.data.sitters ??= []).push(v.id);
+  p.data.sitters = liveSitters(p).filter((id) => id !== v.id);
+  p.data.sitters.push(v.id);
   startWalk(v, st, partner ? { propId: p.id, kind, visitorId: partner } : { propId: p.id, kind }, a.x, a.y, t);
   return true;
 }
@@ -345,9 +351,10 @@ function seatedStep(v: Visitor, dt: number): void {
   }
   if (v.job.kind === 'rest') done = v.energy >= REST_UNTIL || v.t <= 0;
   if (v.job.kind === 'with') {
-    // a couple's second gets up with the first (02 4.3 couple items 2-3)
+    // a couple's second gets up with the first (02 4.3 couple items 2-3): once the first has sat here and stood up, or gave up the
+    // walk to it; a second who got there first waits for the first to sit down
     const o = byId(v.job.visitorId ?? 0);
-    done = !o || o.sitPropId !== p.id;
+    done = !o || (o.sitPropId !== p.id && o.job.propId !== p.id);
   }
   if (!done) return;
   if (v.st === 'picnic') v.hunger = Math.min(v.hunger, KIOSK_HUNGER);
@@ -439,6 +446,20 @@ function paveStep(v: Visitor, dt: number): void {
   const after = paveNext();
   if (after) goTo(v, after.x, after.y);
   else finish(v);
+}
+
+/**
+ * The planning tick's easel check (loop.ts; 02 4.3 artist item 2, 07 S4.7 item 3 "the easel leaves with the artist"): an easel whose
+ * artist is not painting at it goes. The paint timer takes an artist's easel away (below); this catches the one the remove tool took
+ * and an undo put back after its artist had stopped painting, or left.
+ */
+export function dropStrayEasels(): void {
+  for (let k = props.length - 1; k >= 0; k--) {
+    const p = props[k] as Prop;
+    if (p.kind !== 'easel') continue;
+    const o = byId(p.data.ownerId ?? 0);
+    if (!o || o.st !== 'paint' || o.job.propId !== p.id) removeProp(p.id);
+  }
 }
 
 function timed(v: Visitor, dt: number): boolean {

@@ -11,7 +11,14 @@
 // S4 part B fills phases 5 (the regulars' day), 7 (arrivals and the gardener's entry), 8 (visitors), 9 (creatures) and 12 (the 1.2 s
 // planning tick in the order of 03 4.3: the facility index, the staff's paving search, the vendor check, the pigeon top-up; every 72
 // steps, counted in whole ticks like the wear so no float sum drifts); a new park also seeds its creatures (six pigeons and the
-// pomeranian's record) and clears the staff. Phases 6 and 10 stay empty for S5 and S6, as does the rest of phase 5.
+// pomeranian's record) and clears the staff. Phases 6 and 10 stay empty for S5 and S6, as does the rest of phase 5. The vendor check of
+// the planning tick also takes away an easel whose artist no longer paints at it (act.ts dropStrayEasels; 02 4.3 artist item 2: the
+// easel leaves with the artist): the one the remove tool took and an undo put back after the artist stopped painting.
+// Known deviation: the starter kiosk's vendor comes at the first planning tick (step 72), not at step 0 as 02 4.2 item 8 reads ("when
+// the kiosk is placed", and gen places it). Seating it in newPark draws nothing itself, but it makes the vendor VisitorId 1 and starts
+// its decide cadence 72 steps sooner, which re-rolls every seeded day from its first step: on seed 101 the rain then falls at midday of
+// day 1 and the arrivals count at f 0.70 is 10, outside the 17 +- 3 that tests/arrivals.test.ts pins on the seed 07 S4.7 item 2 names
+// (itself an open question to the owner). Left for the owner with that question.
 import { clamp } from './math.ts';
 import { T, isNewDay, stepClock, syncClock } from './clock.ts';
 import { forceWeather, stepWeather, stepWet } from './weather.ts';
@@ -27,6 +34,7 @@ import { stepRegularReturns } from '../entities/names.ts';
 import { stepArrivals, stepVisitors } from '../entities/visitor.ts';
 import { ensureGardener, ensureVendors, facilities, resetStaff, stepStaffPlanning } from '../entities/staff.ts';
 import { seedCreatures, stepCreatures, topUpPigeons } from '../entities/creatures.ts';
+import { dropStrayEasels } from '../entities/act.ts';
 import '../entities/brain.ts'; // hands decide, act and BUSY to visitor.ts (setBrain) at load
 
 export const SIM_DT = 1 / 60;
@@ -77,8 +85,8 @@ export function setTick(n: number): void {
 /**
  * Start a park from `seed`: the world, creator mode with no possessed actor, an empty command log, tick 0, nobody in the park, the staff
  * cleared, six pigeons. Every state object is rebuilt through its module's factory (09 4 row 7); MODE and PLAYER are saved and hashed, so
- * a park.new issued in avatar mode must not carry over. The starter kiosk's vendor comes at the first planning tick (1.2 s), the gardener
- * at 10 s.
+ * a park.new issued in avatar mode must not carry over. The starter kiosk's vendor comes at the first planning tick (1.2 s; the known
+ * deviation in the file header), the gardener at 10 s.
  */
 export function newPark(seed: number): void {
   genPark(seed);
@@ -130,11 +138,12 @@ export function simulate(dt: number, _lite: number): void {
   if (tickN % 60 === 0) decayWear(); // 11 wear: once per sim second, counted in whole steps so no float sum drifts
   lap('wear');
   if (tickN % PLAN_STEPS === 0) {
-    // 12 the planning tick (03 4.3): (1) the facility index, (2) the staff (the paving search every 60 s), (3) a vendor per kiosk,
-    // (4) the pigeon top-up every 90 s; (5) the alumni roll and (6) the featured pair are S5's
+    // 12 the planning tick (03 4.3): (1) the facility index, (2) the staff (the paving search every 60 s), (3) a vendor per kiosk and
+    // no easel without its painting artist, (4) the pigeon top-up every 90 s; (5) the alumni roll and (6) the featured pair are S5's
     facilities();
     stepStaffPlanning(tickN);
     ensureVendors();
+    dropStrayEasels();
     topUpPigeons(tickN);
   }
   lap('plan');

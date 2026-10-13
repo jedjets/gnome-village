@@ -3,9 +3,10 @@
 // stroke, removed props back under their old ids, logged, cleared by a new park), 03 3.1 and 2.3 ids.ts (reserved ids), register 3.11
 // (never saved, so a restore empties it; owner 2026-10-13), 03 5.5 item 2 (a replay from a snapshot reproduces only the undos of entries
 // recorded after it; an undo of an earlier entry is reason.nothing_to_undo; owner 2026-10-13), 02 8.3 (an undone tree hands its species
-// back). 08 2.5 undo.test.ts rows.
+// back). 08 2.5 undo.test.ts rows. S4 part B review fixes: a removed kiosk's vendor comes back with its name in its old place among the held
+// names (the list is hashed in order), never past 30 people (03 3.11) and never under a name someone else took meanwhile (02 4.5 item 5).
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SIM_DT, newPark, simulate, tick } from '../src/core/loop.ts';
+import { PLAN_STEPS, SIM_DT, newPark, simulate, tick } from '../src/core/loop.ts';
 import { T } from '../src/core/clock.ts';
 import { W } from '../src/core/weather.ts';
 import { applyNow, enqueue, log, replay, type Command, type CommandInput, type Result, type ToolPayload } from '../src/core/commands.ts';
@@ -18,12 +19,14 @@ import { I, KIND, Kind, OCC, propById, props, removeProp } from '../src/world/gr
 import { setMode } from '../src/play/mode.ts';
 import { nextSpecies, propAt } from '../src/play/tools.ts';
 import { UNDO_DEPTH, canUndo, clearUndo, depth } from '../src/play/undo.ts';
-import { byId, spawnVisitor, visitors, type Visitor } from '../src/entities/visitor.ts';
+import { CAP_PEOPLE, byId, people, removeVisitor, spawnVisitor, visitors, type Visitor } from '../src/entities/visitor.ts';
 import { vendorFor } from '../src/entities/staff.ts';
+import { namesHeld } from '../src/entities/names.ts';
 
 const tool = (payload: ToolPayload): Result => applyNow({ side: 'park', kind: 'tool', payload });
 const undo = (): Result => applyNow({ side: 'park', kind: 'undo', payload: {} });
 const reasonOf = (r: Result): string => (r.ok ? 'ok' : r.reason);
+const kioskVendors = (): boolean[] => props.filter((p) => p.kind === 'kiosk').map((p) => vendorFor(p.id) !== 0);
 const at = (x: number, y: number): { x: number; y: number } => ({ x, y });
 
 beforeEach(() => {
@@ -186,6 +189,59 @@ describe('undo restores ids and vendors (03 5.6 item 3)', () => {
     expect(JSON.stringify(byId(v.id))).toBe(rec);
     expect([propById(k?.id ?? 0)?.data.vendorId, vendorFor(k?.id ?? 0)]).toEqual([v.id, v.id]);
     expect(stateHash()).toBe(h0);
+  });
+
+  it('the vendor\'s name goes back to its place among the held names: the hash is as before with names held after it (S4 review)', () => {
+    tool({ tool: 'kiosk', at: at(3, 3) });
+    const k = propAt(3, 3) as (typeof props)[number];
+    const v = byId(vendorFor(k.id)) as Visitor;
+    for (let n = 0; n < 3; n++) spawnVisitor('single', 'g_west'); // three names held after the vendor's
+    const held0 = namesHeld(), h0 = stateHash();
+    expect(held0.indexOf(v.name)).toBe(0);
+    expect(held0).toHaveLength(4);
+    tool({ tool: 'remove', at: at(3, 3) });
+    expect(namesHeld()).not.toContain(v.name);
+    undo();
+    expect(namesHeld()).toEqual(held0);
+    expect(stateHash()).toBe(h0);
+  });
+
+  it('the undo of a kiosk removal never takes the park past 30: the kiosk comes back without its vendor, which comes when there is room (03 3.11)', () => {
+    tool({ tool: 'kiosk', at: at(3, 3) });
+    const k = propAt(3, 3) as (typeof props)[number];
+    const v = byId(vendorFor(k.id)) as Visitor;
+    while (people() < CAP_PEOPLE) spawnVisitor('single', 'g_west');
+    tool({ tool: 'remove', at: at(3, 3) });
+    expect(people()).toBe(CAP_PEOPLE - 1);
+    expect(spawnVisitor('single', 'g_west')).not.toBeNull(); // the "+" fills the place the vendor left
+    expect(reasonOf(undo())).toBe('ok');
+    expect(people()).toBe(CAP_PEOPLE);
+    expect([propById(k.id)?.kind, vendorFor(k.id), byId(v.id)]).toEqual(['kiosk', 0, undefined]);
+    for (let n = 0; n < 2; n++) removeVisitor(visitors.find((o) => o.archetype === 'single')?.id ?? 0); // two leave
+    for (let n = 0; n < PLAN_STEPS; n++) simulate(SIM_DT, 0); // the planning tick's vendor check (03 4.3 item 3)
+    expect(kioskVendors()).toEqual([true, true]); // the starter kiosk's (none yet at tick 0) and this one's
+    expect(people()).toBe(CAP_PEOPLE);
+  });
+
+  it('a vendor whose name someone took meanwhile does not come back under it: a new vendor with a free name does (02 4.5 item 5)', () => {
+    tool({ tool: 'kiosk', at: at(3, 3) });
+    const k = propAt(3, 3) as (typeof props)[number];
+    const v = byId(vendorFor(k.id)) as Visitor;
+    tool({ tool: 'remove', at: at(3, 3) });
+    let taker: Visitor | null = null;
+    for (let n = 0; n < 400 && !taker; n++) {
+      const o = spawnVisitor('single', 'g_west', { sex: v.sex }) as Visitor;
+      if (o.name === v.name) taker = o;
+      else removeVisitor(o.id);
+    }
+    expect(taker?.name).toBe(v.name);
+    expect(reasonOf(undo())).toBe('ok');
+    const vendor = byId(vendorFor(k.id)) as Visitor;
+    expect(vendor.archetype).toBe('vendor');
+    expect(vendor.id).not.toBe(v.id);
+    expect(vendor.name).not.toBe(v.name);
+    expect(visitors.filter((o) => o.name === v.name).map((o) => o.id)).toEqual([taker?.id]);
+    expect(new Set(namesHeld()).size).toBe(namesHeld().length);
   });
 
   it('the undo of a kiosk placement hands its vendor\'s VisitorId back: the next visitor gets it again (S4; 08 2.5 undo row 1)', () => {

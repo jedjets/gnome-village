@@ -5,8 +5,8 @@
 // Three fixtures run the six runs of 08 3.2: det-s2 (S2: speed and weather only), det-s3 (S3 part A: det-s2 plus park tools and an
 // undo, 08 3.2 item 1; its bench, stroke and undo fall inside run 5's window, so the replay reproduces an undo, 03 5.6 item 4) and det-s4
 // (S4 part B: det-s3 plus 22 visitor.call commands that fill the park to 30 people by midday of day 1, 07 S4.7 item 1). S4 part B turned
-// the arrivals on, so det-s2 and det-s3 changed by design and were re-recorded once (07 S4.7 item 1; each fixture's note holds the old and
-// the new values); det-s2 still proves that no later slice moves an S4 path. Runs 4 and 6 compare against run 1's numbers, kept per
+// the arrivals on, so det-s2 and det-s3 changed by design and were re-recorded (07 S4.7 item 1), and the stage's review fixes moved all
+// three once more (each fixture's note holds the old and the new values); det-s2 still proves that no later slice moves an S4 path. Runs 4 and 6 compare against run 1's numbers, kept per
 // fixture, instead of running the same 64,800 steps again (the file's time budget, 08 3.2 item 8).
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -33,8 +33,8 @@ const fixture = FIXTURES['det-s2']; // the state-hash tests below run on det-s2'
 
 type Hook = (step: number) => void;
 
-/** det-s2's values since S4 part B (see the test that reads it). */
-const DET_S2_S4 = { rngN: 27245, stateHash: 3065084456 };
+/** det-s2's values since S4 part B and its review fixes (see the test that reads it). */
+const DET_S2_S4 = { rngN: 27599, stateHash: 3808997934 };
 
 /** The kind of the prop whose footprint covers (x, y). */
 function propKindAt(x: number, y: number): string | undefined {
@@ -82,7 +82,9 @@ describe('the fixtures (08 3.2 item 1)', () => {
     expect(fixture.commands.filter((c) => c.kind === 'debug.weather')).toHaveLength(6);
     expect(fixture.commands.some((c) => c.tick > 20000 && c.tick <= 21000)).toBe(true); // 08 3.2 item 1
     expect(fixture.commands.at(-1)).toEqual({ tick: 64800, side: 'park', kind: 'speed', payload: { speed: 0 } });
-    // S2 recorded rngN 912, stateHash 2925709919; S4 part B re-recorded them once, the arrivals on (07 S4.7 item 1). No later slice may move these.
+    // S2 recorded rngN 912, stateHash 2925709919; S4 part B re-recorded them, the arrivals on (07 S4.7 item 1): rngN 27245, stateHash
+    // 3065084456, then rngN 27599, stateHash 3808997934 after the stage's review fixes (a couple's second waits seated for the first,
+    // act.ts seatedStep). No later slice may move these.
     expect(fixture.expect).toEqual(DET_S2_S4);
   });
 

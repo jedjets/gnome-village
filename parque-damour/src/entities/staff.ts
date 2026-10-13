@@ -10,11 +10,14 @@
 // the next planning tick (ensureVendors); it vanishes with the kiosk (vendorLeave). A vendor's spawn draws nothing (a name and a look
 // from the kiosk id, the starting needs at their middles), so a kiosk tool command and its undo leave the sim stream where it was, and the
 // undo of a placement hands the vendor's VisitorId back by stepping the visitor counter back while it is still the last id handed out
-// (ids.ts does the same for a minted PropId); VisitorIds are never recycled (03 3.1), so a removed vendor's record comes back under its
-// own id when the removal is undone (vendorReturn). Together these make 08 2.5 "every tool undoes to the same hash" hold for the kiosk.
+// (ids.ts does the same for a minted PropId). That hand-back is the one exception to 03 3.1 "VisitorIds grow without recycling": an id
+// it hands back belonged to a vendor that existed only between the placement and its undo. A removed vendor's record comes back under its
+// own id, with its name at the place it held in names.ts (the name list is hashed in order), when the removal is undone (vendorReturn);
+// when the park filled up to 30 meanwhile, or its name went to someone else, a new vendor comes instead (or none at 30, until the
+// planning tick's check finds room). Together these make 08 2.5 "every tool undoes to the same hash" hold for the kiosk.
 // The facility index is a pure function of the props and the tile layers, rebuilt whenever the world version moved (grid.ts), so a
 // restored park and an uninterrupted one read the same index; the planning tick refreshes it as 03 4.3 orders. Free seats are read at
-// query time from each prop's `sitters` (saved with the props).
+// query time from each prop's `sitters` (saved with the props), counting only the claims still live (freeSeats).
 import type { XY } from '../core/math.ts';
 import { fnv1a } from '../core/math.ts';
 import { DAYLEN, T } from '../core/clock.ts';
@@ -79,9 +82,26 @@ export function seatPos(p: Prop, k: number): XY {
 /** Seats a prop has (06 4: bench, table and picnic 2). */
 export const SEATS = 2;
 
-/** Seats not taken or promised: a walker on its way holds its seat in `sitters` (first come, first served: 02 6.6 item 3). */
+/**
+ * True while visitor `id` still holds a seat of `p`: it sits on it, or its errand is still this prop (a walker on its way). A listed id
+ * that holds nothing is stale: a walker that gave up its route (move.ts giveUp clears the job), or a sitter the remove tool stood up whose
+ * prop an undo put back with the list it had (tools.ts keeps the prop as it was).
+ */
+export function holdsSeat(p: Prop, id: VisitorId): boolean {
+  const o = byId(id);
+  return !!o && (o.sitPropId === p.id || o.job.propId === p.id);
+}
+
+/** The prop's `sitters` without the stale ids (holdsSeat), in list order. */
+export function liveSitters(p: Prop): VisitorId[] {
+  return (p.data.sitters ?? []).filter((id) => holdsSeat(p, id));
+}
+
+/** Seats not taken or promised: a walker on its way holds its seat in `sitters` (first come, first served: 02 6.6 item 3); stale ids do not count. */
 export function freeSeats(p: Prop): number {
-  return SEATS - (p.data.sitters?.length ?? 0);
+  let n = 0;
+  for (const id of p.data.sitters ?? []) if (holdsSeat(p, id)) n++;
+  return SEATS - n;
 }
 
 /* ---------- the facility index (03 4.3 item 1) ---------- */
@@ -248,8 +268,11 @@ export function nearestTile(list: readonly number[], x: number, y: number, r = I
 
 /* ---------- the vendors (02 4.2 item 8, 4.3 vendor) ---------- */
 
-/** A removed kiosk's vendor as the undo entry keeps it (03 5.6 item 2 `vendorRemoved`): a copy of its record. */
-export type VendorRecord = Visitor;
+/**
+ * A removed kiosk's vendor as the undo entry keeps it (03 5.6 item 2 `vendorRemoved`): a copy of its record, plus `heldAt`, where its
+ * name stood in names.ts's held list, so the undo puts the name back in its place (the list is saved and hashed in order).
+ */
+export type VendorRecord = Visitor & { heldAt?: number };
 
 /** The kiosk's vendor's id, or 0 when it has none in the park. */
 export function vendorFor(kioskId: PropId): VisitorId {
@@ -257,10 +280,14 @@ export function vendorFor(kioskId: PropId): VisitorId {
   return id !== 0 && byId(id) ? id : 0;
 }
 
-/** Hold a generated name for a visitor made without the draw of names.ts takeName (06 6.1: a name in use is not given twice). */
-function holdName(name: string): void {
+/**
+ * Hold a generated name for a visitor made without the draw of names.ts takeName (06 6.1: a name in use is not given twice): at the end
+ * of the held list, or at index `at` (a vendor's name coming back where it was).
+ */
+function holdName(name: string, at = -1): void {
   const s = namesState();
-  s.held.push(name);
+  if (at >= 0 && at <= s.held.length) s.held.splice(at, 0, name);
+  else s.held.push(name);
   setNamesState(s);
 }
 
@@ -311,7 +338,7 @@ export function vendorLeave(kioskId: PropId, handBack = false): VendorRecord | n
   const id = vendorFor(kioskId);
   const v = id ? byId(id) : undefined;
   if (!v) return null;
-  const rec = JSON.parse(JSON.stringify(v)) as Visitor;
+  const rec: VendorRecord = { ...(JSON.parse(JSON.stringify(v)) as Visitor), heldAt: namesHeld().indexOf(v.name) };
   removeVisitor(v.id);
   if (handBack) {
     const s = idsState();
@@ -320,12 +347,21 @@ export function vendorLeave(kioskId: PropId, handBack = false): VendorRecord | n
   return rec;
 }
 
-/** The undo put a removed kiosk back: its vendor returns as it was, under its own id (03 5.6 item 3). Nothing when it had none. */
+/**
+ * The undo put a removed kiosk back (03 5.6 item 3): its vendor returns as it was, under its own id, its name back in its place in the
+ * held list. Only while the park has room (30 people, 03 3.11) and nobody took its name meanwhile (02 4.5 item 5); otherwise a new vendor
+ * comes (spawnVendor: none at 30, and the planning tick's ensureVendors tries again). Nothing when the kiosk had no vendor.
+ */
 export function vendorReturn(kioskId: PropId, rec: VendorRecord | null): void {
   const k = propById(kioskId);
-  if (!rec || !k || !putVisitor(rec)) return;
-  holdName(rec.name);
-  k.data.vendorId = rec.id;
+  if (!rec || !k || k.kind !== 'kiosk' || vendorFor(kioskId) !== 0) return;
+  const { heldAt, ...v } = rec;
+  if (people() < CAP_PEOPLE && !namesHeld().includes(v.name) && putVisitor(v)) {
+    holdName(v.name, heldAt ?? -1);
+    k.data.vendorId = v.id;
+    return;
+  }
+  spawnVendor(kioskId);
 }
 
 /* ---------- the gardener and the paving job (02 4.2 item 8, 11.1 items 4-6) ---------- */

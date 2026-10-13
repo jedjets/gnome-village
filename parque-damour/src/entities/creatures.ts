@@ -13,7 +13,8 @@
 // the south-west gate, not drawn and not stepped (S6 moves it, 02 11.3 item 2); the caps are 12 pigeons and 4 dogs with the pomeranian
 // (register 3.3). Every decision draws on the sim stream; positions, heights (z, in EH units: a lamp's head 1.65, a bench 0.45, a
 // fountain rim 0.9, a tree 2.2) and timers are saved and hashed. "A gathering" (3 pigeons at one crumbs prop) is announced once per
-// crumbs prop with params.feed on the `peck` that makes it (events.ts has no feed kind).
+// crumbs prop with params.feed on the `peck` that makes it (events.ts has no feed kind). A pigeon's crumbs are the ones its targetId
+// names at the spot it was sent to (targetCrumbs): a PropId is recycled, so crumbs dropped elsewhere can carry the id of crumbs it lost.
 // Dropped from the range: rabbits, deer, foxes, folds, hutches, riders, taming, raids, the fox's barking at night, swimming, sweeps.
 import type { XY } from '../core/math.ts';
 import { T } from '../core/clock.ts';
@@ -169,6 +170,17 @@ function dropCrumbsProp(p: Prop): void {
   gathered = gathered.filter((id) => id !== p.id); // the id is free again
 }
 
+/**
+ * The crumbs `c` walks or flies to, or pecks: the crumbs prop its targetId names, if it lies at the spot `c` was sent to (nextPigeon aims
+ * within 0.3 of it). Crumbs that went (stock 0, 60 s, the remove tool) leave their PropId free (03 3.1), and new crumbs elsewhere can take
+ * it: those are not `c`'s, so `c` neither pecks them from where it is nor counts toward their 5 or their gathering.
+ */
+function targetCrumbs(c: Creature): Prop | undefined {
+  if (c.targetId === 0) return undefined;
+  const p = propById(c.targetId);
+  return p?.kind === 'crumbs' && Math.abs(p.x - c.tx) <= 0.5 && Math.abs(p.y - c.ty) <= 0.5 ? p : undefined;
+}
+
 /* ---------- scatter (02 11.2 item 5) ---------- */
 
 function onGround(c: Creature): boolean {
@@ -266,7 +278,7 @@ function crumbsFor(c: Creature): Prop | null {
     const d = Math.hypot(p.x - c.x, p.y - c.y);
     if (d > bd) continue;
     let n = 0;
-    for (const o of creatures) if (o.targetId === p.id) n++;
+    for (const o of creatures) if (o.targetId === p.id && targetCrumbs(o) === p) n++;
     if (n < CAP_PIGEONS_PER_CRUMBS) {
       best = p;
       bd = d;
@@ -332,12 +344,12 @@ function land(c: Creature): void {
     return;
   }
   c.z = 0;
-  const cr = c.targetId ? propById(c.targetId) : undefined;
-  if (cr?.kind === 'crumbs') {
+  const cr = targetCrumbs(c);
+  if (cr) {
     c.st = 'peck';
     c.t = PECK_T;
     let n = 0;
-    for (const o of creatures) if (o.targetId === cr.id && o.st === 'peck') n++;
+    for (const o of creatures) if (o.targetId === cr.id && o.st === 'peck' && targetCrumbs(o) === cr) n++;
     const first = n >= GATHERING_N && !gathered.includes(cr.id);
     if (first) gathered.push(cr.id);
     emit({ kind: 'peck', tick: nowTick(), x: c.x, y: c.y, ids: [c.id], params: first ? { feed: 'feed.pigeons' } : undefined });
@@ -402,8 +414,8 @@ function stepPigeon(c: Creature, dt: number): void {
     case 'peck': {
       c.t -= dt;
       if (c.t > 0) return;
-      const cr = c.targetId ? propById(c.targetId) : undefined;
-      if (cr?.kind === 'crumbs') {
+      const cr = targetCrumbs(c);
+      if (cr) {
         cr.data.stock = (cr.data.stock ?? 1) - 1; // one crumb a peck (02 11.2 item 3)
         if ((cr.data.stock ?? 0) <= 0) dropCrumbsProp(cr);
         else {

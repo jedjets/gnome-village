@@ -3,14 +3,16 @@
 // a dog or the pomeranian within 3, a child's chase within 1; crumbs attract at most 5 within 10 and vanish at stock 0 or after 60 s; a
 // gathering of 3 is announced once), 02 11.3 (a dog on a lead 1 tile behind its walker; the pomeranian's record waits outside), 03 3.5
 // (the Creature record) / 08 2.3 creatures.test.ts rows / 07 S4.6 step 9. The fog's perch (m_fog) is S6's; perchAll is tested here.
+// S4 part B review fix: crumbs that went leave their PropId free (03 3.1), and crumbs dropped elsewhere can take it; the pigeons that were
+// going to the old crumbs neither peck the new ones from where they are nor fill their 5.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SIM_DT, newPark, simulate } from '../src/core/loop.ts';
+import { SIM_DT, newPark, setTick, simulate } from '../src/core/loop.ts';
 import { T } from '../src/core/clock.ts';
 import { clearListeners, on, type GameEvent } from '../src/core/events.ts';
-import { props } from '../src/world/grid.ts';
+import { props, type Prop } from '../src/world/grid.ts';
 import { gateById } from '../src/world/park.ts';
 import {
-  CAP_PIGEONS_PER_CRUMBS, CRUMBS_LIFE_STEPS, GATHERING_N, PIGEONS_START, SCATTER_D, SCATTER_T, count, creatures, dropCrumbs, perchAll,
+  CAP_PIGEONS_PER_CRUMBS, CRUMBS_LIFE_STEPS, GATHERING_N, PIGEONS_START, R_CRUMBS_ATTRACT, SCATTER_D, SCATTER_T, count, creatures, dropCrumbs, perchAll,
   resetCreatures, spawnDog, spawnPigeonAt, stepCreatures, thePomeranian, type Creature,
 } from '../src/entities/creatures.ts';
 import { removeVisitor, spawnVisitor, type Visitor } from '../src/entities/visitor.ts';
@@ -118,6 +120,29 @@ describe('crumbs (02 11.2 items 3-4; 06 1.8)', () => {
     p.t = 0;
     for (let k = 0; k < 9 * 60; k++) stepCreatures(SIM_DT);
     expect(props.some((q) => q.kind === 'crumbs')).toBe(false);
+  });
+  it('crumbs that went leave their PropId to crumbs dropped elsewhere: the pigeons bound for the old ones do not peck or fill the new ones', () => {
+    dropCrumbs(20, 30, 0);
+    const old = props.find((p) => p.kind === 'crumbs') as Prop;
+    const bound = Array.from({ length: CAP_PIGEONS_PER_CRUMBS }, (_, k) => {
+      const c = pigeonAt(18 + k, 33);
+      return Object.assign(c, { st: 'walk', targetId: old.id, tx: old.x + 0.1, ty: old.y + 0.1 });
+    });
+    old.untilTick = 1; // their 60 s are up at step 1: that step takes them away (02 11.2 item 3)
+    setTick(1);
+    stepCreatures(SIM_DT);
+    expect(props.includes(old)).toBe(false);
+    dropCrumbs(5, 40, 0);
+    const fresh = props.find((p) => p.kind === 'crumbs') as Prop;
+    expect(fresh.id).toBe(old.id); // the recycled PropId (03 3.1)
+    fresh.data.stock = 3;
+    const near = pigeonAt(6, 41);
+    near.t = 0; // decides at once
+    for (let k = 0; k < 8 * 60; k++) stepCreatures(SIM_DT);
+    for (const c of bound) expect(Math.hypot(c.x - fresh.x, c.y - fresh.y)).toBeGreaterThan(R_CRUMBS_ATTRACT); // still over by (20, 30)
+    expect(near.targetId).toBe(fresh.id); // the five bound for the old crumbs did not fill the new ones' 5
+    expect(Math.hypot(near.x - fresh.x, near.y - fresh.y)).toBeLessThan(1);
+    expect(fresh.data.stock).toBe(2); // one peck in 8 s, the newcomer's: none from 15 tiles away
   });
   it('untouched crumbs are gone after 60 s', () => {
     dropCrumbs(10, 30, 0);
