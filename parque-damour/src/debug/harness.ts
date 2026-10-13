@@ -9,6 +9,7 @@
 // savePark/loadPark/clearAll (S3), Park callVisitor (S4), Render DBG, Audio (S8). restore drops the old scene's particles, as newPark does.
 // S3 part A: this file imports play/tools.ts (and with it play/undo.ts) for their `tool` and `undo` handlers, so `apply` and `enqueue` place
 // tools in the dev page (09 5.4, tools/det.mjs on det-s3) before part C's rail imports them from main.ts; no member is added (03 13).
+// S3 part B: the Save group gains savePark, loadPark and clearAll (03 13): the two parque: keys through save/store.ts, nothing else.
 import { T } from '../core/clock.ts';
 import { seedVisual, rngN } from '../core/rng.ts';
 import { SIM_DT, SP, setSpeed, simulate, tick } from '../core/loop.ts';
@@ -21,7 +22,7 @@ import { pickAt, screenOf, screenToTile } from '../render/project.ts';
 import { draw, getCtx } from '../render/draw.ts';
 import { clearParticles, fxStep } from '../render/effects.ts';
 import { SCHEMA_VERSION } from '../save/schema.ts';
-import { restore, snapshot, stateHash, worldHash } from '../save/store.ts';
+import { clearAll, loadPark, restore, savePark, snapshot, stateHash, worldHash } from '../save/store.ts';
 import '../play/tools.ts';
 import { FT, qualityLevel } from './perf.ts';
 
@@ -58,6 +59,12 @@ export function buildHarness(api: HarnessApi) {
       restore(s);
       clearParticles();
     },
+    /** Write parque:park-v1 and parque:profile-v1 now; false when the storage refused (a `warn` event says which key). */
+    savePark,
+    /** The saved park, migrated, or null; it is not restored (pass it to restore). */
+    loadPark,
+    /** Remove both parque: keys and put the in-memory profile back to its defaults. */
+    clearAll,
   };
   const park = {
     newPark: api.newPark,

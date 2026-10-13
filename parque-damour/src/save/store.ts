@@ -2,75 +2,126 @@
 // Keys parque:profile-v1 and parque:park-v1; serialise, parse, autosave, the in-memory profile, the state hash (03 section 11).
 // Nothing ported: GV has no save (review section 11). NEW.
 // S1: the in-memory profile with loadProfile/saveProfile and the stylePick and musicPick writers the boards need (04 4.4 item 2).
-// S2: snapshot, restore, stateHash and worldHash over the engine's state, in memory only (no localStorage for the park yet).
-// TODO(S3): loadPark, savePark, clearPark, stepAutosave, points, tiers, unlocks; the profile's cp and mp join the state hash (03 11);
-// the feed (ui/feed.ts, which this layer cannot import) is wired into the snapshot.
+// S2: snapshot, restore, stateHash and worldHash over the engine's state.
+// S3 part B: the two keys and nothing else (AGENTS 5 item 8); JSON with the layers as base64 and numbers unrounded; savePark writes the
+// park and the profile together; loadPark gives the migrated save or null; clearPark for New; saveBeforeNew, the extra park write on
+// park.new (03 17 A24); stepAutosave counts sim time from the frame's step count and writes at 30 sim seconds. Every localStorage access
+// is inside try/catch: a failure emits one `warn` event and never throws. This layer reads no DOM and no wall clock and adds no listener:
+// main.ts (part C) wires visibilitychange and pagehide to savePark, Continue to restore(loadPark()), New to saveBeforeNew and clearPark.
+// The undo stack is never saved; a restore empties it (play/undo.ts onRestoreCommands; owner 2026-10-13).
+// TODO(S5): the feed (ui/feed.ts, which this layer cannot import) joins the snapshot through a hook; the profile's cp and mp join the
+// state hash (03 11) in the slice that first awards points, which re-records the det fixtures (S3 must keep them: 07 S3.7 item 1).
 import { FNV_SEED, fnvStep } from '../core/math.ts';
 import { rngN, setSimState, setVisState, simState, visState } from '../core/rng.ts';
 import { idsState, setIdsState } from '../core/ids.ts';
+import { T } from '../core/clock.ts';
+import { emit } from '../core/events.ts';
 import { W, markWetUnknown, overridesState, setOverridesState } from '../core/weather.ts';
 import { log, setLog } from '../core/commands.ts';
-import { setTick, tick } from '../core/loop.ts';
+import { SIM_DT, setTick, tick } from '../core/loop.ts';
 import { getAvatar, getMode, getPlayer, setMode } from '../play/mode.ts';
+import { nextSpecies, setNextSpecies } from '../play/tools.ts';
 import {
-  BEDC, ICE, KIND, NC, OCC, PAVEDAY, PETALS, WATER, WEAR, WET, props, propsState, setLayersState, setPropsState,
+  BEDC, ICE, KIND, NC, OCC, PAVEDAY, PETALS, WATER, WEAR, WET, props, propsState, rebuildBlock, setLayersState, setPropsState,
   type LayersState, type Prop,
 } from '../world/grid.ts';
 import { parkSeed, setParkSeed } from '../world/gen.ts';
 import { iceState, setIceState } from '../world/water.ts';
 import { markCharmDirty } from '../world/charm.ts';
+import { defaultProfile, migratePark, migrateProfile } from './migrate.ts';
 import { SCHEMA_VERSION, type LayersSave, type ParkSaveV1, type ProfileV1, type WeatherSave } from './schema.ts';
 
 export const PROFILE_KEY = 'parque:profile-v1';
 export const PARK_KEY = 'parque:park-v1';
+/** Autosave every 30 sim seconds (register 3.11). */
+export const AUTOSAVE_S = 30;
+/** The same in fixed steps (1800): the count stays whole, so no float sum of 1/60 drifts below 30 (loop.ts wear does the same). */
+const AUTOSAVE_STEPS = Math.round(AUTOSAVE_S / SIM_DT);
 
-function freshProfile(): ProfileV1 {
-  return { v: 1, settings: { lang: 'en', muted: false, speed: 1 }, stylePick: null, musicPick: null };
+/* ---------- localStorage, every access caught (03 11 Failure handling) ---------- */
+
+type Op = 'read' | 'write' | 'remove' | 'parse';
+
+/** One `warn` event for a failed save operation: what failed and on which key (a log line for the dev console, not a player string). */
+function warn(op: Op, key: string): void {
+  emit({ kind: 'warn', tick: tick(), params: { what: 'save.' + op, key } });
 }
 
-let profile: ProfileV1 | null = null;
+/** The page's localStorage, or undefined when the host has none. Reading the global itself can throw (blocked site data): callers catch. */
+function ls(): Storage | undefined {
+  return typeof localStorage === 'undefined' ? undefined : localStorage;
+}
 
-function storage(): Storage | null {
+/** The text under `key` (null when absent or when there is no storage); ok false when the storage threw. */
+function read(key: string): { ok: boolean; text: string | null } {
   try {
-    return typeof localStorage === 'undefined' ? null : localStorage;
+    const s = ls();
+    return { ok: true, text: s ? s.getItem(key) : null };
   } catch {
-    return null;
+    return { ok: false, text: null };
   }
 }
 
-/** Read parque:profile-v1 (a fresh profile when absent or unreadable); fields the file lacks take their defaults. */
+/** Write `text` under `key`; false when there is no storage or it threw (quota, private mode). */
+function write(key: string, text: string): boolean {
+  try {
+    const s = ls();
+    if (!s) return false;
+    s.setItem(key, text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Remove `key`; true when it is gone (or there is no storage to hold it), false when the storage threw. */
+function remove(key: string): boolean {
+  try {
+    ls()?.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/* ---------- the profile (03 3.9) ---------- */
+
+let prof: ProfileV1 | null = null;
+
+/**
+ * Read parque:profile-v1 into the in-memory profile and return it: the migrated profile, or the defaults of 08 2.6 (no points, tier 0,
+ * English, sound on, the dial at 1) when it is absent, unreadable or not a profile (one `warn` for the last two).
+ */
 export function loadProfile(): ProfileV1 {
-  const base = freshProfile();
-  const s = storage();
-  if (!s) return base;
-  try {
-    const raw = s.getItem(PROFILE_KEY);
-    if (!raw) return base;
-    const o = JSON.parse(raw) as Partial<ProfileV1>;
-    if (o.settings) base.settings = { ...base.settings, ...o.settings };
-    if (typeof o.stylePick === 'string') base.stylePick = o.stylePick;
-    if (typeof o.musicPick === 'string') base.musicPick = o.musicPick;
-    return base;
-  } catch {
-    return base;
+  const r = read(PROFILE_KEY);
+  let p: ProfileV1 | null = null;
+  if (!r.ok) warn('read', PROFILE_KEY);
+  else if (r.text !== null) {
+    p = migrateProfile(r.text);
+    if (!p) warn('parse', PROFILE_KEY);
   }
+  prof = p ?? defaultProfile();
+  return prof;
 }
 
-/** The in-memory profile, loaded once on first use. */
+/** The in-memory profile the game edits, loaded once on first use (03 2.10 `profile()`). */
 export function getProfile(): ProfileV1 {
-  if (!profile) profile = loadProfile();
-  return profile;
+  return prof ?? loadProfile();
 }
 
-/** Write the in-memory profile to parque:profile-v1; silently a no-op without storage. */
-export function saveProfile(): void {
-  const s = storage();
-  if (!s) return;
-  try {
-    s.setItem(PROFILE_KEY, JSON.stringify(getProfile()));
-  } catch {
-    /* quota or private mode: the profile lives in memory until the next try */
-  }
+/** Write the in-memory profile; its write serial (`updatedAt`) moves on only when the write lands. */
+function writeProfile(): boolean {
+  const p = getProfile();
+  if (!write(PROFILE_KEY, JSON.stringify({ ...p, updatedAt: p.updatedAt + 1 }))) return false;
+  p.updatedAt++;
+  return true;
+}
+
+/** Write the in-memory profile to parque:profile-v1; false (and one `warn`) when it did not land. Never throws. */
+export function saveProfile(): boolean {
+  const ok = writeProfile();
+  if (!ok) warn('write', PROFILE_KEY);
+  return ok;
 }
 
 /** The Style Gate pick: 'A' | 'B' | 'C' (04 4.4 item 2). */
@@ -85,14 +136,102 @@ export function setMusicPick(pick: string): void {
   saveProfile();
 }
 
-/** True when a park save exists; the intro shows Continue on it. */
+/* ---------- the park key (register 3.11, 03 11) ---------- */
+
+let autoSteps = 0;
+
+function readPark(loud: boolean): ParkSaveV1 | null {
+  const r = read(PARK_KEY);
+  if (!r.ok) {
+    if (loud) warn('read', PARK_KEY);
+    return null;
+  }
+  if (r.text === null) return null;
+  const s = migratePark(r.text);
+  if (!s && loud) warn('parse', PARK_KEY);
+  return s;
+}
+
+/**
+ * The saved park, migrated to the current version (migrate.ts), or null when there is none or it cannot be read, parsed or migrated
+ * (one `warn` for the last three; the key is left as it is, and the next write replaces it). Continue is restore(loadPark()) (03 11).
+ */
+export function loadPark(): ParkSaveV1 | null {
+  return readPark(true);
+}
+
+/** True when loadPark() would give a park: the intro shows Continue on it (03 11: a damaged save shows Begin without Continue). */
 export function hasPark(): boolean {
-  const s = storage();
+  return readPark(false) !== null;
+}
+
+/**
+ * The autosave (register 3.11): the park and the profile together, the dial (never the pause) copied into the profile's settings first
+ * (03 4.6). Restarts the 30-second count. Returns true when both keys were written; on a failure one `warn` and false. Never throws.
+ */
+export function savePark(): boolean {
+  autoSteps = 0;
+  let text: string;
   try {
-    return s !== null && s.getItem(PARK_KEY) !== null;
+    text = JSON.stringify(snapshot());
   } catch {
+    warn('write', PARK_KEY);
     return false;
   }
+  const p = getProfile();
+  if (T.speed > 0) p.settings.speed = T.speed;
+  const okPark = write(PARK_KEY, text);
+  const okProfile = writeProfile();
+  if (!okPark || !okProfile) warn('write', okPark ? PROFILE_KEY : PARK_KEY);
+  return okPark && okProfile;
+}
+
+/**
+ * The extra park write on park.new (03 17 A24): main.ts calls it after the player confirms New and before clearPark, so the key never
+ * holds a half-written park whatever happens to the steps that follow. Returns what savePark returns.
+ */
+export function saveBeforeNew(): boolean {
+  return savePark();
+}
+
+/**
+ * New (03 11): the park key goes and the profile counts one more park played (written at once). Returns false (one `warn`) when the
+ * storage threw. Never throws.
+ */
+export function clearPark(): boolean {
+  autoSteps = 0;
+  const okPark = remove(PARK_KEY);
+  getProfile().parksPlayed++;
+  const okProfile = writeProfile();
+  if (!okPark || !okProfile) warn(okPark ? 'write' : 'remove', okPark ? PROFILE_KEY : PARK_KEY);
+  return okPark && okProfile;
+}
+
+/** Both keys gone and the in-memory profile back to its defaults (the harness clearAll, 03 13). False (one `warn`) on a failure. */
+export function clearAll(): boolean {
+  autoSteps = 0;
+  prof = defaultProfile();
+  const okPark = remove(PARK_KEY);
+  const okProfile = remove(PROFILE_KEY);
+  if (!okPark || !okProfile) warn('remove', okPark ? PROFILE_KEY : PARK_KEY);
+  return okPark && okProfile;
+}
+
+/**
+ * Count the `ns` steps a frame ran (ns x SIM_DT sim seconds; none while paused) and write the park and the profile once 30 sim seconds
+ * have passed since the last write (register 3.11). Returns true on the call that wrote.
+ */
+export function stepAutosave(ns: number): boolean {
+  if (!(ns > 0)) return false;
+  autoSteps += Math.floor(ns);
+  if (autoSteps < AUTOSAVE_STEPS) return false;
+  savePark();
+  return true;
+}
+
+/** Start the 30-second count over (a Continue or a new park: the first autosave comes 30 sim seconds later). */
+export function resetAutosave(): void {
+  autoSteps = 0;
 }
 
 /* ---------- the park snapshot, restore and state hash (03 3.10, 11) ---------- */
@@ -172,10 +311,17 @@ export function snapshot(): ParkSaveV1 {
     props: propsState(),
     ...lists(),
     log: log().map((c) => ({ ...c })),
+    treeTurn: nextSpecies(),
   };
 }
 
-/** Put the park back as a snapshot left it (silently: no events). Throws on a snapshot of another version or with a damaged layer. */
+/**
+ * Put the park back as a snapshot left it, silently (no events; the queued commands and events go with the old timeline). MODE and PLAYER
+ * come back with it; every derived cache follows: BLOCK is rebuilt at once, the water bodies and the render caches see a new world version
+ * (markBlockDirty), the charm field is marked dirty, the id counters, free list and reservations are the snapshot's, the undo stack is
+ * emptied (setLog's restore hooks: never saved, register 3.11) and the tree cycle is the snapshot's. Throws on a snapshot of another
+ * version or with a damaged layer, before anything changes: loadPark() only hands over saves migrate.ts checked.
+ */
 export function restore(s: ParkSaveV1): void {
   if (s.v !== SCHEMA_VERSION) throw new Error('unknown park save version ' + String(s.v));
   const layers = layersFrom(s.layers); // decode first: a damaged save throws before anything is changed
@@ -201,7 +347,9 @@ export function restore(s: ParkSaveV1): void {
   setVisState(s.rng.vis);
   setMode(s.mode.mode, s.mode.avatar ?? undefined, s.mode.player);
   setTick(s.tick);
-  setLog(s.log);
+  setLog(s.log); // runs the restore hooks: undo.ts empties its stack, tools.ts derives a tree cycle ...
+  if (typeof s.treeTurn === 'number') setNextSpecies(s.treeTurn); // ... which the saved one replaces
+  rebuildBlock();
   markCharmDirty();
 }
 
