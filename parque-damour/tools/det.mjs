@@ -10,6 +10,9 @@
 //   4. zero console errors and page errors on every page; rngN and the state hash equal to the fixture's (the Vitest values); from S8 on,
 //      when __PD.audio exists, __PD.audio.log.length === 200 on page 1 (05 8.3).
 // Exit code 1 on any mismatch, printing both hashes and, between pages 1 and 2, the first differing 600-step window (08 3.3).
+// Every page opens in its own browser context (as tools/shot.mjs), so the park page 1 autosaves on close does not make page 3's Begin stop
+// at the New confirm (S3) and leave the loop unstarted. The CDP call timeout is raised past page 3's wait (the fixtures' 4x and 6x stretches
+// make the real run about 165 s, near puppeteer's 180 s default).
 // Usage: node tools/det.mjs [<fixture>] [--url <dev server url>] [--days <n>] [--no-real]
 //   <fixture>  the fixture's name in tests/fixtures (det-s2, det-s3, ...; `.json` optional, `--fixture <name>` also works), default det-s2
 //   --url      default http://localhost:5173/ (start it with `npm run dev`)
@@ -50,7 +53,8 @@ function commandsFor(fixture, steps) {
 }
 
 async function openPage(browser, url, seed, errors, label) {
-  const page = await browser.newPage();
+  const ctx = await browser.createBrowserContext(); // its own localStorage: no saved park, so Begin starts the game at once
+  const page = await ctx.newPage();
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(`console [${label}]: ${m.text()}`);
   });
@@ -133,15 +137,15 @@ async function main() {
   const cmds = commandsFor(fixture, steps);
   const errors = [];
   const problems = [];
-  const browser = await puppeteer.launch({ executablePath: CHROMIUM, headless: true, args: CHROMIUM_ARGS });
+  const browser = await puppeteer.launch({ executablePath: CHROMIUM, headless: true, args: CHROMIUM_ARGS, protocolTimeout: 600_000 });
   try {
     const t0 = Date.now();
     const p1 = await openPage(browser, url, fixture.seed, errors, 'run 1');
     const r1 = await directRun(p1, cmds, steps, WINDOW);
-    await p1.close();
+    await p1.browserContext().close();
     const p2 = await openPage(browser, url, fixture.seed, errors, 'run 2');
     const r2 = await directRun(p2, cmds, steps, WINDOW);
-    await p2.close();
+    await p2.browserContext().close();
     console.log(`run 1: seed ${fixture.seed} steps ${r1.tick} rngN ${r1.rngN} hash ${r1.hash} (0x${r1.hash.toString(16)})`);
     console.log(`run 2: seed ${fixture.seed} steps ${r2.tick} rngN ${r2.rngN} hash ${r2.hash}`);
     if (r1.tick !== steps) problems.push(`run 1 stopped at tick ${r1.tick}, not ${steps}`);
@@ -154,7 +158,7 @@ async function main() {
       const p3 = await openPage(browser, url, fixture.seed, errors, 'run 3 (real loop, 8x)');
       const t3 = Date.now();
       const r3 = await realRun(p3, cmds, steps);
-      await p3.close();
+      await p3.browserContext().close();
       console.log(`run 3 (real loop): steps ${r3.tick} rngN ${r3.rngN} hash ${r3.hash} speed ${r3.speed} in ${((Date.now() - t3) / 1000).toFixed(1)} s`);
       if (r3.tick !== steps) problems.push(`run 3 stopped at tick ${r3.tick}, not ${steps}`);
       if (r3.hash !== r1.hash || r3.rngN !== r1.rngN) problems.push(`the real-time run differs from run 1: hash ${r3.hash} vs ${r1.hash}, rngN ${r3.rngN} vs ${r1.rngN}`);
