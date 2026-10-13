@@ -4,7 +4,7 @@
 // every localStorage failure caught with one `warn` event, MODE and PLAYER restored, the derived caches rebuilt on a restore, New.
 // 08 2.6 save.test.ts rows (each `it` named as the row), plus the store contract of 07 S3 step 9.
 // Node has no localStorage: MemStorage below stands in for it, installed on globalThis by each test (never in src/).
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { SIM_DT, newPark, setSpeed, simulate, tick } from '../src/core/loop.ts';
 import { T } from '../src/core/clock.ts';
 import { applyNow, enqueue, log, type CommandInput, type Result, type ToolPayload } from '../src/core/commands.ts';
@@ -15,7 +15,7 @@ import { BEDC, BLOCK, I, ICE, KIND, Kind, N, NC, OCC, PAVEDAY, PETALS, WATER, WE
 import { waterBodies } from '../src/world/water.ts';
 import { getAvatar, getMode, getPlayer, setMode } from '../src/play/mode.ts';
 import { ghost, nextSpecies, propAt, type ToolId } from '../src/play/tools.ts';
-import { canUndo, clearUndo, depth } from '../src/play/undo.ts';
+import { UNDO_DEPTH, canUndo, clearUndo, depth } from '../src/play/undo.ts';
 import { cam } from '../src/render/camera.ts';
 import { addPart, clearParticles, particles } from '../src/render/effects.ts';
 import {
@@ -398,6 +398,63 @@ describe('keys, autosave and failures (08 2.6 row 6; register 3.11; 03 11; AGENT
   });
 });
 
+/**
+ * The store as a page has it on its first call: fresh modules, the profile not read yet (main.ts reads only hasPark before the first
+ * autosave). Its own events module carries the warns.
+ */
+async function freshStore(): Promise<{ store: typeof import('../src/save/store.ts'); freshWarns: Array<GameEvent['params']> }> {
+  vi.resetModules();
+  const events = await import('../src/core/events.ts');
+  const loop = await import('../src/core/loop.ts');
+  const store = await import('../src/save/store.ts');
+  const freshWarns: Array<GameEvent['params']> = [];
+  events.on('warn', (e) => freshWarns.push(e.params));
+  loop.newPark(101);
+  return { store, freshWarns };
+}
+const warnOf = (op: 'read' | 'write' | 'remove', key: string): { what: string; key: string } => ({ what: 'save.' + op, key });
+
+describe('one warn per call before the profile is in memory (08 2.6 row 6; 07 S3 step 9: a failure emits one warn)', () => {
+  it('a storage that refuses every access: each call on a fresh page emits exactly one warn, naming what failed first', async () => {
+    type Store = typeof import('../src/save/store.ts');
+    const calls: Array<[string, (st: Store) => unknown, object]> = [
+      ['savePark', (st) => st.savePark(), warnOf('write', PARK_KEY)], // the profile read failed first; the park write is what matters
+      ['saveBeforeNew', (st) => st.saveBeforeNew(), warnOf('write', PARK_KEY)],
+      ['stepAutosave', (st) => st.stepAutosave(30 * Math.round(1 / SIM_DT)), warnOf('write', PARK_KEY)],
+      ['clearPark', (st) => st.clearPark(), warnOf('remove', PARK_KEY)],
+      ['saveProfile', (st) => st.saveProfile(), warnOf('write', PROFILE_KEY)],
+      ['setStylePick', (st) => st.setStylePick('A'), warnOf('write', PROFILE_KEY)],
+      ['setMusicPick', (st) => st.setMusicPick('B'), warnOf('write', PROFILE_KEY)],
+      ['getProfile', (st) => st.getProfile(), warnOf('read', PROFILE_KEY)],
+      ['loadProfile', (st) => st.loadProfile(), warnOf('read', PROFILE_KEY)],
+      ['loadPark', (st) => st.loadPark(), warnOf('read', PARK_KEY)],
+      ['clearAll', (st) => st.clearAll(), warnOf('remove', PARK_KEY)],
+    ];
+    for (const [name, call, first] of calls) {
+      const { store, freshWarns } = await freshStore();
+      installBlocked();
+      expect(() => call(store), name).not.toThrow();
+      expect([name, freshWarns]).toEqual([name, [first]]);
+      expect(store.getProfile().cp).toBe(0); // the defaults stand in for the profile it could not read
+    }
+    const { store, freshWarns } = await freshStore();
+    installBlocked();
+    expect(store.hasPark()).toBe(false); // the intro's question stays quiet
+    expect(freshWarns).toEqual([]);
+  });
+
+  it('a damaged profile key on a fresh page: savePark writes both keys with one save.parse warn, and the defaults replace it', async () => {
+    mem.map.set(PROFILE_KEY, '{"v":1,"cp":');
+    const { store, freshWarns } = await freshStore();
+    expect(store.savePark()).toBe(true);
+    expect(freshWarns).toEqual([{ what: 'save.parse', key: PROFILE_KEY }]);
+    expect([...mem.writes].sort()).toEqual([PARK_KEY, PROFILE_KEY]);
+    expect(JSON.parse(mem.map.get(PROFILE_KEY) ?? '{}')).toMatchObject({ v: 1, cp: 0, mp: 0, updatedAt: 1 });
+    expect(store.savePark()).toBe(true); // in memory now: no second warn
+    expect(freshWarns).toHaveLength(1);
+  });
+});
+
 describe('Continue and New (03 11; 03 17 A24)', () => {
   it('loadPark gives null with no save; a damaged save is refused with one warn and Continue is not offered', () => {
     expect(loadPark()).toBeNull();
@@ -436,6 +493,41 @@ describe('Continue and New (03 11; 03 17 A24)', () => {
   });
 });
 
+type Probe = { hash: number; world: number; ids: ReturnType<typeof idsState>; tick: number };
+const probe = (): Probe => ({ hash: stateHash(), world: worldHash(), ids: idsState(), tick: tick() });
+/** One path of twoPaths: the probes, whether each tool entry applied, and the undo depth at the first probe. */
+type PathRun = { at9: Probe; at11: Probe; ok: boolean[]; depth9: number };
+
+/**
+ * A removal (the tree tool fells starter tree 17: its id is reserved while the entry stands), a round trip through JSON, then the same
+ * 11 tool entries on the live path and on the restored one: 10 benches and a lamp, with ticks between. Probes after 9 entries (the
+ * felling's entry still on the live stack) and after 11 (it fell off the live stack at the tenth, which released id 17 there).
+ */
+function twoPaths(): { live: PathRun; restored: PathRun; h: number; hRestored: number } {
+  steps(60);
+  expect(tool({ tool: 'tree', at: at(9, 2) }).ok).toBe(true);
+  expect([idsState().propReserved, depth()]).toEqual([[17], 1]);
+  const h = stateHash();
+  const s = clone(snapshot());
+  const spots: Array<{ x: number; y: number }> = [];
+  for (let y = 20; y < 46 && spots.length < 11; y += 2)
+    for (let x = 4; x < 44 && spots.length < 11; x += 3) if (!propAt(x, y) && ghost('bench', at(x, y)).ok) spots.push(at(x, y));
+  const path = (): PathRun => {
+    const ok: boolean[] = [];
+    for (let k = 0; k < 9; k++) ok.push(tool({ tool: 'bench', at: spots[k] as { x: number; y: number } }).ok);
+    steps(100);
+    const at9 = probe(), depth9 = depth();
+    ok.push(tool({ tool: 'bench', at: spots[9] as { x: number; y: number } }).ok);
+    ok.push(tool({ tool: 'lamp', at: spots[10] as { x: number; y: number } }).ok);
+    steps(500);
+    return { at9, at11: probe(), ok, depth9 };
+  };
+  const live = path();
+  restore(s);
+  const hRestored = stateHash();
+  return { live, restored: path(), h, hRestored };
+}
+
 describe('a restore leaves every derived cache consistent (07 S3 step 9; 03 3.1, 3.2; 08 3.2 run 6)', () => {
   it('BLOCK, the water bodies, the props by id, the ids, the undo stack and the tree cycle', () => {
     expect(tool({ tool: 'pond', at: at(6, 30), size: 3, stroke: 1 }).ok).toBe(true);
@@ -461,5 +553,28 @@ describe('a restore leaves every derived cache consistent (07 S3 step 9; 03 3.1,
     expect([canUndo(), depth()]).toEqual([false, 0]);
     expect(nextSpecies()).toBe(cycle);
     expect(tool({ tool: 'lamp', at: at(20, 4) }).ok).toBe(true); // the tools work on the restored world
+  });
+
+  it('after a restore, the paths agree while the entry that reserved an id would still be on the live stack (08 2.6 row 1)', () => {
+    const r = twoPaths();
+    expect(r.hRestored).toBe(r.h);
+    expect(r.live.ok).toEqual(Array(11).fill(true));
+    expect(r.restored.ok).toEqual(r.live.ok);
+    expect(r.restored.at9).toEqual(r.live.at9);
+    expect(r.live.at9.ids.propReserved).toEqual([17]);
+    // the felling's entry and nine more fill the live stack, so the tenth pushes it off there; the restored stack holds only the nine
+    expect([r.live.depth9, r.restored.depth9]).toEqual([UNDO_DEPTH, UNDO_DEPTH - 1]);
+  });
+
+  // OPEN QUESTION for the owner (S3 part B hand-back): the restore empties the undo stack (register 3.11; owner 2026-10-13) but keeps the
+  // ids the snapshot holds reserved, as the round trip's hash needs (08 2.6 row 1). No entry on the restored path will ever release them,
+  // while the live path releases each when its entry leaves the stack (03 5.6 item 3: 10 more entries, or a clearUndo such as S7's
+  // avatar.enter). From then on the two paths hand out different PropIds and their state hashes part. Making them agree needs a change
+  // in play/undo.ts (outside this stage) and a decision: reservations that end only at park.new (part A's clearUndo test and 03 5.6 item 3
+  // change), or the release schedule saved with the ids (03 3.10 excludes the undo stack). `it.fails` pins the gap: once the paths
+  // agree this test fails, and it becomes a plain `it`.
+  it.fails('after a restore, 11 more tool entries on both paths give the same stateHash, worldHash and ids (open question)', () => {
+    const r = twoPaths();
+    expect(r.restored.at11).toEqual(r.live.at11);
   });
 });
