@@ -5,11 +5,14 @@
 // Ported from GV 10839-10866 (updateHUD) and 12181 (the clock chip's single and double tap). ADAPT: phase, day and season words through
 // t(); the dot's colour is ambient.WCOLD by W.kind (GV WCOLD 10774, 10850), ringed in --glass-line; the tap clock reads each event's own
 // timeStamp (GV read the wall clock); the hook keeps ui/ free of debug/ (03 2.1).
+// S3: the shell's toasts of the command results (03 5.4: applyCommand never toasts): a `rejected` event toasts t(reason) (02 12.5 item 3,
+// GV pbPlace's refusal toasts), an applied `undo` toasts toast.undone (GV undoStroke 11114).
 // TODO(S4): the visitor count and "+"; TODO(S5): the Romance chip; TODO(S6): the Points chip; TODO(S7): body.avatar from the `mode` event.
 import { T, SEASON_KEYS } from '../core/clock.ts';
+import { watch } from '../core/events.ts';
 import { W } from '../core/weather.ts';
 import { WCOLD } from '../render/ambient.ts';
-import { $, ageToast, layoutOverlays } from './dom.ts';
+import { $, ageToast, layoutOverlays, toast } from './dom.ts';
 import { t, onLang } from './i18n.ts';
 import { toggleSheet } from './sheets.ts';
 
@@ -33,7 +36,22 @@ function paint(): void {
   document.body.dataset.day = String(T.day);
 }
 
+/** The frame listeners for the command results (03 5.4); registered once. */
+let watching = false;
+function watchResults(): void {
+  if (watching) return;
+  watching = true;
+  watch('rejected', (ev) => {
+    const r = ev.params?.reason;
+    if (typeof r === 'string' && r.startsWith('reason.')) toast(r);
+  });
+  watch('applied', (ev) => {
+    if (ev.params?.kind === 'undo') toast('toast.undone');
+  });
+}
+
 export function initHud(h: HudHooks = {}): void {
+  watchResults();
   let lastTap = -1e9, timer = 0;
   $('hudClock').addEventListener('click', (e) => {
     window.clearTimeout(timer);

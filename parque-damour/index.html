@@ -62,10 +62,15 @@
     </div>
     <div id="tools"></div>
   </div>
+  <!-- row 2, the context (04 5.4 item 4; GV #gbar 184-195): one glass bar with the tool's label or the ranked reason (#depth), the brush
+       size (#sizewrap) or Place / Cancel for a live ghost; Undo beside it; the cooldown chip from S6 -->
   <div id="row2">
-    <div id="sizewrap"><span id="sizelbl" data-t="rail.size">Brush</span><input id="size" type="range" min="1" max="3" value="1" step="1" data-t-aria="aria.size"><span id="depth"></span></div>
-    <button class="gb glass" id="bPlace" type="button" data-t="rail.place" data-t-aria="aria.place" hidden>Place</button>
-    <button class="gb glass" id="bCancel" type="button" data-t="rail.cancel" data-t-aria="aria.cancel" hidden>Cancel</button>
+    <div class="ctx" hidden>
+      <span id="depth" aria-live="polite"></span>
+      <span id="sizewrap" hidden><span id="sizelbl" data-t="rail.size">Brush</span><input id="size" type="range" min="1" max="3" value="1" step="1" data-t-aria="aria.size"></span>
+      <button class="gb" id="bPlace" type="button" data-t="rail.place" data-t-aria="aria.place" hidden>Place</button>
+      <button class="gb" id="bCancel" type="button" data-t="rail.cancel" data-t-aria="aria.cancel" hidden>Cancel</button>
+    </div>
     <button class="gb glass" id="bUndo" type="button" data-t="rail.undo" data-t-aria="aria.undo" disabled>Undo</button>
     <span class="chip" id="cdChip" hidden></span>
   </div>
@@ -101,16 +106,19 @@
     <div id="iP"></div>
     <button id="bContinue" type="button" data-t="intro.continue" hidden>Continue</button>
     <button id="begin" type="button" data-t="intro.begin">Begin</button>
-    <div id="lang">
+    <div id="lang" role="group" data-t-aria="aria.lang">
       <button type="button" data-l="en" aria-pressed="true">EN</button>
       <button type="button" data-l="es" aria-pressed="false">ES</button>
     </div>
   </div>
 </div>
 
-<div id="confirm" role="dialog" data-t-aria="aria.confirm" hidden>
-  <p id="confirmText" data-t="confirm.new_park"></p>
-  <div class="b"><button class="gb" id="confirmYes" type="button" data-t="confirm.yes">Yes</button><button class="gb" id="confirmNo" type="button" data-t="confirm.no">No</button></div>
+<!-- the New confirm (03 10.1; 02 12.5 item 4): a paper card over a dimmed page, variant 1 of scratch/s3-options.html -->
+<div id="confirm" role="dialog" aria-modal="true" aria-describedby="confirmText" data-t-aria="aria.confirm" hidden>
+  <div class="card">
+    <p id="confirmText" data-t="confirm.new_park">Start a new park? The current one is lost.</p>
+    <div class="b"><button class="yes" id="confirmYes" type="button" data-t="confirm.yes">Yes</button><button class="no" id="confirmNo" type="button" data-t="confirm.no">No</button></div>
+  </div>
 </div>
 
 <script type="module" src="./src/main.ts"></script>

@@ -70,6 +70,7 @@ export const en: Record<string, string> = {
   'toast.new_park': 'A new park',
   'toast.undone': 'Undone',
   'toast.start': 'Back to the fountain',
+  'toast.load_failed': 'The saved park could not be read. Starting fresh.',
 
   'feed.season.spring': 'Spring in the park',
   'feed.season.summer': 'Summer in the park',
@@ -163,6 +164,7 @@ export const en: Record<string, string> = {
   'aria.sheet_options': 'Options',
   'aria.sheet_sound': 'Sound check',
   'aria.confirm': 'Confirm',
+  'aria.lang': 'Language',
 
   // Style Gate board (04 section 4; S1a)
   'gate.style.title': "Parque D'Amour · Style Gate",

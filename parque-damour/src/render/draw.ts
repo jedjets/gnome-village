@@ -22,7 +22,7 @@ import { drawWater } from './water.ts';
 import { drawLampPool, lampOn, propDrawables } from './props.ts';
 import { gamePen } from './flora.ts';
 import { drawWeatherOverlay, particleDrawables } from './effects.ts';
-import { drawFocusMark, drawGhost, drawSelection } from './ghost.ts';
+import { drawFocusMark, drawGhost, drawSelection, type Ghost } from './ghost.ts';
 import { sortByDepth, type Drawable } from './order.ts';
 
 /** The canvas context every pass draws on when it is not handed one (ground.ctxOf and flora.renderCtx read this export). */
@@ -122,8 +122,11 @@ function drawLampPools(c: CanvasRenderingContext2D): void {
   c.globalAlpha = 1;
 }
 
-/** One frame of the scene (03 7.9). Reads the sim, writes nothing to it. */
-export function draw(): void {
+/**
+ * One frame of the scene (03 7.9). Reads the sim, writes nothing to it. `ghost` is phase 7's input: the armed big stamp's or run's
+ * ghost the shell holds (main.ts hands in ui/rail.ts armedGhost(); render cannot import ui, 03 2.1); null draws no panes.
+ */
+export function draw(ghost: Ghost | null = null): void {
   const c = getCtx();
   // 1 the light of this frame, CSS pixels, no smoothing (GV 12044)
   computeAmbient();
@@ -150,9 +153,9 @@ export function draw(): void {
   for (const d of particleDrawables()) ITEMS.push(d);
   sortByDepth(ITEMS);
   for (const d of ITEMS) d.draw(d, c);
-  // 7 the ghost panes, the selection ring, the focus pin (S3 fills them)
+  // 7 the ghost panes (S3), the selection ring (S4), the focus pin (S5)
   css(c);
-  drawGhost(null);
+  drawGhost(c, ghost);
   drawSelection();
   drawFocusMark();
   // 8 the weather overlay and the fog wash (S9)

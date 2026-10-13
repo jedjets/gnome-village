@@ -9,7 +9,9 @@
 //     the camera set through __PD.cam (angle eased by the frame's turnStep until it settles), the sim stepped with __PD.simulate when the
 //     scene asks for a later time, __PD.seedVisual(seed) and __PD.fxStep(1/60, 120) for reproducible particles, #hint and #perf hidden,
 //     __PD.draw(), capture shots/<slice>-<name>.png at 390x844, deviceScaleFactor 3 (08 4.1 items 3 and 4).
-// Exits 1 on any console error, page error, failed request or system-fallback font (08 4.1 item 5).
+// Exits 1 on any console error, page error, failed request or system-fallback font (08 4.1 item 5), and in the scene mode on a rail
+// taller than 40 % of the viewport or a horizontal scroll (04 5.4 item 8, AGENTS 4 item 4).
+// Every page opens in its own browser context, so no saved park from an earlier page makes Begin ask the New confirm (S3).
 // Usage: npm run shot -- <slice> [--url <url>] [--days <n>] [--smoke]
 //   <slice>   default s0; letters, digits, - and _ only
 //   --url     a dev server (scenes) or a dev or preview server (smoke) instead of the built-in one or dist/index.html
@@ -86,6 +88,72 @@ const SCENE_SETS = {
     { name: 'street-13-far', turn: 2, z: 1.3, at: [12.5, 49], abs: 3.5 },
     { name: 'night', turn: 0, z: 0.8, ox: -60, oy: 130, abs: 3.9 },
   ],
+  // s3: 07 S3.7 item 5 and the rail of S3 part C, driven by real taps and clicks (puppeteer's mouse at __PD.screenOf of a tile, the rail's
+  // buttons), never by writing state: the Park strip at the start view; a green bandstand ghost on the open lawn south of the inner
+  // loop (24..26, 32..34 on seed 101) with Place enabled; a red one over the starter pond (tapped at (31, 12)) with row 2 reading "not on
+  // the water"; row 2 with Undo enabled after a path stroke dragged across that lawn and applied by a real unpause and pause; the New
+  // confirm open
+  s3: [
+    { name: 'rail', turn: 0, z: 1.3 },
+    { name: 'ghost-ok', turn: 0, z: 1.3, at: [24, 29], act: 'ghostOk' },
+    { name: 'ghost-bad', turn: 0, z: 1.3, at: [29, 15], act: 'ghostBad' },
+    { name: 'undo', turn: 0, z: 1.3, at: [24, 29], act: 'pathStroke' },
+    { name: 'confirm', turn: 0, z: 1.3, act: 'confirmNew' },
+  ],
+};
+
+/** The tile's screen point in CSS px (the canvas fills the viewport from 0, 0). */
+async function screenOfTile(page, x, y) {
+  return page.evaluate((tx, ty) => window.__PD.screenOf(tx, ty), x, y);
+}
+async function tapTile(page, x, y) {
+  const p = await screenOfTile(page, x, y);
+  await page.mouse.click(p.x, p.y);
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** A real unpause and pause through the rail's pause button (the `speed` command, 03 4.6): what was enqueued while paused applies. */
+async function runBriefly(page, ms = 250) {
+  await page.click('#bHalt');
+  await page.waitForFunction(() => window.__PD.T.speed > 0, { timeout: 5_000 });
+  await sleep(ms);
+  await page.click('#bHalt');
+  await page.waitForFunction(() => window.__PD.T.speed === 0, { timeout: 5_000 });
+}
+
+/** Scene actions (s3), run after the camera is set and before the capture. */
+const ACTIONS = {
+  /** The bandstand armed and a tap on the lawn tile (25, 33): the 3 x 3 ghost (24..26, 32..34) centred on it, green. */
+  async ghostOk(page) {
+    await page.click('.tool[data-id="bandstand"]');
+    await tapTile(page, 25, 33);
+    await page.waitForFunction(() => !document.getElementById('bPlace').hidden && !document.getElementById('bPlace').disabled, { timeout: 5_000 });
+  },
+  /** The bandstand still armed: a tap on the pond moves the ghost there, red, and row 2 reads the reason. */
+  async ghostBad(page) {
+    await tapTile(page, 31, 12);
+    await page.waitForFunction(() => document.getElementById('depth').classList.contains('no') && document.getElementById('bPlace').disabled, { timeout: 5_000 });
+  },
+  /** Cancel, the path brush, a stroke dragged along row 33 from x 20 to 27 (the drag-paint throttle paints on the way), a real unpause. */
+  async pathStroke(page) {
+    await page.click('#bCancel');
+    await page.click('.tool[data-id="path"]');
+    const a = await screenOfTile(page, 20, 33), b = await screenOfTile(page, 27, 33);
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    for (let k = 1; k <= 12; k++) {
+      await sleep(60);
+      await page.mouse.move(a.x + ((b.x - a.x) * k) / 12, a.y + ((b.y - a.y) * k) / 12);
+    }
+    await page.mouse.up();
+    await runBriefly(page);
+    await page.waitForFunction(() => !document.getElementById('bUndo').disabled, { timeout: 5_000 });
+  },
+  /** Row 3's New: the confirm opens (No is pressed after the capture by the next page load; this is the last scene). */
+  async confirmNew(page) {
+    await page.click('.tool[data-id="hand"]');
+    await page.click('#bNew');
+    await page.waitForFunction(() => !document.getElementById('confirm').hidden, { timeout: 5_000 });
+  },
 };
 
 function parseArgs(argv) {
@@ -132,7 +200,8 @@ async function fontsLoaded(page) {
 }
 
 async function newPage(browser, vp, errors) {
-  const page = await browser.newPage();
+  const ctx = await browser.createBrowserContext(); // its own localStorage: a fresh profile and no saved park
+  const page = await ctx.newPage();
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(`console [${vp.name}]: ${m.text()}`);
   });
@@ -163,7 +232,7 @@ async function smoke(browser, slice, url, days, errors, written) {
     const file = path.join(SHOTS, `${slice}-${vp.name}.png`);
     await page.screenshot({ path: file });
     written.push(file);
-    await page.close();
+    await page.browserContext().close();
   }
 }
 
@@ -233,6 +302,7 @@ async function scenes(browser, slice, set, url, errors, written) {
         }, steps);
       }
       await frame(page, sc);
+      if (sc.act) await ACTIONS[sc.act](page);
       await page.evaluate((seed) => {
         const pd = window.__PD;
         pd.seedVisual(seed);
@@ -243,11 +313,21 @@ async function scenes(browser, slice, set, url, errors, written) {
       // in between draw the same picture (paused, particles still)
       await new Promise((r) => setTimeout(r, 450));
       await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))));
+      // 04 5.4 item 8: the rail under 40 % of the viewport; AGENTS 4 item 4: no horizontal scroll
+      const lay = await page.evaluate(() => ({
+        rail: document.getElementById('rail').getBoundingClientRect().height,
+        sw: document.documentElement.scrollWidth,
+        vw: window.innerWidth,
+        vh: window.innerHeight,
+      }));
+      if (lay.rail > 0.4 * lay.vh) errors.push(`layout [${sc.name}]: the rail is ${lay.rail} px, over 40 % of ${lay.vh}`);
+      if (lay.sw > lay.vw) errors.push(`layout [${sc.name}]: horizontal scroll ${lay.sw} > ${lay.vw}`);
       const file = path.join(SHOTS, `${slice}-${sc.name}.png`);
       await page.screenshot({ path: file });
       written.push(file);
+      console.log(`${slice}-${sc.name}: rail ${Math.round(lay.rail)} px of ${lay.vh}`);
     }
-    await page.close();
+    await page.browserContext().close();
   } finally {
     if (server) await server.close();
   }

@@ -70,6 +70,7 @@ export const es: Record<string, string> = {
   'toast.new_park': 'Un parque nuevo',
   'toast.undone': 'Deshecho',
   'toast.start': 'De vuelta a la fuente',
+  'toast.load_failed': 'No se pudo leer el parque guardado. Empezamos de nuevo.',
 
   'feed.season.spring': 'Primavera en el parque',
   'feed.season.summer': 'Verano en el parque',
@@ -163,6 +164,7 @@ export const es: Record<string, string> = {
   'aria.sheet_options': 'Opciones',
   'aria.sheet_sound': 'Prueba de sonido',
   'aria.confirm': 'Confirmar',
+  'aria.lang': 'Idioma',
 
   // Tablero del Style Gate (04 sección 4; S1a)
   'gate.style.title': "Parque D'Amour · Style Gate",

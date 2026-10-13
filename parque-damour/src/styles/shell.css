@@ -2,7 +2,9 @@
    The paper HUD shell: stage, chips, rail, card, sheets, toast, feed, intro, photo mode, confirm, safe areas, reduced motion.
    Ported from GV CSS 24-230. PORT; ids are Parque's (03 10.1), body.avatar replaces body.gnome, every colour is a token,
    no text under 11 px (04 5.2 type scale).
-   TODO(S3): Place and Cancel states on row 2; TODO(S6): .tool.locked with the tier word, the #cdChip ring; TODO(S11): audit. */
+   S3: the Park strip's pills (icon above the label, the --moss swatch border, 04 5.4 items 2 and 8), row 2 as one context bar (#depth,
+   #sizewrap, Place / Cancel; GV #gbar 184-195), Undo, and the New confirm (a paper card, scratch/s3-options.html variant 1).
+   TODO(S6): .tool.locked with the tier word, the #cdChip ring; TODO(S11): audit. */
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
 html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--body-bg);
@@ -49,6 +51,8 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
   transition:transform .13s ease,background .13s ease,color .13s ease}
 .tool .sw{width:17px;height:17px;border-radius:6px;border:1.5px solid var(--swatch-line);display:flex;align-items:center;justify-content:center;overflow:hidden}
 .tool .sw svg{width:15px;height:15px;display:block}
+.tool.park .sw{border-color:var(--moss)}
+.tool .lb{white-space:nowrap}
 .tool .tier{font-size:11px;font-weight:700;color:var(--stone)}
 .tool.locked{opacity:.6}
 #tools.more{-webkit-mask-image:linear-gradient(90deg,black 84%,transparent);mask-image:linear-gradient(90deg,black 84%,transparent)}
@@ -59,6 +63,17 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
 .tool:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 #row2{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;pointer-events:none}
 #row2 > *{pointer-events:auto}
+#row2 .ctx{display:flex;align-items:center;gap:6px;min-height:44px;max-width:100%;min-width:0;background:var(--glass);
+  border:1px solid var(--glass-line);border-radius:999px;padding:3px 3px 3px 14px;box-shadow:var(--shadow);
+  backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}
+#depth{font-family:var(--display);font-style:italic;font-size:12px;line-height:1.3;color:var(--ink);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;min-width:0;padding-right:4px}
+#depth.no{background:var(--ember);border-radius:999px;padding:3px 10px;margin-left:-9px}
+#row2 .ctx .gb{min-height:36px;padding:6px 14px}
+#bPlace:not(:disabled){background:var(--ink);color:var(--on-ink)}
+#bCancel{background:var(--well-2);border:1px solid var(--glass-line)}
+#bUndo{min-height:44px;padding:6px 16px}
+#row2 .gb:disabled{opacity:1;color:var(--stone)} /* a disabled Place or Undo keeps its glass and reads in --stone (04 5.2 item 2) */
 #row3{display:flex;gap:6px;align-items:center;justify-content:space-between;pointer-events:none;flex-wrap:wrap}
 #row3 > *{pointer-events:auto}
 .grp{display:flex;gap:4px;background:var(--glass);border:1px solid var(--glass-line);border-radius:999px;
@@ -70,13 +85,9 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
 #bRotL,#bRotR{padding:5px 6px;min-width:26px;font-size:11px}
 .gb[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
 .gb:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
-#sizewrap{display:flex;align-items:center;gap:8px;background:var(--glass);border:1px solid var(--glass-line);
-  border-radius:999px;padding:5px 13px;box-shadow:var(--shadow);backdrop-filter:blur(9px);
-  -webkit-backdrop-filter:blur(9px);font-size:11px;font-weight:600;color:var(--ink-soft);opacity:0;
-  transform:translateY(6px);transition:opacity .18s,transform .18s;pointer-events:none}
-#sizewrap.on{opacity:1;transform:none;pointer-events:auto}
-#depth{font-variant-numeric:tabular-nums;min-width:24px;text-align:right;color:var(--ink)}
-#size,#spdR{-webkit-appearance:none;appearance:none;width:118px;height:3px;border-radius:2px;
+#sizewrap{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;color:var(--ink-soft);padding:0 12px 0 4px;
+  border-left:1px solid var(--glass-line);min-height:30px}
+#size,#spdR{-webkit-appearance:none;appearance:none;width:96px;height:3px;border-radius:2px;
   background:var(--paper-2);outline:none}
 #spdR{width:92px;margin:0 2px}
 #size::-webkit-slider-thumb,#spdR::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;
@@ -156,7 +167,7 @@ body.photo .hud,body.photo #rail,body.photo #card,body.photo #hint,body.photo #f
 body.photo #photoX{display:block}
 
 /* ---------- avatar mode (GV 169, 183; 03 10.2) ---------- */
-body.avatar #tools,body.avatar #sizewrap,body.avatar #bUndo{display:none!important}
+body.avatar #tools,body.avatar #row2 .ctx,body.avatar #sizewrap,body.avatar #bPlace,body.avatar #bCancel,body.avatar #bUndo{display:none!important}
 
 /* ---------- intro (GV 140-156) ---------- */
 #intro{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
@@ -179,12 +190,17 @@ body.avatar #tools,body.avatar #sizewrap,body.avatar #bUndo{display:none!importa
   font:inherit;font-size:11px;font-weight:600;color:var(--ink-soft);cursor:pointer}
 #lang button[aria-pressed="true"]{background:var(--ink);color:var(--on-ink);border-color:var(--ink)}
 
-/* ---------- confirm (03 10.1) ---------- */
-#confirm{position:fixed;z-index:8;left:50%;top:50%;transform:translate(-50%,-50%);width:min(88vw,320px);
-  background:var(--glass);border:1px solid var(--glass-line);border-radius:16px;padding:12px 14px;box-shadow:var(--shadow);
-  backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px)}
-#confirm p{margin:0;font-size:13px;line-height:1.4}
-#confirm .b{display:flex;gap:6px;justify-content:flex-end;margin-top:10px}
-#confirm .gb{background:var(--well-2);border:1px solid var(--glass-line)}
+/* ---------- confirm (03 10.1; 02 12.5 item 4): a paper card over the dimmed page, above the intro (it also asks on Begin) ---------- */
+#confirm{position:fixed;inset:0;z-index:25;display:flex;align-items:center;justify-content:center;background:var(--glass-line);
+  padding:calc(env(safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 16px)}
+#confirm .card{width:min(84vw,300px);background:var(--paper);border:1px solid var(--glass-line);border-radius:16px;
+  padding:18px 18px 14px;box-shadow:var(--shadow-lift);text-align:center}
+#confirm p{margin:0;font-family:var(--display);font-size:16px;font-weight:600;line-height:1.35;color:var(--ink);text-wrap:balance}
+#confirm .b{display:flex;gap:8px;justify-content:center;margin-top:14px}
+#confirm button{min-width:96px;min-height:40px;border-radius:999px;font:inherit;font-size:14px;font-weight:700;line-height:1.3;
+  padding:8px 18px;cursor:pointer}
+#confirm .yes{background:var(--ink);color:var(--on-ink);border:1px solid var(--ink)}
+#confirm .no{background:var(--well-2);color:var(--ink);border:1px solid var(--glass-line)}
+#confirm button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 
 @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important;animation-duration:.01ms!important}}
