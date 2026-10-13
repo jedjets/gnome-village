@@ -3,12 +3,14 @@
 // 2026-10-13; 07 S4.6 steps 12 and 13): the 04 7.1 item 2 proportions measured from the rig's skeleton (figure-rig.ts solveH), the LOD tier
 // by drawn height at the tier edges (04 7.1 item 5), the singles' top rule over 10,000 lookSeeds (no single's top within SIG_NEAR, CIEDE2000,
 // of its own signature colour; never a Breton under a beret; a couple never in its own scarf hue), both walker's dogs across seeds, every
-// state the sim uses mapped onto the 14 body-language states, and the chat bubble's tail on the lower edge (04 7.5 item 4).
+// state the sim uses mapped onto the 14 body-language states, and the chat bubble's tail on the lower edge (04 7.5 item 4). The S4 rig
+// review: itemFor is the item the rig draws (one source), and the sprite cache repaints a light step a few a frame (03 7.9).
 import { describe, it, expect } from 'vitest';
 import { CROWD_BRETON, PALETTES, STYLES, type Pen } from '../src/render/ambient.ts';
-import { FH, LOD, STATES, opts, solveH, tierOf, type RigLook, type Skel } from '../src/render/figure-rig.ts';
+import { FH, LOD, STATES, opts, solveH, tierOf, type Item, type RigLook, type Skel } from '../src/render/figure-rig.ts';
 import { ALLOWED_TOPS, SIG_NEAR, breedOf, lookOf, newLook, pick, topOf } from '../src/render/figure-look.ts';
-import { SCALE_CHILD, SCALE_ELDER, figureScale, itemFor, stateOf } from '../src/render/figures.ts';
+import { SCALE_CHILD, SCALE_ELDER, figureScale, itemFor, poseOf, stateOf } from '../src/render/figures.ts';
+import { SPRITE_REPAINTS, spriteFor, spriteFrame, type SpriteLight } from '../src/render/figure-sprites.ts';
 import { DOING } from '../src/entities/act.ts';
 import { signatureOf, type Visitor } from '../src/entities/visitor.ts';
 import { drawChatBubble } from '../src/render/effects.ts';
@@ -187,12 +189,35 @@ describe('register section 4, Figure rig: both walker\'s dogs, one per dog walke
     expect(t).toBeLessThan(1200);
     expect(breedOf(12345)).toBe(breedOf(12345));
   });
-  it('the family child carries a balloon, or its ice cream once bought (04 7.2 over 7.1 rule 10)', () => {
-    expect(itemFor(vis({ archetype: 'child' }))).toBe('balloon');
-    expect(itemFor(vis({ archetype: 'child', items: { hat: false, purse: false, baguette: false, iceCream: true } }))).toBe('icecream');
-    expect(itemFor(vis({ archetype: 'dogwalker', path: [{ x: 1, y: 1 }], st: 'wander' }))).toBe('lead');
-    expect(itemFor(vis({ st: 'read', sitPropId: 3 }))).toBe('book');
-    expect(itemFor(vis({ st: 'photo', archetype: 'tourist' }))).toBe('camera-up');
+});
+
+/** The items the rig draws for a visitor: solveH for its look and pose, as figure-garments.ts dresses them. */
+const drawn = (v: Visitor): { F: Item; B: Item } => solveH(lookOf(v, P, figureScale(v), newLook()), poseOf(v, v.face, 0, opts()), FH).items;
+
+describe('03 7.6 item 4: itemFor is the thing the rig draws in the hand, read from the same solve (the S4 rig review)', () => {
+  const ice = { hat: false, purse: false, baguette: false, iceCream: true };
+  const cases: Array<[string, Partial<Visitor>, Item]> = [
+    ['an idle family child holds its balloon (04 7.2 over 7.1 rule 10)', { archetype: 'child', ageWord: 'young' }, 'balloon'],
+    ['the child with its ice cream once bought', { archetype: 'child', ageWord: 'young', items: ice }, 'icecream'],
+    ['a child skipping in play flings both arms out, empty (the picked page)', { archetype: 'child', ageWord: 'young', st: 'play' }, 'none'],
+    ['a child chasing pigeons, arms out, empty', { archetype: 'child', ageWord: 'young', st: 'play', job: { creatureId: 9 } }, 'none'],
+    ['an elder feeding on a bench: the crumbs in the back hand', { archetype: 'elder', ageWord: 'elder', st: 'feed', sitPropId: 3 }, 'crumbs'],
+    ['a reader on a bench: the book', { st: 'read', sitPropId: 3 }, 'book'],
+    ['a dog walker walking: the lead', { archetype: 'dogwalker', st: 'wander', path: [{ x: 1, y: 1 }] }, 'lead'],
+    ['a dog walker sitting still holds the lead (people.ts draws it to the hand)', { archetype: 'dogwalker', st: 'sit', sitPropId: 3 }, 'lead'],
+    ['an idle artist: the brush, the palette in the back hand', { archetype: 'artist' }, 'brush'],
+    ['the busker playing: the accordion', { archetype: 'busker', st: 'play' }, 'accordion'],
+    ['the tourist taking a photo: the camera up', { archetype: 'tourist', st: 'photo' }, 'camera-up'],
+    ['a vendor serving: the cone', { archetype: 'vendor', st: 'serve' }, 'cone-serve'],
+    ['a plain single standing: nothing', { archetype: 'single' }, 'none'],
+  ];
+  it('each case: itemFor equals the drawn front item, else the drawn back item', () => {
+    for (const [what, o, item] of cases) {
+      const v = vis(o), held = drawn(v);
+      expect(held.F !== 'none' ? held.F : held.B, what).toBe(item);
+      expect(itemFor(v, P), what).toBe(item);
+    }
+    expect(drawn(vis({ archetype: 'artist' })).B).toBe('palette');
   });
 });
 
@@ -239,5 +264,64 @@ describe('04 7.5 item 4: the chat bubble\'s tail joins the lower edge (the S4 ri
     expect(before.y).toBeGreaterThan(50); // both its neighbours on the lower half
     expect(after.y).toBeGreaterThan(50);
     expect(tail.x).toBeLessThan(100); // on the speaker's side (facing +1)
+  });
+});
+
+const noop = (): void => undefined;
+
+describe('03 7.9 and the S4 rig review: the figure sprites repaint a light step a few a frame, not all in one frame', () => {
+  type FakeCanvas = { width: number; height: number; paints: number; getContext: () => unknown };
+  let made = 0;
+  const g = globalThis as unknown as { document?: unknown };
+  const had = 'document' in g, old = g.document;
+  const ctx2d = { setTransform: noop, clearRect: noop, save: noop, restore: noop, scale: noop };
+  /** A sprite for key k in light L at zoom 1.3, dpr 2, 52 x 56 CSS px; each paint counts on its canvas. */
+  const get = (k: string, L: SpriteLight): FakeCanvas => {
+    const sp = spriteFor('rig-test|' + k, L, 1.3, 2, 52, 56, 26, 42, (gc) => {
+      (gc as unknown as { cv: FakeCanvas }).cv.paints++;
+      return null;
+    });
+    return sp.c as unknown as FakeCanvas;
+  };
+  it('a hit paints nothing; a one-step light change repaints at most SPRITE_REPAINTS a frame in place, the rest blitted a step off', () => {
+    g.document = {
+      createElement: (): FakeCanvas => {
+        made++;
+        const cv: FakeCanvas = { width: 0, height: 0, paints: 0, getContext: () => ({ ...ctx2d, cv }) };
+        return cv;
+      },
+    };
+    try {
+      const day: SpriteLight = { l: 24, a: 0, t: 204 }, step: SpriteLight = { l: 23, a: 0, t: 204 }, far: SpriteLight = { l: 21, a: 0, t: 204 };
+      const N = 30;
+      spriteFrame(1000);
+      const first = Array.from({ length: N }, (_, i) => get('f' + i, day));
+      expect(made).toBe(N);
+      expect(first.every((c) => c.paints === 1)).toBe(true);
+      spriteFrame();
+      for (let i = 0; i < N; i++) expect(get('f' + i, day)).toBe(first[i]); // hits
+      expect(first.every((c) => c.paints === 1)).toBe(true);
+      // the light steps: frame by frame, at most SPRITE_REPAINTS repaints, on the same canvases (no new canvas)
+      let frames = 0;
+      while (first.some((c) => c.paints < 2)) {
+        spriteFrame();
+        const before = first.reduce((s, c) => s + c.paints, 0);
+        for (let i = 0; i < N; i++) expect(get('f' + i, step)).toBe(first[i]);
+        expect(first.reduce((s, c) => s + c.paints, 0) - before).toBeLessThanOrEqual(SPRITE_REPAINTS);
+        frames++;
+        expect(frames).toBeLessThan(N);
+      }
+      expect(frames).toBe(Math.ceil(N / SPRITE_REPAINTS));
+      expect(made).toBe(N);
+      // two steps off (a jump of the clock): repainted at once, budget or not; a new key is painted at once
+      spriteFrame(0);
+      for (let i = 0; i < N; i++) get('f' + i, far);
+      expect(first.every((c) => c.paints === 3)).toBe(true);
+      get('new', far);
+      expect(made).toBe(N + 1);
+    } finally {
+      if (had) g.document = old;
+      else delete g.document;
+    }
   });
 });

@@ -11,11 +11,12 @@
 // on its seat's height (bench 0.2 EH, a cafe chair 0.3, a blanket on the ground) with its hips on the seat as the style board's bench
 // tile does, after its bench or blanket in the painter order (03 16 risk 8: never behind the bench), and at a cafe table at its own
 // depth, so the far sitter paints between the far chair and the top and the near one after the near chair (props.ts splits the table);
-// a perched pigeon after its perch; a flying one at its ground point's depth (03 7.2 item 2). A walker's dog wears the 1 px ink lead of
-// 04 7.2 from its collar to the walker's hand.
+// a perched pigeon after its perch (on a bench's back rail: before the sitters, or after them when the back faces the camera); a flying
+// one at its ground point's depth (03 7.2 item 2). A walker's dog wears the 1 px ink lead of 04 7.2 from its collar to the walker's hand.
 // A figure drawn under 12 px (the tiers below the expression's, 04 7.1 item 5; zoom under 0.55 for a grown visitor) is blitted from a
-// sprite of drawFigure's own output, keyed by its look, pose, facing, one of 8 walk frames, the zoom to 1/64 and the light (the tree
-// sprite cache's idiom, GV 6782-6790; 03 15.2): 30 figures at Fit cost 30 blits instead of 30 rigs (S4 part C perf, 03 7.9).
+// sprite of drawFigure's own output, keyed by its look, pose, facing, one of 8 walk frames and the zoom to 1/64, and repainted in place
+// when the light moves (figure-sprites.ts; the tree sprite cache's idiom, GV 6782-6790; 03 15.2): 30 figures at Fit cost 30 blits instead
+// of 30 rigs (S4 part C perf, 03 7.9).
 // S4 rig stage (register section 4, Figure rig and Crowd palette): each figure is the Tailored rig (figures.ts), with its seat's height
 // and the slope of the seat's front on screen (04 7.1 item 6), and the lamp warmth of 03 7.3 item 5 (its colours toward AT by
 // 0.18 (1 - d / 3) for the nearest lit lamp, park or street, within 3 tiles); a dog is its walker's terrier or poodle (figure-look.ts
@@ -40,7 +41,8 @@ import { BREATH_RAD, FH, drawVisitor, figureScale, handOf, poseOf } from './figu
 import { opts, type Ink, type Opts, type RigLook } from './figure-rig.ts';
 import { breedOf, lookOf, newLook } from './figure-look.ts';
 import { DOG_EH, DOG_TROT_HZ, PIGEON_FLAP_HZ, PIGEON_WALK_HZ, drawDog, drawDogOf, drawLead, drawPigeonOf, drawPigeonState, pigeonStateOf } from './creatures.ts';
-import { blit, spriteFor, type Sprite } from './figure-sprites.ts';
+import { blit, spriteFor, spriteFrame, type Sprite, type SpriteLight } from './figure-sprites.ts';
+import { SEATS, seatPos } from '../entities/staff.ts';
 
 /** A seat's height in EH units (props-park.ts drawBench seatE 0.2; props.ts drawBistroTable's chair seat 0.3; a blanket on the ground). */
 export const SEAT_E: Readonly<Partial<Record<Prop['kind'], number>>> = { bench: 0.2, table: 0.3, picnic: 0 };
@@ -211,8 +213,13 @@ const WALK_FRAMES_FAR = 8, WALK_FRAMES = 16, BEAST_FRAMES = 8;
 const BREATH_STEPS = 1;
 /** Is the zoom moving this frame (a pinch, the follow's zoom-in)? Then figures from 12 px draw straight, not one sprite per frame. */
 let zooming = false, lastZ = 0;
-/** The frame's light and pixel ratio in a sprite key (as flora.ts treeSpriteOf keys the light). */
+/** The frame's pixel ratio in a sprite key. */
 let LK = '';
+/**
+ * The frame's light for the sprites (figure-sprites.ts repaints a sprite a step away): what lit() reads, the ambient's red multiplier
+ * AM[0] in 24ths (AM's channels move together with the light and the cloud dim), the warm mix AA in 16ths and the warm target AT.
+ */
+const LIGHT: SpriteLight = { l: 0, a: 0, t: 0 };
 const zqOf = (h: number): number => (h < SPRITE_H ? Math.max(1, Math.round(cam.z * 64)) / 64 : cam.z);
 const frameOf = (t: number, n: number): number => Math.floor((((t % 1) + 1) % 1) * n) % n;
 
@@ -235,7 +242,7 @@ function figureSprite(v: Visitor, h: number): Sprite {
     warm + '|' + zq + LK;
   const hq = (h * zq) / cam.z;
   const w = Math.ceil(hq * 1.6) + 6, ay = Math.ceil(hq * 1.3) + 4;
-  return spriteFor(key, zq, view.dpr, w, ay + Math.ceil(hq * 0.35) + 3, w / 2, ay, (g, at) => {
+  return spriteFor(key, LIGHT, zq, view.dpr, w, ay + Math.ceil(hq * 0.35) + 3, w / 2, ay, (g, at) => {
     if (walking) POSE.ph = ((frame + 0.5) / nf) * TAU;
     POSE.breath = (br / BREATH_STEPS) * BREATH_RAD;
     POSE.warm = warm / 100;
@@ -259,7 +266,7 @@ function drawCreature(d: Drawable, c: CanvasRenderingContext2D): void {
     const fr = fl ? frameOf(ph, BEAST_FRAMES) : walk ? frameOf(ph * 3, BEAST_FRAMES) : 0;
     if (!still) return drawPigeonOf(INK, P0, st, pd.face, cr.id, tSim());
     const s = pd.h, w = Math.ceil(2.8 * s) + 6, ay = Math.ceil(1.8 * s) + 4;
-    blit(c, spriteFor('pg|' + st + pd.face + fr + '|' + zq + LK, zq, dpr, w, ay + Math.ceil(0.8 * s) + 4, w / 2, ay, (g, at) => {
+    blit(c, spriteFor('pg|' + st + pd.face + fr + '|' + zq + LK, LIGHT, zq, dpr, w, ay + Math.ceil(0.8 * s) + 4, w / 2, ay, (g, at) => {
       const phase = fl ? (fr + 0.5) / BEAST_FRAMES : walk ? (fr + 0.5) / BEAST_FRAMES / 3 : 0.15;
       drawPigeonState({ pen: { ctx: g, spec: style(), z: zq }, warm: 0 }, at, pd.face, pigeonStateOf(st), phase);
       return null;
@@ -273,7 +280,7 @@ function drawCreature(d: Drawable, c: CanvasRenderingContext2D): void {
     // a dog from a sprite: its trot in 8 frames, its warmth to 0.01 (a trotting dog in a lamp's warmth is drawn straight)
     const fr = trot ? frameOf(tSim() * DOG_TROT_HZ + cr.id * 0.29, BEAST_FRAMES) : 0, warm = Math.round(pd.warm * 100);
     const s = pd.h, w = Math.ceil(1.5 * s) + 6, ay = Math.ceil(1.2 * s) + 4;
-    const sp = spriteFor('dg|' + breed + pd.face + trot + fr + '|' + warm + '|' + zq + LK, zq, dpr, w, ay + Math.ceil(0.3 * s) + 4, w / 2, ay, (g, at) =>
+    const sp = spriteFor('dg|' + breed + pd.face + trot + fr + '|' + warm + '|' + zq + LK, LIGHT, zq, dpr, w, ay + Math.ceil(0.3 * s) + 4, w / 2, ay, (g, at) =>
       drawDog({ pen: { ctx: g, spec: style(), z: zq }, warm: warm / 100 }, at, pd.face, breed, trot, (fr + 0.5) / BEAST_FRAMES));
     blit(c, sp, pd.sx, pd.sy, z, dpr);
     const k = z / sp.zq;
@@ -323,6 +330,24 @@ export function warmthAt(x: number, y: number): number {
   return best;
 }
 
+/**
+ * The depth of a pigeon on a bench's back rail (04 7.4 perch). Its sim point is near the bench's middle, between the two seats, so its own
+ * depth would sort it between the sitters (the S4 rig review). The rail is behind the sitters while the bench faces the camera: the
+ * pigeon paints after the bench and before every sitter (each paints at least AFTER after the bench); while the bench's back faces the
+ * camera the rail is in front of them, and the pigeon paints after both seats' sitters (staff.ts seatPos, where act.ts seats them).
+ */
+function benchPerchDepth(b: Prop): number {
+  const fp = footprintDepth(b.x, b.y, b.w, b.h);
+  const q = (Math.PI / 2) * ((b.rot + 2) % 4), fx = -Math.sin(q), fy = Math.cos(q); // the front, local +v (headingOf)
+  if (depthOf(b.x + fx * 0.2, b.y + fy * 0.2) >= depthOf(b.x - fx * 0.2, b.y - fy * 0.2)) return fp + AFTER / 2;
+  let d = fp;
+  for (let k = 0; k < SEATS; k++) {
+    const at = seatPos(b, k);
+    d = Math.max(d, depthOf(at.x, at.y));
+  }
+  return d + AFTER + 1 / 64;
+}
+
 /** How far the screen drops per px forward along a heading (hx, hy) in world units: 0.5 straight down a tile axis toward the camera. */
 function slopeOf(hx: number, hy: number): number {
   const rx = hx * rc - hy * rs, ry = hx * rs + hy * rc;
@@ -357,7 +382,11 @@ export function peopleDrawables(): Drawable[] {
   rs = Math.sin(cam.ang);
   zooming = cam.z !== lastZ;
   lastZ = cam.z;
-  LK = '|' + view.dpr + '|' + Math.round(T.light * 16) + '|' + Math.round(AA * 16) + '|' + Math.round(AM[2] * 32) + '|' + AT[1];
+  LK = '|' + view.dpr;
+  LIGHT.l = Math.round(AM[0] * 24);
+  LIGHT.a = Math.round(AA * 16);
+  LIGHT.t = AT[1];
+  spriteFrame();
   litLamps();
   for (const v of visitors) {
     anchorOf(v, A0);
@@ -401,7 +430,8 @@ export function peopleDrawables(): Drawable[] {
     d.x = c.x;
     d.y = c.y;
     d.z = pigeon ? c.z : 0;
-    d.depth = perch ? Math.max(depthOf(c.x, c.y), footprintDepth(perch.x, perch.y, perch.w, perch.h)) + AFTER : depthOf(c.x, c.y);
+    d.depth = perch?.kind === 'bench' ? benchPerchDepth(perch)
+      : perch ? Math.max(depthOf(c.x, c.y), footprintDepth(perch.x, perch.y, perch.w, perch.h)) + AFTER : depthOf(c.x, c.y);
     d.draw = drawCreature;
     d.v = null;
     d.c = c;

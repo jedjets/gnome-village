@@ -12,9 +12,10 @@
 // a beret, a flat cap or a sunhat, never GV's pointed hat; the park's states and items instead of GV's jobs and tools. The selection ring
 // is ghost.ts drawSelection; the featured pair's rose ring is S5's.
 // TODO(S5): the baguette, umbrella and hat-in-hand items of 03 7.6 item 4 (no state draws them yet; an options step first, AGENTS 12c).
-import { GC, ellipsePts, fillEllipse, fillPoly, inkLine, mix, shade, strokeLine, type Pen, type Pt } from './ambient.ts';
-import { FH, solveH, type Expr as RigExpr, type Ink, type Item, type Opts, type RigLook, type Skel, type State } from './figure-rig.ts';
+import { GC, ellipsePts, fillEllipse, fillPoly, inkLine, mix, shade, strokeLine, style, type Palette, type Pen, type Pt } from './ambient.ts';
+import { FH, opts, solveH, type Expr as RigExpr, type Ink, type Item, type Opts, type RigLook, type Skel, type State } from './figure-rig.ts';
 import { drawRigPerson } from './figure-garments.ts';
+import { lookOf, newLook } from './figure-look.ts';
 import type { Visitor } from '../entities/visitor.ts';
 import { speedOf } from '../entities/move.ts';
 
@@ -359,28 +360,17 @@ export function exprOf(v: Visitor): RigExpr {
   }
 }
 
-/** itemFor (03 7.6 item 4; GV toolFor 8050): the thing in the front hand, by state, then by archetype, then what it carries. */
-export function itemFor(v: Visitor): Item {
-  switch (stateOf(v)) {
-    case 'read':
-      return 'book';
-    case 'eat':
-      return 'icecream';
-    case 'photo':
-      return 'camera-up';
-    case 'paint':
-      return 'brush';
-    case 'pave':
-      return 'rake-down';
-    case 'tidy':
-      return 'trowel';
-    case 'serve':
-      return 'cone-serve';
-    default:
-      if (v.archetype === 'dogwalker') return 'lead';
-      if (v.items.iceCream) return 'icecream';
-      return v.archetype === 'child' ? 'balloon' : 'none';
-  }
+const ITEM_LOOK: RigLook = newLook();
+const ITEM_POSE: Opts = opts();
+/**
+ * itemFor (03 7.6 item 4; GV toolFor 8050): the thing a visitor holds, read from the very solve the rig draws (solveH's items for the
+ * visitor's look and pose, figure-look.ts lookOf and poseOf), so it can never disagree with the drawing: the front hand's item, else the
+ * back hand's (the elder's crumbs while feeding, the parent's tote). A child playing or chasing flings both arms out with nothing in
+ * them, as the picked page draws it (scratch/s4-options-rig.ts: the archetype holds only while standing or walking).
+ */
+export function itemFor(v: Visitor, P: Palette = style().palette): Item {
+  const S = solveH(lookOf(v, P, figureScale(v), ITEM_LOOK), poseOf(v, v.face, 0, ITEM_POSE), FH);
+  return S.items.F !== 'none' ? S.items.F : S.items.B;
 }
 
 /**

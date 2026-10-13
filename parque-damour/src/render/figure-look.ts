@@ -5,9 +5,9 @@
 // A Parisian chic (register section 4, Crowd palette, 2026-10-13; ambient.ts crowd*); the archetype signifiers of 04 7.2 (hats, the child's
 // balloon or ice cream, the couple's matching scarf); and the two rules of the pick: a single never wears a top within SIG_NEAR (CIEDE2000)
 // of its own signature colour (ALLOWED_TOPS, precomputed per signature, re-rolled from lookSeed, no colour maths per frame), and a couple's
-// scarf takes one of the two crowd hues by the lead member's lookSeed, never the colour of either member's top. Never a Breton under a beret
-// (the matchmaker's and the mime's look, 04 7.4). The page's wardrobe() spread its 24 tops evenly for the owner; in the game lookSeed alone
-// picks, as the page says.
+// scarf takes one of the two crowd hues by the lead member's lookSeed, never the colour of either member's top, and keeps it (and its top)
+// after the lead has left (PAIRS). Never a Breton under a beret (the matchmaker's and the mime's look, 04 7.4). The page's wardrobe()
+// spread its 24 tops evenly for the owner; in the game lookSeed alone picks, as the page says.
 // NEW (S4 rig stage): no GV range; GV coloured gnomes by village (hatFor, GV 4284), which Parque does not have.
 import { CROWD_BRETON, type Palette } from './ambient.ts';
 import type { Arche, HairStyle, Hat, Item, Lower, RigLook } from './figure-rig.ts';
@@ -91,12 +91,42 @@ export function topOf(seed: number, arche: Archetype, sex: 'f' | 'm', pair: stri
   return top;
 }
 
-/** The couple's matching scarf hue (crowdPair) by the lead (lower id) member's lookSeed; '' for anyone else. */
-function pairOf(v: Visitor, P: Palette): { hue: string; lead: Visitor | null } {
-  if (v.archetype !== 'couple') return { hue: '', lead: null };
+/** A couple member's scarf hue (an index into crowdPair) and its lead partner's top (into crowdTop, -1 for the lead itself). */
+type PairLook = { seed: number; hue: number; partnerTop: number };
+/**
+ * The couple members' pair looks, remembered by visitor id while both members are in the park: removeVisitor sets the partner's
+ * coupleOf to 0 as soon as one member reaches its outside tile, and the one still walking to the gate must keep its scarf and its top
+ * (04 7.2 couple row, 7.3 rule 5: the couple shares one hue). Swept of ids that have left; checked against lookSeed, so a reused id
+ * never takes another visitor's look. Render state only, never saved: a member reloaded after its lead left reads its own seed.
+ */
+const PAIRS = new Map<number, PairLook>();
+const PR: PairLook = { seed: 0, hue: 0, partnerTop: -1 };
+
+/** The couple's matching scarf hue (crowdPair) by the lead (lower id) member's lookSeed, and the lead's top for the other member. */
+function pairOf(v: Visitor, P: Palette): PairLook | null {
+  if (v.archetype !== 'couple') return null;
   const o = v.coupleOf ? byId(v.coupleOf) : undefined;
-  const lead = o && o.id < v.id ? o : null;
-  return { hue: P.crowdPair[pick(lead ? lead.lookSeed : v.lookSeed, 10, P.crowdPair.length)] as string, lead };
+  if (!o) {
+    const m = PAIRS.get(v.id);
+    if (m && m.seed === v.lookSeed) return m; // the partner has left: the look it had beside them
+    PR.seed = v.lookSeed;
+    PR.hue = pick(v.lookSeed, 10, P.crowdPair.length);
+    PR.partnerTop = -1;
+    return PR;
+  }
+  const lead = o.id < v.id ? o : v;
+  const hue = pick(lead.lookSeed, 10, P.crowdPair.length);
+  const partnerTop = lead === o ? topOf(o.lookSeed, o.archetype, o.sex, P.crowdPair[hue] as string, -1, P) : -1;
+  let m = PAIRS.get(v.id);
+  if (!m) {
+    if (PAIRS.size >= 64) for (const id of PAIRS.keys()) if (!byId(id)) PAIRS.delete(id);
+    m = { seed: 0, hue: 0, partnerTop: -1 };
+    PAIRS.set(v.id, m);
+  }
+  m.seed = v.lookSeed;
+  m.hue = hue;
+  m.partnerTop = partnerTop;
+  return m;
 }
 
 /** The walker's dog by its walker's lookSeed (register section 4, Figure rig: both dogs, one per dog walker by seed). */
@@ -123,12 +153,12 @@ export function lookOf(v: Visitor, P: Palette, scale: number, out: RigLook): Rig
   out.hat = v.items.hat || a === 'jogger' ? hatKind(a, sex) : 'none';
   out.hatHex = out.hat === 'sunhat' || a === 'vendor' ? P.paper : (P.crowdHat[pick(seed, 9, P.crowdHat.length)] as string);
   const pr = pairOf(v, P);
-  const partnerTop = pr.lead ? topOf(pr.lead.lookSeed, pr.lead.archetype, pr.lead.sex, pr.hue, -1, P) : -1;
-  const top = topOf(seed, a, sex, pr.hue, partnerTop, P);
+  const hue = pr ? (P.crowdPair[pr.hue] as string) : '';
+  const top = topOf(seed, a, sex, hue, pr ? pr.partnerTop : -1, P);
   out.top = P.crowdTop[top] as string;
   out.stripe = top === CROWD_BRETON ? P.crowdStripe : '';
   out.low = P.crowdLow[pick(seed, 7, P.crowdLow.length)] as string;
-  out.pairScarf = pr.hue;
+  out.pairScarf = hue;
   out.carry = carryOf(v);
   out.balloon = pick(seed, 11, 2) === 0 ? P.rose : P.sky;
   out.long = false;

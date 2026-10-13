@@ -339,6 +339,9 @@ export function solveH(look: RigLook, o: Opts, h: number): Skel {
       armF = look.carry === 'icecream' ? reach(0.13 * h, -0.07 * h, 0.1, 1) : reach(0.07 * h, -0.02 * h, -0.2, 1);
     }
   }
+  // the walker's dog is on its lead in every pose (people.ts draws the lead to the hand on the dog's side), so a walker whose front hand
+  // holds nothing else holds the lead (itemFor reads it; 'lead' adds no shape here)
+  if (a === 'walker' && itemF === 'none') itemF = 'lead';
   // idle breathing, +-0.07 rad on the arms (04 7.1 item 4; GV 8331): an angle arm turns, a reaching hand rises and falls
   if (o.breath !== 0 && !walking) {
     for (const arm of [armF, armB]) {
