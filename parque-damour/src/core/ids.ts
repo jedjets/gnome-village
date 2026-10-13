@@ -4,7 +4,8 @@
 // Policy: a freed PropId joins the back of a queue and is handed out again before any fresh id (first freed, first reused), so a
 // stale reference is as old as it can be before its id is reused. An id freed by a tool that undo can reverse is freed with `reserve`:
 // it is held out of the queue until its undo entry leaves the stack (releasePropId) or the undo puts the prop back (reclaimPropId), so
-// the undo can re-add the prop under its old id (03 5.6 item 3). Everything here is plain numbers, so the state saves as JSON.
+// the undo can re-add the prop under its old id (03 5.6 item 3). The undo of a placement hands the new id back where it came from
+// (unallocPropId, S3), so a tool and its undo leave the counters as they were. Everything here is plain numbers, so the state saves as JSON.
 
 export type VisitorId = number;
 export type PairId = number;
@@ -79,6 +80,23 @@ export function reclaimPropId(id: PropId): boolean {
   if (k < 0) return false;
   propReserved.splice(k, 1);
   return true;
+}
+
+/**
+ * The undo of a placement (03 5.6 item 3): hand `id` back to where nextPropId took it from, so a placement and its undo leave the ids
+ * state as it was (08 2.5, undo.test.ts row 1: the same state hash). `recycled` says nextPropId took it from the head of the free queue;
+ * otherwise it was minted, and the counter steps back when nothing was minted after it. An id minted before a later one goes to the head
+ * of the queue instead, the next to be reused. Ignores 0, ids never handed out and ids already free or reserved.
+ */
+export function unallocPropId(id: PropId, recycled: boolean): void {
+  if (id < 1 || id > prop || propFree.includes(id) || propReserved.includes(id)) return;
+  if (!recycled && id === prop) prop--;
+  else propFree.unshift(id);
+}
+
+/** True while nextPropId would hand out a recycled id (the free queue is not empty): an undo entry notes it (unallocPropId). */
+export function propIdRecycles(): boolean {
+  return propFree.length > 0;
 }
 
 /** A new park starts every counter over. */

@@ -1,6 +1,6 @@
 // tools/det.mjs
-// The browser half of the determinism check (08 3.4): the S2 fixture (tests/fixtures/det-s2.json) through window.__PD in the pre-installed
-// Chromium, against a DEV server (the harness is not in the production build, 03 section 13).
+// The browser half of the determinism check (08 3.4): a fixture (tests/fixtures/<name>.json, det-s2 by default) through window.__PD in the
+// pre-installed Chromium, against a DEV server (the harness is not in the production build, 03 section 13).
 //   1. page 1: open <url>#s=<seed>&halt&dev, press Begin, wait for __PD, run the fixture with __PD.simulate in chunks of 2000 steps
 //      (each command enqueued while the tick is one before its own), read hash, rngN and tick;
 //   2. page 2: the same in a fresh page; it must give the same three numbers;
@@ -10,7 +10,8 @@
 //   4. zero console errors and page errors on every page; rngN and the state hash equal to the fixture's (the Vitest values); from S8 on,
 //      when __PD.audio exists, __PD.audio.log.length === 200 on page 1 (05 8.3).
 // Exit code 1 on any mismatch, printing both hashes and, between pages 1 and 2, the first differing 600-step window (08 3.3).
-// Usage: node tools/det.mjs [--url <dev server url>] [--days <n>] [--no-real]
+// Usage: node tools/det.mjs [<fixture>] [--url <dev server url>] [--days <n>] [--no-real]
+//   <fixture>  the fixture's name in tests/fixtures (det-s2, det-s3, ...; `.json` optional, `--fixture <name>` also works), default det-s2
 //   --url      default http://localhost:5173/ (start it with `npm run dev`)
 //   --days     sim days to run, default 3 (64,800 steps); fewer cuts the fixture and stops with a speed 0 at that step
 //   --no-real  skip page 3 (the real-time run takes days * 360 / 8 seconds at speed 8, 135 s for 3 days)
@@ -27,13 +28,17 @@ const CHUNK = 2000;
 const WINDOW = 600;
 
 function parseArgs(argv) {
-  const out = { url: 'http://localhost:5173/', days: 3, real: true };
+  const out = { url: 'http://localhost:5173/', days: 3, real: true, fixture: 'det-s2' };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--url') out.url = argv[++i] ?? out.url;
     else if (a === '--days') out.days = parseInt(argv[++i] ?? '3', 10) || 3;
     else if (a === '--no-real') out.real = false;
+    else if (a === '--fixture') out.fixture = argv[++i] ?? out.fixture;
+    else if (!a.startsWith('--')) out.fixture = a;
   }
+  out.fixture = out.fixture.replace(/\.json$/, '');
+  if (!/^[\w-]+$/.test(out.fixture)) throw new Error(`bad fixture name ${out.fixture}`);
   return out;
 }
 
@@ -120,9 +125,10 @@ function firstWindow(a, b) {
 }
 
 async function main() {
-  const { url, days, real } = parseArgs(process.argv.slice(2));
+  const { url, days, real, fixture: name } = parseArgs(process.argv.slice(2));
   if (!fs.existsSync(CHROMIUM)) throw new Error(`Chromium not found at ${CHROMIUM}`);
-  const fixture = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'fixtures', 'det-s2.json'), 'utf8'));
+  const fixture = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'fixtures', name + '.json'), 'utf8'));
+  console.log(`fixture ${name}: seed ${fixture.seed}, ${fixture.commands.length} commands`);
   const steps = days * STEPS_PER_DAY;
   const cmds = commandsFor(fixture, steps);
   const errors = [];
@@ -162,7 +168,7 @@ async function main() {
     for (const p of problems) console.error('FAIL', p);
     process.exit(1);
   }
-  console.log('PASS: identical hash, rngN and tick on every run; no console errors');
+  console.log(`PASS ${name}: identical hash, rngN and tick on every run; no console errors`);
 }
 
 main().catch((e) => {

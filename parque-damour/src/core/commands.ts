@@ -2,7 +2,9 @@
 // The Command union {tick, side, kind, payload}, enqueue, applyPending, applyCommand with rejection reasons, the log, replay (03 section 5).
 // NEW (GV applies from the UI directly, review section 4). Every player action is a Command; this file is the only place one is applied.
 // S2 applies `speed`, `park.new` and `debug.weather` (registered by core/loop.ts); every other kind is rejected `reason.not_here` until the
-// slice that owns it registers a handler with registerHandler (tool and undo S3, visitor.call S4, ability S6, avatar.* S7).
+// slice that owns it registers a handler with registerHandler (visitor.call S4, ability S6, avatar.* S7). S3: play/tools.ts registers `tool`
+// (applyTool) and play/undo.ts registers `undo` (an empty stack is `reason.nothing_to_undo`); both pass the side and mode rules below first
+// (park side only, `reason.not_in_avatar` in avatar mode, 03 5.3). A new park clears the undo stack through onResetCommands (03 5.6 item 5).
 // Layering (03 2.1): this file is core, so it cannot import the conductor or the tools. The tick it stamps (setTickSource), the step
 // `replay` drives (setStepper) and the handlers are handed in by the layers above. It reads play/mode.ts, a leaf with no imports, for
 // the mode rules of 03 5.3: the second named exception of 03 2.1 (L0 row).
@@ -75,6 +77,7 @@ let generation = 0; // bumped by clearPending, so applyPending notices a new par
 let tickSource: () => number = () => 0;
 let stepper: (() => void) | null = null;
 const handlers = new Map<CommandKind, (c: never) => Result>();
+const resetHooks: Array<() => void> = [];
 
 /** The loop hands in the current tick: enqueue stamps tickSource() + 1 (03 5.2 item 1). */
 export function setTickSource(fn: () => number): void {
@@ -195,11 +198,20 @@ export function clearPending(): void {
   generation++;
 }
 
-/** A new park: nothing queued, an empty log, the sequence from 1. */
+/**
+ * Run `fn` whenever resetCommands runs (a new park: core/loop.ts newPark, the `park.new` command included). play/undo.ts clears its stack
+ * here (03 5.6 item 5), so this core module never imports play/ (03 2.1).
+ */
+export function onResetCommands(fn: () => void): void {
+  resetHooks.push(fn);
+}
+
+/** A new park: nothing queued, an empty log, the sequence from 1, and the hooks of onResetCommands (the undo stack empties). */
 export function resetCommands(): void {
   clearPending();
   logList = [];
   seqCounter = 0;
+  for (const fn of resetHooks) fn();
 }
 
 export function pendingCount(): number {

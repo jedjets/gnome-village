@@ -7,6 +7,8 @@
 // Groups present in S2: State, Stepping, Commands, Picking, Save (snapshot, restore), Park (newPark, setWeather), Render, Screenshots
 // (seedVisual, fxStep), Meta. Later slices add: State visitors/pairs/creatures/effects (S4-S6) and feed() (S3), Picking tap (S4), Save
 // savePark/loadPark/clearAll (S3), Park callVisitor (S4), Render DBG, Audio (S8). restore drops the old scene's particles, as newPark does.
+// S3 part A: this file imports play/tools.ts (and with it play/undo.ts) for their `tool` and `undo` handlers, so `apply` and `enqueue` place
+// tools in the dev page (09 5.4, tools/det.mjs on det-s3) before part C's rail imports them from main.ts; no member is added (03 13).
 import { T } from '../core/clock.ts';
 import { seedVisual, rngN } from '../core/rng.ts';
 import { SIM_DT, SP, setSpeed, simulate, tick } from '../core/loop.ts';
@@ -20,6 +22,7 @@ import { draw, getCtx } from '../render/draw.ts';
 import { clearParticles, fxStep } from '../render/effects.ts';
 import { SCHEMA_VERSION } from '../save/schema.ts';
 import { restore, snapshot, stateHash, worldHash } from '../save/store.ts';
+import '../play/tools.ts';
 import { FT, qualityLevel } from './perf.ts';
 
 export type HarnessApi = { newPark: (seed: number) => void };

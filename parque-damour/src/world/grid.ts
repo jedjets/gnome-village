@@ -3,6 +3,8 @@
 // Ported from GV 567-568 (N, NC) and 612-673 (the layer arrays). ADAPT: one scale (S = 1), flat ground (E all zero), park kinds.
 // The Prop type and the `props` list live here because world/gen.ts (L1) places props and entities/ (L2) may only import downward;
 // entities/visitor.ts re-exports the type in S4 (03 3.6). Apron props (railing, gate, facade, quay) are never in this list (park.ts).
+// S3: the park tools and their undo remove a prop with its id reserved or kept, and put one back under its old id (03 5.6 item 3);
+// they rebuild BLOCK at once after a change (rebuildBlock below covers every tile a tool touched, so no per-tile variant is needed).
 import { freePropId, nextPropId, type PropId, type VisitorId, type PairId } from '../core/ids.ts';
 
 export const N = 48;
@@ -102,6 +104,15 @@ export function propById(id: PropId): Prop | undefined {
   return byId.get(id);
 }
 
+/** List a prop and write its id into OCC on every footprint tile when it blocks walking. */
+function listProp(p: Prop): void {
+  props.push(p);
+  byId.set(p.id, p);
+  if (!p.passable)
+    for (let y = p.y; y < p.y + p.h; y++) for (let x = p.x; x < p.x + p.w; x++) if (inB(x, y)) OCC[I(x, y)] = p.id;
+  markBlockDirty();
+}
+
 /** Place a prop: allocate its id, list it, and write the id into OCC on every footprint tile when it blocks walking. */
 export function addProp(spec: NewProp): Prop {
   const p: Prop = {
@@ -117,23 +128,33 @@ export function addProp(spec: NewProp): Prop {
     untilTick: spec.untilTick ?? 0,
     data: spec.data ?? {},
   };
-  props.push(p);
-  byId.set(p.id, p);
-  if (!p.passable)
-    for (let y = p.y; y < p.y + p.h; y++) for (let x = p.x; x < p.x + p.w; x++) if (inB(x, y)) OCC[I(x, y)] = p.id;
-  markBlockDirty();
+  listProp(p);
   return p;
 }
 
-/** Remove a prop: clear its OCC tiles, free its id. Returns the prop, or undefined when no such id is listed. */
-export function removeProp(id: PropId): Prop | undefined {
+/**
+ * Put a removed prop back under its own id (the undo of a removal, 03 5.6 item 3). The caller has reclaimed the id (ids.ts
+ * reclaimPropId); a prop whose id is listed already is refused (false), so two props never share an id.
+ */
+export function putProp(p: Prop): boolean {
+  if (byId.has(p.id)) return false;
+  listProp(JSON.parse(JSON.stringify(p)) as Prop);
+  return true;
+}
+
+/**
+ * Remove a prop: clear its OCC tiles and give its id back as `id` says: 'free' to the free queue, 'reserve' to be held for the undo entry
+ * that can put it back (a park tool, ids.ts freePropId with reserve), 'keep' when the caller hands it back itself (the undo of a
+ * placement, ids.ts unallocPropId). Returns the prop, or undefined when no such id is listed.
+ */
+export function removeProp(id: PropId, idTo: 'free' | 'reserve' | 'keep' = 'free'): Prop | undefined {
   const p = byId.get(id);
   if (!p) return undefined;
   props.splice(props.indexOf(p), 1);
   byId.delete(id);
   for (let y = p.y; y < p.y + p.h; y++)
     for (let x = p.x; x < p.x + p.w; x++) if (inB(x, y) && OCC[I(x, y)] === id) OCC[I(x, y)] = 0;
-  freePropId(id);
+  if (idTo !== 'keep') freePropId(id, idTo === 'reserve');
   markBlockDirty();
   return p;
 }
@@ -155,7 +176,10 @@ export function setPropsState(list: readonly Prop[]): void {
   markBlockDirty();
 }
 
-/** Beds, water and occupied tiles block walking; a bridge opens the water under it (02 2.3). */
+/**
+ * Beds, water and occupied tiles block walking; a bridge opens the water under it (02 2.3). Rebuilt whole (2,304 tiles plus the bridges)
+ * when KIND, OCC or a prop changed: gen, the park tools and the undo call it after their change (03 3.2).
+ */
 export function rebuildBlock(): void {
   if (!blockDirty) return;
   blockDirty = false;
