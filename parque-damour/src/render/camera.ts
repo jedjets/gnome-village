@@ -10,8 +10,9 @@
 // world point under the fingers or the view centre (GV pinned a tile centre and fell back to a plain zoom off the land, 11206); taps and
 // paints go to InputHandlers by tool class (03 8.1 items 2 and 5): a brush paints on down and never taps, and pointercancel never taps;
 // the tap clock and the drag-paint throttle use each event's own timeStamp (GV read the wall clock at 11173 and counted paintCool down
-// in the frame, 12075); a drag sample more than one tile from the stroke's last painted centre paints every centre on the straight line
-// to it first (lineTiles, Bresenham; owner 2026-10-13: a drag fills its gaps; GV painted the sample alone, 11212-11215); follow takes
+// in the frame, 12075); a drag sample more than one tile from the gesture's last sample, read by the same finger under the same camera,
+// paints every park centre on the straight line to it (lineTiles, Bresenham; owner 2026-10-13: a drag fills its gaps; GV painted the
+// sample alone, 11212-11215), and a second finger or a camera move starts the line afresh; follow takes
 // the FollowTarget union and a lookup (GV duck-typed 11292); the pivot is released once the angle equals its target, so the final
 // sub-0.0015 rad snap is pinned too (GV released it one frame early, 11315: a hop of up to half a pixel); focusY measures the DOM on a
 // 0.35 s cadence (review 13); cam.follow is the followed id (0 none, -1 a point); Fit's second press returns to the start view of 04 5.1
@@ -76,7 +77,8 @@ let dragging = false;
 let pinch: Pinch | null = null;
 let down: Down | null = null;
 let paintNext = 0; // event time in ms from which the next drag paint may land
-let lastPaint: XY | null = null; // the centre the brush last painted in this gesture (lineTiles starts from it)
+type Sample = { x: number; y: number; z: number; ang: number; ox: number; oy: number; cw: number; chh: number }; // a tile and its view
+let lastSample: Sample | null = null; // the brush's last sample in this gesture (lineTiles starts from it); null after a second finger
 let originX = 0; // canvas client offset, read once per gesture
 let originY = 0;
 const wired = new WeakSet<HTMLCanvasElement>();
@@ -390,7 +392,8 @@ export type InputHandlers = {
   onStrokeStart?: () => void;
   /**
    * Paint one park tile: at once on down, then after 0.14 s, then every 0.10 s while the finger drags (GV 11176, 11212-11215); a drag
-   * sample more than one tile (Chebyshev) from the last painted centre is reached through every centre of lineTiles, one call each.
+   * sample more than one tile (Chebyshev) from the gesture's last sample is reached through every park centre of lineTiles, one call
+   * each, unless a second finger touched or the camera moved since that sample (then the sample alone, as GV).
    */
   onPaint?: (tile: XY) => void;
 };
@@ -429,24 +432,40 @@ export function lineTiles(a: XY, b: XY): XY[] {
   return out;
 }
 
-/** Paint the drag sample t: through the line from the last painted centre when t is more than one tile from it, else t alone. */
-function paintTo(h: InputHandlers, t: XY): void {
-  const l = lastPaint;
-  if (l && cheb(l.x, l.y, t.x, t.y) > 1) for (const c of lineTiles(l, t)) h.onPaint?.(c);
-  else h.onPaint?.(t);
-  lastPaint = t;
+/** Inside the railings: the brush never paints outside them (02 8.4 item 1). */
+const inPark = (t: XY): boolean => t.x >= 0 && t.y >= 0 && t.x < N && t.y < N;
+/** The camera and viewport are exactly as when sample l was read, so the ground has not moved under the finger. */
+const sameView = (l: Sample): boolean =>
+  l.z === cam.z && l.ang === cam.ang && l.ox === cam.ox && l.oy === cam.oy && l.cw === view.cw && l.chh === view.chh;
+
+/**
+ * Paint the brush sample under (sx, sy) and remember it (owner 2026-10-13: a drag fills its gaps): from a last sample more than one tile
+ * away under the same view, every park centre of the line to it, so a drag that runs along the apron and comes back in paints only where
+ * the line enters; else the sample alone when in the park. A pinch, the wheel, a turn, a follow or a resize moves the ground under a
+ * still finger, which never swept that line: the sample paints alone, as GV did.
+ */
+function paintSample(h: InputHandlers, sx: number, sy: number): void {
+  const t = groundTile(sx, sy), l = lastSample;
+  if (l && sameView(l) && cheb(l.x, l.y, t.x, t.y) > 1) {
+    for (const c of lineTiles(l, t)) if (inPark(c)) h.onPaint?.(c);
+  } else if (inPark(t)) h.onPaint?.(t);
+  remember(t);
+}
+
+/** The tile on the ground under a screen point, not clamped to the park (the same rounding as project.ts screenToTile). */
+function groundTile(sx: number, sy: number): XY {
+  const w = screenToWorld(sx, sy, tileScratch);
+  return { x: Math.floor(w.x + 0.5), y: Math.floor(w.y + 0.5) };
+}
+
+/** Keep t as the gesture's last brush sample, with the camera and viewport it was read under. */
+function remember(t: XY): void {
+  lastSample = { x: t.x, y: t.y, z: cam.z, ang: cam.ang, ox: cam.ox, oy: cam.oy, cw: view.cw, chh: view.chh };
 }
 
 /** A pointer's position in canvas CSS px. */
 function pos(e: PtrEvent): XY {
   return { x: e.clientX - originX, y: e.clientY - originY };
-}
-
-/** The park tile under a screen point, or null outside the park (the same rounding as project.ts screenToTile). */
-function parkTileAt(sx: number, sy: number): XY | null {
-  const w = screenToWorld(sx, sy, tileScratch);
-  const x = Math.floor(w.x + 0.5), y = Math.floor(w.y + 0.5);
-  return x >= 0 && y >= 0 && x < N && y < N ? { x, y } : null;
 }
 
 /** Wire pointer and wheel input on the canvas (GV setupInput 11168-11230; 03 8.1). Installing twice on one canvas is a no-op. */
@@ -475,16 +494,17 @@ export function setupInput(canvas: HTMLCanvasElement, h: InputHandlers): void {
         down = { x: p.x, y: p.y, t: e.timeStamp, moved: 0, cls };
         if (cls === 'hand') dragging = true;
         else if (cls === 'brush') {
-          const t = parkTileAt(p.x, p.y);
-          lastPaint = t;
-          if (t) {
+          const t = groundTile(p.x, p.y);
+          if (inPark(t)) {
             h.onStrokeStart?.();
             h.onPaint?.(t);
           }
+          remember(t);
           paintNext = e.timeStamp + PAINT_FIRST_MS;
         }
       } else if (ptrs.size === 2) {
         dragging = false;
+        lastSample = null; // the finger that paints on after this pinch starts a fresh line (no stripe from the other finger's tile)
         const [a, b] = [...ptrs.values()] as [XY, XY];
         const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
         const a0 = Math.atan2(b.y - a.y, b.x - a.x);
@@ -539,8 +559,7 @@ export function setupInput(canvas: HTMLCanvasElement, h: InputHandlers): void {
         cam.oy += cur.y - prev.y;
         clampCam();
       } else if (down && down.cls === 'brush' && ptrs.size === 1 && e.timeStamp >= paintNext) {
-        const t = parkTileAt(cur.x, cur.y);
-        if (t) paintTo(h, t);
+        paintSample(h, cur.x, cur.y);
         paintNext = e.timeStamp + PAINT_EVERY_MS;
       }
     },

@@ -286,6 +286,13 @@ function wire(cls: ToolClass, left = 0, top = 0) {
   return { ...c, taps, paints, strokes: () => strokes };
 }
 
+/** The tile on the ground under a screen point, unclamped (camera.ts's rounding), and whether two tiles are over one tile apart. */
+function tileUnder(sx: number, sy: number): XY {
+  const w = screenToWorld(sx, sy);
+  return { x: Math.floor(w.x + 0.5), y: Math.floor(w.y + 0.5) };
+}
+const far = (u: XY, v: XY): boolean => Math.max(Math.abs(u.x - v.x), Math.abs(u.y - v.y)) > 1;
+
 /** A finger on the circle of radius 50 around (195, 400). */
 const at = (a: number): XY => ({ x: 195 + 50 * Math.cos(a), y: 400 + 50 * Math.sin(a) });
 
@@ -336,7 +343,7 @@ describe('gestures (03 8.1; GV 11168-11230)', () => {
     expect(c.taps).toHaveLength(0);
     expect(cam.ox).toBe(ox);
   });
-  it('a fast brush drag fills its gaps: a sample over one tile from the last painted centre paints the line to it (owner 2026-10-13)', () => {
+  it('a fast brush drag fills its gaps: a sample over one tile from the last sample paints the line to it (owner 2026-10-13)', () => {
     const c = wire('brush');
     const s0 = screenOf(10, 20), s1 = screenOf(16, 22), s2 = screenOf(17, 22), s3 = screenOf(17, 20);
     c.fire('pointerdown', 1, s0.x, s0.y, 1000);
@@ -355,6 +362,80 @@ describe('gestures (03 8.1; GV 11168-11230)', () => {
     c.fire('pointerdown', 1, s4.x, s4.y, 2000);
     expect(c.paints.slice(10)).toEqual([{ x: 30, y: 30 }]);
     c.fire('pointerup', 1, s4.x, s4.y, 2010);
+  });
+  it('a drag that leaves the park fills up to the railings, runs along the apron painting nothing and comes back in with no stripe (02 8.4 item 1)', () => {
+    const c = wire('brush');
+    let t = 1000;
+    const move = (x: number, y: number): void => {
+      const s = screenOf(x, y);
+      c.fire('pointermove', 1, s.x, s.y, (t += 140));
+    };
+    const s0 = screenOf(5, 2);
+    c.fire('pointerdown', 1, s0.x, s0.y, t);
+    move(5, -2); // out over the railings: the park centres on the way, (5, 1) and (5, 0)
+    expect(c.paints).toEqual([{ x: 5, y: 2 }, { x: 5, y: 1 }, { x: 5, y: 0 }]);
+    for (let x = 9; x <= 29; x += 4) move(x, -2); // along the apron: nothing
+    expect(c.paints).toHaveLength(3);
+    move(29, 1); // back in: only the line from the last sample, (29, -1) off the park, then (29, 0) and (29, 1)
+    expect(c.paints.slice(3)).toEqual([{ x: 29, y: 0 }, { x: 29, y: 1 }]);
+    const end = screenOf(29, 1);
+    c.fire('pointerup', 1, end.x, end.y, t + 10);
+    expect(c.paints.some((q) => q.y === 0 && q.x > 5 && q.x < 29)).toBe(false);
+    expect(c.strokes()).toBe(1);
+  });
+  it('a second finger starts a fresh line: the finger that stays paints no stripe from where the lifted one last painted', () => {
+    const c = wire('brush');
+    const a = screenOf(15, 24), b = screenOf(32, 24);
+    c.fire('pointerdown', 1, a.x, a.y, 1000);
+    c.fire('pointerdown', 2, b.x, b.y, 1010); // a pinch begins; it paints nothing
+    c.fire('pointerup', 1, a.x, a.y, 1100);
+    c.fire('pointermove', 2, b.x + 1, b.y, 1300);
+    expect(c.paints).toEqual([{ x: 15, y: 24 }, { x: 32, y: 24 }]);
+    c.fire('pointerup', 2, b.x + 1, b.y, 1310);
+  });
+  it('a camera move under a held brush (pinch, wheel, quarter turn) starts a fresh line; a still camera fills again', () => {
+    const c = wire('brush');
+    // a pinch zoom by a second finger, then that finger lifts and the first moves 1 px
+    const s = screenOf(16, 20);
+    c.fire('pointerdown', 1, s.x, s.y, 1000);
+    c.fire('pointerdown', 2, s.x + 100, s.y, 1010);
+    c.fire('pointermove', 2, s.x + 1000, s.y, 1020); // zoom 1.3 -> 3.0, clamped, so the ground under the held finger moves
+    c.fire('pointerup', 2, s.x + 1000, s.y, 1030);
+    const afterPinch = tileUnder(s.x + 1, s.y);
+    expect(far(afterPinch, { x: 16, y: 20 })).toBe(true);
+    c.fire('pointermove', 1, s.x + 1, s.y, 1200);
+    expect(c.paints).toEqual([{ x: 16, y: 20 }, afterPinch]);
+    c.fire('pointerup', 1, s.x + 1, s.y, 1210);
+    // the wheel zooms under a held finger
+    reset();
+    c.fire('pointerdown', 1, 60, 250, 2000);
+    const first = c.paints.length;
+    expect(first).toBe(3); // the pinch part painted two
+    for (let i = 0; i < 6; i++) c.wheel(-1);
+    const afterWheel = tileUnder(61, 250);
+    expect(far(afterWheel, c.paints[first - 1]!)).toBe(true);
+    c.fire('pointermove', 1, 61, 250, 2200);
+    expect(c.paints.slice(first)).toEqual([afterWheel]);
+    // a quarter turn eases under the finger: each sample while it moves paints alone
+    turn(1);
+    for (let i = 0; i < 6; i++) stepCamera(1 / 60);
+    const midTurn = tileUnder(62, 250);
+    expect(far(midTurn, afterWheel)).toBe(true);
+    c.fire('pointermove', 1, 62, 250, 2400);
+    for (let i = 0; i < 6; i++) stepCamera(1 / 60);
+    const lateTurn = tileUnder(63, 250);
+    expect(far(lateTurn, midTurn)).toBe(true);
+    c.fire('pointermove', 1, 63, 250, 2600);
+    expect(c.paints.slice(first + 1)).toEqual([midTurn, lateTurn]);
+    for (let i = 0; i < 120; i++) stepCamera(1 / 60);
+    expect(cam.ang).toBe(cam.angT);
+    // the camera at rest: one sample to start the line, then a fast sample fills it again
+    const q = tileUnder(195, 400);
+    c.fire('pointermove', 1, 195, 400, 2800);
+    const r = screenOf(q.x + 4, q.y);
+    c.fire('pointermove', 1, r.x, r.y, 3000);
+    expect(c.paints.slice(first + 3)).toEqual([q, ...[1, 2, 3, 4].map((k) => ({ x: q.x + k, y: q.y }))]);
+    c.fire('pointerup', 1, r.x, r.y, 3010);
   });
   it('a stamp or ability tool waits for the tap and never pans or paints', () => {
     const c = wire('other');
