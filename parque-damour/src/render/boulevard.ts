@@ -8,16 +8,21 @@
 // over a solid trunk, easing over 0.4 s after a turn, so the park stays in view (the see-through canopy of GV 333-334, v9.2.1; the near-side
 // blocks are apron.ts's opaque ground floors). This is variant 1 of the boulevard gate (register section 4, picked 2026-10-13);
 // BOULEVARD holds its knobs as a parameter table, as props-park.ts's, so a scratch page can show the other variants.
+// The street lamps on the tree pavement's kerb (register section 4 row Street lamps, the owner on 2026-10-13: "Yes Just generate an option
+// and use it"; park.streetLamps): the park's three-globe lamp (props.drawLamp, 04 6.2) as apron drawables sorted with the street trees,
+// lit by the lamps' hours and fade (ambient.lampGlow) with its halo and globe glow, never the c_lamplight boost; solid on every side
+// (thin posts hide nothing); their ground pools are draw.ts's pool pass (04 6.2 item 4, 10.2 item 2).
 // NEW: nothing ported (GV has no streets); the sprite blit is GV drawTree 6837-6848 through flora.treeSpriteOf.
 import type { XY } from '../core/math.ts';
 import { now } from '../core/loop.ts';
-import { APRON, BACKDROP, bandRects, streetTrees, type StreetTree } from '../world/park.ts';
+import { APRON, BACKDROP, bandRects, streetLamps, streetTrees, type StreetTree } from '../world/park.ts';
 import { EH, TH, TW, cam, rotVec, screenToWorld, view } from './camera.ts';
 import { screenInto } from './project.ts';
 import { depthOf, type Drawable } from './order.ts';
-import { h01, mix, shade, style } from './ambient.ts';
-import { SPECIES_HEIGHT, treeSpriteOf, type SpriteLayer, type TreeSprite } from './flora.ts';
+import { AA, AM, AT, h01, lampGlow, mix, shade, style } from './ambient.ts';
+import { SPECIES_HEIGHT, gamePen, treeSpriteOf, type SpriteLayer, type TreeSprite } from './flora.ts';
 import { viewBounds } from './ground.ts';
+import { LAMP_H, drawLamp } from './props.ts';
 
 /**
  * Variant 1's knobs. seeds: the street trees' shapes, plane forms by seed mod 3 (dome, tall oval: full crowns, no umbrella), one per
@@ -260,4 +265,67 @@ function drawStreetTree(d: Drawable, ctx: CanvasRenderingContext2D): void {
   ctx.globalAlpha = it.a;
   blit(ctx, treeSpriteOf(0, it.seed, 'crown'), SP);
   ctx.globalAlpha = 1;
+}
+
+/* ---------- the street lamps (apron drawables: the park's lamp, props.drawLamp) ---------- */
+const LAMPS: Drawable[] = [];
+const SL: XY = { x: 0, y: 0 };
+/**
+ * props.drawLamp draws in screen space round the lamp's foot (one orientation, no world point but the foot), so every street lamp of a
+ * frame looks the same: drawLamp paints it once into this sprite at the frame's zoom, glow, light and dpr, and each lamp blits it at its
+ * foot snapped to the device pixel (03 15.2: a cache like the tree sprites', exact to half a device pixel). Redrawn when any key moves.
+ */
+const LS = { c: null as HTMLCanvasElement | null, key: '', ox: 0, oy: 0 };
+let sprite: typeof LS | null = null; // this frame's, set by streetLampDrawables
+function lampSprite(): typeof LS | null {
+  const z = cam.z, g = lampGlow(), d = view.dpr;
+  const key = z + '|' + g + '|' + d + '|' + AM.join() + '|' + AA + '|' + AT.join();
+  if (LS.key === key) return LS.c ? LS : null;
+  LS.key = key;
+  if (typeof document === 'undefined') return (LS.c = null);
+  // the halo (r 0.9 tile round the head, 0.2 tile over the post's top) sets the width and the top; the base disc the bottom
+  const tile = TW * z, half = Math.ceil(0.9 * tile + 3), up = Math.ceil(1.4 * EH * z + 1.1 * tile + 3), dn = Math.ceil(0.08 * tile + 3);
+  const c = LS.c ?? (LS.c = document.createElement('canvas'));
+  c.width = Math.ceil(2 * half * d);
+  c.height = Math.ceil((up + dn) * d);
+  const x = c.getContext('2d');
+  if (!x) return (LS.c = null);
+  x.setTransform(d, 0, 0, d, 0, 0);
+  x.imageSmoothingEnabled = false;
+  drawLamp(gamePen(x), { x: half, y: up }, { lit: g > 0, glow: g });
+  LS.ox = half;
+  LS.oy = up;
+  return LS;
+}
+
+/** Phase 6's street lamps (apron.ts adds them with the trees): each at its foot's depth, so the painter sorts it with the trees, the
+ *  railings and the blocks; culled as a park lamp is (below 1.5 px tall, 03 15.2 item 6) and when neither it nor its halo is on screen. */
+export function streetLampDrawables(out: Drawable[]): void {
+  if (!LAMPS.length) for (const l of streetLamps()) LAMPS.push({ depth: 0, kind: 'lamp', id: 52000 + l.id, x: l.x, y: l.y, z: 0, draw: drawStreetLamp });
+  const z = cam.z;
+  if (LAMP_H * EH * z < 1.5) return;
+  const half = TW * z + 4, up = (1.4 * EH + 1.1 * TW) * z + 4, dn = 0.2 * TH * z + 4; // the halo's reach: 0.9 tile round the head
+  let n = 0;
+  for (const it of LAMPS) {
+    screenInto(it.x, it.y, 0, SL);
+    if (SL.x + half < 0 || SL.x - half > view.cw || SL.y + dn < 0 || SL.y - up > view.chh) continue;
+    it.depth = depthOf(it.x, it.y);
+    out.push(it);
+    n++;
+  }
+  sprite = n ? lampSprite() : null; // once a frame, before any lamp draws
+}
+
+/** A street lamp: the park's lamp exactly (04 6.2), lit and faded by the lamps' hours (no litUntil, no c_lamplight: park lamps only),
+ *  blitted from the frame's lamp sprite (drawn by drawLamp; straight onto the canvas when there is no sprite). */
+function drawStreetLamp(d: Drawable, ctx: CanvasRenderingContext2D): void {
+  screenInto(d.x, d.y, 0, SL);
+  const sp = sprite;
+  if (!sp?.c) {
+    const g = lampGlow();
+    drawLamp(gamePen(ctx), SL, { lit: g > 0, glow: g });
+    return;
+  }
+  const k = view.dpr;
+  ctx.drawImage(sp.c, Math.round((SL.x - sp.ox) * k) / k, Math.round((SL.y - sp.oy) * k) / k, sp.c.width / k, sp.c.height / k);
 }

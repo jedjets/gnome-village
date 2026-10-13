@@ -71,12 +71,17 @@ const SCENE_SETS = {
     { name: 'summer-13', turn: 0, z: 1.3, ox: 270, oy: -20, abs: 3.45 },
   ],
   // bv: the boulevard round the park, variant 1 of the boulevard gate (register 3.1 and section 4): Fit and the two overviews on day 1
-  // (spring buds), then summer day 4 at midday at zoom 1.3 on g_south_w's pavement, from the default side (the south faces the camera:
-  // see-through crowns, low blocks) and from the opposite one (full crowns and facades), and the overview at f 0.90 with the lamps lit
+  // (spring buds); the street lamps at night (register section 4 row Street lamps) on spring day 3 at f 0.90 (leafing crowns): zoom 1.3
+  // on g_south_w's pavement from the near side and from the far side, and Fit; then summer day 4 at midday at zoom 1.3 on the same
+  // pavement, from the default side (the south faces the camera: see-through crowns, low blocks, the lamps unlit) and from the opposite
+  // one (full crowns and facades), and the overview at f 0.90 with the lamps lit
   bv: [
     { name: 'fit', turn: 0, fit: true },
     { name: 'overview-0', turn: 0, z: 0.8, ox: -60, oy: 130 },
     { name: 'overview-2', turn: 2, z: 0.8, ox: 120, oy: 120 },
+    { name: 'night-street-13', turn: 0, z: 1.3, at: [12.5, 49], abs: 2.9 },
+    { name: 'night-street-13-far', turn: 2, z: 1.3, at: [12.5, 49], abs: 2.9 },
+    { name: 'night-fit', turn: 0, fit: true, abs: 2.9 },
     { name: 'street-13', turn: 0, z: 1.3, at: [12.5, 49], abs: 3.5 },
     { name: 'street-13-far', turn: 2, z: 1.3, at: [12.5, 49], abs: 3.5 },
     { name: 'night', turn: 0, z: 0.8, ox: -60, oy: 130, abs: 3.9 },

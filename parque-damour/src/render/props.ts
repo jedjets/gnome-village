@@ -14,7 +14,7 @@
 // so people inside paint between them (GV frontFix 8871 idea; 03 7.2).
 // Dropped from the range: the house kit beyond the box primitives (6952-8044), the gnome, critter and part branches of drawProp
 // (figures.ts, creatures.ts and effects.ts own those).
-// TODO(S4, S6): easel, crumbs, peel, sprinkler, rowboat, umbrella. TODO(S9): the halo breath, snow caps, a halo pool cap of 24 (04 10.2).
+// TODO(S4, S6): easel, crumbs, peel, sprinkler, rowboat, umbrella. TODO(S9): the halo breath, snow caps.
 import { EH, TH, TW, cam, view } from './camera.ts';
 import {
   GC, faceLight, fillEllipse, fillPoly, h01, inkLine, lampGlow, mix, shade, skyRamp, strokeLine,
@@ -460,12 +460,15 @@ function drawAwning(pen: Pen, proj: Proj, x0: number, y1: number, seed: number):
 }
 
 /* ---------- the dispatcher and the painter drawables (03 2.7 props.ts row, 7.2, 7.7, 15.2 item 6; GV drawProp 9540-9553) ---------- */
+/** The lamp's drawn height in EH with its head (04 6.1: 1.4 post + 0.25 head, and the globes' caps), the park's and the street's. */
+export const LAMP_H = 1.75;
 /** Drawn height in EH of each kind the game draws, for the size and screen culls (04 6.1; a tree's crown stands 1.5 x its height). */
 const PROP_H: Partial<Record<PropKind, number>> = {
-  bench: 0.6, lamp: 1.75, fountain: 1.6, kiosk: 1.65, table: 0.62, bandstand: 3.0, picnic: 0.35, basket: 0.35, bridge: 0.6, hedge: 0.5, tree: 3.8,
+  bench: 0.6, lamp: LAMP_H, fountain: 1.6, kiosk: 1.65, table: 0.62, bandstand: 3.0, picnic: 0.35, basket: 0.35, bridge: 0.6, hedge: 0.5, tree: 3.8,
 };
-/** How far the lamp is on: the lamps' hours with their fade (ambient.lampGlow), or a c_lamplight litUntil still ahead (03 7.7 item 3). */
-function lampOn(p: Prop): number {
+/** How far the lamp is on: the lamps' hours with their fade (ambient.lampGlow), or a c_lamplight litUntil still ahead (03 7.7 item 3);
+ *  draw.ts's pool pass reads it too. */
+export function lampOn(p: Prop): number {
   return (p.data.litUntil ?? 0) > tick() ? 1 : lampGlow();
 }
 /** The wet of a prop's north-west tile, 0 to 1 (04 6.1: wet slats and decks x 0.86). */

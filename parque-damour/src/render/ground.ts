@@ -13,7 +13,7 @@
 // (flat ground: nothing in front can hide them); the epoch also turns on a changed tile layer (worldVersion) or quality level, and its
 // 220 ms tick rebuilds only when what the colours read has moved (a paused park rebuilds nothing); pebbles are tiny world squares.
 // Dropped from the range: paved ways and hearth slabs (KIND gravel is the paving), clipTile, the line mode below z 0.7, steps.
-// TODO(S9): lamp pools (03 7.3 item 5), snow cover (04 10.3), landed leaves (04 10.4).
+// TODO(S9): snow cover (04 10.3), landed leaves (04 10.4). The lamp pools (03 7.3 item 5) are draw.ts's, right after this pass.
 import { clamp01, css, hx, mixc, TAU, type RGB, type XY } from '../core/math.ts';
 import { T } from '../core/clock.ts';
 import { now } from '../core/loop.ts';
@@ -120,6 +120,10 @@ export function setGroundQuality(q: number): void {
     quality = q;
     colEpoch++;
   }
+}
+/** The quality level handed in, for the lamp pools draw.ts paints in this phase (level 1 and up drops them, 03 13). */
+export function groundQuality(): number {
+  return quality;
 }
 /** What the tile colours read that the sim changes without a world version: the light, the season blend and the WET, PETALS, WEAR
  *  and ICE layers, as one number (a weighted sum; the epoch only needs to know that something moved). */
@@ -428,7 +432,7 @@ function buildDetail(): void {
 const SP: XY = { x: 0, y: 0 }, SQ: XY = { x: 0, y: 0 };
 /**
  * Phase 4: the tiles, filled once per colour from the epoch's paths under the world transform; worn-lawn ribbons at z >= 0.45; petals
- * and puddles; at z >= 1.0 pebbles, flagstones and lawn tufts; bed flowers by BEDC at z > 0.8 (flora.drawBedTile). Lamp pools are S9's.
+ * and puddles; at z >= 1.0 pebbles, flagstones and lawn tufts; bed flowers by BEDC at z > 0.8 (flora.drawBedTile). Lamp pools: draw.ts.
  */
 export function drawGround(c?: CanvasRenderingContext2D): void {
   const ctx = ctxOf(c);

@@ -1,14 +1,15 @@
 // src/world/park.ts
 // Park bounds, the apron, the five gates and the backdrop specification in world coordinates (register 3.1, 02 2.4).
 // Nothing ported: GV's island edges (642, 674) are replaced by fixed gates on a square boundary. NEW.
-// BACKDROP says where the quay, river, boulevard, railings, street trees, facade blocks and skyline sit, in world (tile) coordinates, and
-// railPieces(), streetTrees() and facadeBlocks() list the apron props it implies (03 3.6, 7.4 item 4). They are regenerated, never saved,
-// never in OCC, and nothing in the simulation reads them (only GATES feeds the sim). This file holds where they stand and how tall they
-// are (04 6.4: facades 6.0 EH, railings 0.5 EH); how they look (paving, cobbles, crowns, windows, awnings) is the renderer's.
+// BACKDROP says where the quay, river, boulevard, railings, street trees, street lamps, facade blocks and skyline sit, in world (tile)
+// coordinates, and railPieces(), streetTrees(), streetLamps() and facadeBlocks() list the apron props it implies (03 3.6, 7.4 item 4).
+// They are regenerated, never saved, never in OCC, and nothing in the simulation reads them (only GATES feeds the sim). This file holds
+// where they stand and how tall they are (04 6.4: facades 6.0 EH, railings 0.5 EH); how they look (paving, cobbles, crowns, windows,
+// awnings, the lamps' globes) is the renderer's.
 // The boulevard (register 3.1, the owner on 2026-10-13: "some trees as a border, then a road, then buildings"): on the east, south and
 // west sides, counting rings of tiles out from the boundary row or column (ring k is the k-th tile beyond it; the north side stays the
 // quay and the river): the railings and gates on the boundary; rings 1-2 the tree pavement (paving, a kerb on the road side) with a
-// plane tree every 2 tiles on the line between the two rings; rings 3-4 the road (two lanes, a faint dashed centre line, kerbs); ring 5
+// plane tree every 2 tiles on the line between the two rings and a street lamp every 4 on its kerb; rings 3-4 the road (two lanes, a faint dashed centre line, kerbs); ring 5
 // the far pavement; rings 6-7 the facade blocks; ring 8 the back pavement behind them, the apron's edge. Each ring turns the south-east and
 // south-west corners as a square L (the south band owns the corner square), so the trees, the road and the blocks go round cleanly; on
 // the east and west the bands run north to the quay row (y = -1). The gates' outside tiles (GATES[].outside) lie in ring 1, on the tree
@@ -80,7 +81,9 @@ export type BackdropSpec = {
   facadesTo: number; // last facade ring (ring 8 behind it is the back pavement, the apron's edge)
   treeLine: number; // the street trees stand this far beyond the boundary tile's centre: 1.5, the seam of the tree pavement's two rings
   treeStep: number; // one street tree every this many tiles along the street, the corners included
-  gateClear: number; // no street tree within this many tiles of a gate's centre along its street (the approach and the gate's pavement)
+  gateClear: number; // no street tree or lamp within this many tiles of a gate's centre along its street (the approach, the gate's pavement)
+  lampLine: number; // the street lamps stand this far beyond the boundary tile's centre: 2.2, on the tree pavement's kerb (its edge at 2.5)
+  lampStep: number; // one street lamp every this many tiles along the street: midway between two street trees in every second gap
   facadeAlong: number; // a facade block is this many tiles along the street ...
   facadeDepth: number; // ... and this many deep (07 S2.6 item 10, 03 7.4 item 4: 3 along x 2 deep; 2 x 2 at the corners and the ends)
   facadeHeight: number; // EH, every block (04 6.4: 5 storeys and a mansard)
@@ -99,6 +102,8 @@ export const BACKDROP: BackdropSpec = {
   treeLine: 1.5,
   treeStep: 2,
   gateClear: 2,
+  lampLine: 2.2,
+  lampStep: 4,
   facadeAlong: 3,
   facadeDepth: 2,
   facadeHeight: 6,
@@ -156,12 +161,10 @@ let trees: StreetTree[] | null = null;
  */
 export function streetTrees(): readonly StreetTree[] {
   if (trees) return trees;
-  const { treeLine: t, treeStep: step, gateClear } = BACKDROP;
+  const { treeLine: t, treeStep: step } = BACKDROP;
   const lo = -t, hi = N - 1 + t, out: StreetTree[] = [];
-  const clear = (side: Side4, along: number): boolean =>
-    GATES.some((g) => g.side === side && Math.abs((side === 'south' ? (g.tiles[0].x + g.tiles[1].x) / 2 : (g.tiles[0].y + g.tiles[1].y) / 2) - along) <= gateClear);
   const add = (side: Side4, x: number, y: number): void => {
-    if (!clear(side, side === 'south' ? x : y)) out.push({ id: out.length + 1, side, x, y });
+    if (!nearGate(side, side === 'south' ? x : y)) out.push({ id: out.length + 1, side, x, y });
   };
   for (let x = lo; x <= hi + 1e-9; x += step) add('south', x, hi);
   for (let y = hi - step; y >= 0; y -= step) {
@@ -169,6 +172,52 @@ export function streetTrees(): readonly StreetTree[] {
     add('east', hi, y);
   }
   trees = out;
+  return out;
+}
+
+/** Is a place `along` its street (x on the south, y on the east and west) within BACKDROP.gateClear of a gate's centre on that street? */
+function nearGate(side: Side4, along: number): boolean {
+  return GATES.some((g) => g.side === side && Math.abs((side === 'south' ? (g.tiles[0].x + g.tiles[1].x) / 2 : (g.tiles[0].y + g.tiles[1].y) / 2) - along) <= BACKDROP.gateClear);
+}
+
+/** A street lamp: the park's three-globe lamp (04 6.2) on the tree pavement's kerb at world (x, y), `side` the street it lines (the
+ *  corner lamps line the south one, as the corner trees do). */
+export type StreetLamp = { id: number; side: Side4; x: number; y: number };
+
+/** A corner lamp stands on the kerb diagonal only when it clears the corner tree by this many tiles; else the corner stays bare. */
+const CORNER_CLEAR = 0.9;
+
+let lamps: StreetLamp[] | null = null;
+/**
+ * The street lamps (register 3.1 and section 4; the owner on 2026-10-13: "Yes Just generate an option and use it"; BACKDROP.lampLine,
+ * lampStep, gateClear): one row on the tree pavement's kerb, the line 2.2 tiles beyond the boundary tiles' centres (x = -2.2 on the
+ * west, 49.2 on the east, y = 49.2 on the south), running round both southern corners and north to the quay as the street trees do.
+ * Along the street each lamp stands midway between two neighbouring places of the trees' 2-tile step, in every second gap counted from
+ * the corner tree, the first in the second gap (x or y = 1.5, 5.5 ... 45.5): one every 4 tiles, mirror-symmetric under x -> 47 - x.
+ * That phase leaves the gap beside each corner tree empty, so the corner's own lamp, on the kerb diagonal at (-2.2, 49.2) and
+ * (49.2, 49.2), stands 3.7 tiles along the kerb from the next ones and keeps the rhythm (it clears the corner tree by 0.99 tiles; the
+ * other phase would put it 1.7 from them). None within 2 tiles of a gate's centre along its street (the gate pillars carry their own
+ * lamps). 32 in all. Fixed, no seed, no rng; regenerated, never saved, not props, no charm (register 3.5 counts the park's lamps only).
+ */
+export function streetLamps(): readonly StreetLamp[] {
+  if (lamps) return lamps;
+  const { treeLine: t, treeStep: step, lampLine: l, lampStep } = BACKDROP;
+  const lo = -t, hi = N - 1 + t, out: StreetLamp[] = [];
+  const add = (side: Side4, x: number, y: number): void => {
+    if (!nearGate(side, side === 'south' ? x : y)) out.push({ id: out.length + 1, side, x, y });
+  };
+  const corner = (x: number): void => {
+    if (Math.hypot(l - t, l - t) >= CORNER_CLEAR) add('south', x, N - 1 + l);
+  };
+  corner(-l);
+  for (let x = lo + 1.5 * step; x + step / 2 <= hi + 1e-9; x += lampStep) add('south', x, N - 1 + l);
+  corner(N - 1 + l);
+  // north from the corners while a tree stands on each side of the gap (the trees run to y = 0.5 by the quay)
+  for (let y = hi - 1.5 * step; y - step / 2 >= 0; y -= lampStep) {
+    add('west', -l, y);
+    add('east', N - 1 + l, y);
+  }
+  lamps = out;
   return out;
 }
 

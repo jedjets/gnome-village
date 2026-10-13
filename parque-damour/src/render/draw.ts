@@ -6,15 +6,21 @@
 // Verdict: PORT. Changes: eight phases instead of GV's one tile walk (03 7.9); the sky paints the whole canvas, the city haze below the
 // horizon included (backdrop.drawSky), so there is no separate clear; the drawables of the apron, the props and the particles are
 // collected into one reused list and sorted together by order.sortByDepth each frame (figures and creatures join in S4); the transform is
-// put back to CSS pixels between phases, so no pass depends on the one before it restoring.
+// put back to CSS pixels between phases, so no pass depends on the one before it restoring; phase 4 ends with the lamps' ground pools,
+// the park's and the street's, at most 24 nearest the camera centre (04 6.2 item 4, 10.2 item 2; 03 7.3 item 5), under every drawable.
 // Dropped from the range: GV's per-tile bucket rules for heights and shores (9604-9977), the shadows switch (12041), the drawn surface.
-import { computeAmbient } from './ambient.ts';
-import { view } from './camera.ts';
+import type { XY } from '../core/math.ts';
+import { props } from '../world/grid.ts';
+import { streetLamps } from '../world/park.ts';
+import { computeAmbient, lampGlow } from './ambient.ts';
+import { TH, TW, VANCH, cam, screenToWorld, view } from './camera.ts';
+import { screenInto } from './project.ts';
 import { apronGround, drawSky } from './backdrop.ts';
 import { apronDrawables } from './apron.ts';
-import { drawGround } from './ground.ts';
+import { drawGround, groundQuality } from './ground.ts';
 import { drawWater } from './water.ts';
-import { propDrawables } from './props.ts';
+import { drawLampPool, lampOn, propDrawables } from './props.ts';
+import { gamePen } from './flora.ts';
 import { drawWeatherOverlay, particleDrawables } from './effects.ts';
 import { drawFocusMark, drawGhost, drawSelection } from './ghost.ts';
 import { sortByDepth, type Drawable } from './order.ts';
@@ -40,6 +46,82 @@ function css(c: CanvasRenderingContext2D): void {
   c.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
 }
 
+/* ---------- phase 4's last pass: the lamps' ground pools (04 6.1, 6.2 item 4, 10.2 item 2; 03 7.3 item 5) ---------- */
+type Pool = { sx: number; sy: number; g: number; d: number };
+const POOLS: Pool[] = [];
+/** 04 10.2 item 2: at most 24 pools a frame, the nearest the camera centre; the other lamps draw their lit globes and halo only. */
+const MAX_POOLS = 24;
+const PC: XY = { x: 0, y: 0 }, PS: XY = { x: 0, y: 0 };
+const byNear = (a: Pool, b: Pool): number => a.d - b.d;
+/** The pool at full glow, painted once by props.drawLampPool for this zoom and dpr (its colour reads the palette only, not the light);
+ *  each pool blits it at its lamp's foot, snapped to the device pixel, at globalAlpha = the lamp's glow (the pool's alpha is linear in
+ *  it), so 24 pools cost 24 blits instead of 24 gradients. */
+const PSP = { c: null as HTMLCanvasElement | null, key: '', hw: 0, hh: 0 };
+function poolSprite(): typeof PSP | null {
+  const z = cam.z, d = view.dpr, key = z + '|' + d;
+  if (PSP.key === key) return PSP.c ? PSP : null;
+  PSP.key = key;
+  if (typeof document === 'undefined') return (PSP.c = null);
+  const R = 3 * TW * z, hw = Math.ceil(R) + 1, hh = Math.ceil(R * (TH / TW)) + 1;
+  const cv = PSP.c ?? (PSP.c = document.createElement('canvas'));
+  cv.width = Math.ceil(2 * hw * d);
+  cv.height = Math.ceil(2 * hh * d);
+  const x = cv.getContext('2d');
+  if (!x) return (PSP.c = null);
+  x.setTransform(d, 0, 0, d, 0, 0);
+  const pen = gamePen(x);
+  PS.x = hw;
+  PS.y = hh;
+  drawLampPool(pen, PS, { lit: true });
+  PSP.hw = hw;
+  PSP.hh = hh;
+  return PSP;
+}
+
+/**
+ * The ground pool (props.drawLampPool) under every lit lamp, the park's (props.lampOn: the lamps' hours and fade, or a litUntil) and
+ * the street's (park.streetLamps: the hours and fade only, never the c_lamplight boost), after the tiles and under every drawable: of the
+ * pools on screen, the 24 nearest the camera centre (the view anchor, by world distance); none at quality level 1 and up (03 13: level 1
+ * drops the lamp halos; ground.ts holds the level main.ts hands in).
+ */
+function drawLampPools(c: CanvasRenderingContext2D): void {
+  if (groundQuality() >= 1) return;
+  const R = 3 * TW * cam.z, Ry = R * (TH / TW), street = lampGlow();
+  screenToWorld(view.cw / 2, view.chh * VANCH, PC);
+  let n = 0;
+  const add = (x: number, y: number, g: number): void => {
+    if (g <= 0) return;
+    screenInto(x, y, 0, PS);
+    if (PS.x + R < 0 || PS.x - R > view.cw || PS.y + Ry < 0 || PS.y - Ry > view.chh) return;
+    const p = POOLS[n] ?? (POOLS[n] = { sx: 0, sy: 0, g: 0, d: 0 });
+    p.sx = PS.x;
+    p.sy = PS.y;
+    p.g = g;
+    p.d = Math.hypot(x - PC.x, y - PC.y);
+    n++;
+  };
+  for (const p of props) if (p.kind === 'lamp') add(p.x, p.y, lampOn(p));
+  if (street > 0) for (const l of streetLamps()) add(l.x, l.y, street);
+  if (n === 0) return;
+  if (n > MAX_POOLS) {
+    for (let i = n; i < POOLS.length; i++) (POOLS[i] as Pool).d = Infinity; // last frame's spares sort last (the list is reused)
+    POOLS.sort(byNear);
+  }
+  const sp = poolSprite(), k = view.dpr;
+  for (let i = 0; i < Math.min(n, MAX_POOLS); i++) {
+    const p = POOLS[i] as Pool;
+    if (sp?.c) {
+      c.globalAlpha = p.g;
+      c.drawImage(sp.c, Math.round((p.sx - sp.hw) * k) / k, Math.round((p.sy - sp.hh) * k) / k, sp.c.width / k, sp.c.height / k);
+    } else {
+      PS.x = p.sx;
+      PS.y = p.sy;
+      drawLampPool(gamePen(c), PS, { lit: true, glow: p.g });
+    }
+  }
+  c.globalAlpha = 1;
+}
+
 /** One frame of the scene (03 7.9). Reads the sim, writes nothing to it. */
 export function draw(): void {
   const c = getCtx();
@@ -52,9 +134,11 @@ export function draw(): void {
   // 3 the apron ground: the river, the quay, the pavement, the street, the far bank
   css(c);
   apronGround(c);
-  // 4 the park's tiles, ribbons, petals, puddles, detail and bed flowers
+  // 4 the park's tiles, ribbons, petals, puddles, detail and bed flowers; then the lamps' ground pools over them and the apron's ground
   css(c);
   drawGround(c);
+  css(c);
+  drawLampPools(c);
   // 5 the ponds and canals (cached outlines)
   css(c);
   drawWater(c);

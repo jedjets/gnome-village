@@ -1,9 +1,12 @@
 // tests/park.test.ts
 // Locks register 3.1 / 02 2.3-2.4 / 08 2.2 / 03 7.4: the five gates, the boundary predicates, nearestGate, and the backdrop specification
-// (the quay, the river, the pavement, the railing pieces, the facade blocks, the skyline). Also the empty charm API (03 6.7, S2 stub).
+// (the quay, the river, the pavement, the railing pieces, the street trees and lamps, the facade blocks, the skyline). Also the empty
+// charm API (03 6.7, S2 stub).
 import { describe, it, expect } from 'vitest';
 import { N, inB } from '../src/world/grid.ts';
-import { APRON, BACKDROP, GATES, SKYLINE, bandRects, facadeBlocks, gateById, isBoundary, isGateTile, nearestGate, railPieces, streetTrees } from '../src/world/park.ts';
+import {
+  APRON, BACKDROP, GATES, SKYLINE, bandRects, facadeBlocks, gateById, isBoundary, isGateTile, nearestGate, railPieces, streetLamps, streetTrees,
+} from '../src/world/park.ts';
 import { addSource, charmAt, charmDirty, markCharmDirty, rebuildCharm } from '../src/world/charm.ts';
 
 describe('world/park gates (02 2.4)', () => {
@@ -63,7 +66,7 @@ describe('world/park bounds (02 2.1, 2.3)', () => {
 describe('world/park backdrop (register 3.1 the boulevard, 03 7.4)', () => {
   it('the bands: quay at y -1, river -2 to -8; on E, S, W rings 1-2 tree pavement, 3-4 road, 5 far pavement, 6-7 facades; 8 deep', () => {
     expect(BACKDROP).toMatchObject({ quayY: -1, riverFrom: -2, riverTo: -8, treePavement: [1, 2], road: [3, 4], farPavement: 5 });
-    expect(BACKDROP).toMatchObject({ facadesFrom: 6, facadesTo: 7, treeLine: 1.5, treeStep: 2, gateClear: 2 });
+    expect(BACKDROP).toMatchObject({ facadesFrom: 6, facadesTo: 7, treeLine: 1.5, treeStep: 2, gateClear: 2, lampLine: 2.2, lampStep: 4 });
     expect(BACKDROP).toMatchObject({ facadeAlong: 3, facadeDepth: 2, facadeHeight: 6, railHeight: 0.5, farBankFrom: -9 });
     expect(BACKDROP.facadesTo + 1).toBe(APRON); // ring 8, the back pavement behind the blocks, is the apron's edge
     expect(-BACKDROP.riverTo).toBe(APRON);
@@ -163,6 +166,70 @@ describe('world/park backdrop (register 3.1 the boulevard, 03 7.4)', () => {
           if (y >= 0) expect(ring === 6 || ring === 7, 'ring of ' + key).toBe(true);
           expect(y >= -8 && y <= -1).toBe(false); // the river and the quay
         }
+  });
+});
+
+/** A lamp's place along its street: x on the south, y on the east and west. */
+const along = (l: { side: string; x: number; y: number }): number => (l.side === 'south' ? l.x : l.y);
+/** A point as a string to 1e-6, for comparing sets of float positions. */
+const key = (x: number, y: number): string => x.toFixed(6) + ',' + y.toFixed(6);
+
+describe('world/park street lamps (register 3.1 and section 4 row Street lamps, 2026-10-13; 03 7.4 item 4; 04 6.4)', () => {
+  it('the knobs: the kerb line 2.2 beyond the boundary tiles\' centres, one lamp every 4 tiles; the base stays on the pavement', () => {
+    expect(BACKDROP).toMatchObject({ lampLine: 2.2, lampStep: 4 });
+    expect(BACKDROP.lampLine + 0.15).toBeLessThan(BACKDROP.treePavement[1] + 0.5); // the base disc (0.3 wide) inside the kerb edge at 2.5
+  });
+  it('32 lamps with ids 1..32: 10 on each street and one on each southern corner\'s kerb diagonal', () => {
+    const L = streetLamps();
+    expect(L).toHaveLength(32);
+    expect(L.map((l) => l.id)).toEqual(Array.from({ length: 32 }, (_, i) => i + 1));
+    const bySide = (s: string): number => L.filter((l) => l.side === s).length;
+    expect([bySide('south'), bySide('east'), bySide('west'), bySide('north')]).toEqual([12, 10, 10, 0]);
+    const corners = L.filter((l) => Math.abs(l.y - 49.2) < 1e-9 && (Math.abs(l.x + 2.2) < 1e-9 || Math.abs(l.x - 49.2) < 1e-9));
+    expect(corners.map((l) => l.side)).toEqual(['south', 'south']);
+  });
+  it('every lamp stands on the kerb line: x = -2.2 on the west, 49.2 on the east, y = 49.2 on the south (corners included)', () => {
+    for (const l of streetLamps()) {
+      if (l.side === 'west') expect(l.x).toBeCloseTo(-2.2, 12);
+      if (l.side === 'east') expect(l.x).toBeCloseTo(49.2, 12);
+      if (l.side === 'south') expect(l.y).toBeCloseTo(49.2, 12);
+      expect(l.x > -0.5 && l.x < 47.5 && l.y > -0.5 && l.y < 47.5).toBe(false); // never on the park
+      expect(Math.min(l.x, l.y)).toBeGreaterThan(-2.5); // on the tree pavement, inside the kerb, short of the quay
+      expect(Math.max(l.x, l.y)).toBeLessThan(49.5);
+      expect(l.y).toBeGreaterThan(0.5); // by the quay the last lamp stands between the last two trees
+    }
+  });
+  it('along each street, midway between two places of the trees\' 2-tile step, in every second gap: 4 tiles apart but at the gates', () => {
+    for (const side of ['south', 'west', 'east']) {
+      const row = streetLamps().filter((l) => l.side === side && (side !== 'south' || (l.x > -2 && l.x < 49)));
+      for (const l of row) expect(((along(l) + 1.5) % 4 + 4) % 4).toBe(3); // 1.5, 5.5 ... 45.5: the second gap from each corner tree
+      const a = row.map(along).sort((p, q) => p - q);
+      for (let k = 1; k < a.length; k++) expect([4, 8, 12]).toContain((a[k] as number) - (a[k - 1] as number)); // 8 and 12 across a gate
+    }
+  });
+  it('none within 2 tiles of a gate\'s centre along its street', () => {
+    for (const l of streetLamps())
+      for (const g of GATES) {
+        if (g.side !== l.side) continue;
+        const c = l.side === 'south' ? (g.tiles[0].x + g.tiles[1].x) / 2 : (g.tiles[0].y + g.tiles[1].y) / 2;
+        expect(Math.abs(along(l) - c)).toBeGreaterThan(2);
+      }
+  });
+  it('none closer than 0.9 tiles to any street tree (the corner lamps clear their corner tree by 0.99)', () => {
+    let min = Infinity;
+    for (const l of streetLamps()) for (const t of streetTrees()) min = Math.min(min, Math.hypot(l.x - t.x, l.y - t.y));
+    expect(min).toBeGreaterThanOrEqual(0.9);
+    expect(min).toBeCloseTo(0.7 * Math.SQRT2, 9);
+  });
+  it('the east row mirrors the west row under x -> 47 - x, and the whole set is mirror-symmetric', () => {
+    const L = streetLamps();
+    const west = L.filter((l) => l.side === 'west').map((l) => key(47 - l.x, l.y)).sort();
+    const east = L.filter((l) => l.side === 'east').map((l) => key(l.x, l.y)).sort();
+    expect(west).toEqual(east);
+    expect(L.map((l) => key(47 - l.x, l.y)).sort()).toEqual(L.map((l) => key(l.x, l.y)).sort());
+  });
+  it('fixed: the same list on every call (cached, no seed)', () => {
+    expect(streetLamps()).toBe(streetLamps());
   });
 });
 

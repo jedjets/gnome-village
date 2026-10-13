@@ -1,8 +1,8 @@
 // src/render/apron.ts
 // The apron drawables the painter sorts with the props (03 7.4 item 4; 04 6.4): one railing piece per boundary tile except the gates,
-// the five gates (two stone pillars with single-globe lamps and open iron leaves), the street trees (boulevard.ts's), the facade blocks as
-// iso boxes in the manner of the board's tile 11 (a cafe with its awning and three bistro tables on each of E, S and W), the moored
-// peniche and a sailboat. Split out of backdrop.ts (AGENTS rule 9; 03 2.7 row apron.ts), which keeps the sky and the apron ground.
+// the five gates (two stone pillars with single-globe lamps and open iron leaves), the street trees and street lamps (boulevard.ts's), the
+// facade blocks as iso boxes in the manner of the board's tile 11 (a cafe with its awning and three bistro tables on each of E, S and W),
+// the moored peniche and a sailboat. Split out of backdrop.ts (AGENTS rule 9; 03 2.7 row apron.ts), which keeps the sky and the apron ground.
 // Ported from GV 6953-6965 (wp, poly, faceVis, faceLight, shade, h01: the iso box kit), 7509-7547 (fencePieces: the railing idea).
 // Verdict: ADAPT. Changes: boxes are prisms of world points, any polygon, faces culled by faceVis and lit by faceLight; a facade block is
 // one drawable at the largest depth of its footprint (03 7.2 item 2); a block nearer the camera than the park centre fades over 0.4 s of
@@ -23,7 +23,7 @@ import { depthOf, footprintDepth, type Drawable } from './order.ts';
 import { GC, faceLight, h01, lampGlow, mix, shade, style } from './ambient.ts';
 import { drawBarge, drawSail, prism, sailX, sq, vis, xy } from './backdrop.ts';
 import { drawBistroTable } from './props.ts';
-import { BOULEVARD, streetTreeDrawables } from './boulevard.ts';
+import { BOULEVARD, streetLampDrawables, streetTreeDrawables } from './boulevard.ts';
 import { gamePen, gameProj } from './flora.ts';
 import { resetTransform } from './ground.ts';
 
@@ -109,7 +109,7 @@ function centreAlong(b: FacadeBlock): number {
 
 /**
  * Phase 6's apron share (03 7.9): every apron drawable near the screen with its depth for this angle (a block takes the largest depth
- * of its footprint tiles), the street trees, and the near-side cut of each facade eased over 0.4 s (04 6.4). The list is reused.
+ * of its footprint tiles), the street trees and lamps, and the near-side cut of each facade eased over 0.4 s (04 6.4). The list is reused.
  */
 export function apronDrawables(): Drawable[] {
   if (!ITEMS.length) build();
@@ -131,6 +131,7 @@ export function apronDrawables(): Drawable[] {
     OUT.push(it);
   }
   streetTreeDrawables(OUT);
+  streetLampDrawables(OUT);
   return OUT;
 }
 
