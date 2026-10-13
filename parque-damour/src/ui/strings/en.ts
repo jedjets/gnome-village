@@ -127,6 +127,7 @@ export const en: Record<string, string> = {
   'reason.straight_line': 'in a straight line from the last piece',
   'reason.run_too_long': '14 pieces at most',
   'reason.nothing_to_undo': 'nothing to undo',
+  'reason.park_full': 'The park is full',
   'reason.park_full_props': 'the park cannot hold any more',
   'reason.not_in_avatar': 'not while being someone',
   'reason.wrong_side': 'not for this side',

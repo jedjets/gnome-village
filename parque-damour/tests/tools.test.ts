@@ -11,6 +11,7 @@ import { idsState } from '../src/core/ids.ts';
 import { stateHash, worldHash } from '../src/save/store.ts';
 import { BEDC, I, KIND, Kind, OCC, WATER, WEAR, addProp, layersState, markBlockDirty, propById, props } from '../src/world/grid.ts';
 import { setMode } from '../src/play/mode.ts';
+import { spawnVisitor, type Visitor } from '../src/entities/visitor.ts';
 import {
   CAP_BANDSTANDS, CAP_KIOSKS, CAP_PROPS_SOFT, CAP_RUN_TILES, TOOLS, TOOL_IDS, ghost, nextSpecies, propAt, servingTile, setNextSpecies, toolById,
   type ToolId,
@@ -184,7 +185,18 @@ describe('bridge reasons and spans (02 8.3 bridge row, 8.4 water list; world/wat
     }
   });
 
-  it.todo('a visitor on the span is reason.someone_on_it (needs visitors: S4 entities/visitor.ts someoneOn; 07 S4)');
+  it('a visitor on the span is reason.someone_on_it; off it the bridge places (02 8.4 water list item 3; entities/visitor.ts someoneOn)', () => {
+    water(1, 3, 6, 2); // the crossing at (3, 3)-(3, 4)
+    const v = spawnVisitor('single', 'g_north') as Visitor;
+    v.x = 3.2;
+    v.y = 3.6; // rounds to (3, 4), on the span
+    v.path = null;
+    expect(ghost('bridge', at(3, 3)).reason).toBe('reason.someone_on_it');
+    expect(reasonOf(tool({ tool: 'bridge', at: at(3, 4) }))).toBe('reason.someone_on_it');
+    expect(props.some((p) => p.kind === 'bridge' && p.x === 3)).toBe(false);
+    v.y = 5.4; // on the lawn below the water
+    expect(reasonOf(tool({ tool: 'bridge', at: at(3, 3) }))).toBe('ok');
+  });
 });
 
 describe('runs (02 8.2 run row; GV pbTap 5991-5997)', () => {
@@ -366,7 +378,17 @@ describe('kiosk and remove side effects (02 8.3 kiosk and remove rows)', () => {
 
   it.todo('placing a kiosk spawns one vendor; remove on it sends the vendor away (needs staff: S4 entities/staff.ts vendorArrive, vendorLeave; 07 S4)');
   it.todo('remove on a bench stands its sitters up (needs visitors: S4 entities/visitor.ts standUpFrom; 07 S4)');
-  it.todo('remove on a bridge with someone on it is reason.someone_on_it (needs visitors: S4 entities/visitor.ts someoneOn; 07 S4)');
+  it('remove on a bridge with someone on it is reason.someone_on_it; once they step off it goes (02 8.3 remove row, 8.4)', () => {
+    const v = spawnVisitor('single', 'g_north') as Visitor;
+    v.x = 34;
+    v.y = 11.7; // on the starter bridge's south tile (34, 12)
+    v.path = null;
+    expect(reasonOf(tool({ tool: 'remove', at: at(34, 11) }))).toBe('reason.someone_on_it');
+    expect(props.some((p) => p.kind === 'bridge')).toBe(true);
+    v.y = 13.2; // the landing at (34, 13)
+    expect(reasonOf(tool({ tool: 'remove', at: at(34, 11) }))).toBe('ok');
+    expect(props.some((p) => p.kind === 'bridge')).toBe(false);
+  });
 });
 
 describe('ghost is pure (03 2.6 tools.ts; 08 2.5)', () => {

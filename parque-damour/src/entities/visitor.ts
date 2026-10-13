@@ -1,24 +1,485 @@
 // src/entities/visitor.ts
-// The Visitor record, factory, arrivals scheduler, stepVisitors, removal at a gate, caps; the one MODE branch at the decide cadence (03 2.5, 4.4).
-// Ported from GV 1387-1399 (factory), 5689-5716 (updateGnomes), 4472-4504 (newcomer) in S4. ADAPT.
-// TODO(S4): fills this file; S0 holds only the header and a placeholder export.
-// S3 adds the hooks the park tools and their undo call (02 8.3 remove and bridge rows, 02 8.5 item 3, 03 5.6 item 3): no-ops until S4.
+// The Visitor record (03 3.3), the factory, the arrivals scheduler, callVisitor ("+"), removal at the outside tile, the cap of 30 people
+// without cameos, the decide cadence with the one MODE branch (03 4.4), and the park tools' hooks of S3 (02 8.3, 8.5 item 3).
+// Ported from GV 1387-1399 (makeGnome: the record and its starting values), 4488-4503 (addVillager: the cap and the complementary-sex
+// rule), 5689-5716 (updateGnomes: the 5696 cadence and its MODE branch only).
+// Verdict: ADAPT. Changes: the record of 03 3.3 with ids for every link (03 P5); starting needs of 02 4.2 item 5 (hunger 0.2-0.5, energy
+// 0.5-0.9, comfort 0.7, social 0.2-0.6); visit 0.25-0.5 day (tourist 0.25; staff never); the cap is 30 people, cameos excluded (GV
+// POP_CAP 44), enforced in spawnVisitor and callVisitor; visitors appear on a gate's outside tile and step onto its first tile (02 4.2
+// item 3) instead of a sea shore; the complementary rule re-rolls a single's sex and seeks once when the single seeks f or m and no
+// unpaired single in the park is compatible (02 4.2 item 7; GV chose the sex directly); the arrivals scheduler of 02 4.2 is new (GV's
+// strangers came a day after someone became single); the cadence calls the injected avatarDecide for the possessed actor (03 4.4).
+// Dropped from the range: 1388-1398's age, stage, height, carry, swim, climb, float, rescue, indoors, home, mate, craft and animation
+// fields; 4489's toast (callVisitor returns reason.park_full, the shell toasts it); 4493-4494 and 4498 (village position, shore, splash);
+// 4497's g.called (write-only, review 16); 4500 (the inline feed sentence); 5690-5695 and 5697-5715 (dug, needs, act, building, ride,
+// float, bend, hop, wary, tag, blink, splash: needs.ts, act.ts and move.ts own what is kept).
+//
+// Draw order on the sim stream (rng), so a replay meets the same numbers:
+//   stepArrivals, when an arrival is due: the gate (1), the archetype (1); then the group: a tourist rolls alone or pair (1); a couple
+//     draws its shared leaveAt (1); then each member's own draws below; last, the gap to the next arrival (1).
+//   callVisitor: the gate (1, unless given), single 60 % (1), the archetype when not single (1); then the group as above (no gap).
+//   spawnVisitor, per person: lookSeed (1), sex (1, unless fixed), seeks (1, singles only; a re-roll draws sex and seeks again), ageWord
+//     (1, for single, tourist, jogger, artist, busker, dog walker), the name (1, names.ts takeName; none for a regular or the gardener),
+//     hunger, energy, social (3), leaveAt (1, unless fixed: a tourist's, staff's, a couple's (its one draw comes before the two
+//     members), a child's (the parent's)), decideT (1).
+// lookSeed: the low 3 bits are the signature colour index (04 7.3; signatureOf); bit 3 a hat and bit 4 a purse for those whose
+// archetype does not fix them; the renderer reads the rest (lookSeed >>> 5) for hair, coat and skin.
+// Part A of S4 (07 S4.6 steps 1-5): the running loop calls none of the scheduler, the factory or the cadence yet (part B wires
+// stepArrivals, the cadence, the visitor.call command and the save); the park tools already call the three hooks at the end of the file,
+// on a list that stays empty until then, and a new park or a restore empties it (resetVisitors) without a draw.
 import type { XY } from '../core/math.ts';
-import type { PropId } from '../core/ids.ts';
+import { START_ABS, STEPS_PER_DAY, T, type Phase } from '../core/clock.ts';
+import { chance, rnd, rng } from '../core/rng.ts';
+import { nextVisitorId, type CreatureId, type GateId, type PairId, type PropId, type VisitorId } from '../core/ids.ts';
+import { emit } from '../core/events.ts';
+import { OK, fail, onResetCommands, onRestoreCommands, type Result } from '../core/commands.ts';
+import { W, type WeatherKind } from '../core/weather.ts';
+import { I, inB, propById } from '../world/grid.ts';
+import { GATES, gateById } from '../world/park.ts';
+import { getMode, getPlayer } from '../play/mode.ts';
+import { GARDENER_NAME, regularArrived, regularDue, regularLeft, releaseName, resetNames, takeName, type RegularDef, type Seeks, type Sex } from './names.ts';
+import { NO_TARGET, R_OPEN_NEAR, goTo, openNear } from './move.ts';
 
-export const SLICE = 'S4' as const;
+export type { Prop, PropKind } from '../world/grid.ts'; // 03 3.6: the Prop type, re-exported here
+export type { Seeks, Sex } from './names.ts';
 
-/** A prop is going (`remove`, a tree tapped with the tree tool, or an undo): whoever sits on it stands up (02 8.3, "sitters stand"). */
-export function standUpFrom(_propId: PropId): void {
-  // TODO(S4): every visitor with sitPropId === propId stands up (and drops the prop from its job).
+/** The register's archetypes (3.4, ids without the space) plus `child` and `cameo` (03 3.3, A3). */
+export type Archetype =
+  | 'single' | 'couple' | 'family' | 'child' | 'elder' | 'tourist' | 'jogger' | 'artist' | 'busker' | 'dogwalker' | 'gardener' | 'vendor' | 'cameo';
+export type AgeWord = 'young' | 'grown' | 'elder';
+/** The ten kinds of register section 5; embarrass.ts (S5) owns the list. */
+export type EmbKind = 'poop' | 'soaked' | 'trip' | 'snatched' | 'wasp' | 'drenched' | 'rival' | 'mime' | 'fog' | 'flock';
+export type Job = { propId?: PropId; tile?: XY; pairId?: PairId; visitorId?: VisitorId; creatureId?: CreatureId; kind?: string };
+export type Items = { hat: boolean; purse: boolean; baguette: boolean; iceCream: boolean };
+
+/** 03 3.3. */
+export type Visitor = {
+  id: VisitorId; name: string; sex: Sex; archetype: Archetype; ageWord: AgeWord;
+  seeks: Seeks; lookSeed: number;
+  x: number; y: number; face: -1 | 1; st: string; t: number;
+  path: XY[] | null; pi: number; ptx: number; pty: number; replanT: number; blocked: number; blockedList: number[];
+  job: Job;
+  hunger: number; energy: number; comfort: number; social: number;
+  arrivedAt: number; leaveAt: number; gateIn: GateId; gateOut: GateId | null;
+  pairId: PairId; coupleOf: VisitorId; parentOf: VisitorId; childOf: VisitorId;
+  items: Items;
+  embToday: number; embDay: number; pendingEmb: EmbKind | null; regularId: number; decideT: number;
+  sitPropId: PropId; basket: number; shares: number; cdUntil: number; spawnedForPlayer: boolean;
+};
+
+/* ---------- numbers (02 4.2, 06 1.4, 1.8, 5.1, 14.1, 15) ---------- */
+export const CAP_PEOPLE = 30;
+export const CAP_ARTISTS = 1;
+export const CAP_AI_BUSKERS = 1;
+export const CAP_DOGWALKERS = 2;
+export const ARRIVAL_GAP_MIN = 6; // s
+export const ARRIVAL_GAP_MAX = 14;
+export const VISIT_MIN = 0.25; // days
+export const VISIT_MAX = 0.5;
+export const VISIT_TOURIST = 0.25;
+export const CALL_SINGLE = 0.6; // 06 1.8 CALL_SINGLE_PCT 60
+export const TOURIST_PAIR = 0.4; // 06 5.1: alone 60 %, pair 40 %
+export const DECIDE_MIN = 0.5; // s (GV 5696)
+export const DECIDE_MAX = 1.3;
+export const COMFORT_START = 0.7;
+export const SIGNATURES = 8; // 04 7.3
+/** "Never leaves" for staff, as a finite number of days so the record survives JSON (Infinity would save as null). */
+export const NEVER = 1e9;
+
+/** Population target by day phase (02 4.2 item 1, 06 1.3). */
+export const PHASE_TARGET: Readonly<Record<Phase, number>> = {
+  night: 3, dawn: 6, morning: 16, midday: 20, afternoon: 24, golden: 20, dusk: 14, evening: 9,
+};
+/** Arrival factor by the global weather kind (02 3.3, 06 14.1). */
+export const WEATHER_ARRIVALS: Readonly<Record<WeatherKind, number>> = {
+  clear: 1.0, fair: 1.0, cloudy: 0.9, breeze: 0.9, rain: 0.5, shower: 0.7, mist: 0.8, snow: 0.6,
+};
+/** Arrival factor by season, spring to winter (02 3.4, 06 15). */
+export const SEASON_ARRIVALS: readonly number[] = [1.0, 1.1, 1.0, 0.7];
+/** Archetype weights per arrival, in the order of 02 4.2 item 4 (sum 100). */
+export const ARCHETYPE_WEIGHTS: ReadonlyArray<readonly [Archetype, number]> = [
+  ['single', 30], ['couple', 12], ['family', 12], ['elder', 10], ['tourist', 12], ['jogger', 8], ['artist', 4], ['dogwalker', 8], ['busker', 4],
+];
+/** seeks for a single (02 4.2 item 7): f 45, m 45, any 10. */
+export const SEEKS_WEIGHTS: ReadonlyArray<readonly [Seeks, number]> = [['f', 45], ['m', 45], ['any', 10]];
+
+const AGE_ROLLED: ReadonlySet<Archetype> = new Set<Archetype>(['single', 'tourist', 'jogger', 'artist', 'busker', 'dogwalker']);
+const HAT_ALWAYS: ReadonlySet<Archetype> = new Set<Archetype>(['elder', 'tourist', 'artist', 'vendor']); // 04 7.2: cap, sunhat, floppy hat
+const STAFF: ReadonlySet<Archetype> = new Set<Archetype>(['gardener', 'vendor']);
+
+/* ---------- state ---------- */
+export const visitors: Visitor[] = [];
+const index = new Map<VisitorId, Visitor>();
+let arrivalT = 0; // s until the next arrival may come; 0 at a new park: the first comes on the first step
+let avatarDecide: (v: Visitor) => void = () => {};
+
+export function byId(id: VisitorId): Visitor | undefined {
+  return index.get(id);
 }
 
-/** Tiles (indices) that a tool or an undo just made blocked: a visitor standing on one moves to the nearest open tile (GV openNear 1559). */
-export function moveOffBlocked(_tiles: readonly number[]): void {
-  // TODO(S4): openNear(x, y, R_OPEN_NEAR) for every visitor and creature on one of these tiles (02 8.5 item 3).
+/** People in the park: everyone but cameos (03 3.11). */
+export function people(): number {
+  let n = 0;
+  for (const v of visitors) if (v.archetype !== 'cameo') n++;
+  return n;
 }
 
-/** True when someone stands on one of these tiles: the bridge stamp and `remove` refuse with `reason.someone_on_it` (02 8.4). */
-export function someoneOn(_tiles: readonly XY[]): boolean {
-  return false; // TODO(S4): a visitor (or a dog) whose rounded tile is one of these.
+/** The colour index of the scarf (04 7.3): the low 3 bits of lookSeed. */
+export function signatureOf(lookSeed: number): number {
+  return lookSeed % SIGNATURES;
 }
+
+/** The step count now, from the clock (entities do not import the conductor; T.abs is START_ABS + tick / STEPS_PER_DAY). */
+function nowTick(): number {
+  return Math.round((T.abs - START_ABS) * STEPS_PER_DAY);
+}
+
+/** The pick of `table` for `u` in [0, total): one place per weight, in table order. */
+function byWeight<K>(u: number, table: ReadonlyArray<readonly [K, number]>): K {
+  let acc = 0;
+  for (const [k, w] of table) {
+    acc += w;
+    if (u < acc) return k;
+  }
+  return (table[table.length - 1] as readonly [K, number])[0];
+}
+
+/** The gate for `u` in [0, 100) by the arrival weights of 02 2.4 (30, 30, 15, 15, 10). */
+export function gateForRoll(u: number): GateId {
+  return byWeight(u, GATES.map((g) => [g.id, g.weight] as const));
+}
+
+/** The archetype for `u` in [0, 100) by the weights of 02 4.2 item 4. */
+export function archetypeForRoll(u: number): Archetype {
+  return byWeight(u, ARCHETYPE_WEIGHTS);
+}
+
+/** How many visitors match `pred`. */
+function countWhere(pred: (v: Visitor) => boolean): number {
+  let n = 0;
+  for (const v of visitors) if (pred(v)) n++;
+  return n;
+}
+
+/** 02 4.2 item 4: a roll that hits a full archetype (1 artist, 1 AI busker, 2 dog walkers in the park) becomes a single. */
+export function capArchetype(a: Archetype): Archetype {
+  if (a === 'artist' && countWhere((v) => v.archetype === 'artist') >= CAP_ARTISTS) return 'single';
+  if (a === 'busker' && countWhere((v) => v.archetype === 'busker' && !v.spawnedForPlayer) >= CAP_AI_BUSKERS) return 'single';
+  if (a === 'dogwalker' && countWhere((v) => v.archetype === 'dogwalker') >= CAP_DOGWALKERS) return 'single';
+  return a;
+}
+
+/** The population target: by phase, times the global weather and the season factors, rounded (02 4.2 item 1; Math.round, .5 up). */
+export function targetPeople(phase: Phase, kind: WeatherKind, season: number): number {
+  return Math.round(PHASE_TARGET[phase] * WEATHER_ARRIVALS[kind] * (SEASON_ARRIVALS[season] ?? 1));
+}
+
+/** The target now: the clock's phase and season and the global weather (arrivals ignore overrides, 02 3.5). */
+export function currentTarget(): number {
+  return targetPeople(T.phase, W.kind, T.season);
+}
+
+/** Mutually compatible by seeks (register 3.5): each seeks the other's sex or anyone. */
+export function compatible(a: { sex: Sex; seeks: Seeks }, b: { sex: Sex; seeks: Seeks }): boolean {
+  return (a.seeks === 'any' || a.seeks === b.sex) && (b.seeks === 'any' || b.seeks === a.sex);
+}
+
+/**
+ * The complementary rule (02 4.2 item 7, GV addVillager 4490-4492): a single who seeks f or m re-rolls once when unpaired singles are in
+ * the park and none of them is compatible. An empty park, or one with only paired singles, re-rolls nothing (no roll could help).
+ */
+export function needsReroll(sex: Sex, seeks: Seeks): boolean {
+  if (seeks === 'any') return false;
+  let any = false;
+  for (const o of visitors) {
+    if (o.archetype !== 'single' || o.pairId !== 0) continue;
+    any = true;
+    if (compatible({ sex, seeks }, o)) return false;
+  }
+  return any;
+}
+
+/* ---------- the factory (GV makeGnome 1387) ---------- */
+
+export type SpawnOpts = {
+  sex?: Sex; // fixed sex (a couple's members, a cameo)
+  seeks?: Seeks;
+  ageWord?: AgeWord;
+  name?: string; // a fixed name (a cameo's): no draw
+  regular?: RegularDef; // a returning regular: name, sex, seeks and ageWord from 06 6.2
+  leaveAt?: number; // a fixed leaveAt in days: no draw
+  signature?: number; // share this signature colour (a couple's second member, 04 7.3 item 5)
+  spawnedForPlayer?: boolean; // summoned by an ability (c_musician's busker): not an AI busker
+  at?: XY; // appear here, idle, instead of on the gate's outside tile (a vendor on its serving tile)
+};
+
+function rollSex(): Sex {
+  return rng() < 0.5 ? 'f' : 'm';
+}
+function rollSeeks(): Seeks {
+  return byWeight(rng() * 100, SEEKS_WEIGHTS);
+}
+
+/**
+ * Create a visitor of `arch` on `gate`'s outside tile, in state `arrive` and walking onto the gate's first tile (02 4.2 item 3), with the
+ * starting values of 02 4.2 items 5-7. Null when the park already holds 30 people (cameos do not count and are never refused, 03 3.11).
+ * The draws follow the order in the file header.
+ */
+export function spawnVisitor(arch: Archetype, gate: GateId, opts: SpawnOpts = {}): Visitor | null {
+  if (arch !== 'cameo' && people() >= CAP_PEOPLE) return null;
+  const g = gateById(gate);
+  let lookSeed = Math.floor(rng() * 4294967296);
+  if (opts.signature !== undefined) lookSeed = lookSeed - (lookSeed % SIGNATURES) + (opts.signature % SIGNATURES);
+  const reg = opts.regular;
+  let sex: Sex = reg?.sex ?? opts.sex ?? (arch === 'gardener' ? 'm' : rollSex());
+  let seeks: Seeks = reg?.seeks ?? opts.seeks ?? 'any';
+  if (!reg && opts.seeks === undefined) {
+    if (arch === 'single') {
+      seeks = rollSeeks();
+      if (opts.sex === undefined && needsReroll(sex, seeks)) {
+        sex = rollSex();
+        seeks = rollSeeks();
+      }
+    } else if (arch === 'couple') seeks = sex === 'f' ? 'm' : 'f';
+  }
+  const ageWord: AgeWord =
+    reg?.ageWord ?? opts.ageWord ?? (AGE_ROLLED.has(arch) ? (chance(0.5) ? 'young' : 'grown') : arch === 'elder' ? 'elder' : arch === 'child' ? 'young' : 'grown');
+  const name = reg?.name ?? opts.name ?? (arch === 'gardener' ? GARDENER_NAME : takeName(sex));
+  const hunger = rnd(0.2, 0.5);
+  const energy = rnd(0.5, 0.9);
+  const social = rnd(0.2, 0.6);
+  const arrivedAt = T.abs;
+  const leaveAt =
+    opts.leaveAt ?? (STAFF.has(arch) ? NEVER : arch === 'tourist' ? arrivedAt + VISIT_TOURIST : arrivedAt + rnd(VISIT_MIN, VISIT_MAX));
+  const decideT = rnd(0, 0.6); // GV 1391: the first decisions are staggered
+  const plain = arch !== 'child' && !STAFF.has(arch);
+  const items: Items = {
+    hat: HAT_ALWAYS.has(arch) || (plain && ((lookSeed >>> 3) & 1) === 1),
+    purse: plain && ((lookSeed >>> 4) & 1) === 1,
+    baguette: false,
+    iceCream: false,
+  };
+  const at = opts.at ?? g.outside;
+  const v: Visitor = {
+    id: nextVisitorId(), name, sex, archetype: arch, ageWord, seeks, lookSeed,
+    x: at.x, y: at.y, face: 1, st: opts.at ? 'idle' : 'arrive', t: 0,
+    path: null, pi: 0, ptx: NO_TARGET, pty: NO_TARGET, replanT: 0, blocked: 0, blockedList: [],
+    job: {},
+    hunger, energy, comfort: COMFORT_START, social,
+    arrivedAt, leaveAt, gateIn: gate, gateOut: null,
+    pairId: 0, coupleOf: 0, parentOf: 0, childOf: 0,
+    items,
+    embToday: 0, embDay: 0, pendingEmb: null, regularId: reg?.regularId ?? 0, decideT,
+    sitPropId: 0, basket: 0, shares: 0, cdUntil: 0, spawnedForPlayer: opts.spawnedForPlayer ?? false,
+  };
+  visitors.push(v);
+  index.set(v.id, v);
+  if (!opts.at) goTo(v, g.tiles[0].x, g.tiles[0].y); // one step onto the gate (02 2.4 "Done when")
+  emit({ kind: 'arrive', tick: nowTick(), x: v.x, y: v.y, ids: [v.id], params: { regularId: v.regularId } });
+  return v;
+}
+
+/**
+ * Bring in one arrival of `arch` through `gate` (02 4.2, 06 5.1): a couple (one f, one m, linked by coupleOf, one shared leaveAt and one
+ * signature colour), a family (a parent and a child, linked by parentOf and childOf, the child leaving with the parent), a tourist alone
+ * or with a second tourist (40 %), or one person. A group of two with room for one comes as a single (a tourist comes alone); a single
+ * is replaced by a regular who is due (02 4.5 item 3). Returns the people who came.
+ */
+export function arriveGroup(arch: Archetype, gate: GateId): Visitor[] {
+  const room = CAP_PEOPLE - people();
+  if (room <= 0) return [];
+  let a = arch;
+  if ((a === 'couple' || a === 'family') && room < 2) a = 'single';
+  const out: Visitor[] = [];
+  const add = (v: Visitor | null): Visitor | null => {
+    if (v) out.push(v);
+    return v;
+  };
+  switch (a) {
+    case 'single': {
+      const reg = regularDue(T.day, T.f);
+      const v = add(spawnVisitor('single', gate, reg ? { regular: reg } : {}));
+      if (v && reg) regularArrived(reg.regularId, v.id, T.day);
+      break;
+    }
+    case 'couple': {
+      const leaveAt = T.abs + rnd(VISIT_MIN, VISIT_MAX);
+      const f = add(spawnVisitor('couple', gate, { sex: 'f', leaveAt }));
+      const m = f && add(spawnVisitor('couple', gate, { sex: 'm', leaveAt, signature: signatureOf(f.lookSeed) }));
+      if (f && m) {
+        f.coupleOf = m.id;
+        m.coupleOf = f.id;
+        // TODO(S5): romance.ts makes them a Pair at stage 3 (Bench) with affinity rnd(0.55, 0.70) and sets both pairId (register 3.4).
+      }
+      break;
+    }
+    case 'family': {
+      const p = add(spawnVisitor('family', gate));
+      const c = p && add(spawnVisitor('child', gate, { leaveAt: p.leaveAt }));
+      if (p && c) {
+        p.parentOf = c.id;
+        c.childOf = p.id;
+      }
+      break;
+    }
+    case 'tourist': {
+      const two = chance(TOURIST_PAIR) && room >= 2;
+      add(spawnVisitor('tourist', gate));
+      if (two) add(spawnVisitor('tourist', gate));
+      break;
+    }
+    default:
+      add(spawnVisitor(a, gate));
+  }
+  return out;
+}
+
+/**
+ * Phase 7 of a step (02 4.2 items 1-4, 03 6.3 item 1): while the people in the park are fewer than the target and fewer than 30, an
+ * arrival comes 6 to 14 s after the last; at the target nobody comes and the timer stays run out, so the next arrival comes as soon as
+ * there is room.
+ */
+export function stepArrivals(dt: number): void {
+  if (arrivalT > 0) arrivalT = Math.max(0, arrivalT - dt);
+  if (arrivalT > 0) return;
+  const n = people();
+  if (n >= currentTarget() || n >= CAP_PEOPLE) return;
+  const gate = gateForRoll(rng() * 100);
+  const arch = capArchetype(archetypeForRoll(rng() * 100));
+  arriveGroup(arch, gate);
+  arrivalT = rnd(ARRIVAL_GAP_MIN, ARRIVAL_GAP_MAX);
+}
+
+/**
+ * The "+" on the Visitors chip (02 12.2, GV addVillager 4488): one arrival now through `gate` or a gate by weight, a single 60 % of the
+ * time, else by the archetype weights and caps; whatever the target. Refused with reason.park_full at 30 people (GV 4489).
+ */
+export function callVisitor(gate?: GateId | null): Result {
+  if (people() >= CAP_PEOPLE) return fail('reason.park_full');
+  const g = gate ?? gateForRoll(rng() * 100);
+  const arch = chance(CALL_SINGLE) ? 'single' : capArchetype(archetypeForRoll(rng() * 100));
+  return arriveGroup(arch, g).length > 0 ? OK : fail('reason.park_full');
+}
+
+/**
+ * Take a visitor out of the park (02 4.5 item 1, 6.5): the name is free again, a regular schedules the return (two draws), a seat is
+ * freed, and every link to the visitor drops to 0. romance.ts (S5) dissolves a Pair before its member leaves.
+ */
+export function removeVisitor(id: VisitorId): void {
+  const v = index.get(id);
+  if (!v) return;
+  releaseName(v.name);
+  if (v.regularId !== 0) regularLeft(v.regularId, T.day);
+  const seat = v.sitPropId !== 0 ? propById(v.sitPropId) : undefined;
+  if (seat?.data.sitters) seat.data.sitters = seat.data.sitters.filter((s) => s !== id);
+  for (const o of visitors) {
+    if (o.coupleOf === id) o.coupleOf = 0;
+    if (o.parentOf === id) o.parentOf = 0;
+    if (o.childOf === id) o.childOf = 0;
+    if (o.job.visitorId === id) delete o.job.visitorId;
+  }
+  visitors.splice(visitors.indexOf(v), 1);
+  index.delete(id);
+  emit({ kind: 'leave', tick: nowTick(), x: v.x, y: v.y, ids: [id], params: { regularId: v.regularId } });
+}
+
+/** A leaving visitor on its gateOut's outside tile is removed (02 5.2 rung 3). True when it was. */
+export function leaveIfOutside(v: Visitor): boolean {
+  if (v.st !== 'goLeave' || v.gateOut === null) return false;
+  const o = gateById(v.gateOut).outside;
+  if (Math.round(v.x) !== o.x || Math.round(v.y) !== o.y) return false;
+  removeVisitor(v.id);
+  return true;
+}
+
+/* ---------- the decide cadence (03 4.4, GV 5696) ---------- */
+
+/** play/avatar.ts (S7) hands in its decide at boot, so entities never import it (03 4.4). */
+export function setAvatarDecide(fn: (v: Visitor) => void): void {
+  avatarDecide = fn;
+}
+
+/**
+ * The per-visitor cadence (GV 5696): when decideT runs out it is drawn again in [0.5, 1.3] s, and a visitor not in a `busy` state
+ * decides: the possessed actor in avatar mode through avatarDecide, everyone else through `decide` (brain.ts). The one MODE read in
+ * entities/ (03 4.4).
+ */
+export function decideCadence(v: Visitor, dt: number, decide: (v: Visitor) => void, busy: Readonly<Record<string, true>>): void {
+  v.decideT -= dt;
+  if (v.decideT > 0) return;
+  v.decideT = rnd(DECIDE_MIN, DECIDE_MAX);
+  if (busy[v.st]) return;
+  if (v.id === getPlayer() && getMode() === 'avatar') avatarDecide(v);
+  else decide(v);
+}
+
+/* ---------- the park tools' hooks (S3: 02 8.3, 8.4, 8.5 item 3) ---------- */
+
+/**
+ * A prop is going (`remove`, a tree tapped with the tree tool, or an undo): whoever sits on it stands up, and whoever was on an errand to
+ * it drops the errand; both go idle and decide at the next cadence (02 8.3, "sitters stand").
+ */
+export function standUpFrom(propId: PropId): void {
+  for (const v of visitors) {
+    if (v.sitPropId !== propId && v.job.propId !== propId) continue;
+    v.sitPropId = 0;
+    v.job = {};
+    v.st = 'idle';
+    v.t = 0;
+    v.path = null;
+    v.pi = 0;
+    v.decideT = 0;
+  }
+  const p = propById(propId);
+  if (p?.data.sitters) p.data.sitters = [];
+}
+
+/**
+ * Tiles (indices) that a tool or an undo just made blocked: a visitor standing on one moves to the nearest open tile within 3 (GV openNear
+ * 1559, two draws for the jitter) and replans its walk (02 8.5 item 3). Creatures follow in part B (creatures.ts).
+ */
+export function moveOffBlocked(tiles: readonly number[]): void {
+  const set = new Set(tiles);
+  for (const v of visitors) {
+    const x = Math.round(v.x), y = Math.round(v.y);
+    if (!inB(x, y) || !set.has(I(x, y))) continue;
+    const o = openNear(v.x, v.y, R_OPEN_NEAR);
+    if (!o) continue;
+    v.x = o.x;
+    v.y = o.y;
+    if (v.path) goTo(v, v.ptx, v.pty, true);
+  }
+}
+
+/** True when a visitor stands on one of these tiles (its rounded position): the bridge stamp and `remove` refuse (02 8.4). */
+export function someoneOn(tiles: readonly XY[]): boolean {
+  for (const v of visitors) {
+    const x = Math.round(v.x), y = Math.round(v.y);
+    for (const t of tiles) if (t.x === x && t.y === y) return true;
+  }
+  return false;
+}
+
+/* ---------- state ---------- */
+
+export type ArrivalsState = { arrivalT: number };
+export function arrivalsState(): ArrivalsState {
+  return { arrivalT };
+}
+export function setArrivalsState(s: ArrivalsState): void {
+  arrivalT = s.arrivalT;
+}
+
+/**
+ * A new park (or a restore, whose save holds no visitors before part B): nobody in the park, no name held, the regulars on their first
+ * visit table, the first arrival due at once. No draw, so a new park moves no stream (det-s2, det-s3).
+ */
+export function resetVisitors(): void {
+  visitors.length = 0;
+  index.clear();
+  arrivalT = 0;
+  resetNames();
+}
+
+onResetCommands(resetVisitors);
+onRestoreCommands(resetVisitors);

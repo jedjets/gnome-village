@@ -127,6 +127,7 @@ export const es: Record<string, string> = {
   'reason.straight_line': 'en línea recta desde la última pieza',
   'reason.run_too_long': '14 piezas como mucho',
   'reason.nothing_to_undo': 'nada que deshacer',
+  'reason.park_full': 'El parque está lleno',
   'reason.park_full_props': 'en el parque no cabe nada más',
   'reason.not_in_avatar': 'no mientras eres alguien',
   'reason.wrong_side': 'no es de este bando',
