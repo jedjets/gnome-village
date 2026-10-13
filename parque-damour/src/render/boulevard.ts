@@ -6,7 +6,7 @@
 // street trees, plane trees in season with the park's, as apron drawables blitted from the tree sprite cache (flora.ts), so the painter
 // sorts them with the props. A street tree whose crown would cover park tiles (the sides that face the camera) draws its crown at 35 %
 // over a solid trunk, easing over 0.4 s after a turn, so the park stays in view (the see-through canopy of GV 333-334, v9.2.1; the near-side
-// blocks are apron.ts's opaque ground floors). This is variant 1 of the boulevard gate (register section 4, pending the owner's pick);
+// blocks are apron.ts's opaque ground floors). This is variant 1 of the boulevard gate (register section 4, picked 2026-10-13);
 // BOULEVARD holds its knobs as a parameter table, as props-park.ts's, so a scratch page can show the other variants.
 // NEW: nothing ported (GV has no streets); the sprite blit is GV drawTree 6837-6848 through flora.treeSpriteOf.
 import type { XY } from '../core/math.ts';

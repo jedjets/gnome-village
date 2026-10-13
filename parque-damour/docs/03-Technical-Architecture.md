@@ -894,4 +894,4 @@ Values this document defines that the register does not (the owner may object; o
 Open points for the owner:
 1. Whether a two-player mode should stamp commands with a fixed `LEAD` or use a lockstep "wait for the peer" rule is left to the transport slice; both work with section 5.
 2. Whether `#s=<seed>` in the URL should survive a Continue (GV wrote it on every new island) or be dropped once a save exists. This document writes it only on `park.new`.
-3. The boulevard variant (register section 4, pending): the game draws variant 1 (natural plane trees whose crowns go see-through over the park, a cobbled road, near-side blocks as opaque ground floors, A7) until the owner picks from the scratch page. The style board keeps its cutaway tile (04 §4.2 tile 11) as the record of the gate.
+3. Closed 2026-10-13: the owner picked boulevard variant 1 (register section 4): natural plane trees whose crowns go see-through over the park, a cobbled road, near-side blocks as opaque ground floors (A7), as built. The style board keeps its cutaway tile (04 §4.2 tile 11) as the record of the gate.
