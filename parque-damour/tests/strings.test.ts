@@ -6,7 +6,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { en } from '../src/ui/strings/en.ts';
 import { es } from '../src/ui/strings/es.ts';
-import { t, plural, setLang } from '../src/ui/i18n.ts';
+import { gender, t, plural, setLang } from '../src/ui/i18n.ts';
 import { TOOLS } from '../src/play/tools.ts';
 import { DOING } from '../src/entities/act.ts';
 
@@ -110,5 +110,35 @@ describe('the doing lines and the park\'s feed lines (06 16.9, 16.11; 03 2.5 act
   it('the English wording is 06\'s, copied exactly', () => {
     const doc = table06();
     for (const k of keys) expect(en[k], k).toBe(doc.get(k));
+  });
+});
+
+describe('the visitors on screen: card, census, archetypes and ages (06 16.3, 16.4, 16.8, 16.10; 08 2.7; S4 part C)', () => {
+  const ARCH = ['single', 'couple', 'family', 'child', 'elder', 'tourist', 'jogger', 'artist', 'busker', 'dogwalker', 'gardener', 'vendor', 'cameo'];
+  const keys = [
+    ...ARCH.map((a) => 'archetype.' + a), 'age.young', 'age.grown', 'age.elder', 'card.sub', 'card.rel.single.f', 'card.rel.single.m',
+    'card.rel.with', 'card.rel.family', 'card.rel.child', 'card.rel.staff', 'card.rel.visiting', 'sheet.census.summary', 'sheet.census.row',
+    'sheet.census.partner',
+  ];
+  it('every key the card, the census and the chip use is in both tables, the chip\'s count in its two plural forms', () => {
+    for (const k of [...keys, 'hud.visitors.one', 'hud.visitors.other', 'sheet.census.room.one', 'sheet.census.room.other']) {
+      expect(en[k], k).toBeTruthy();
+      expect(es[k], k).toBeTruthy();
+    }
+  });
+  it('the English wording is 06\'s, copied exactly', () => {
+    const doc = table06();
+    for (const k of keys) expect(en[k], k).toBe(doc.get(k));
+  });
+  it('plural and gender pick their forms (08 2.7: sheet.census.room, card.rel.single)', () => {
+    setLang('en');
+    expect(plural('hud.visitors', 1)).toBe('1 visitor');
+    expect(plural('hud.visitors', 30)).toBe('30 visitors');
+    expect(gender('card.rel.single', 'f')).toBe(en['card.rel.single.f']);
+    setLang('es');
+    expect(gender('card.rel.single', 'f')).toBe('soltera, buscando');
+    expect(gender('card.rel.single', 'm')).toBe('soltero, buscando');
+    expect(t('card.sub', { archetype: '@archetype.elder', age: '@age.elder' })).toBe('mayor · mayor');
+    setLang('en');
   });
 });

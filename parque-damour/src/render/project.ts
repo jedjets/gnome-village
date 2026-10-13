@@ -5,8 +5,10 @@
 // Verdict: PORT. Changes: no SEAS term (flat ground); screenToTile is the closed-form inverse of 03 7.1 item 6 (GV walked the painter
 // order nearest-first with ptInQuad, 6423-6442), rounding to the nearest tile centre because tile (x, y) spans x +- 0.5 (GV 6419);
 // pickAt ranks people, then creatures, then props, then the tile (03 8.2; GV let an animal win when nearer than the biased gnome), takes
-// the people and creature lists as arguments (empty until S4), adds props (OCC, then a passable prop, then the 0.75-tile box of GV 5658
-// around a multi-tile footprint) and the tile, and answers none off the canvas.
+// the people and creature lists as arguments (render/people.ts pickPeople and pickCreatures from S4 on: every visitor, every creature in
+// the park), adds props (OCC, then a passable prop, then the 0.75-tile box of GV 5658 around a multi-tile footprint) and the tile, and
+// answers none off the canvas. S4 part C, the people branch: a person is picked where it is drawn, at its seat's height `e` when it sits
+// (GV's gnomes never sat raised; a crew's drawn _sx/_sy at 11234 is the same idea), its head point 8z above that.
 // Dropped from the range: projectVerts and ptInQuad (6417-6443, 09 section 3), the drawn crew positions _sx/_sy, the hutch and rider
 // skips, the flyer box and the select and follow side effects of tapSelect (11234-11250; card.ts selects, camera.ts follows).
 import type { XY } from '../core/math.ts';
@@ -45,8 +47,8 @@ export function screenToTile(sx: number, sy: number, allowApron = false): XY | n
 
 export type Hit = { kind: 'visitor' | 'creature' | 'prop' | 'tile' | 'none'; id: number; tile: XY | null };
 
-/** What pickAt needs of a person (the S4 Visitor record has these fields). */
-export type PickPerson = { readonly id: number; readonly x: number; readonly y: number };
+/** What pickAt needs of a person: the Visitor record's id and ground point, and `e`, the seat's height in EH units a sitter is drawn at. */
+export type PickPerson = { readonly id: number; readonly x: number; readonly y: number; readonly e?: number };
 /** What pickAt needs of a creature (the S4 Creature record has these fields); z is a pigeon's flight height in EH units. */
 export type PickCreature = {
   readonly id: number;
@@ -70,12 +72,12 @@ const P0: XY = { x: 0, y: 0 };
 
 /**
  * What a tap at (sx, sy) touches (03 8.2), first match wins:
- * 1 the nearest person whose head point screenOf(x, y).y - 8z is within 34 px after the 4 px bias;
+ * 1 the nearest person whose head point screenOf(x, y, e).y - 8z is within 34 px after the 4 px bias (e the seat's height, 0 standing);
  * 2 the nearest creature within 30 px of its head point (pigeon 3, dog 6, pomeranian 5 px x z; a pigeon is drawn at its flight z);
  * 3 the prop in OCC on the tapped tile, else a passable prop covering it (the smallest, then the lower id), else the nearest
  *   multi-tile prop with a footprint tile centre within 0.75 tile of the tap on both axes;
  * 4 the park tile; 5 none (off the canvas, or on the apron clear of any footprint box).
- * Visitors and creatures are empty in S2; S4 passes its lists.
+ * main.ts passes render/people.ts pickPeople() and pickCreatures(); with no lists only props and tiles are picked.
  */
 export function pickAt(
   sx: number,
@@ -88,7 +90,7 @@ export function pickAt(
   const tile = screenToTile(sx, sy);
   let found = false, best = 0, bd = Infinity;
   for (const v of people) {
-    screenInto(v.x, v.y, 0, P0);
+    screenInto(v.x, v.y, v.e ?? 0, P0);
     const d = Math.hypot(P0.x - sx, P0.y - PICK_HEAD * z - sy) - PICK_PERSON_BIAS;
     if (d < bd && d < PICK_PERSON_PX) {
       bd = d;

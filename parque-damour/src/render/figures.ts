@@ -5,9 +5,16 @@
 // the walk swing, the body line, the tunic stroke), 8331-8340 (arm angles and the back arm first), 8395-8414 (fringe, eyes,
 // nose, cheeks), 8435-8440 (the selection ring recipe). ADAPT: hip -0.38, shoulder -0.66, head -0.82, head r 0.10,
 // two-segment arms, FH 22; the hat is a beret, a flat cap or a sunhat, never GV's pointed hat.
-// TODO(S4): drawFigure(v, s) from a Visitor record (itemFor, signifiers of 7.2, the matchmaker look), the walk phase from the sim,
-// the selection and featured-pair rings; the sitting pose keys off the bench rotation.
-import { GC, ellipsePts, fillEllipse, fillPoly, inkLine, mix, shade, strokeLine, type Pen, type Pt } from './ambient.ts';
+// S4 part C (07 S4.6 steps 14-16; owner 2026-10-13: the rig variants are on their own options page, so this stage draws only the art
+// already approved): lookOf, poseOf and drawVisitor adapt a Visitor record to drawFigure as it is: the Look from lookSeed through
+// style().palette (skin, hair, coat, the hat and the skirt from the bits above the signature's, 04 7.1 rule 8), the signature scarf for
+// singles only (04 7.3 item 2), child 0.65 and elder 0.95 (rule 1), idle, walk or sit from the record (`path`, `sitPropId`), the walk
+// phase from sim seconds and move.ts speedOf (rule 3: walkPh grows at speed x 2.1 a second), the facing handed in by render/people.ts.
+// The rig's own work waits for the owner's pick of a rig variant (07 S4.6 step 12); each piece has one TODO(S4-rig) line below.
+// The selection ring is ghost.ts drawSelection; the featured pair's rose ring is S5's.
+import { GC, ellipsePts, fillEllipse, fillPoly, inkLine, mix, shade, strokeLine, type Palette, type Pen, type Pt } from './ambient.ts';
+import { signatureOf, type Visitor } from '../entities/visitor.ts';
+import { speedOf } from '../entities/move.ts';
 
 /** A grown visitor's height in px at zoom 1 (0.85 EH; 04 7.1 rule 1). */
 export const FH = 22;
@@ -271,4 +278,101 @@ function drawHat(pen: Pen, look: Look, hx0: number, hy0: number, hr: number, fac
     fillPoly(pen, dome, hex, { seed: seed + 34, contour: true, lineW: lw * 0.8, rim: true, gapless: true });
     strokeLine(pen, [{ x: hx0 - hr * 0.9, y: hy0 - hr * 0.72 }, { x: hx0 + hr * 0.9, y: hy0 - hr * 0.72 }], P.rose, Math.max(0.8, lw * 0.7), { open: true, noInk: true });
   }
+}
+
+/* ---------- the Visitor record to drawFigure (S4 part C, interim: the approved art only) ---------- */
+
+/** Drawn scale (04 7.1 rule 1): a family's child 0.65 FH, an elder 0.95 FH, everyone else 1. */
+export const SCALE_CHILD = 0.65;
+export const SCALE_ELDER = 0.95;
+/** The walk phase grows at speed x 2.1 radians a sim second: one stride every 0.46 s at 3.0 tiles/s (04 7.1 rule 3). */
+export const WALK_K = 2.1;
+/** The palette's grey hair tone (`hair[5]`), worn by elders until the rig draws `elderHair` (04 7.2 elder row). */
+const ELDER_HAIR = 5;
+
+export function figureScale(v: Pick<Visitor, 'archetype' | 'ageWord'>): number {
+  return v.archetype === 'child' ? SCALE_CHILD : v.ageWord === 'elder' ? SCALE_ELDER : 1;
+}
+
+/** How far above the ground point drawFigure puts the head's centre for drawn height h: 0.82 h, less the 0.24 h crouch when sitting. */
+export function headRise(h: number, sitting: boolean): number {
+  return 0.82 * h - (sitting ? 0.24 * h : 0);
+}
+
+/**
+ * The hat from the existing set (berets, flat caps, sunhats; 04 7.1 rule 10): none without `items.hat` (a hat in a pomeranian's mouth
+ * is not on the head) and never on a child, the gardener or a jogger; a flat cap for an elder and a vendor, a sunhat for a tourist, a
+ * beret for the artist (04 7.2's hat halves that the set already draws); anyone else wearing one takes a beret or a sunhat (f) or a
+ * flat cap or a beret (m) by `bit`.
+ */
+function hatOf(v: Visitor, bit: number): Hat {
+  if (!v.items.hat) return 'none';
+  switch (v.archetype) {
+    case 'child':
+    case 'gardener':
+    case 'jogger':
+      return 'none';
+    case 'elder':
+    case 'vendor':
+      return 'cap';
+    case 'tourist':
+      return 'sunhat';
+    case 'artist':
+      return 'beret'; // TODO(S4-rig): the artist's floppy hat (04 7.2)
+    default:
+      return v.sex === 'f' ? (bit ? 'beret' : 'sunhat') : bit ? 'cap' : 'beret';
+  }
+}
+
+/**
+ * The Look of a visitor, written into `out` (04 7.1 rule 8, 7.3 item 2): lookSeed's low 3 bits are the signature colour
+ * (visitor.ts signatureOf) and bits 3 and 4 the hat and purse that spawnVisitor reads into `items`; the rest, r = lookSeed >>> 5,
+ * picks the skin (of 4), the hair (of 6), the coat (of 8), then a skirt, the hat's kind and its colour. The scarf in the signature
+ * colour is for singles only (04 7.3 item 2); a tourist's sunhat and a vendor's cap are `paper` (04 7.2); an elder's hair is grey.
+ */
+export function lookOf(v: Visitor, P: Palette, out: Look): Look {
+  let r = v.lookSeed >>> 5;
+  out.seed = (r % 9973) + 1;
+  out.sex = v.sex;
+  out.skin = r % P.skin.length;
+  r = Math.floor(r / P.skin.length);
+  const hair = r % P.hair.length;
+  r = Math.floor(r / P.hair.length);
+  out.hair = v.ageWord === 'elder' ? ELDER_HAIR : hair;
+  out.coat = r % P.coat.length;
+  r = Math.floor(r / P.coat.length);
+  out.skirt = v.sex === 'f' && v.archetype !== 'jogger' && (r & 1) === 1;
+  out.hat = hatOf(v, (r >>> 1) & 1);
+  const hats = [P.ink, P.coat[5] as string, P.coat[7] as string, P.bedEarth];
+  out.hatColour = v.archetype === 'tourist' || v.archetype === 'vendor' ? P.paper : (hats[(r >>> 2) % hats.length] as string);
+  out.signature = v.archetype === 'single' ? signatureOf(v.lookSeed) : -1;
+  out.scale = figureScale(v);
+  // TODO(S4-rig): the archetype signifiers of 04 7.2 (the couple's matching scarves, the parent's tote, the elder's cane, the tourist's
+  // camera, the jogger's headband, band and shorts, the artist's palette, the busker's accordion, the gardener's apron and rake, the
+  // vendor's apron) and the crowd palette the owner asked for (register section 4, Figure rig row: colourful crowd, options pending)
+  return out;
+}
+
+/**
+ * The Pose of a visitor, written into `out`: sitting while it holds a seat (`sitPropId`), walking while it has a path, else standing;
+ * the walk phase from sim seconds `tSim` at the visitor's own speed (move.ts speedOf), offset by its id so a crowd does not march in
+ * step; `face` is the facing on screen (render/people.ts faceOf). The expression stays flat until S5's romance stages.
+ */
+export function poseOf(v: Visitor, face: 1 | -1, tSim: number, out: Pose): Pose {
+  out.state = v.sitPropId !== 0 ? 'sit' : v.path !== null ? 'walk' : 'idle';
+  out.face = face;
+  out.walkPh = tSim * speedOf(v) * WALK_K + v.id * 1.7;
+  out.expr = 'idle';
+  out.lookAt = undefined;
+  out.blushK = undefined;
+  // TODO(S4-rig): the body-language table of the 14 states (walk, idle, sit, read, feed, eat, photo, paint, play, pave, tidy, serve,
+  // shelter, chase), idle breathing and the glance (04 7.1 items 3, 4), and the sitting pose keyed to the seat's rotation (item 6)
+  return out;
+}
+
+/** A visitor at ground point p with its Look and Pose (lookOf, poseOf): drawFigure as approved at the Style Gate. */
+export function drawVisitor(pen: Pen, p: Pt, look: Look, pose: Pose): void {
+  // TODO(S4-rig): itemFor(v) in the hand (GV toolFor 8050: book, baguette, bouquet, umbrella, camera, brush, ice cream, hat in hand; 03 7.6 item 4)
+  // TODO(S4-rig): the close tier at h >= 18 (clothing stripes, hands, hat band, basket weave, buttons; 04 7.1 item 5)
+  drawFigure(pen, p, look, pose);
 }

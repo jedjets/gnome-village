@@ -2,11 +2,18 @@
 // Locks 03 8.2 and 08 2.9 (pick.test.ts row; 07 S2.7 item 6): pickAt's priority people > creatures > props > tile, the radii of GV
 // 11234-11240 (34 px people after a 4 px bias at the head 8z above the feet; 30 px creatures at pigeon 3, dog 6, pomeranian 5 px x z),
 // props by OCC, then a passable prop, then the 0.75-tile box of GV 5658 beside a multi-tile footprint; and the fountain at all four angles.
+// S4 part C: 07 S4.7 item 7 (pickAt on a figure's head point returns its id at zoom 1.3 and 2.4, all four turns) over the live lists
+// of render/people.ts, a sitter picked at its seat's height, and the pomeranian waiting outside never picked.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { genPark } from '../src/world/gen.ts';
 import { I, KIND, Kind, N, OCC, addProp, props, type Prop } from '../src/world/grid.ts';
 import { CTR, cam, centreOn, screenToWorld, setAngle, setViewport } from '../src/render/camera.ts';
 import { PICK_CREATURE_HEAD, pickAt, screenOf, screenToTile, type PickCreature, type PickPerson } from '../src/render/project.ts';
+import { anchorOf, pickCreatures, pickPeople, type Anchor } from '../src/render/people.ts';
+import { FH, headRise } from '../src/render/figures.ts';
+import { resetVisitors, spawnVisitor, type Archetype, type Visitor } from '../src/entities/visitor.ts';
+import { resetCreatures, spawnPigeonAt, thePomeranian } from '../src/entities/creatures.ts';
+import { seatPos } from '../src/entities/staff.ts';
 
 const QUARTERS = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2];
 
@@ -181,5 +188,69 @@ describe('props: OCC, then the smallest passable prop, then the footprint box (0
     expect(s.y).toBeGreaterThan(0);
     expect(pickAt(s.x, s.y)).toEqual({ kind: 'none', id: 0, tile: null });
     expect(screenToTile(s.x, s.y, true)).toEqual({ x: 23, y: -4 });
+  });
+});
+
+/** A visitor of `arch` standing still on (x, y); spawnVisitor draws on the sim stream as a real arrival does. */
+function put(arch: Archetype, x: number, y: number): Visitor {
+  const v = spawnVisitor(arch, 'g_north') as Visitor;
+  v.x = x;
+  v.y = y;
+  v.path = null;
+  v.st = 'idle';
+  return v;
+}
+/** The centre of the head as drawFigure draws it: the anchor (a sitter on its seat) less headRise (0.82 h, the crouch taken off). */
+function headPoint(v: Visitor): { x: number; y: number } {
+  const a: Anchor = anchorOf(v, { x: 0, y: 0, gx: 0, gy: 0, h: 0, e: 0, sit: false });
+  return { x: a.x, y: a.y - headRise(a.h, a.sit) };
+}
+
+describe('07 S4.7 item 7: pickAt on a figure\'s head point returns its id (03 8.2 item 1; render/people.ts lists)', () => {
+  it('a grown single, a child at 0.65 and an elder at 0.95 standing, and a single sitting on a bench, at zoom 1.3 and 2.4, every turn', () => {
+    resetVisitors();
+    resetCreatures();
+    const single = put('single', lawn.x, lawn.y);
+    const child = put('child', lawn.x, lawn.y - 6);
+    const elder = put('elder', lawn.x - 6, lawn.y);
+    const sitter = put('single', 0, 0);
+    const at = seatPos(bench, 0);
+    sitter.x = at.x;
+    sitter.y = at.y;
+    sitter.sitPropId = bench.id;
+    sitter.st = 'sit';
+    expect(pickPeople().map((p) => p.id)).toEqual([single.id, child.id, elder.id, sitter.id]);
+    expect(pickPeople().find((p) => p.id === sitter.id)?.e).toBe(0.2); // the bench's seat (props-park.ts drawBench seatE)
+    for (const a of QUARTERS) {
+      for (const z of [1.3, 2.4]) {
+        for (const v of [single, child, elder, sitter]) {
+          view(a, z, v.x, v.y);
+          const h = headPoint(v);
+          expect(h.y, `${v.archetype} head above its feet`).toBeLessThan(screenOf(v.x, v.y).y - 0.4 * FH * z * 0.65);
+          const hit = pickAt(h.x, h.y, pickPeople(), pickCreatures());
+          expect(hit, `${v.archetype}${v.sitPropId ? ' sitting' : ''} at turn ${a.toFixed(2)}, zoom ${z}`).toMatchObject({ kind: 'visitor', id: v.id });
+        }
+        // the seated single beats its bench, whose OCC tile the tap is also over (people before props)
+        view(a, z, bench.x, bench.y);
+        const s = screenOf(at.x, at.y, 0.2);
+        expect(pickAt(s.x, s.y - 4 * z, pickPeople(), pickCreatures())).toMatchObject({ kind: 'visitor', id: sitter.id });
+      }
+    }
+    resetVisitors();
+  });
+
+  it('pickCreatures lists the creatures in the park; the pomeranian waiting outside the gate is never picked', () => {
+    resetVisitors();
+    resetCreatures();
+    const pom = thePomeranian();
+    const bird = spawnPigeonAt(lawn.x, lawn.y);
+    expect(pom.outside).toBe(true);
+    expect(pickCreatures().map((c) => c.id)).toEqual([bird?.id]);
+    for (const a of QUARTERS) {
+      view(a, 1.3, pom.x, pom.y);
+      const s = screenOf(pom.x, pom.y);
+      expect(pickAt(s.x, s.y - 5 * cam.z, pickPeople(), pickCreatures()).kind).not.toBe('creature');
+    }
+    resetCreatures();
   });
 });

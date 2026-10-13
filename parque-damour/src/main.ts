@@ -12,8 +12,10 @@
 // confirm, then writes the park once more (03 17 A24) and enqueues `park.new` with a fresh seed (applied at once even while paused,
 // which stays paused: 03 4.6, owner 2026-10-13); when it applies, the park key goes, parksPlayed counts one more (store.clearPark), the
 // hash names the new seed and the view starts over. The language is the profile's once a profile was written, else the browser's.
-// TODO(S4): taps with the hand select (card.select(pickAt)); TODO(S6): an armed ability's target; TODO(S7): avatar.tap; TODO(S8):
-// initAudio on Begin and Continue.
+// S4 part C: a tap with the hand selects (card.select of pickAt over render/people.ts's people and creatures, 03 8.2 item 4), the camera
+// follows through people.ts followPos (a sitter at its seat, a pigeon at its flight height), draw gets the selected visitor for the ring,
+// the feed's listeners are wired, and a new park clears the selection and the feed.
+// TODO(S6): an armed ability's target; TODO(S7): avatar.tap; TODO(S8): initAudio on Begin and Continue.
 import { newPark as loopNewPark, onFrame, onFrameEnd, setSpeed, start } from './core/loop.ts';
 import { T } from './core/clock.ts';
 import { enqueue } from './core/commands.ts';
@@ -23,8 +25,11 @@ import { I, props } from './world/grid.ts';
 import { parkSeed } from './world/gen.ts';
 import { ghost } from './play/tools.ts';
 import { getMode } from './play/mode.ts';
-import { CTR, ZOOM_START, cam, centreOn, fitCam, resize, setAngle, setupInput, stepCamera, type ToolClass as Gesture } from './render/camera.ts';
-import { screenToTile } from './render/project.ts';
+import { CTR, ZOOM_START, cam, centreOn, fitCam, resize, setAngle, setFollowLookup, setupInput, stepCamera, type ToolClass as Gesture } from './render/camera.ts';
+import { pickAt, screenToTile } from './render/project.ts';
+import { followPos, pickCreatures, pickPeople } from './render/people.ts';
+import { people } from './entities/visitor.ts';
+import { creatures } from './entities/creatures.ts';
 import { initRender, draw } from './render/draw.ts';
 import { setGroundQuality } from './render/ground.ts';
 import { ambientFx, clearParticles, particles, stepParticles } from './render/effects.ts';
@@ -33,6 +38,8 @@ import { showIntro, startLang } from './ui/intro.ts';
 import { activeTool, armedGhost, brushSize, buildRail, cancelGhost, syncSpeed, tapGhost, toolClass, updateRail } from './ui/rail.ts';
 import { initHud, updateHud } from './ui/hud.ts';
 import { initSheets } from './ui/sheets.ts';
+import { clearSel, select, selectedVisitor } from './ui/card.ts';
+import { clearFeed, initFeed } from './ui/feed.ts';
 import { clearPark, getProfile, loadPark, resetAutosave, restore, saveBeforeNew, savePark, stepAutosave } from './save/store.ts';
 import type { ParkSaveV1 } from './save/schema.ts';
 import { installHarness } from './debug/harness.ts';
@@ -78,6 +85,8 @@ function resetCamera(): void {
  */
 function afterNewPark(seed: number): void {
   clearParticles();
+  clearSel();
+  clearFeed();
   writeHash(seed);
   cancelGhost();
   resetAutosave();
@@ -104,7 +113,11 @@ function gesture(): Gesture {
 function onTap(sx: number, sy: number): void {
   if (getMode() === 'avatar') return; // TODO(S7): avatar.tap with pickAt and screenToTile(allowApron)
   const cls = toolClass();
-  if (cls === 'none' || cls === 'brush') return; // TODO(S4): the hand selects; a brush painted on down
+  if (cls === 'none') {
+    select(pickAt(sx, sy, pickPeople(), pickCreatures())); // the hand: a person is selected and followed, anything else clears (03 8.2 item 4)
+    return;
+  }
+  if (cls === 'brush') return; // a brush painted on down
   const tile = screenToTile(sx, sy, true); // an apron tile goes on, so the sim answers with reason.outside
   if (!tile) {
     toast('reason.outside');
@@ -225,6 +238,8 @@ function begin(canvas: HTMLCanvasElement, from: Start, halt: boolean): void {
   canvas.addEventListener('pointerup', onPointerUp, { passive: true });
   canvas.addEventListener('pointercancel', onPointerUp, { passive: true });
   initSheets();
+  initFeed();
+  setFollowLookup(followPos);
   buildRail({ onNew: askNew });
   initHud({
     onClockDoubleTap: () => {
@@ -238,7 +253,13 @@ function begin(canvas: HTMLCanvasElement, from: Start, halt: boolean): void {
     afterNewPark(parkSeed());
     toast('toast.new_park');
   });
-  setPerfCounts(() => ({ people: 0, creatures: 0, props: props.length, particles: particles().length, zoom: cam.z }));
+  setPerfCounts(() => ({
+    people: people(),
+    creatures: creatures.filter((c) => !c.outside).length,
+    props: props.length,
+    particles: particles().length,
+    zoom: cam.z,
+  }));
   const relayout = (): void => {
     resize(canvas);
     layoutOverlays();
@@ -261,7 +282,7 @@ function begin(canvas: HTMLCanvasElement, from: Start, halt: boolean): void {
     stepCamera(dtr); // item 9: turnStep, keepCentre, followStep
     ambientFx(dtr); // item 9: the fountains' spray and rings; nothing while paused
     setGroundQuality(qualityLevel()); // render may not import debug (03 2.1)
-    draw(armedGhost()); // item 10, with the rail's live ghost (phase 7)
+    draw(armedGhost(), selectedVisitor()); // item 10, with the rail's live ghost and the selection ring (phase 7)
     if (T.speed !== shownSpeed) {
       shownSpeed = T.speed; // a `speed` command applied: the dial follows
       syncSpeed();

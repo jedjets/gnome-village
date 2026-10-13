@@ -5,7 +5,8 @@
 // (frontKey: a multi-tile prop at the largest depth of its footprint, now order.footprintDepth inside each module's drawables).
 // Verdict: PORT. Changes: eight phases instead of GV's one tile walk (03 7.9); the sky paints the whole canvas, the city haze below the
 // horizon included (backdrop.drawSky), so there is no separate clear; the drawables of the apron, the props and the particles are
-// collected into one reused list and sorted together by order.sortByDepth each frame (figures and creatures join in S4); the transform is
+// collected into one reused list and sorted together by order.sortByDepth each frame (the people and creatures of people.ts with them
+// from S4 part C); the transform is
 // put back to CSS pixels between phases, so no pass depends on the one before it restoring; phase 4 ends with the lamps' ground pools,
 // the park's and the street's, at most 24 nearest the camera centre (04 6.2 item 4, 10.2 item 2; 03 7.3 item 5), under every drawable.
 // Dropped from the range: GV's per-tile bucket rules for heights and shores (9604-9977), the shadows switch (12041), the drawn surface.
@@ -23,6 +24,7 @@ import { drawLampPool, lampOn, propDrawables } from './props.ts';
 import { gamePen } from './flora.ts';
 import { drawWeatherOverlay, particleDrawables } from './effects.ts';
 import { drawFocusMark, drawGhost, drawSelection, type Ghost } from './ghost.ts';
+import { peopleDrawables } from './people.ts';
 import { sortByDepth, type Drawable } from './order.ts';
 
 /** The canvas context every pass draws on when it is not handed one (ground.ctxOf and flora.renderCtx read this export). */
@@ -123,10 +125,11 @@ function drawLampPools(c: CanvasRenderingContext2D): void {
 }
 
 /**
- * One frame of the scene (03 7.9). Reads the sim, writes nothing to it. `ghost` is phase 7's input: the armed big stamp's or run's
- * ghost the shell holds (main.ts hands in ui/rail.ts armedGhost(); render cannot import ui, 03 2.1); null draws no panes.
+ * One frame of the scene (03 7.9). Reads the sim, writes nothing to it. `ghost` and `sel` are phase 7's inputs the shell holds (render
+ * cannot import ui, 03 2.1): the armed big stamp's or run's ghost (ui/rail.ts armedGhost(); null draws no panes) and the selected
+ * visitor's id for the selection ring (ui/card.ts; 0 draws none).
  */
-export function draw(ghost: Ghost | null = null): void {
+export function draw(ghost: Ghost | null = null, sel = 0): void {
   const c = getCtx();
   // 1 the light of this frame, CSS pixels, no smoothing (GV 12044)
   computeAmbient();
@@ -150,13 +153,14 @@ export function draw(ghost: Ghost | null = null): void {
   ITEMS.length = 0;
   for (const d of apronDrawables()) ITEMS.push(d);
   for (const d of propDrawables()) ITEMS.push(d);
+  for (const d of peopleDrawables()) ITEMS.push(d);
   for (const d of particleDrawables()) ITEMS.push(d);
   sortByDepth(ITEMS);
   for (const d of ITEMS) d.draw(d, c);
   // 7 the ghost panes (S3), the selection ring (S4), the focus pin (S5)
   css(c);
   drawGhost(c, ghost);
-  drawSelection();
+  drawSelection(c, sel);
   drawFocusMark();
   // 8 the weather overlay and the fog wash (S9)
   drawWeatherOverlay();

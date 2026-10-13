@@ -3,7 +3,10 @@
 // Ported from GV 8575-8598 (drawBirdAt, drawBirdFlying: body, sheen, head, tail, beak, two-stroke wings), 8506-8530 (drawFox
 // idea: legs as short strokes, ears as triangles, a collar). ADAPT: the pigeon's sheen is `teal`, the pomeranian is three fluff
 // ellipses with a curled tail; the direction's brush draws every shape.
-// TODO(S4): drawCreature(c, s) dispatch by kind and state, the walkers' dog (GV 8506), perched pigeons, culling by size.
+// S4 part C (07 S4.6 step 13 waits for the owner's rig pick, as 12 does): drawPigeonOf and drawDogOf adapt a Creature record's state
+// to the two primitives as they are: a pigeon walks (walk), stands as a still walk (peck, perch, idle), or flies (fly, scatter); a walker's
+// dog is the pomeranian's shape at the dog's 0.45 EH (03 7.7 item 5) as a stand-in, trotting while it walks. Each piece of the rig's
+// creature work has one TODO(S4-rig) line below; render/people.ts places them, faces them and draws the lead.
 import { EH } from './camera.ts';
 import { GC, fillEllipse, fillPoly, inkLine, mix, shade, strokeLine, type Pen, type Pt } from './ambient.ts';
 
@@ -151,4 +154,32 @@ function fluff(pen: Pen, x: number, y: number, rx: number, ry: number, hex: stri
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
   }
   ctx.fill();
+}
+
+/* ---------- the Creature record to the primitives above (S4 part C, interim: the approved art only) ---------- */
+
+/** A walking pigeon's phase grows 1 a sim second (the bob at 3 Hz, 04 9.1); a flying one's 5 (the flap at 5 Hz, GV 8592). */
+export const PIGEON_WALK_HZ = 1;
+export const PIGEON_FLAP_HZ = 5;
+/** The phase a standing pigeon holds (the style board's walking pigeon). */
+const PIGEON_STILL = 0.15;
+/** A walker's dog is 0.45 EH tall (03 7.7 item 5, 04 7.4: 11.7 px at zoom 1). */
+export const DOG_EH = 0.45;
+
+/**
+ * A pigeon in state `st` at point p (its flight height already in p): flying in `fly` and `scatter`, walking in `walk`, and in every
+ * other state (peck, perch, idle) the walk standing still; `tSim` is sim seconds, `id` staggers the flock.
+ */
+export function drawPigeonOf(pen: Pen, p: Pt, st: string, face: 1 | -1, id: number, tSim: number): void {
+  const flying = st === 'fly' || st === 'scatter';
+  // TODO(S4-rig): the pecking pose (the head down to the crumbs) and the perched pose (tucked, tail down) of 04 7.4
+  const phase = flying ? tSim * PIGEON_FLAP_HZ + id * 0.37 : st === 'walk' ? tSim * PIGEON_WALK_HZ + id * 0.37 : PIGEON_STILL;
+  drawPigeon(pen, p, { face, mode: flying ? 'fly' : 'walk', phase });
+}
+
+/** A walker's dog at ground point p: the pomeranian's shape at 0.45 EH, trotting while `running`; `tSim` is sim seconds. */
+export function drawDogOf(pen: Pen, p: Pt, face: 1 | -1, running: boolean, id: number, tSim: number): void {
+  // TODO(S4-rig): the real dog (GV fox/dog 8506 at 0.45 EH with an awningRed collar; the owner's two, the white terrier and the black
+  // poodle, one per walker by seed: register section 4, Figure rig row)
+  drawPomeranian(pen, p, { face, running, phase: running ? tSim + id * 0.29 : 0.1 }, DOG_EH * EH * pen.z);
 }

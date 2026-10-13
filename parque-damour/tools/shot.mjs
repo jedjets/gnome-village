@@ -94,6 +94,17 @@ const SCENE_SETS = {
   // the water"; row 2 with Undo enabled after a path stroke dragged across that lawn and applied by a real unpause and pause; the New
   // confirm open; the bridge over a pond 5 tiles across, red, with row 2 reading the longest reason whole ("the water is too wide here
   // (4 at most)")
+  // s4: 07 S4.7 items 6 and 7 for S4 part C, driven by real clicks and taps: 22 presses of the Visitors chip's "+" while paused at the
+  // start (they apply on the first step, as the owner ruled for commands enqueued while paused), then f 0.552 of day 1 round the fountain
+  // (twelve sitting, the jogger Léo on the outer loop's west side clear of the trees, pigeons at the crumbs by the bench at (19, 31));
+  // a single's card from a real tap on her head point (zoom 1.8 and the follow, settled); the Census sheet from the chip (the card hidden
+  // under it); and f 0.90 at the fountain, the lamps lit, after Close and a tap on empty ground cleared the selection
+  s4: [
+    { name: 'crowd', turn: 0, z: 1.3, at: [22.5, 25.2], abs: 0.552, pre: 'callCrowd' },
+    { name: 'card', turn: 0, z: 1.3, at: [22.5, 25.2], act: 'selectSingle' },
+    { name: 'census', keep: true, act: 'openCensus' },
+    { name: 'night', turn: 0, z: 1.3, at: [22, 25], abs: 0.9, act: 'clearSelection' },
+  ],
   s3: [
     { name: 'rail', turn: 0, z: 1.3 },
     { name: 'ghost-ok', turn: 0, z: 1.3, at: [24, 29], act: 'ghostOk' },
@@ -122,8 +133,51 @@ async function runBriefly(page, ms = 250) {
   await page.waitForFunction(() => window.__PD.T.speed === 0, { timeout: 5_000 });
 }
 
-/** Scene actions (s3), run after the camera is set and before the capture. */
+/** Scene actions (s3, s4), run after the camera is set and before the capture; `pre` actions (s4) run before the scene's simulate. */
 const ACTIONS = {
+  /** s4: 22 presses of the Visitors chip's "+" while paused: 22 visitor.call commands that the first step applies. */
+  async callCrowd(page) {
+    for (let k = 0; k < 22; k++) await page.click('#bAdd');
+  },
+  /**
+   * s4: a real tap on the head point (03 8.2: 8z above the drawn ground, at a sitter's seat) of the single nearest the middle of the
+   * clear band, then the follow settles (zoom 1.8; camera.ts followStep eases with k = 1 - 0.02^dt, so a second and a half).
+   */
+  async selectSingle(page) {
+    const p = await page.evaluate(() => {
+      const pd = window.__PD, z = pd.cam.z;
+      let best = null, bd = Infinity;
+      for (const v of pd.visitors) {
+        if (v.archetype !== 'single') continue;
+        const seat = v.sitPropId ? pd.props.find((q) => q.id === v.sitPropId) : null;
+        const e = seat ? ({ bench: 0.2, table: 0.3 })[seat.kind] ?? 0 : 0;
+        const s = pd.screenOf(v.x, v.y, e);
+        const d = Math.hypot(s.x - 195, s.y - 380);
+        if (s.y > 160 && s.y < 560 && d < bd) {
+          bd = d;
+          best = { x: s.x, y: s.y - 8 * z, id: v.id };
+        }
+      }
+      return best;
+    });
+    if (!p) throw new Error('s4 card: no single on screen');
+    await page.mouse.click(p.x, p.y);
+    await page.waitForFunction(() => document.getElementById('card').classList.contains('on'), { timeout: 5_000 });
+    await sleep(1600);
+  },
+  /** s4: the Visitors chip opens the Census (02 12.2); the card hides under body.sheet (02 12.3 item 5). */
+  async openCensus(page) {
+    await page.click('#hudVisitors');
+    await page.waitForFunction(() => document.getElementById('census').classList.contains('on') && document.body.classList.contains('sheet'), { timeout: 5_000 });
+    await sleep(400);
+  },
+  /** s4: Close on the sheet, then a tap on empty ground clears the selection and the follow (03 8.2 item 4). */
+  async clearSelection(page) {
+    if (await page.$eval('#census', (el) => el.classList.contains('on'))) await page.click('#census .x');
+    const t = await screenOfTile(page, 21, 27);
+    await page.mouse.click(t.x, t.y);
+    await page.waitForFunction(() => !document.getElementById('card').classList.contains('on'), { timeout: 5_000 });
+  },
   /** The bandstand armed and a tap on the lawn tile (25, 33): the 3 x 3 ghost (24..26, 32..34) centred on it, green. */
   async ghostOk(page) {
     await page.click('.tool[data-id="bandstand"]');
@@ -311,6 +365,7 @@ async function scenes(browser, slice, set, url, errors, written) {
     });
     if (!(await fontsLoaded(page))) errors.push('fonts [scenes]: Figtree or Fraunces did not load; a fallback-font shot is invalid');
     for (const sc of set) {
+      if (sc.pre) await ACTIONS[sc.pre](page);
       if (sc.abs !== undefined) {
         // one step past the mark: 0.30 + 68040 / 21600 is 3.4499... in floating point, which the clock reads as the band before
         const steps = Math.round((sc.abs - START_ABS) * STEPS_PER_DAY) + 1;
@@ -322,7 +377,7 @@ async function scenes(browser, slice, set, url, errors, written) {
           }
         }, steps);
       }
-      await frame(page, sc);
+      if (!sc.keep) await frame(page, sc);
       if (sc.act) await ACTIONS[sc.act](page);
       await page.evaluate((seed) => {
         const pd = window.__PD;

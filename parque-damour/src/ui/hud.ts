@@ -7,14 +7,23 @@
 // timeStamp (GV read the wall clock); the hook keeps ui/ free of debug/ (03 2.1).
 // S3: the shell's toasts of the command results (03 5.4: applyCommand never toasts): a `rejected` event toasts t(reason) (02 12.5 item 3,
 // GV pbPlace's refusal toasts), an applied `undo` toasts toast.undone (GV undoStroke 11114).
-// TODO(S4): the visitor count and "+"; TODO(S5): the Romance chip; TODO(S6): the Points chip; TODO(S7): body.avatar from the `mode` event.
+// S4 part C: the Visitors chip shows the people in the park (cameos are not people, 03 3.11) through plural(); its "+" enqueues the
+// `visitor.call` command (02 12.2; GV addVillager 12171), which a park of 30 refuses with reason.park_full and so the toast "The park is
+// full"; the "+" stops the click's propagation as GV's did (it is #hudVisitors's sibling, 03 10.1, so the census chip never sees it
+// either way) and repaints an open census; the frame call ages the feed line (GV 10842) and repaints an open census every 1.2 s
+// (sheets.ts), and the 0.35 s repaint refreshes the card (GV 10860).
+// TODO(S5): the Romance chip; TODO(S6): the Points chip; TODO(S7): body.avatar from the `mode` event.
 import { T, SEASON_KEYS } from '../core/clock.ts';
+import { enqueue } from '../core/commands.ts';
 import { watch } from '../core/events.ts';
 import { W } from '../core/weather.ts';
+import { people } from '../entities/visitor.ts';
 import { WCOLD } from '../render/ambient.ts';
 import { $, ageToast, layoutOverlays, toast } from './dom.ts';
-import { t, onLang } from './i18n.ts';
-import { toggleSheet } from './sheets.ts';
+import { plural, t, onLang } from './i18n.ts';
+import { renderCensus, sheetOpen, toggleSheet, updateSheets } from './sheets.ts';
+import { updateCard } from './card.ts';
+import { ageFeed } from './feed.ts';
 
 /** What main.ts hands the HUD: the clock chip's double tap (the perf overlay under body.dev). */
 export type HudHooks = { onClockDoubleTap?: () => void };
@@ -29,7 +38,7 @@ function paint(): void {
   $('wdot').style.background = WCOLD[W.kind];
   $('tPhase').textContent = t('hud.phase.' + T.phase);
   $('tDay').textContent = t('hud.day', { n: T.day, season: '@hud.season.' + SEASON_KEYS[T.season] });
-  $('tPop').textContent = t('hud.visitors', { n: 0 });
+  $('tPop').textContent = plural('hud.visitors', people());
   $('tRom').textContent = t('hud.romance.none');
   $('tCP').textContent = '0';
   $('tMP').textContent = '0';
@@ -68,7 +77,12 @@ export function initHud(h: HudHooks = {}): void {
   $('hudPoints').addEventListener('click', () => toggleSheet('progress'));
   // a hairline ring in the glass's own line token, so the pale fair and snow dots read on the glass chip (no new colour, 04 4.5)
   $('wdot').style.boxShadow = '0 0 0 1px var(--glass-line)';
-  ($('bAdd') as HTMLButtonElement).disabled = true; // TODO(S4): visitor.call; a sibling of #hudVisitors, so no bubbling to the census
+  // "+" calls a visitor now (02 12.2): the command applies on the next step (while paused, on the unpause: owner 2026-10-13)
+  $('bAdd').addEventListener('click', (e) => {
+    e.stopPropagation(); // GV 12171
+    enqueue({ side: 'park', kind: 'visitor.call', payload: { gate: null } });
+    if (sheetOpen() === 'census') renderCensus();
+  });
   onLang(paint);
   paint();
   layoutOverlays();
@@ -77,9 +91,12 @@ export function initHud(h: HudHooks = {}): void {
 /** Every frame with real seconds; the chips repaint every 0.35 s (GV 10846). */
 export function updateHud(dtr: number): void {
   ageToast(dtr);
+  ageFeed(dtr);
+  updateSheets(dtr);
   hudT -= dtr;
   if (hudT > 0) return;
   hudT = 0.35;
   paint();
+  updateCard();
   layoutOverlays();
 }
