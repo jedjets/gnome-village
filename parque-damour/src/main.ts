@@ -5,7 +5,8 @@
 // of closures; styles are linked from index.html; the frame runs 03 4.1 items 7 to 12 through loop.onFrame and loop.onFrameEnd.
 // S3: the creator-mode tap routing of 03 8.2 items 3 and 4 (1 x 1 stamps enqueue at once; big stamps and runs show a ghost the rail
 // holds and enqueue on Place or a second tap on the same tile; brushes paint on down and on the throttled drag of camera.ts, one stroke
-// id per pointer stroke, and a stroke that would change no tile toasts its first centre's reason, 02 8.2); the autosave on
+// id per pointer stroke, which ends when the last pointer leaves, and a stroke that would change no tile toasts its first centre's
+// reason, "outside the railings" when no park tile was reached, 02 8.2 and 8.4); the autosave on
 // visibilitychange to hidden, pagehide and every 30 sim seconds (store.stepAutosave from the frame-end hook); Continue restores the save
 // silently and fits the camera (03 11); New asks the confirm, then writes the park once more (03 17 A24) and enqueues `park.new` with a
 // fresh seed; when it applies, the park key goes, parksPlayed counts one more (store.clearPark), the hash names the new seed and the view
@@ -27,8 +28,7 @@ import { initRender, draw } from './render/draw.ts';
 import { setGroundQuality } from './render/ground.ts';
 import { ambientFx, clearParticles, particles, stepParticles } from './render/effects.ts';
 import { $, applyDom, layoutOverlays, openConfirm, toast } from './ui/dom.ts';
-import { setLang, type Lang } from './ui/i18n.ts';
-import { showIntro } from './ui/intro.ts';
+import { showIntro, startLang } from './ui/intro.ts';
 import { activeTool, armedGhost, brushSize, buildRail, cancelGhost, syncSpeed, tapGhost, toolClass, updateRail } from './ui/rail.ts';
 import { initHud, updateHud } from './ui/hud.ts';
 import { initSheets } from './ui/sheets.ts';
@@ -53,10 +53,6 @@ function readHash(): { seed: number; halt: boolean; dev: boolean } {
   const h = location.hash || '';
   const m = /s=(\d+)/.exec(h);
   return { seed: m ? parseInt(m[1] as string, 10) >>> 0 : freshSeed(), halt: /halt/.test(h), dev: hasDevHash() };
-}
-
-function detectLang(): Lang {
-  return (navigator.language || 'en').toLowerCase().startsWith('es') ? 'es' : 'en';
 }
 
 /** The hash names the park's seed (GV 12115), keeping the dev flag. */
@@ -158,11 +154,36 @@ function onPaint(tile: XY): void {
   enqueue({ side: 'park', kind: 'tool', payload: { tool, at: { x: tile.x, y: tile.y }, size, stroke: stroke.id } });
 }
 
-/** The pointer stroke ended: a stroke that changed no tile toasts its first centre's reason (02 8.2, 8.4 last line). */
+/**
+ * The pointer stroke ended (the last pointer left the canvas): a stroke that changed no tile toasts its first centre's reason (02 8.2,
+ * 8.4 last line). A brush gesture that never reached a park tile had its centre outside the railings (02 8.4 item 1): camera.ts paints
+ * only park tiles, so it says so here, as a 1 x 1 stamp's tap there does.
+ */
 function onStrokeEnd(): void {
-  if (stroke.id === 0) return;
+  if (stroke.id === 0) {
+    if (held.brush) toast('reason.outside');
+    return;
+  }
   if (!stroke.painted && stroke.reason) toast(stroke.reason);
   stroke.id = 0;
+}
+
+/**
+ * The pointers down on the canvas, so a stroke ends only when the last one leaves: a second finger touching and lifting (a pinch begun
+ * and given up) does not split the stroke, as camera.ts paints on with the finger still down (one undo entry per stroke, 02 8.2).
+ * `brush`: the gesture began with a brush armed.
+ */
+const held = { ids: new Set<number>(), brush: false };
+
+function onPointerDown(e: PointerEvent): void {
+  if (held.ids.size === 0) held.brush = gesture() === 'brush';
+  held.ids.add(e.pointerId);
+}
+
+function onPointerUp(e: PointerEvent): void {
+  if (!held.ids.delete(e.pointerId) || held.ids.size > 0) return;
+  onStrokeEnd();
+  held.brush = false;
 }
 
 /* ---------- New (02 12.5 item 4; 03 11) ---------- */
@@ -182,6 +203,7 @@ let live = false; // a park is on screen: the autosave may write (never from the
 type Start = { kind: 'new'; seed: number } | { kind: 'load'; save: ParkSaveV1 };
 
 function begin(canvas: HTMLCanvasElement, from: Start, halt: boolean): void {
+  if (live) return; // one start per page: the rail, the HUD and the watchers are wired once (intro.ts answers once as well)
   initRender(canvas);
   resize(canvas);
   if (from.kind === 'load') {
@@ -198,8 +220,9 @@ function begin(canvas: HTMLCanvasElement, from: Start, halt: boolean): void {
   } else newPark(from.seed);
   live = true;
   setupInput(canvas, { onTap, toolClass: gesture, onStrokeStart, onPaint });
-  canvas.addEventListener('pointerup', onStrokeEnd, { passive: true });
-  canvas.addEventListener('pointercancel', onStrokeEnd, { passive: true });
+  canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
+  canvas.addEventListener('pointerup', onPointerUp, { passive: true });
+  canvas.addEventListener('pointercancel', onPointerUp, { passive: true });
   initSheets();
   buildRail({ onNew: askNew });
   initHud({
@@ -255,8 +278,7 @@ function begin(canvas: HTMLCanvasElement, from: Start, halt: boolean): void {
 }
 
 function boot(): void {
-  const prof = getProfile();
-  setLang(prof.updatedAt > 0 ? prof.settings.lang : detectLang()); // a written profile holds the player's choice (register 3.12)
+  startLang(navigator.language); // the profile's choice once written, else the browser's; the profile holds it either way (register 3.12)
   applyDom();
   const canvas = $('cv') as HTMLCanvasElement;
   const { seed, halt, dev } = readHash();

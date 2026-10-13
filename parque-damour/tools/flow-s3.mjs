@@ -6,9 +6,14 @@
 //      03 11), and Undo is disabled (the undo history is not saved, owner 2026-10-13).
 //   3. Pause with the rail's button; arm the lamp; tap a lawn tile: nothing appears while paused (03 4.6: the command waits); unpause:
 //      the lamp appears.
+//  3b. The path brush: finger 1 paints, a second finger touches and lifts, finger 1 paints on: one stroke id, and one Undo takes it
+//      all back (02 8.2, 8.5); the brush tapped on the apron toasts "outside the railings" (02 8.4 item 1).
 //   4. Tap New: the confirm appears; Yes: a fresh park (the stroke's tiles are not the restored park's), the #s= hash changes, the park
 //      key is gone and the profile counts one more park; Undo is disabled.
 //   5. Reload: Continue is offered again (the new park autosaved on pagehide); Begin asks the New confirm first; No keeps the intro.
+//  5b. Continue by the keyboard, Enter pressed twice: the game starts once (one Sound press toggles once, one pause is one command).
+//   6. A Spanish browser (navigator.language es-ES), a fresh profile: the intro is in Spanish; after Begin and a reload it still is;
+//      EN tapped on the intro survives a reload (register 3.12).
 // Every action is a real tap or click (puppeteer's mouse at __PD.screenOf of a tile, or the DOM control). Exits 1 on any failed check,
 // console error, page error or failed request.
 // Usage: node tools/flow-s3.mjs [--url <dev server url>]
@@ -134,6 +139,9 @@ async function run(base) {
     const kind = await page.evaluate((id) => window.__PD.props.find((p) => p.id === id)?.kind, occ);
     check(occ !== 0 && kind === 'lamp', 'unpaused: the lamp appears');
 
+    // 3b. A brush stroke is one stroke however many fingers join it, and a brush off the park says why (02 8.2, 8.4 item 1)
+    await strokeChecks(page);
+
     // 4. New: the confirm, Yes, a fresh park and a new hash
     const world0 = await page.evaluate(() => window.__PD.worldHash());
     const parks0 = await page.evaluate(() => JSON.parse(localStorage.getItem('parque:profile-v1') || '{}').parksPlayed ?? 0);
@@ -162,10 +170,139 @@ async function run(base) {
     await page.click('#confirmNo');
     await sleep(300);
     check(await page.$eval('#intro', (i) => !i.classList.contains('gone')), 'No keeps the intro');
+
+    // 5b. Continue by the keyboard, Enter pressed twice: the game starts once, so one press of Sound toggles it once
+    await page.focus('#bContinue');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await painted(page);
+    await sleep(200);
+    check(await page.$eval('#confirm', (c) => c.hidden), 'Enter twice on Continue: no confirm opens over the game');
+    await page.click('#bMute');
+    check((await page.$eval('#bMute', (b) => b.getAttribute('aria-pressed'))) === 'true', 'Enter twice on Continue: one press of Sound toggles it once');
+    const seq0 = await page.evaluate(() => window.__PD.log().reduce((m, c) => Math.max(m, c.seq), 0));
+    await page.click('#bHalt');
+    await page.waitForFunction(() => window.__PD.T.speed === 0, { timeout: 5_000 });
+    await sleep(200);
+    const speeds = await page.evaluate((s) => window.__PD.log().filter((c) => c.seq > s && c.kind === 'speed').length, seq0);
+    check(speeds === 1, `Enter twice on Continue: one press of pause is one speed command (${speeds})`);
+  } finally {
+    await browser.close();
+  }
+  await langChecks();
+}
+
+/**
+ * 3b on the running restored park (the Fit view of Continue): (1) the path brush, finger 1 paints two tiles, finger 2 touches and lifts
+ * (the start of a pinch), finger 1 paints two more: one stroke id for all of it (02 8.2, 8.5: one undo entry per stroke), and one Undo
+ * takes all four tiles back; (2) a tap with the path brush on the apron outside the railings toasts "outside the railings" (02 8.2
+ * brush row, 8.4 item 1), as a 1 x 1 stamp's tap there does.
+ */
+async function strokeChecks(page) {
+  await page.click('.tool[data-id="path"]');
+  // four lawn tiles in a row, free, away from the stroke and the lamp, on screen
+  const row = await page.evaluate((avoid) => {
+    const pd = window.__PD, K = pd.layers.KIND, O = pd.layers.OCC;
+    for (let y = 8; y < 40; y++) {
+      for (let x = 6; x < 38; x++) {
+        if (Math.abs(y - avoid.y) < 3) continue;
+        let ok = true;
+        for (let k = 0; k < 7 && ok; k++) ok = K[y * 48 + x + k] === 0 && O[y * 48 + x + k] === 0 && K[(y - 1) * 48 + x + k] === 0 && K[(y + 1) * 48 + x + k] === 0;
+        const a = pd.screenOf(x, y), b = pd.screenOf(x + 6, y);
+        if (ok && a.x > 30 && b.x < innerWidth - 30 && a.y > 120 && a.y < innerHeight - 260) return [0, 2, 4, 6].map((k) => ({ x: x + k, y }));
+      }
+    }
+    return null;
+  }, { y: 33 });
+  check(row !== null, 'a free lawn row for the two-finger stroke');
+  if (!row) return;
+  const seq0 = await page.evaluate(() => window.__PD.log().reduce((m, c) => Math.max(m, c.seq), 0));
+  await page.evaluate(async (tiles) => {
+    const cv = document.getElementById('cv'), pd = window.__PD;
+    const ev = (type, id, p) =>
+      cv.dispatchEvent(new PointerEvent(type, { pointerId: id, clientX: p.x, clientY: p.y, bubbles: true, isPrimary: id === 21, pointerType: 'touch' }));
+    const at = (k) => pd.screenOf(tiles[k].x, tiles[k].y);
+    const two = { x: at(1).x + 90, y: at(1).y - 160 };
+    // [event, pointer, where, then wait ms]: finger 1 paints at once and past the first 0.14 s; a second finger touches (the pinch
+    // begins) and lifts while finger 1 stays down; finger 1 paints on and lifts
+    const script = [['pointerdown', 21, 0, 200], ['pointermove', 21, 1, 150], ['pointerdown', 22, -1, 80], ['pointerup', 22, -1, 150],
+      ['pointermove', 21, 2, 150], ['pointermove', 21, 3, 60], ['pointerup', 21, 3, 0]];
+    for (const [type, id, k, ms] of script) {
+      ev(type, id, k < 0 ? two : at(k));
+      await new Promise((r) => setTimeout(r, ms));
+    }
+  }, row);
+  await sleep(500);
+  const strokes = await page.evaluate(
+    (s) => [...new Set(window.__PD.log().filter((c) => c.seq > s && c.kind === 'tool' && c.payload.tool === 'path').map((c) => c.payload.stroke))],
+    seq0,
+  );
+  const gravel = async () => page.evaluate((r) => r.filter((t) => window.__PD.layers.KIND[t.y * 48 + t.x] === 1).length, row);
+  const g1 = await gravel();
+  check(g1 === 4 && strokes.length === 1, `a second finger touching and lifting keeps one stroke (${g1} of 4 tiles, stroke ids ${JSON.stringify(strokes)})`);
+  await page.click('#bUndo');
+  await sleep(400);
+  const g2 = await gravel();
+  check(g2 === 0, `one Undo takes the whole two-finger stroke back (${g2} gravel tiles left)`);
+
+  // (2) the brush on the apron, west of the railings
+  const apron = await page.evaluate(() => {
+    const pd = window.__PD;
+    for (let x = -2; x >= -6; x--) {
+      const p = pd.screenOf(x, 24), t = pd.screenToTile(p.x, p.y, true);
+      if (t && t.x < 0 && p.x > 10 && p.y > 120 && p.y < innerHeight - 260) return p;
+    }
+    return null;
+  });
+  check(apron !== null, 'an apron point on screen west of the park');
+  if (!apron) return;
+  await page.mouse.click(apron.x, apron.y);
+  await sleep(150);
+  const hint = await page.$eval('#hint', (h) => ({ on: h.classList.contains('on'), text: h.textContent }));
+  check(hint.on && hint.text === 'outside the railings', `the path brush off the park toasts "${hint.text}"`);
+  await page.click('.tool[data-id="hand"]');
+}
+
+/**
+ * 6. The language (register 3.12): on a Spanish browser with no profile the intro is in Spanish; (a) after a Begin and a reload (the
+ * autosave writes the profile) it is still Spanish; (b) EN tapped on the intro is kept: after a reload the intro is in English.
+ */
+async function langChecks() {
+  const browser = await puppeteer.launch({ executablePath: CHROMIUM, headless: true, args: ARGS });
+  try {
+    for (const tapEn of [false, true]) {
+      const ctx = await browser.createBrowserContext();
+      const page = await ctx.newPage();
+      page.on('console', (m) => {
+        if (m.type() === 'error') errors.push('console [lang]: ' + m.text());
+      });
+      page.on('pageerror', (e) => errors.push('page [lang]: ' + e.message));
+      await page.evaluateOnNewDocument(() => {
+        Object.defineProperty(navigator, 'language', { get: () => 'es-ES' });
+      });
+      await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+      await page.goto(`${langBase}#s=${SEED}&dev`, { waitUntil: 'load' });
+      await introReady(page);
+      check((await page.evaluate(() => document.documentElement.lang)) === 'es', `a Spanish browser, no profile: the intro is in Spanish${tapEn ? ' (b)' : ' (a)'}`);
+      if (tapEn) {
+        await page.click('#lang button[data-l="en"]');
+        check((await page.evaluate(() => document.documentElement.lang)) === 'en', 'EN tapped: <html lang="en">');
+      } else {
+        await page.click('#begin');
+        await painted(page);
+      }
+      await page.reload({ waitUntil: 'load' });
+      await introReady(page);
+      const want = tapEn ? 'en' : 'es';
+      const got = await page.evaluate(() => ({ lang: document.documentElement.lang, stored: JSON.parse(localStorage.getItem('parque:profile-v1') || '{}').settings?.lang }));
+      check(got.lang === want && got.stored === want, `after a reload the language is still ${want} (shown ${got.lang}, stored ${got.stored})`);
+      await ctx.close();
+    }
   } finally {
     await browser.close();
   }
 }
+let langBase = '';
 
 async function main() {
   const i = process.argv.indexOf('--url');
@@ -178,7 +315,8 @@ async function main() {
     base = server.resolvedUrls?.local?.[0] ?? 'http://localhost:5198/';
   }
   try {
-    await run(base.replace(/\/?$/, '/'));
+    langBase = base.replace(/\/?$/, '/');
+    await run(langBase);
   } finally {
     if (server) await server.close();
   }

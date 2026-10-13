@@ -92,12 +92,14 @@ const SCENE_SETS = {
   // buttons), never by writing state: the Park strip at the start view; a green bandstand ghost on the open lawn south of the inner
   // loop (24..26, 32..34 on seed 101) with Place enabled; a red one over the starter pond (tapped at (31, 12)) with row 2 reading "not on
   // the water"; row 2 with Undo enabled after a path stroke dragged across that lawn and applied by a real unpause and pause; the New
-  // confirm open
+  // confirm open; the bridge over a pond 5 tiles across, red, with row 2 reading the longest reason whole ("the water is too wide here
+  // (4 at most)")
   s3: [
     { name: 'rail', turn: 0, z: 1.3 },
     { name: 'ghost-ok', turn: 0, z: 1.3, at: [24, 29], act: 'ghostOk' },
     { name: 'ghost-bad', turn: 0, z: 1.3, at: [29, 15], act: 'ghostBad' },
     { name: 'undo', turn: 0, z: 1.3, at: [24, 29], act: 'pathStroke' },
+    { name: 'bridge-wide', turn: 0, z: 1.3, at: [29, 30], act: 'bridgeWide' },
     { name: 'confirm', turn: 0, z: 1.3, act: 'confirmNew' },
   ],
 };
@@ -147,6 +149,25 @@ const ACTIONS = {
     await page.mouse.up();
     await runBriefly(page);
     await page.waitForFunction(() => !document.getElementById('bUndo').disabled, { timeout: 5_000 });
+  },
+  /**
+   * The longest ranked reason in row 2 (02 8.4: "the water is too wide here (4 at most)"): the pond brush at size 3 (a click at the
+   * slider's right end) tapped at (30, 33) paints a pond 5 tiles across, a real unpause applies it, then the bridge tapped there is red.
+   */
+  async bridgeWide(page) {
+    await page.click('.tool[data-id="pond"]');
+    const r = await page.$eval('#size', (el) => {
+      const b = el.getBoundingClientRect();
+      return { x: b.right - 3, y: b.top + b.height / 2 };
+    });
+    await page.mouse.click(r.x, r.y);
+    await page.waitForFunction(() => document.getElementById('size').value === '3', { timeout: 5_000 });
+    await tapTile(page, 30, 33);
+    await runBriefly(page);
+    await page.waitForFunction(() => window.__PD.layers.WATER[33 * 48 + 28] > 0 && window.__PD.layers.WATER[33 * 48 + 32] > 0, { timeout: 5_000 });
+    await page.click('.tool[data-id="bridge"]');
+    await tapTile(page, 30, 33);
+    await page.waitForFunction(() => document.getElementById('depth').classList.contains('no'), { timeout: 5_000 });
   },
   /** Row 3's New: the confirm opens (No is pressed after the capture by the next page load; this is the last scene). */
   async confirmNew(page) {
@@ -314,14 +335,20 @@ async function scenes(browser, slice, set, url, errors, written) {
       await new Promise((r) => setTimeout(r, 450));
       await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))));
       // 04 5.4 item 8: the rail under 40 % of the viewport; AGENTS 4 item 4: no horizontal scroll
-      const lay = await page.evaluate(() => ({
-        rail: document.getElementById('rail').getBoundingClientRect().height,
-        sw: document.documentElement.scrollWidth,
-        vw: window.innerWidth,
-        vh: window.innerHeight,
-      }));
+      // and row 2's line (the tool's name or the ranked reason) whole, never cut (02 8.2: row 2 shows the reason)
+      const lay = await page.evaluate(() => {
+        const d = document.getElementById('depth');
+        return {
+          rail: document.getElementById('rail').getBoundingClientRect().height,
+          sw: document.documentElement.scrollWidth,
+          vw: window.innerWidth,
+          vh: window.innerHeight,
+          depth: d.offsetParent !== null && d.scrollWidth > d.clientWidth + 1 ? `${d.textContent} (${d.scrollWidth} > ${d.clientWidth})` : '',
+        };
+      });
       if (lay.rail > 0.4 * lay.vh) errors.push(`layout [${sc.name}]: the rail is ${lay.rail} px, over 40 % of ${lay.vh}`);
       if (lay.sw > lay.vw) errors.push(`layout [${sc.name}]: horizontal scroll ${lay.sw} > ${lay.vw}`);
+      if (lay.depth) errors.push(`layout [${sc.name}]: row 2's line is cut: ${lay.depth}`);
       const file = path.join(SHOTS, `${slice}-${sc.name}.png`);
       await page.screenshot({ path: file });
       written.push(file);

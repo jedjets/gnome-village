@@ -5,10 +5,10 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { showIntro } from '../../src/ui/intro.ts';
+import { showIntro, startLang } from '../../src/ui/intro.ts';
 import { $ } from '../../src/ui/dom.ts';
 import { lang, setLang } from '../../src/ui/i18n.ts';
-import { PROFILE_KEY, getProfile, loadProfile } from '../../src/save/store.ts';
+import { PROFILE_KEY, getProfile, loadProfile, saveProfile } from '../../src/save/store.ts';
 import { en } from '../../src/ui/strings/en.ts';
 import { es } from '../../src/ui/strings/es.ts';
 
@@ -65,6 +65,37 @@ describe('04 5.7, 03 11: Continue only with a save (08 2.9)', () => {
   });
 });
 
+describe('03 P2, 02 8.5: Begin and Continue start the game once (a second Enter while the intro fades)', () => {
+  it('Begin twice, Continue twice, Begin then Continue: one start each time; the focused button is blurred', () => {
+    const begin = vi.fn(), cont = vi.fn();
+    showIntro(false, begin, cont);
+    $('begin').focus();
+    $('begin').click();
+    expect(document.activeElement).not.toBe($('begin'));
+    $('begin').click(); // Enter again on the button that had the focus
+    expect(begin).toHaveBeenCalledTimes(1);
+    showIntro(true, begin, cont);
+    $('bContinue').click();
+    $('bContinue').click();
+    $('begin').click();
+    expect(cont).toHaveBeenCalledTimes(1);
+    expect(begin).toHaveBeenCalledTimes(1);
+    expect($('confirm').hidden).toBe(true);
+  });
+  it('Begin with a save: Yes starts once; Begin again (the focus is back on it after the confirm) asks nothing', () => {
+    const begin = vi.fn();
+    showIntro(true, begin, () => {});
+    $('begin').focus();
+    $('begin').click();
+    $('confirmYes').click();
+    expect(begin).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).not.toBe($('begin'));
+    $('begin').click();
+    expect($('confirm').hidden).toBe(true);
+    expect(begin).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('register 3.12: the language persists (08 2.9)', () => {
   it('tapping ES sets <html lang="es"> and profile().settings.lang === "es", written to parque:profile-v1', () => {
     showIntro(false, () => {}, () => {});
@@ -80,5 +111,25 @@ describe('register 3.12: the language persists (08 2.9)', () => {
     document.querySelector<HTMLButtonElement>('#lang button[data-l="en"]')?.click();
     expect(document.documentElement.lang).toBe('en');
     expect(getProfile().settings.lang).toBe('en');
+  });
+  it('boot on a Spanish browser with no profile: Spanish shown and held by the profile, so an autosave keeps it (03 2.2)', () => {
+    expect(startLang('es-ES')).toBe('es');
+    expect(lang()).toBe('es');
+    expect(document.documentElement.lang).toBe('es');
+    expect(getProfile().settings.lang).toBe('es');
+    expect(saveProfile()).toBe(true); // the autosave writes the profile with the park
+    loadProfile(); // a reload
+    expect(startLang('en-US')).toBe('es'); // the written choice wins over the browser
+    expect(document.documentElement.lang).toBe('es');
+  });
+  it('EN tapped on a Spanish browser with no profile is written, and the reload shows English', () => {
+    startLang('es-ES');
+    showIntro(false, () => {}, () => {});
+    document.querySelector<HTMLButtonElement>('#lang button[data-l="en"]')?.click();
+    expect(lang()).toBe('en');
+    expect(JSON.parse(localStorage.getItem(PROFILE_KEY) as string).settings.lang).toBe('en');
+    loadProfile(); // a reload
+    expect(startLang('es-ES')).toBe('en');
+    expect(document.documentElement.lang).toBe('en');
   });
 });

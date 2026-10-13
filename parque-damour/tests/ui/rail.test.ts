@@ -140,6 +140,20 @@ describe('02 8.2, 04 5.4 item 4: row 2 by context (GV updateGbar 11018, showUndo
     expect(armedGhost()).toBeNull();
     expect($('bCancel').hidden).toBe(true);
   });
+  it('the longest reason, a bridge over water 5 wide, reads whole: row 2 wraps it and keeps Place and Cancel (02 8.3 bridge, 8.4)', () => {
+    expect(applyNow({ side: 'park', kind: 'tool', payload: { tool: 'pond', at: { x: 30, y: 33 }, size: 3, stroke: 1 } }).ok).toBe(true);
+    setTool('bridge');
+    tapGhost({ x: 30, y: 33 });
+    expect(armedGhost()?.reason).toBe('reason.too_wide');
+    expect($('depth').textContent).toBe(en['reason.too_wide']); // "the water is too wide here (4 at most)", not cut in the text
+    expect($('depth').classList.contains('no')).toBe(true);
+    const d = getComputedStyle($('depth'));
+    expect(d.whiteSpace).toBe('normal'); // a refused reason wraps instead of an ellipsis (tools/shot.mjs s3-bridge-wide measures it)
+    expect(d.textOverflow).not.toBe('ellipsis');
+    for (const id of ['bPlace', 'bCancel']) expect(getComputedStyle($(id)).flexShrink, id).toBe('0');
+    expect(($('bPlace') as HTMLButtonElement).disabled).toBe(true);
+    cancelGhost();
+  });
   it('a second tap on the same tile places (03 8.2 item 3); a run grows by straight segments and refuses a tap off the line', () => {
     setTool('fountain');
     clearPending();
