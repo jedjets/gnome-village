@@ -5,7 +5,8 @@
 // tokens and --ember below 0.3, 0.25, 0.3, the doing line t('doing.' + st); any other hit clears it); the Visitors chip of 02 12.2 (the
 // count through plural, "+" enqueues visitor.call and stops the click, GV 12171); the Census of 02 12.4 (a row per person, the summary
 // with plural, a row tap selects, the 1.2 s repaint while open, Census and Events exclusive, GV 10748); the feed of 02 12.5 items 1-2
-// (one line, a 14 s fade, 40 entries, the lines S4 announces). 08 lists no row for these files; they are added here. jsdom, index.html.
+// (one line, a 14 s fade, 40 entries, the lines S4 announces); and 07 S3.6 step 7 (GV setTool 11070): a tool other than the hand ends
+// the selection as well as the follow. 08 lists no row for these files; they are added here. jsdom, index.html.
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -16,10 +17,11 @@ import { CAP_PEOPLE, people, removeVisitor, resetVisitors, spawnVisitor, visitor
 import { cam, followed } from '../../src/render/camera.ts';
 import { $ } from '../../src/ui/dom.ts';
 import { setLang } from '../../src/ui/i18n.ts';
-import { LOW_MOOD, LOW_RESTED, ZOOM_SELECT, clearSel, select, selectedVisitor, updateCard } from '../../src/ui/card.ts';
+import { LOW_MOOD, LOW_RESTED, ZOOM_SELECT, clearSel, initCard, select, selectedVisitor, updateCard } from '../../src/ui/card.ts';
 import { CENSUS_S, closeSheets, initSheets, openSheet, sheetOpen, updateSheets } from '../../src/ui/sheets.ts';
 import { initHud, updateHud } from '../../src/ui/hud.ts';
 import { FEED_CAP, FEED_FADE_S, ageFeed, clearFeed, feedEntries, initFeed, pushFeed } from '../../src/ui/feed.ts';
+import { activeTool, buildRail, setTool } from '../../src/ui/rail.ts';
 import { en } from '../../src/ui/strings/en.ts';
 
 const ROOT = join(import.meta.dirname, '..', '..');
@@ -34,6 +36,8 @@ beforeAll(() => {
   initSheets();
   initHud();
   initFeed();
+  buildRail({ onNew: () => undefined });
+  initCard();
 });
 
 beforeEach(() => {
@@ -52,6 +56,7 @@ function put(arch: Visitor['archetype'], x: number, y: number, needs: Partial<Vi
   Object.assign(v, { x, y, path: null, st: 'idle' }, needs);
   return v;
 }
+const pill = (id: string): HTMLButtonElement => document.querySelector(`#tools .tool[data-id="${id}"]`) as HTMLButtonElement;
 const bar = (need: string): HTMLElement => document.querySelector(`#cBars .bar[data-need="${need}"]`) as HTMLElement;
 const width = (need: string): string => (bar(need).querySelector('u') as HTMLElement).style.width;
 
@@ -127,6 +132,26 @@ describe('02 12.3 items 1, 2, 5 and 04 5.5 item 1: the single card (GV selectGno
     expect(getComputedStyle(document.body).display).not.toBe('none'); // body.sheet must not match a sheet's own rule
     closeSheets();
     expect(document.body.classList.contains('sheet')).toBe(false);
+  });
+});
+
+describe('07 S3.6 step 7 (GV setTool 11070): a tool other than the hand ends the selection, the card, the ring and the follow', () => {
+  it('the Hand pill keeps the selection; Path, Bench and Remove each clear it (a real click on the Park strip)', () => {
+    const v = put('single', 20, 30);
+    select({ kind: 'visitor', id: v.id, tile: null });
+    pill('hand').click();
+    expect(selectedVisitor()).toBe(v.id);
+    expect($('card').classList.contains('on')).toBe(true);
+    for (const id of ['path', 'bench', 'remove']) {
+      setTool('hand');
+      select({ kind: 'visitor', id: v.id, tile: null });
+      pill(id).click();
+      expect(activeTool(), id).toBe(id);
+      expect(selectedVisitor(), id).toBe(0);
+      expect(followed(), id).toBeNull();
+      expect($('card').classList.contains('on'), id).toBe(false);
+    }
+    setTool('hand');
   });
 });
 

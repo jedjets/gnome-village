@@ -9,8 +9,10 @@
 // walkPh on the record; here the record's `face` is the facing at camera angle 0 only, so the facing at any angle comes from the
 // heading in world units (the next waypoint, a creature's target, a seat's front), remembered per id while it stands; a sitter is drawn
 // on its seat's height (bench 0.2 EH, a cafe chair 0.3, a blanket on the ground) with its hips on the seat as the style board's bench
-// tile does, after its seat in the painter order (03 16 risk 8: never behind the bench); a perched pigeon after its perch; a flying one at
-// its ground point's depth (03 7.2 item 2). A walker's dog wears the 1 px ink lead of 04 7.2 from its collar to the walker's hand.
+// tile does, after its bench or blanket in the painter order (03 16 risk 8: never behind the bench), and at a cafe table at its own
+// depth, so the far sitter paints between the far chair and the top and the near one after the near chair (props.ts splits the table);
+// a perched pigeon after its perch; a flying one at its ground point's depth (03 7.2 item 2). A walker's dog wears the 1 px ink lead of
+// 04 7.2 from its collar to the walker's hand.
 // A figure drawn under 12 px (the tiers below the expression's, 04 7.1 item 5; zoom under 0.55 for a grown visitor) is blitted from a
 // sprite of drawFigure's own output, keyed by its look, pose, facing, one of 8 walk frames, the zoom to 1/64 and the light (the tree
 // sprite cache's idiom, GV 6782-6790; 03 15.2): 30 figures at Fit cost 30 blits instead of 30 rigs (S4 part C perf, 03 7.9).
@@ -284,7 +286,8 @@ export function peopleDrawables(): Drawable[] {
     d.x = v.x;
     d.y = v.y;
     d.z = A0.e;
-    d.depth = seat ? Math.max(depthOf(v.x, v.y), footprintDepth(seat.x, seat.y, seat.w, seat.h)) + AFTER : depthOf(v.x, v.y);
+    // after its bench or blanket; at a cafe table at its own depth, between the table's two halves or after both (props.ts)
+    d.depth = seat && seat.kind !== 'table' ? Math.max(depthOf(v.x, v.y), footprintDepth(seat.x, seat.y, seat.w, seat.h)) + AFTER : depthOf(v.x, v.y);
     d.draw = drawPerson;
     d.v = v;
     d.c = null;

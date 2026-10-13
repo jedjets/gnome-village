@@ -14,7 +14,8 @@
 // hash names the new seed and the view starts over. The language is the profile's once a profile was written, else the browser's.
 // S4 part C: a tap with the hand selects (card.select of pickAt over render/people.ts's people and creatures, 03 8.2 item 4), the camera
 // follows through people.ts followPos (a sitter at its seat, a pigeon at its flight height), draw gets the selected visitor for the ring,
-// the feed's listeners are wired, and a new park clears the selection and the feed.
+// the feed's listeners are wired, a Park tool other than the hand clears the selection (card.initCard), and a new park clears the
+// selection and the feed.
 // TODO(S6): an armed ability's target; TODO(S7): avatar.tap; TODO(S8): initAudio on Begin and Continue.
 import { newPark as loopNewPark, onFrame, onFrameEnd, setSpeed, start } from './core/loop.ts';
 import { T } from './core/clock.ts';
@@ -38,7 +39,7 @@ import { showIntro, startLang } from './ui/intro.ts';
 import { activeTool, armedGhost, brushSize, buildRail, cancelGhost, syncSpeed, tapGhost, toolClass, updateRail } from './ui/rail.ts';
 import { initHud, updateHud } from './ui/hud.ts';
 import { initSheets } from './ui/sheets.ts';
-import { clearSel, select, selectedVisitor } from './ui/card.ts';
+import { clearSel, initCard, select, selectedVisitor } from './ui/card.ts';
 import { clearFeed, initFeed } from './ui/feed.ts';
 import { clearPark, getProfile, loadPark, resetAutosave, restore, saveBeforeNew, savePark, stepAutosave } from './save/store.ts';
 import type { ParkSaveV1 } from './save/schema.ts';
@@ -241,6 +242,7 @@ function begin(canvas: HTMLCanvasElement, from: Start, halt: boolean): void {
   initFeed();
   setFollowLookup(followPos);
   buildRail({ onNew: askNew });
+  initCard(); // a Park tool other than the hand ends the selection (GV setTool 11070)
   initHud({
     onClockDoubleTap: () => {
       if (document.body.classList.contains('dev')) setPerfOn(!FT.on); // the perf overlay is a dev entry (03 8.3, 13)

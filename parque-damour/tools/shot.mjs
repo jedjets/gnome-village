@@ -97,10 +97,15 @@ const SCENE_SETS = {
   // s4: 07 S4.7 items 6 and 7 for S4 part C, driven by real clicks and taps: 22 presses of the Visitors chip's "+" while paused at the
   // start (they apply on the first step, as the owner ruled for commands enqueued while paused), then f 0.552 of day 1 round the fountain
   // (twelve sitting, the jogger Léo on the outer loop's west side clear of the trees, pigeons at the crumbs by the bench at (19, 31));
-  // a single's card from a real tap on her head point (zoom 1.8 and the follow, settled); the Census sheet from the chip (the card hidden
+  // the pair at the cafe table (16, 44) at zoom 2.4 at each quarter turn (03 16 risk 8: the far sitter between the far chair and the
+  // top, the near one after the near chair); a single's card from a real tap on her head point (zoom 1.8 and the follow, settled); the Census sheet from the chip (the card hidden
   // under it); and f 0.90 at the fountain, the lamps lit, after Close and a tap on empty ground cleared the selection
   s4: [
     { name: 'crowd', turn: 0, z: 1.3, at: [22.5, 25.2], abs: 0.552, pre: 'callCrowd' },
+    { name: 'table-0', turn: 0, z: 2.4, at: [16, 44] },
+    { name: 'table-1', turn: 1, z: 2.4, at: [16, 44] },
+    { name: 'table-2', turn: 2, z: 2.4, at: [16, 44] },
+    { name: 'table-3', turn: 3, z: 2.4, at: [16, 44] },
     { name: 'card', turn: 0, z: 1.3, at: [22.5, 25.2], act: 'selectSingle' },
     { name: 'census', keep: true, act: 'openCensus' },
     { name: 'night', turn: 0, z: 1.3, at: [22, 25], abs: 0.9, act: 'clearSelection' },

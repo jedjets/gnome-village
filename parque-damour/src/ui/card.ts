@@ -7,6 +7,8 @@
 // pickAt Hit (03 8.2) holding a visitor's id, never the record (03 P5); select zooms in to at least 1.8 (GV 10869 set 1.8 below 1.7)
 // about the figure, so it stays under the finger while the follow eases it into the clear band (camera.ts followStep); any other hit
 // clears the selection and the follow (03 8.2 item 4; GV tapSelect 11249). The card hides under body.sheet (shell.css, GV 226).
+// Arming any tool but the hand ends the selection (GV setTool 11070; 07 S3.6 step 7): rail.ts's setTool ends the follow, and initCard
+// listens on the Park strip for the rest, since rail.ts may not import this module (rail -> sheets -> card) and is S3's file.
 // Dropped from the range: GV's craft, chief, hamlet and age-in-days sub line, the swimming, climbing, riding and carrying suffixes of the
 // doing line, the critter card (selectCrit 10875: Parque has no creature card), the "Following" toast.
 // TODO(S5): the Heart bar with the next gate's tick, "courting B · stage" and the pair card with Pin (02 12.3 items 2, 3); TODO(S7):
@@ -71,6 +73,17 @@ export function select(hit: Hit): void {
   $('card').classList.add('on');
   updateCard();
   layoutOverlays();
+}
+
+/**
+ * Once at boot (main.ts): a click on a Park strip pill other than the hand clears the selection (GV setTool 11070: `clearSel()` beside
+ * `cam.follow = null`). The listener sits on #tools, which rail.ts refills but never replaces, and runs after the pill's own setTool.
+ */
+export function initCard(): void {
+  $('tools').addEventListener('click', (e) => {
+    const pill = e.target instanceof Element ? e.target.closest<HTMLElement>('.tool') : null;
+    if (pill && pill.dataset.id !== 'hand') clearSel();
+  });
 }
 
 /** Nothing selected; the card goes (GV clearSel 10874: the follow is the caller's). */

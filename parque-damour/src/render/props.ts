@@ -11,11 +11,11 @@
 // direction's brush draws every face; the bench and the table order their parts by the projection, so all four facings and every camera
 // angle paint right (the board's own order is unchanged); a wet bench darkens to x 0.86; a lamp's glow fades in (glow), and the game's lit
 // globes are free of the night tint (bright; owner 2026-10-13); in the game the fountain leaves its spray and ripples to effects.ambientFx
-// (03 7.7 item 4); a bandstand and a bridge are two drawables, back and front, so people inside paint between them (GV frontFix 8871
-// idea; 03 7.2).
+// (03 7.7 item 4); a bandstand, a bridge and a cafe table are two drawables, back and front (the table's far chair, then its top and
+// near chair), so people inside or seated paint between them (GV frontFix 8871 idea; 03 7.2, 16 risk 8).
 // Dropped from the range: the house kit beyond the box primitives (6952-8044), the gnome, critter and part branches of drawProp
 // (figures.ts, creatures.ts and effects.ts own those).
-// TODO(S4, S6): easel, crumbs, peel, sprinkler, rowboat, umbrella. TODO(S9): the halo breath, snow caps.
+// TODO(S4-rig): the easel (04 6.1, 7.2; act.ts puts it in OCC). TODO(S6): crumbs, peel, sprinkler, rowboat, umbrella. TODO(S9): halo breath, snow caps.
 import { EH, TH, TW, cam, view } from './camera.ts';
 import {
   GC, faceLight, fillEllipse, fillPoly, h01, inkLine, lampGlow, lit as tinted, mix, shade, skyRamp, strokeLine,
@@ -315,8 +315,9 @@ export function drawFountain(pen: Pen, proj: Proj, x: number, y: number, o: Foun
 }
 
 /* ---------- the bistro table (04 6.1 row table) ---------- */
-/** A round cafe table with two bistro chairs on tile (x, y); the chairs sit at u = +-0.42 along world x. */
-export function drawBistroTable(pen: Pen, proj: Proj, x: number, y: number): void {
+const CHAIR_U = 0.42; // the chairs' offset from the table's centre along world x (propDrawables puts the far one in the back half)
+/** A round cafe table with two bistro chairs on tile (x, y), chairs at u = +-CHAIR_U; part 1 the far chair, 2 the top and near chair. */
+export function drawBistroTable(pen: Pen, proj: Proj, x: number, y: number, part: 0 | 1 | 2 = 0): void {
   const P = pen.spec.palette;
   const chair = (u: number, seed: number): void => {
     const cxx = x + u, back = u < 0 ? -0.14 : 0.14;
@@ -327,8 +328,9 @@ export function drawBistroTable(pen: Pen, proj: Proj, x: number, y: number): voi
     const bx = cxx + back;
     fillPoly(pen, quad(proj, [bx, y - 0.13, 0.3], [bx, y + 0.13, 0.3], [bx, y + 0.13, 0.62], [bx, y - 0.13, 0.62]), P.sky, { seed: seed + 1, away: back > 0, light: 0.92 });
   };
-  const first = proj(x - 0.42, y).y <= proj(x + 0.42, y).y ? -0.42 : 0.42; // the farther chair first, at any angle
-  chair(first, first < 0 ? 100 : 110);
+  const first = proj(x - CHAIR_U, y).y <= proj(x + CHAIR_U, y).y ? -CHAIR_U : CHAIR_U; // the farther chair first, at any angle
+  if (part !== 2) chair(first, first < 0 ? 100 : 110);
+  if (part === 1) return;
   const legW = Math.max(0.8, 1.1 * pen.z);
   fillEllipse(pen, proj(x, y).x, proj(x, y).y, 0.14 * TW * pen.z, 0.14 * TH * pen.z, P.zinc, { seed: 103, noInk: true, light: 0.9 });
   strokeLine(pen, quad(proj, [x, y, 0], [x, y, 0.48]), P.zinc, legW, { open: true, seed: 104 });
@@ -485,8 +487,7 @@ export const LAMP_H = 1.75;
 const PROP_H: Partial<Record<PropKind, number>> = {
   bench: 0.6, lamp: LAMP_H, fountain: 1.6, kiosk: 1.65, table: 0.62, bandstand: 3.0, picnic: 0.35, basket: 0.35, bridge: 0.6, hedge: 0.5, tree: 3.8,
 };
-/** How far the lamp is on: the lamps' hours with their fade (ambient.lampGlow), or a c_lamplight litUntil still ahead (03 7.7 item 3);
- *  draw.ts's pool pass reads it too. */
+/** How far the lamp is on: the lamps' hours with their fade (lampGlow), or a c_lamplight litUntil ahead (03 7.7 item 3; draw.ts's pools). */
 export function lampOn(p: Prop): number {
   return (p.data.litUntil ?? 0) > tick() ? 1 : lampGlow();
 }
@@ -497,8 +498,8 @@ function wetOf(p: Prop): number {
 
 /**
  * Draw one prop (03 2.7 drawProp(p, s)): s is its north-west tile's centre on screen, c the context (draw.ts's when left out), part 1 or 2
- * the back or front half of a bandstand or bridge (0 the whole). Direction A through the camera's projection; a kind with no drawing yet
- * (easel, crumbs, peel, sprinkler, rowboat, umbrella: S4, S6) draws nothing, and the apron kinds are backdrop.ts's.
+ * the back or front half of a bandstand, bridge or table (0 the whole). Direction A through the camera's projection; a kind with no
+ * drawing yet (easel, crumbs, peel, sprinkler, rowboat, umbrella: S4 rig, S6) draws nothing, and the apron kinds are backdrop.ts's.
  */
 export function drawProp(p: Prop, s: XY, c?: CanvasRenderingContext2D, part: 0 | 1 | 2 = 0): void {
   const ctx = renderCtx(c), pen = gamePen(ctx), proj = gameProj;
@@ -518,7 +519,7 @@ export function drawProp(p: Prop, s: XY, c?: CanvasRenderingContext2D, part: 0 |
       drawKiosk(pen, proj, p.x, p.y, p.rot, lampGlow() > 0.5);
       break;
     case 'table':
-      drawBistroTable(pen, proj, p.x, p.y);
+      drawBistroTable(pen, proj, p.x, p.y, part);
       break;
     case 'bandstand':
       drawBandstand(pen, proj, p.x, p.y, part);
@@ -571,9 +572,9 @@ function shallowDepth(p: Prop): number {
 
 /**
  * The props as painter drawables for this frame (03 7.2): depth is the deepest footprint tile; a bandstand or bridge gives a back half at
- * its shallowest depth less 0.5 and a front half at its deepest plus 0.49, and a picnic blanket lies at its shallowest less 0.5, so people
- * inside or on them paint between. Culled (03 15.2 item 6): trees under 2.5 px tall, other props under 1.5 px, and anything off screen.
- * The objects and the array are reused: good for this frame only.
+ * its shallowest depth less 0.5 and a front half at its deepest plus 0.49, a table its far chair at that chair's depth and the rest at
+ * its tile's, and a picnic blanket lies at its shallowest less 0.5, so people inside, seated or on them paint between. Culled (03 15.2
+ * item 6): trees under 2.5 px tall, other props under 1.5 px, and anything off screen. The objects and the array are reused (one frame).
  */
 export function propDrawables(): Drawable[] {
   PROP_OUT.length = 0;
@@ -589,6 +590,9 @@ export function propDrawables(): Drawable[] {
     if (p.kind === 'bandstand' || p.kind === 'bridge') {
       addDrawable(p, 1, shallowDepth(p) - 0.5);
       addDrawable(p, 2, footprintDepth(p.x, p.y, p.w, p.h) + 0.49);
+    } else if (p.kind === 'table') {
+      addDrawable(p, 1, Math.min(depthOf(p.x - CHAIR_U, p.y), depthOf(p.x + CHAIR_U, p.y)));
+      addDrawable(p, 2, footprintDepth(p.x, p.y, p.w, p.h));
     } else if (p.kind === 'picnic' || p.kind === 'basket') addDrawable(p, 0, shallowDepth(p) - 0.5);
     else addDrawable(p, 0, footprintDepth(p.x, p.y, p.w, p.h));
   }

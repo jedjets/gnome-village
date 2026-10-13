@@ -3,13 +3,17 @@
 // 11234-11240 (34 px people after a 4 px bias at the head 8z above the feet; 30 px creatures at pigeon 3, dog 6, pomeranian 5 px x z),
 // props by OCC, then a passable prop, then the 0.75-tile box of GV 5658 beside a multi-tile footprint; and the fountain at all four angles.
 // S4 part C: 07 S4.7 item 7 (pickAt on a figure's head point returns its id at zoom 1.3 and 2.4, all four turns) over the live lists
-// of render/people.ts, a sitter picked at its seat's height, and the pomeranian waiting outside never picked.
+// of render/people.ts, a sitter picked at its seat's height, and the pomeranian waiting outside never picked. The painter order of the
+// same module beside props.ts (03 7.2 item 2, 03 16 risk 8): a pair on a bench after the bench, and a pair at a cafe table between its
+// far chair and its top, then the near chair, at all four turns.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { genPark } from '../src/world/gen.ts';
 import { I, KIND, Kind, N, OCC, addProp, props, type Prop } from '../src/world/grid.ts';
 import { CTR, cam, centreOn, screenToWorld, setAngle, setViewport } from '../src/render/camera.ts';
 import { PICK_CREATURE_HEAD, pickAt, screenOf, screenToTile, type PickCreature, type PickPerson } from '../src/render/project.ts';
-import { anchorOf, pickCreatures, pickPeople, type Anchor } from '../src/render/people.ts';
+import { anchorOf, peopleDrawables, pickCreatures, pickPeople, type Anchor } from '../src/render/people.ts';
+import { propDrawables } from '../src/render/props.ts';
+import { depthOf, sortByDepth, type Drawable } from '../src/render/order.ts';
 import { FH, headRise } from '../src/render/figures.ts';
 import { resetVisitors, spawnVisitor, type Archetype, type Visitor } from '../src/entities/visitor.ts';
 import { resetCreatures, spawnPigeonAt, thePomeranian } from '../src/entities/creatures.ts';
@@ -252,5 +256,55 @@ describe('07 S4.7 item 7: pickAt on a figure\'s head point returns its id (03 8.
       expect(pickAt(s.x, s.y - 5 * cam.z, pickPeople(), pickCreatures()).kind).not.toBe('creature');
     }
     resetCreatures();
+  });
+});
+
+/** The painted order of a frame's props and people (draw.ts phase 6), as labels: a prop drawable `prop<id>.<part>`, a visitor its id. */
+function painted(): string[] {
+  const list: Drawable[] = [...propDrawables(), ...peopleDrawables()];
+  sortByDepth(list);
+  return list.map((d) => (d.kind === 'prop' ? `prop${d.id}.${(d as Drawable & { part?: number }).part ?? 0}` : String(d.id)));
+}
+/** Seat `v` on seat k of prop p, as act.ts does on arrival. */
+function seat(v: Visitor, p: Prop, k: number): void {
+  const at = seatPos(p, k);
+  v.x = at.x;
+  v.y = at.y;
+  v.sitPropId = p.id;
+  v.st = 'sit';
+}
+
+describe('03 7.2 item 2 and 03 16 risk 8: a pair on a seat paints right against it at all four turns (render/people.ts, props.ts)', () => {
+  it('a pair on a bench paints after the bench, never behind it', () => {
+    resetVisitors();
+    resetCreatures();
+    const a = put('couple', 0, 0), b = put('couple', 0, 0);
+    seat(a, bench, 0);
+    seat(b, bench, 1);
+    for (const ang of QUARTERS) {
+      view(ang, 2.4, bench.x, bench.y);
+      const o = painted();
+      const k = o.indexOf(`prop${bench.id}.0`);
+      expect(k, `turn ${ang.toFixed(2)}`).toBeGreaterThanOrEqual(0);
+      expect(o.indexOf(String(a.id)), `turn ${ang.toFixed(2)}`).toBeGreaterThan(k);
+      expect(o.indexOf(String(b.id)), `turn ${ang.toFixed(2)}`).toBeGreaterThan(k);
+    }
+    resetVisitors();
+  });
+  it('a pair at a cafe table: the far chair, its sitter, the top with the near chair, then the near sitter (the top covers the far lap)', () => {
+    resetVisitors();
+    resetCreatures();
+    const table = one('table');
+    expect(table).toMatchObject({ x: 16, y: 44, w: 1, h: 1 });
+    const a = put('elder', 0, 0), b = put('elder', 0, 0);
+    seat(a, table, 0);
+    seat(b, table, 1);
+    for (const ang of QUARTERS) {
+      view(ang, 2.4, table.x, table.y);
+      const [far, near] = depthOf(a.x, a.y) < depthOf(b.x, b.y) ? [a, b] : [b, a];
+      const o = painted().filter((l) => l.startsWith(`prop${table.id}.`) || l === String(a.id) || l === String(b.id));
+      expect(o, `turn ${ang.toFixed(2)}`).toEqual([`prop${table.id}.1`, String(far.id), `prop${table.id}.2`, String(near.id)]);
+    }
+    resetVisitors();
   });
 });
