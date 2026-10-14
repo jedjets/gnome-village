@@ -13,7 +13,7 @@
 // Dropped from the range: chips, zzz, logs, smoke, fireflies, valley mist, lightning and rumble, rain rings and splashes (S9 reshapes
 // the weather overlay and its rain), the text glyphs of zzz and notes (04 section 8 asks for a drawn note).
 // TODO(S9): drawWeatherOverlay (GV 10062-10105 on sim time), petals, leaves, notes, flash, fireworks, lamp halos (04 section 8, 10.2);
-// TODO(S4, S6): poopDot, bubble, hat, the wasp circling a table.
+// TODO(S5): the Chat stage's alternating talk bubbles (drawChatBubble is here; 04 7.5 item 4). TODO(S6): poopDot, hat, the wasp circling a table.
 import { mulberry32, vrng, vrnd } from '../core/rng.ts';
 import { TAU, clamp01, type XY } from '../core/math.ts';
 import { DAYLEN, T } from '../core/clock.ts';

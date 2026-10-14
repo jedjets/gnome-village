@@ -1,8 +1,8 @@
 // src/render/people.ts
 // The people and the creatures on the ground, as phase 6 drawables (03 7.9): where each is drawn (the anchor the pick, the follow and the
 // selection ring share), which way it faces on screen, its depth in the painter order (03 7.2), and the lists pickAt reads (03 8.2).
-// NEW in S4 part C, beside figures.ts and creatures.ts (which keep the drawing) and props.ts (at its size limit, AGENTS rule 9): the 03 2.7
-// module map has no row for it yet (`peopleDrawables(): Drawable[]; anchorOf(v, out): Anchor; pickPeople(); pickCreatures(); followPos`).
+// NEW in S4 part C, beside figures.ts and creatures.ts (which keep the drawing) and props.ts (at its size limit, AGENTS rule 9); its API is
+// the 03 2.7 people.ts row.
 // Ported from GV 1641-1642 (the facing: the sign of the heading's screen x, here worked out each frame in render because the sim never
 // reads the camera, 03 7.6 item 7, A5), 8172 (a facing toward something on screen is a drawing choice, never written back), 8169-8175
 // (drawGnome at screenOf of the feet), 9578-9600 (the people and critters sorted with the props by depth). ADAPT: GV kept g.face and
