@@ -85,10 +85,14 @@ function box(pen: Pen, proj: Proj, cx: number, cy: number, hu: number, hv: numbe
 function visF(i: number): boolean {
   return faceVis(Math.cos((i / 8) * TAU), Math.sin((i / 8) * TAU));
 }
-/** Octagon face i turned to the viewer (1), away (-1) or edge-on at a quarter turn (0), past rounding (visF reads the sign of a 1e-16). */
+/** The band about edge-on, sqrt 2 x sin 6 deg of sideF's d: a camera a few degrees off a quarter turn (a pinch twist rests at any angle,
+ *  04 1 Rotation) keeps the quarter turn's split, so a vendor beside an edge-on awning face paints over it either side of the turn. */
+const EDGE_ON = Math.SQRT2 * Math.sin(TAU / 60);
+/** Octagon face i turned to the viewer (1), away (-1) or within 6 degrees of edge-on (0): d is sqrt 2 x the sine of its turn off edge-on
+ *  (visF reads the bare sign, which at a quarter turn is the sign of a 1e-16). */
 function sideF(i: number): -1 | 0 | 1 {
   const r = rotVec(Math.cos((i / 8) * TAU), Math.sin((i / 8) * TAU)), d = r.x + r.y;
-  return d > 1e-9 ? 1 : d < -1e-9 ? -1 : 0;
+  return d > EDGE_ON ? 1 : d < -EDGE_ON ? -1 : 0;
 }
 /** The points of a list from last to first, as a new array. */
 function backward<T>(a: readonly T[]): T[] {
@@ -203,8 +207,9 @@ export const KIOSK: KioskSpec = {
  * A kiosk whose north-west tile is (x, y), serving on `rot` (0 south, then 1 west, 2 north, 3 east: the serving tile is south of the
  * south-west tile at rot 0, 02 8.3): a stone plinth; the green octagonal body (foliageSummer x 0.8, 04 6.1) with moulded panels; the
  * serving window over its counter, lamp-lit at night; a menu board on the face beside it; a stone cornice; a striped awning over the three
- * serving faces with a scalloped valance; the zinc cone with ribs and a gilt finial, 1.6 EH in all. Awning faces turned away (or edge-on)
- * paint first: part 1 is those alone (the back, sorted at kioskBackDepth), part 2 the rest (the front), 0 both (03 7.2).
+ * serving faces with a scalloped valance; the zinc cone with ribs and a gilt finial, 1.6 EH in all. Awning faces turned away (or within
+ * 6 degrees of edge-on, sideF) paint first: part 1 is those alone (the back, at kioskBackDepth), part 2 the rest (the front, at
+ * kioskFrontDepth), 0 both (03 7.2).
  */
 export function drawKiosk(pen: Pen, proj: Proj, x: number, y: number, rot: number, night: boolean, part: 0 | 1 | 2 = 0): void {
   const { ctx, z } = pen, P = pen.spec.palette, K = KIOSK, cx = x + 0.5, cy = y + 0.5;
@@ -281,6 +286,14 @@ export function drawKiosk(pen: Pen, proj: Proj, x: number, y: number, rot: numbe
  */
 export function kioskBackDepth(x: number, y: number): number {
   return depthOf(x + 0.5, y + 0.5) - Math.SQRT2 * (KIOSK.r + KIOSK.awningOut) * Math.cos(TAU / 16);
+}
+/**
+ * The painter depth of the kiosk at (x, y)'s front part (drawKiosk part 2): its centre's, not its deepest footprint tile's. The round
+ * kiosk fills its 2 x 2 footprint and no one stands inside it, so a figure outside the footprint in front of the centre is in front of
+ * the kiosk where they overlap. The deepest tile sat 0.05 behind the vendor at turn 0, and a twist of 2 degrees put him under the counter.
+ */
+export function kioskFrontDepth(x: number, y: number): number {
+  return depthOf(x + 0.5, y + 0.5);
 }
 
 /* ---------- the bandstand (04 6.1 row bandstand; 06 4): the owner's pick 3B, a Belle Époque kiosque a musique ---------- */

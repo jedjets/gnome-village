@@ -9,11 +9,15 @@ import { mulberry32 } from '../src/core/rng.ts';
 import { genPark } from '../src/world/gen.ts';
 import { props, type Prop } from '../src/world/grid.ts';
 import { propDrawables } from '../src/render/props.ts';
-import { kioskBackDepth } from '../src/render/props-park.ts';
+import { KIOSK, drawKiosk, kioskBackDepth, kioskFrontDepth } from '../src/render/props-park.ts';
+import { STYLES, type Pen } from '../src/render/ambient.ts';
 import { peopleDrawables } from '../src/render/people.ts';
 import { byId, resetVisitors, spawnVisitor, type Visitor } from '../src/entities/visitor.ts';
 import { resetCreatures } from '../src/entities/creatures.ts';
 import { ensureVendors, vendorFor } from '../src/entities/staff.ts';
+
+/** A plain iso projection for counting fills (any projection draws the same polygons). */
+const flatProj = (x: number, y: number, e = 0): { x: number; y: number } => ({ x: (x - y) * 13, y: (x + y) * 6.5 - e * 26 });
 
 function mk(id: number, depth: number, kind = 't'): Drawable {
   return { depth, kind, id, x: 0, y: 0, z: 0, draw: () => undefined };
@@ -140,7 +144,9 @@ describe('03 7.2 item 2: the kiosk paints in two halves round its vendor at the 
       ['k1', 'v', 'k2'], // turn 2: the vendor beside the far side, in front of the far rim: over the awning edge, under body and roof
       ['k1', 'k2', 'v'], // turn 3
     ];
-    for (const [t, ang] of [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2].entries()) {
+    // each quarter turn and 0.03 rad either side of it (a pinch twist rests at any angle, 04 1 Rotation; the S4 fixes review)
+    for (const [t, q] of [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2].entries()) for (const off of [-0.03, 0, 0.03]) {
+      const ang = q + off, at = `turn ${t} ${off >= 0 ? '+' : ''}${off}`;
       setViewport(390, 844, 2);
       setAngle(ang);
       cam.angT = ang;
@@ -153,11 +159,36 @@ describe('03 7.2 item 2: the kiosk paints in two halves round its vendor at the 
         return d.kind !== 'visitor' ? '' : d.id === v.id ? 'v' : d.id === w.id ? 'w' : '';
       };
       const o = list.map(label).filter((l) => l !== '');
-      expect(o.filter((l) => l !== 'w'), `turn ${t}`).toEqual(want[t]);
-      // the back half sorts at the awning's far rim: sqrt 2 x the outer apothem (0.98 cos 22.5 deg) before the kiosk's centre
-      expect(kioskBackDepth(k.x, k.y), `turn ${t}`).toBeCloseTo(depthOf(14.5, 44.5) - Math.SQRT2 * 0.98 * Math.cos(Math.PI / 8), 9);
-      if (t === 2) expect(o, 'turn 2: one behind the far rim paints under both halves').toEqual(['w', 'k1', 'v', 'k2']);
+      expect(o.filter((l) => l !== 'w'), at).toEqual(want[t]);
+      // the back half sorts at the awning's far rim: sqrt 2 x the outer apothem (0.98 cos 22.5 deg) before the kiosk's centre; the front
+      // half at the centre, not the deepest footprint tile (that one sat 0.05 behind the vendor at turn 0: a 2 degree twist put him under it)
+      expect(kioskBackDepth(k.x, k.y), at).toBeCloseTo(depthOf(14.5, 44.5) - Math.SQRT2 * 0.98 * Math.cos(Math.PI / 8), 9);
+      expect(kioskFrontDepth(k.x, k.y), at).toBe(depthOf(14.5, 44.5));
+      const k2 = list.find((d) => d.kind === 'prop' && d.id === k.id && (d as Drawable & { part?: number }).part === 2) as Drawable;
+      expect(k2.depth, at).toBe(kioskFrontDepth(k.x, k.y));
+      if (t === 2) expect(o, `${at}: one behind the far rim paints under both halves`).toEqual(['w', 'k1', 'v', 'k2']);
     }
     resetVisitors();
+  });
+
+  it('the back half holds the awning faces turned away and the one within 6 degrees of edge-on, on both sides of each quarter turn', () => {
+    // the awning is 3 faces of KIOSK.stripes / 3 stripes, each stripe a face and a valance: 2 x per fills a face, counted in part 1 alone
+    let fills = 0;
+    const ctx = new Proxy({} as Record<string, unknown>, {
+      get: (_t, key) => (key === 'createLinearGradient' ? () => ({ addColorStop: () => undefined }) : key === 'fill' ? () => void fills++ : () => undefined),
+      set: () => true,
+    }) as unknown as CanvasRenderingContext2D;
+    const pen: Pen = { ctx, spec: STYLES.A, z: 2.4 };
+    const per = Math.max(1, Math.round(KIOSK.stripes / 3));
+    // the starter kiosk serves south (rot 0): its awning is faces SE, S and SW. Turn 0: SW edge-on, SE and S to the viewer; turn 1: SE
+    // edge-on, S and SW away; turn 2: SW edge-on (the vendor's side, s4-table-2), SE and S away; turn 3: SE edge-on, S and SW to the viewer
+    const back = [1, 3, 3, 1];
+    for (const [t, q] of [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2].entries()) for (const off of [-0.1, -0.03, 0, 0.03, 0.1]) {
+      setAngle(q + off);
+      fills = 0;
+      drawKiosk(pen, flatProj, 14, 44, 0, false, 1);
+      expect(fills / (2 * per), `turn ${t} ${off >= 0 ? '+' : ''}${off}: awning faces in the back half`).toBe(back[t]);
+    }
+    setAngle(0);
   });
 });

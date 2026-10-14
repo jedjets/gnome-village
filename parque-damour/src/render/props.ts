@@ -28,7 +28,7 @@ import { iceState } from '../world/water.ts';
 import { screenInto } from './project.ts';
 import { depthOf, footprintDepth, type Drawable } from './order.ts';
 import { SPECIES_HEIGHT, drawHedge, drawTreeProp, gamePen, gameProj, renderCtx, type Species } from './flora.ts';
-import { drawBandstand, drawBench, drawBridge, drawKiosk, drawPicnic, kioskBackDepth } from './props-park.ts';
+import { drawBandstand, drawBench, drawBridge, drawKiosk, drawPicnic, kioskBackDepth, kioskFrontDepth } from './props-park.ts';
 import { drawEasel } from './figure-props.ts';
 
 export { treeSprite } from './flora.ts';
@@ -572,7 +572,7 @@ function shallowDepth(p: Prop): number {
 
 /**
  * The props as painter drawables for this frame (03 7.2): depth is the deepest footprint tile; a bandstand or bridge gives a back half at
- * its shallowest depth less 0.5 and a front half at its deepest plus 0.49, a kiosk a back half at kioskBackDepth, a table its far chair
+ * its shallowest depth less 0.5 and a front half at its deepest plus 0.49, a kiosk its halves at its far rim and centre, a table its far chair
  * at that chair's depth and the rest at its tile's, a picnic blanket its shallowest less 0.5, so people inside, serving, seated or on
  * them paint between. Culled (03 15.2 item 6): trees under 2.5 px tall, other props under 1.5 px, off screen. Reused next frame.
  */
@@ -589,7 +589,7 @@ export function propDrawables(): Drawable[] {
     if (S0.x + half < 0 || S0.x - half > cw || S0.y + dn < 0 || S0.y - up > chh) continue;
     if (p.kind === 'bandstand' || p.kind === 'bridge' || p.kind === 'kiosk') {
       addDrawable(p, 1, p.kind === 'kiosk' ? kioskBackDepth(p.x, p.y) : shallowDepth(p) - 0.5);
-      addDrawable(p, 2, footprintDepth(p.x, p.y, p.w, p.h) + (p.kind === 'kiosk' ? 0 : 0.49)); // a vendor at a counter turned to us is after it
+      addDrawable(p, 2, p.kind === 'kiosk' ? kioskFrontDepth(p.x, p.y) : footprintDepth(p.x, p.y, p.w, p.h) + 0.49); // a vendor at a counter turned to us is after it
     } else if (p.kind === 'table') {
       addDrawable(p, 1, Math.min(depthOf(p.x - CHAIR_U, p.y), depthOf(p.x + CHAIR_U, p.y)));
       addDrawable(p, 2, footprintDepth(p.x, p.y, p.w, p.h));
