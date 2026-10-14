@@ -617,6 +617,7 @@ Conventions (03 §12): keys are lowercase, dot-separated, `area.item[.detail]`. 
 | `rail.creator` | Creator | TODO |
 | `rail.photo` | Photo | TODO |
 | `rail.new` | New | TODO |
+| `rail.options` | Options | TODO |
 | `rail.locked_at` | Unlocks at {side} T{tier} | TODO |
 | `rail.tier` | T{tier} | T{tier} |
 | `rail.cooldown` | {s} s | {s} s |
@@ -952,8 +953,11 @@ The clock chip's day is `t('hud.day', { n, season: '@hud.season.<season>' })`: t
 | `sheet.picker.locked` | Locked · {side} T{tier} | TODO |
 | `sheet.options.title` | Options | TODO |
 | `sheet.options.language` | Language | TODO |
+| `sheet.options.lang_en` | EN | EN |
+| `sheet.options.lang_es` | ES | ES |
 | `sheet.options.sound` | Sound | TODO |
 | `sheet.options.speed` | Speed | TODO |
+| `sheet.options.speed_hint` | Set it with the dial in the bottom row | TODO |
 | `sheet.options.pace` | Park pace | Ritmo del parque |
 | `sheet.options.pace.calm` | Calm | Tranquilo |
 | `sheet.options.pace.calm_hint` | A visitor every 6 to 14 s | Un visitante cada 6 a 14 s |
@@ -1062,6 +1066,7 @@ The five `sheet.options.pace*` rows are the Options sheet's **Park pace** settin
 | `toast.load_failed` | The saved park could not be read. Starting fresh. | TODO |
 | `toast.speed` | Speed {n}x | TODO |
 | `toast.paused` | Paused | TODO |
+| `toast.sound_check_later` | The sound check comes with the sound | TODO |
 | `confirm.new_park` | Start a new park? The current one is lost. | TODO |
 | `confirm.yes` | Yes | TODO |
 | `confirm.no` | No | TODO |
@@ -1145,6 +1150,7 @@ The five `sheet.options.pace*` rows are the Options sheet's **Park pace** settin
 | `aria.mode` | Be someone, or return to Creator | TODO |
 | `aria.photo` | Photo mode | TODO |
 | `aria.new` | New park | TODO |
+| `aria.options` | Options: park pace, language, sound and speed | TODO |
 | `aria.close` | Close | TODO |
 | `aria.pin` | Pin this romance | TODO |
 | `aria.lang` | Language | TODO |
@@ -1263,4 +1269,4 @@ Values this document defines that neither the register nor `02-Game-Design.md` d
 Open points for the owner:
 1. Whether `c_rowboat` should be refused during `m_fog` (design §15 open point 4): this document allows it (no `reason` row).
 2. Whether the park should have special days (a festival on summer day 2, a market on autumn day 2 as GV's midsummer and harvest, review §6.7): section 15 has none because the design defines none.
-3. Whether the Options sheet shows the seed (`sheet.options.seed`): brief §11 item 10 assumed yes; the register lists language, sound and speed only.
+3. Whether the Options sheet shows the seed (`sheet.options.seed`): brief §11 item 10 assumed yes; the register (3.10) lists language, sound, speed and park pace only. The Options stage shows it as the sheet's summary line.

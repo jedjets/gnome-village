@@ -5,8 +5,8 @@
 // Park pace Calm | Lively shows the park's pace pressed (or the one whose command waits: a tap while paused, Begin's profile pace in a
 // park started paused), and a tap enqueues the logged `park.pace` command and writes settings.pace to the profile; the language, sound
 // and speed rows mirror the one state each has (intro.ts chooseLang, #bMute, the dial); the seed; the dev rows only under body.dev; the
-// sheet closes with its close button and Escape; Census and Options are exclusive (opening one closes the other). 08 lists no row for
-// this file; it is added here. jsdom, on index.html with shell.css.
+// sheet closes with its close button and Escape; Census and Options are exclusive (opening one closes the other). 08 2.9 lists its
+// rows. jsdom, on index.html with shell.css.
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

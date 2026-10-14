@@ -442,7 +442,7 @@ Locked items show dimmed with their tier in the rail and the picker. Unlocking t
 ### 8.1 Rail layout
 1. Row 1: segmented switch **Park | Cupid | Mischief**, then the scrolling strip of that group (GV data-driven rail `TOOLS` 11038–11046, `buildTools` 11048).
 2. Row 2 (contextual): Park group: brush size 1–3 for brushes, **Place / Cancel** for ghosts, **Undo**. Cupid or Mischief: the active ability's cooldown chip and charges.
-3. Row 3: pause + speed (1–8×), rotate left, rotate right, Fit, Sound, **Be someone**, Photo, New.
+3. Row 3: pause + speed (1–8×), rotate left, rotate right, Fit, Sound, **Be someone**, Photo, New, Options (register 3.9; Options opens the Options sheet, section 12.4).
 4. Selecting any tool other than `hand` clears the selection and camera follow (GV `setTool` 11070).
 
 ### 8.2 Tool classes
