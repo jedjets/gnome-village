@@ -954,6 +954,11 @@ The clock chip's day is `t('hud.day', { n, season: '@hud.season.<season>' })`: t
 | `sheet.options.language` | Language | TODO |
 | `sheet.options.sound` | Sound | TODO |
 | `sheet.options.speed` | Speed | TODO |
+| `sheet.options.pace` | Park pace | Ritmo del parque |
+| `sheet.options.pace.calm` | Calm | Tranquilo |
+| `sheet.options.pace.calm_hint` | A visitor every 6 to 14 s | Un visitante cada 6 a 14 s |
+| `sheet.options.pace.lively` | Lively | Animado |
+| `sheet.options.pace.lively_hint` | A visitor every 3 to 6 s | Un visitante cada 3 a 6 s |
 | `sheet.options.seed` | Park seed {seed} | TODO |
 | `sheet.options.sound_check` | Sound check | TODO |
 | `sheet.options.perf` | Performance overlay | TODO |
@@ -963,6 +968,8 @@ The clock chip's day is `t('hud.day', { n, season: '@hud.season.<season>' })`: t
 | `sheet.sound.muted` | Sound is muted | TODO |
 
 The Visitors chip opens the sheet titled Census (register 3.10: "Visitors chip … opens Census"; 02 §12.2, §12.4); "visitors" is the chip's own word (`hud.visitors`, 16.3).
+
+The five `sheet.options.pace*` rows are the Options sheet's **Park pace** setting (register section 4, Park pace and Options, owner 2026-10-14; design §4.2 item 2, §12.4): Calm keeps the 6 to 14 s gap between arrivals, Lively uses 3 to 6 s (`entities/visitor.ts` `LIVELY_GAP_MIN`, `LIVELY_GAP_MAX`); Lively is the default for a new player. The Options stage adds them to `en.ts` and `es.ts`.
 
 ### 16.11 Feed lines (stored as `{ key, params }` and rendered at display time)
 | Key | EN | ES |
@@ -1188,7 +1195,7 @@ The Visitors chip opens the sheet titled Census (register 3.10: "Visitors chip �
 
 Both gates passed on 2026-10-12 (register §4): style **A Storybook**; music **B Music-box lullaby** and **C Café swing**, with **A Musette waltz** retired (05 §5.9). The boards stay as the record of the gates and still show all three directions and play all three motifs, so every key above stays, including `gate.dir.B`, `gate.dir.C` and `gate.motif.A`. No game screen uses a `gate.*` key.
 
-Rules for this table: `Object.keys(en)` equals `Object.keys(es)` (test); no key may be added in code without a row here; a `.one` key always has a `.other`; a `.f` key always has a `.m`; numbers are formatted by `t()` with the locale's decimal rules; never build a sentence by concatenation. Count: 16.1 to 16.16 define 9 + 24 + 19 + 37 + 32 + 38 + 55 + 19 + 67 + 32 + 73 + 14 + 50 + 34 + 9 + 17 = 529 keys; the test asserts the count against the data file, not against this number.
+Rules for this table: `Object.keys(en)` equals `Object.keys(es)` (test); no key may be added in code without a row here; a `.one` key always has a `.other`; a `.f` key always has a `.m`; numbers are formatted by `t()` with the locale's decimal rules; never build a sentence by concatenation. Count: 16.1 to 16.16 define 9 + 24 + 19 + 37 + 32 + 38 + 55 + 19 + 67 + 37 + 73 + 14 + 50 + 34 + 9 + 17 = 534 keys; the test asserts the count against the data file, not against this number.
 
 ---
 
@@ -1251,7 +1258,7 @@ Values this document defines that neither the register nor `02-Game-Design.md` d
 7. The `feed.cast.<id>` feed line per ability, `feed.left_alone`, `feed.alumni_return`, `feed.ice`, `feed.thaw`, `item.*`, `spot.*`, `word.*`, and every English wording in section 16 (`feed.romance.renewed` is the owner's wording in both languages, 2026-10-11, not an assumption); the design fixes the wording of the New confirm, "The park is full", "has had enough for one day", and the ranked reasons, which are copied.
 8. `ending.happily` and `ending.parted` keys for the two endings as words (register §5).
 9. Section 17 copies the 38 cue ids, soft flags, scopes and gaps of `05-Audio-and-Music-Design.md` §3.2 (05 §9 item 1); 05 owns them, and a change starts there.
-10. The key count 529 (16.16) is a hand count for the reader; the test compares the two data files, not this number.
+10. The key count 534 (16.16) is a hand count for the reader; the test compares the two data files, not this number.
 
 Open points for the owner:
 1. Whether `c_rowboat` should be refused during `m_fog` (design §15 open point 4): this document allows it (no `reason` row).

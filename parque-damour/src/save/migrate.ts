@@ -9,8 +9,11 @@
 // at the top level (lang, muted, speed) and no points; a v0 park holds seed, tick, rng, the weather without the ice timers, the layers it
 // has (a layer it lacks is all zero), the id counters without propReserved, and the props; nothing else. Each later version adds one
 // function here and one fixture under tests/fixtures/.
+// Park pace (owner 2026-10-14): a profile's settings.pace is kept when it is a pace; a profile without one (a new profile, or one written
+// before the field) has none, and store.ts profilePace reads that as Lively. defaultProfile stays without it, so a v1 profile written
+// before the field and a new one read alike. A park's `pace` needs no lift: store.ts restores a park without one as calm.
 import { PROP_ID_MAX } from '../core/ids.ts';
-import { AVATAR_SIDE } from '../core/commands.ts';
+import { AVATAR_SIDE, isPace } from '../core/commands.ts';
 import { WEATHER_KINDS } from '../core/weather.ts';
 import { BEDC, ICE, KIND, KIND_KEYS, OCC, PAVEDAY, PETALS, WATER, WEAR, WET } from '../world/grid.ts';
 import { SCHEMA_VERSION, type ParkSaveV1, type ProfileV1, type Tier } from './schema.ts';
@@ -73,6 +76,7 @@ function profileFrom(o: Obj): ProfileV1 {
   if (s.lang === 'en' || s.lang === 'es') p.settings.lang = s.lang;
   if (typeof s.muted === 'boolean') p.settings.muted = s.muted;
   if (isInt(s.speed, 1, 8)) p.settings.speed = s.speed;
+  if (isPace(s.pace)) p.settings.pace = s.pace;
   if (isStr(o.stylePick) && PICKS.includes(o.stylePick)) p.stylePick = o.stylePick;
   if (isStr(o.musicPick) && PICKS.includes(o.musicPick)) p.musicPick = o.musicPick;
   if (isInt(o.parksPlayed, 0)) p.parksPlayed = o.parksPlayed;

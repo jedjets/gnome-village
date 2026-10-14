@@ -172,7 +172,7 @@ Avatars (possessable, unlocked by tier): `a_pigeon` (Mischief T0), `a_pomeranian
 
 ### 3.9 Modes and the rail
 - `MODE` is `creator` or `avatar`; `PLAYER` is the possessed actor id or null. One branch in the simulation swaps the actor's brain (GV line 5696 pattern). Leaving avatar mode returns the actor to AI.
-- Rail, creator mode: row 1 a segmented switch **Park | Cupid | Mischief** then the scrolling strip of that group (locked abilities shown dimmed with their tier); row 2 contextual: brush size and Undo (Park) or the active ability's cooldown chip; row 3: pause + speed, rotate left/right, Fit, Sound, **Be someone**, Photo, New.
+- Rail, creator mode: row 1 a segmented switch **Park | Cupid | Mischief** then the scrolling strip of that group (locked abilities shown dimmed with their tier); row 2 contextual: brush size and Undo (Park) or the active ability's cooldown chip; row 3: pause + speed, rotate left/right, Fit, Sound, **Be someone**, Photo, New, Options.
 - Rail, avatar mode: row 1 shows the avatar's action hints; row 3 as above with the mode button reading **Creator**.
 - "Be someone" opens the avatar picker sheet listing unlocked avatars with their side and tier.
 
@@ -180,7 +180,7 @@ Avatars (possessable, unlocked by tier): `a_pigeon` (Mischief T0), `a_pomeranian
 - Clock chip (left): weather dot · time-of-day word · Day N · Season. Tap opens Events; double tap toggles the perf overlay (dev).
 - Right column: **Visitors** chip (count + "+" calls a visitor through a gate) opens Census; **Romance** chip (featured pair names · stage) opens Romances; **Points** chip (Cupid n · Mischief n) opens Progress (both ladders, next unlock).
 - Card: name, archetype and age word, relationship line, bars Mood (comfort), Rested (energy), Full (1 − hunger), plus Heart (affinity) for a paired single, doing line. A pair card variant shows both names, the shared affinity bar and the stage.
-- Sheets: Census, Romances, Progress, Events (last 40), Avatar picker, Options (language, sound, speed). Sound check and perf are dev-only behind a flag.
+- Sheets: Census, Romances, Progress, Events (last 40), Avatar picker, Options (language, sound, speed, park pace). Sound check and perf are dev-only behind a flag.
 - Feed line, toast, photo mode and intro (Begin, Continue, EN/ES) as GV.
 
 ### 3.11 Persistence
@@ -217,6 +217,7 @@ No multiplayer transport, no monetisation, no store build, no terrain heights, n
 | **Slice 3 owner answers** (2026-10-13) | the ten hand-back questions: 3 Y lit globes glow untinted; 4 Y far-side lamp heads in leaf accepted; 5 Y New applies at once while paused; 6 Y a drag fills its gaps; 7 Y no profile write after a failed read; 8 Y docs synced; 9 Y replay rule reworded; 10 N reserved-id drift after Continue kept (03 open points). | Done |
 | **Figure rig** (Slice 4, register row 26) | scratch/s4-options.html: three Style A rig variants (1 Storybook stick, 2 Tailored, 3 Gouache) in a lineup of every archetype, the 14 body-language states, the zoom tiers and a night crop; pigeon states; two walker's dogs. **Picked on 2026-10-13** (owner: "Tailored, both dogs, yes, colourful crowd"): **2 Tailored** (filled garments after ref2, natural motion); **both dogs**, the white terrier (A) and the black poodle (B), one per dog walker by seed; the family child **may carry** a balloon or an ice cream (04 7.2 wins over 04 7.1 rule 10); the crowd is **colourful** instead of the muted coat palette (04 7.1 rule 8, 7.3 rule 1 change; the palette itself is a new options step). | Rig build after Slice 4 part C |
 | **Crowd palette** (Slice 4, register row 26) | scratch/s4-crowd-options.html: three colourful crowd palettes on the Tailored rig (A Parisian chic, B Macaron, C Jewel), the same 24-person crowd side by side, day, Fit and night. **Picked on 2026-10-13** (owner: "1. A 2. Y 3. Y 4. Y"): **A Parisian chic** (navy, camel, cream, black, burgundy, bottle green, grey marl, trench, cognac, and a striped top in **burgundy on cream**, so the navy-and-white stripes stay unique to the matchmaker and the mime, 04 7.4); a single **never wears a top close to its own signature colour** (re-rolled by lookSeed); the single's signature scarf is drawn a little larger with a light paper rim; **couples' matching scarves use a crowd colour with no rim**, so the rim always means "single". Replaces the muted coat palette of 04 7.1 rule 8 and 7.3 rule 1. | Rig build after Slice 4 part C |
+| **Park pace and Options** (Slice 4, 2026-10-14) | The arrivals ran below the plan (9 by f 0.45, 17 by f 0.70 on seed 101). The owner: "Instead of A or B, add it as a setting in the menu", then "1 Y 2 Y": an Options button at the end of the bottom row opens the Options sheet; **Park pace** Calm (a visitor every 6-14 s) or Lively (every 3-6 s, the plan's 16 and 24); remembered in the profile and applied to new parks; a change mid-game is a logged command. Default for new players: **Lively**. | Done |
 | Repository | Closed: the owner keeps building in gnome-village (2026-10-11) | Nothing. Pages deployment for this app is deferred and `.github/workflows/pages.yml` stays inert; section 7 keeps the optional recipe |
 
 ---

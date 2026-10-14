@@ -33,12 +33,14 @@
 // or dog walker's finished laps, an artist who has painted, the gardener's next tidy), and the Job counters `step` and `left` (the
 // corner of a loop and the legs or crumbs left). A spawn with `drawless` makes no draw (a kiosk's vendor, so the kiosk and its undo
 // leave the sim stream as it was: 08 2.5 undo row 1).
+// Park pace (owner 2026-10-14, register section 4): this file registers `park.pace` and keeps the park's pace with the arrivals timer
+// (arrivalsState); a Calm park draws 02 4.2's 6-14 s gap, a Lively one LIVELY_GAP_MIN-MAX, one draw either way. A new park is calm.
 import type { XY } from '../core/math.ts';
 import { START_ABS, STEPS_PER_DAY, T, type Phase } from '../core/clock.ts';
 import { chance, rnd, rng } from '../core/rng.ts';
 import { nextVisitorId, type CreatureId, type GateId, type PairId, type PropId, type VisitorId } from '../core/ids.ts';
 import { emit } from '../core/events.ts';
-import { OK, fail, onResetCommands, registerHandler, type Result } from '../core/commands.ts';
+import { OK, fail, isPace, onResetCommands, registerHandler, type Pace, type Result } from '../core/commands.ts';
 import { W, type WeatherKind } from '../core/weather.ts';
 import { I, inB, propById, props } from '../world/grid.ts';
 import { GATES, gateById } from '../world/park.ts';
@@ -86,6 +88,9 @@ export const CAP_AI_BUSKERS = 1;
 export const CAP_DOGWALKERS = 2;
 export const ARRIVAL_GAP_MIN = 6; // s
 export const ARRIVAL_GAP_MAX = 14;
+/** A Lively park's gap in s (register section 4, Park pace and Options): tuned on seed 101 to 07 S4.7 item 2's 16 and 24. */
+export const LIVELY_GAP_MIN = 3;
+export const LIVELY_GAP_MAX = 6;
 export const VISIT_MIN = 0.25; // days
 export const VISIT_MAX = 0.5;
 export const VISIT_TOURIST = 0.25;
@@ -123,6 +128,7 @@ const STAFF: ReadonlySet<Archetype> = new Set<Archetype>(['gardener', 'vendor'])
 export const visitors: Visitor[] = [];
 const index = new Map<VisitorId, Visitor>();
 let arrivalT = 0; // s until the next arrival may come; 0 at a new park: the first comes on the first step
+let pace: Pace = 'calm'; // the park's pace (the park.pace command); a new park and a save without one are calm
 let avatarDecide: (v: Visitor) => void = () => {};
 
 export function byId(id: VisitorId): Visitor | undefined {
@@ -362,7 +368,7 @@ export function stepArrivals(dt: number): void {
   const gate = gateForRoll(rng() * 100);
   const arch = capArchetype(archetypeForRoll(rng() * 100));
   arriveGroup(arch, gate);
-  arrivalT = rnd(ARRIVAL_GAP_MIN, ARRIVAL_GAP_MAX);
+  arrivalT = pace === 'lively' ? rnd(LIVELY_GAP_MIN, LIVELY_GAP_MAX) : rnd(ARRIVAL_GAP_MIN, ARRIVAL_GAP_MAX);
 }
 
 /**
@@ -533,6 +539,8 @@ export function stepVisitors(dt: number): void {
 /* ---------- the visitor.call command (03 5.1; 02 12.2) ---------- */
 
 registerHandler('visitor.call', (c) => callVisitor(c.payload.gate));
+/** park.pace: the gap from the next arrival on (the timer running now is kept); a payload that is no pace is reason.not_here. */
+registerHandler('park.pace', (c) => (isPace(c.payload.pace) ? ((pace = c.payload.pace), OK) : fail('reason.not_here')));
 
 /* ---------- state ---------- */
 
@@ -567,22 +575,25 @@ export function setVisitorsState(list: readonly Visitor[]): void {
   }
 }
 
-export type ArrivalsState = { arrivalT: number };
+export type ArrivalsState = { arrivalT: number; pace: Pace };
 export function arrivalsState(): ArrivalsState {
-  return { arrivalT };
+  return { arrivalT, pace };
 }
-export function setArrivalsState(s: ArrivalsState): void {
+/** A restore: the timer, and the pace (calm when the save has none or no pace). */
+export function setArrivalsState(s: { arrivalT: number; pace?: unknown }): void {
   arrivalT = s.arrivalT;
+  pace = isPace(s.pace) ? s.pace : 'calm';
 }
 
 /**
- * A new park: nobody in the park, no name held, the regulars on their first visit table, the first arrival due at once. No draw. A
- * restore puts the saved list, names and timer back instead (save/store.ts, after setLog).
+ * A new park: nobody in the park, no name held, the regulars on their first visit table, the first arrival due at once, a calm pace. No
+ * draw. A restore puts the saved list, names, timer and pace back instead (save/store.ts, after setLog).
  */
 export function resetVisitors(): void {
   visitors.length = 0;
   index.clear();
   arrivalT = 0;
+  pace = 'calm';
   resetNames();
 }
 

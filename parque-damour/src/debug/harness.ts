@@ -12,10 +12,11 @@
 // S3 part B: the Save group gains savePark, loadPark and clearAll (03 13): the two parque: keys through save/store.ts, nothing else.
 // S4 part B: the State group gains visitors and creatures (the live lists, read only), the Park group callVisitor (it enqueues the logged
 // `visitor.call` command, 03 5.1, as setWeather does).
+// Park pace (owner 2026-10-14): the Park group gains setPace, which enqueues the logged `park.pace` command as setWeather does.
 import { T } from '../core/clock.ts';
 import { seedVisual, rngN } from '../core/rng.ts';
 import { SIM_DT, SP, setSpeed, simulate, tick } from '../core/loop.ts';
-import { applyNow, enqueue, log, replay } from '../core/commands.ts';
+import { applyNow, enqueue, log, replay, type Pace } from '../core/commands.ts';
 import { drain } from '../core/events.ts';
 import { W, type WeatherKind } from '../core/weather.ts';
 import { BEDC, ICE, KIND, OCC, PAVEDAY, PETALS, WATER, WEAR, WET, props } from '../world/grid.ts';
@@ -81,6 +82,10 @@ export function buildHarness(api: HarnessApi) {
     /** Enqueues the logged `visitor.call` command (the "+" on the Visitors chip, 02 12.2); a park at 30 rejects it with reason.park_full. */
     callVisitor: (): void => {
       enqueue({ side: 'park', kind: 'visitor.call', payload: { gate: null } });
+    },
+    /** Enqueues the logged `park.pace` command (register section 4, Park pace and Options); it applies on the next step. */
+    setPace: (pace: Pace): void => {
+      enqueue({ side: 'park', kind: 'park.pace', payload: { pace } });
     },
   };
   const render = {

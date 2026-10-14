@@ -301,9 +301,10 @@ type ParkSaveV1 = { v: 1; seed: number; tick: number;
   feed: FeedEntry[];                   // last 40
   log: Command[];                      // last 600
   treeTurn: number;                    // 0 | 1 | 2: the species the tree tool plants next (02 8.3; tools.ts nextSpecies): saved, not in stateHash
+  pace?: Pace;                         // 'calm' | 'lively': the park's pace (visitor.ts; the park.pace command, 5.1); absent reads calm; hashed when lively
 };
 ```
-`treeTurn` is saved so a restored park plants the same next species (S3); it is not part of `stateHash()` (section 11). S4 added two fields, both saved and hashed so a restored park reaches the same hash (08 3.2 run 6): `paving.run` and `paving.at`, the gardener's pending run and the index of its next tile (`staff.ts` `PavingState`; `stateHash()` hashes the whole `paving` block, the day's tally included), and `sched` (`SchedSave`), the schedulers' counters between steps: `arrivalT` the time until the next arrival may come (`visitor.ts`), `held` the generated names in use, `arrivedDay` and `arrivedToday` the regulars arrived that day (`names.ts`), `gathered` the crumbs props whose gathering of pigeons was announced (`creatures.ts`); `stateHash()` hashes the whole `sched` block. Both are optional in a save: one written before S4 restores them to the empty values. Until their slices fill them, `schema.ts` types `pairs` and `effects` as `SaveRec[]` and `alumni` and `feed` as plain records, and the engine saves them empty. Excluded from the save: the undo stack (register 3.11 "undo-irrelevant"), camera, selection, armed tool or ability, toast, sheet state, particles, caches, `T.speed` (lives in the profile settings).
+`treeTurn` is saved so a restored park plants the same next species (S3); it is not part of `stateHash()` (section 11). S4 added two fields, both saved and hashed so a restored park reaches the same hash (08 3.2 run 6): `paving.run` and `paving.at`, the gardener's pending run and the index of its next tile (`staff.ts` `PavingState`; `stateHash()` hashes the whole `paving` block, the day's tally included), and `sched` (`SchedSave`), the schedulers' counters between steps: `arrivalT` the time until the next arrival may come (`visitor.ts`), `held` the generated names in use, `arrivedDay` and `arrivedToday` the regulars arrived that day (`names.ts`), `gathered` the crumbs props whose gathering of pigeons was announced (`creatures.ts`); `stateHash()` hashes the whole `sched` block. Both are optional in a save: one written before S4 restores them to the empty values. `pace` (owner 2026-10-14, register section 4 "Park pace and Options") is the park's pace, which sets the arrivals gap (design §4.2 item 2): `entities/visitor.ts` keeps it beside the arrivals timer (`arrivalsState().pace`), a new park starts `calm`, the `park.pace` command (5.1) changes it, and the snapshot writes it; a save without it (every park saved before) restores as `calm`, so its arrivals and its hash stay as they were (section 11). The pace a new park gets is a profile setting, not park state (`settings.pace`, section 3.9; Lively when absent). Until their slices fill them, `schema.ts` types `pairs` and `effects` as `SaveRec[]` and `alumni` and `feed` as plain records, and the engine saves them empty. Excluded from the save: the undo stack (register 3.11 "undo-irrelevant"), camera, selection, armed tool or ability, toast, sheet state, particles, caches, `T.speed` (lives in the profile settings).
 
 ### 3.11 Caps
 
@@ -406,6 +407,7 @@ type Command = { tick: number; seq: number } & (
   | { side: 'park'; kind: 'speed';        payload: { speed: 0|1|2|3|4|5|6|7|8 } }
   | { side: 'park'; kind: 'park.new';     payload: { seed: number } }
   | { side: 'park'; kind: 'visitor.call'; payload: { gate: GateId | null } }
+  | { side: 'park'; kind: 'park.pace';    payload: { pace: Pace } }   // 'calm' | 'lively' (register section 4, Park pace and Options); visitor.ts applies it
   | { side: 'park'; kind: 'debug.weather'; payload: { kind: WeatherKind } }   // DEV builds and tests only; sets W.kind to the payload kind and W.next to that kind's mean duration ((durMin + durMax) / 2, design §3.3); makes no rng() draw
 );
 type ToolPayload =
@@ -416,7 +418,7 @@ type ToolPayload =
   | { tool: 'hedge'|'canal'; tiles: XY[] };                                         // the finished run, max 14 tiles
 type Target = { kind: 'tile'; x: number; y: number } | { kind: 'visitor'; id: VisitorId } | { kind: 'pair'; id: PairId } | { kind: 'park' };
 ```
-`hand` is not a command (it only selects). Camera moves, Fit, rotate, photo mode, sheets, language, mute, pin and dev toggles are UI-only and never enter the log (design §14.3).
+`hand` is not a command (it only selects). Camera moves, Fit, rotate, photo mode, sheets, language, mute, pin and dev toggles are UI-only and never enter the log (design §14.3). The park's pace is a command (`park.pace`, owner 2026-10-14): it changes the arrivals, so it is logged and replayed like `speed`. A payload that is not `'calm'` or `'lively'` is rejected `reason.not_here`. The shell sends the profile's pace to every new park with `store.enqueueProfilePace()` right after a Begin's `newPark` or a New's `park.new` (`commands.enqueueAfterNew` keeps it beside a pending `park.new`, which drops what is queued behind it (4.6), and queues it for the new park's tick 1); a Continue sends none, so the restored park keeps its own pace.
 
 ### 5.2 Enqueue and apply
 
@@ -434,10 +436,10 @@ type Target = { kind: 'tile'; x: number; y: number } | { kind: 'visitor'; id: Vi
 | `ability` | the ability's own side (`c_*` cupid, `m_*` mischief) | rejected `reason.not_in_avatar` |
 | `avatar.enter` | the avatar's side | rejected `reason.wrong_mode` if already in avatar mode |
 | `avatar.leave`, `avatar.tap` | `PLAYER`'s side | only in avatar mode, else rejected `reason.wrong_mode` |
-| `speed`, `park.new`, `visitor.call` | `park` | allowed |
+| `speed`, `park.new`, `visitor.call`, `park.pace` | `park` | allowed |
 | `debug.weather` | `park` | allowed; rejected in a production build |
 
-A command whose `side` is not in the Allowed column is rejected with `reason.wrong_side` (section 5.4).
+A command whose `side` is not in the Allowed column is rejected with `reason.wrong_side` (section 5.4). `park.pace` is not one of the paused kinds of 4.6 (`speed`, `park.new`): a pace changed while paused applies at the first step after the unpause, as a tool does, so the live order stays the replay order; the one sent right after a New waits for that park and applies at its tick 1 (5.1).
 
 ### 5.4 Validation and rejection reasons
 
@@ -756,7 +758,7 @@ Static elements carry `data-t="key"` (text) or `data-t-aria="key"` (aria-label).
 | Exclusions | section 3.10 |
 | Failure handling | every `localStorage` access in `try/catch`; a parse or migration failure logs a `warn` event, discards the park and shows Begin without Continue; the profile falls back to defaults, and after a failed profile read (the storage threw, or the text did not parse or migrate) no call writes `parque:profile-v1` until a later read succeeds, so a passing read error never overwrites the stored Cupid and Mischief points; the park key is still written, and the read's one `warn` is the only one (owner 2026-10-13) |
 | Migration | `migrate.ts` holds `profileV0toV1`, `parkV0toV1` placeholders now; each future version adds one function and a test fixture |
-| State hash | `stateHash()`: FNV-1a over `tick`, `rng.sim`, `rng.simN`, the full `weather` block including `ice`, `ids` (`IdsState`), `paving`, the nine saved layers' bytes, and the canonical JSON of `props`, `visitors`, `pairs`, `creatures`, `effects`, `sides`, `regulars`, `alumni`, `tally`, `mode` and the profile's `cp`/`mp`, each array sorted by id. Excluded: `seed`, `feed`, `log`, `pinnedPair`, `rng.vis`, `treeTurn`, `T.speed`. |
+| State hash | `stateHash()`: FNV-1a over `tick`, `rng.sim`, `rng.simN`, the full `weather` block including `ice`, `ids` (`IdsState`), `paving`, the nine saved layers' bytes, and the canonical JSON of `props`, `visitors`, `pairs`, `creatures`, `effects`, `sides`, `regulars`, `alumni`, `tally`, `mode` and the profile's `cp`/`mp`, each array sorted by id, and the park's `pace` when it is `lively` (a `calm` park hashes as a park from before the pace, so the calm determinism fixtures keep their values; owner 2026-10-14). Excluded: `seed`, `feed`, `log`, `pinnedPair`, `rng.vis`, `treeTurn`, `T.speed`. |
 | Size estimate | layers 53 KB raw → 71 KB base64; 30 visitors ≈ 12 KB; 150 props ≈ 18 KB; pairs and creatures ≈ 4 KB; feed 40 × 100 B = 4 KB; log 600 × 80 B = 48 KB; total ≈ 160 KB, under the brief's 1 MB (brief §9 row 6) |
 
 Do not: do not save object references; do not save the undo stack; do not write to `localStorage` from any module but `store.ts`.
@@ -909,7 +911,7 @@ Open points for the owner:
 3. Closed 2026-10-13: the owner picked boulevard variant 1 (register section 4): natural plane trees whose crowns go see-through over the park, a cobbled road, near-side blocks as opaque ground floors (A7), as built. The style board keeps its cutaway tile (04 §4.2 tile 11) as the record of the gate.
 4. Known limitation, kept by the owner on 2026-10-13 (Slice 3 hand-back question 10, "N"): reserved-id drift after a Continue. A restore empties the undo stack (register 3.11) but keeps the ids the snapshot holds reserved, so the round trip keeps `stateHash()`; on the restored path no entry will ever release them, while the live path releases each when its entry leaves the stack (5.6 item 3: ten more entries, or a `clearUndo` such as `avatar.enter`). From then on the two paths hand out different `PropId`s for new props and their state hashes part, which shows only when a test compares a live run with its restored twin. The player sees no difference: the same props stand in the same places, only their ids differ. `tests/save.test.ts` keeps the gap pinned with `it.fails`.
 5. Open after Slice 4, pending the owner (from the Slice 4 hand-backs; each is built as described and pinned by its test, and changes only on the owner's word):
-   1. The arrivals counts. 07 S4.7 item 2 (and the `arrivals.test.ts` row of 08 §2.3) asks for 16 ± 3 people by f 0.45 and 24 ± 3 by f 0.70 at 8× on seed 101, which the arrival rules cannot reach: one arrival every 6 to 14 s (design §4.2 item 2, 06 §1.8) and a visit of 0.25 to 0.5 day (register 3.4). `tests/arrivals.test.ts` pins what the rules give, 10 ± 3 and 17 ± 3 (seed 101 gives 9 and 17). The owner chooses: keep the gap and take the lower counts into 07 and 08, or shorten the gap (a change to design §4.2 and 06 §1.8).
+   1. Closed 2026-10-14: the arrivals counts. The owner chose neither option but a setting (register section 4, **Park pace and Options**): a Calm park keeps the 6 to 14 s gap (seed 101: 9 by f 0.45, 17 by f 0.70; `tests/arrivals.test.ts` pins 10 ± 3 and 17 ± 3), a Lively park uses 3 to 6 s and meets 07 S4.7 item 2's 16 ± 3 and 24 ± 3 (seed 101: 16 and 25); new players get Lively (design §4.2 item 2; sections 3.10, 5.1, 5.3, 11).
    2. The starter kiosk's vendor comes at the first planning tick (step 72), not at step 0 as design §4.2 item 8 reads ("when the kiosk is placed"). Seating it in `newPark` re-rolls every seeded day (on seed 101 the rain then falls at midday and 10 people are in the park at f 0.70, outside item 1's pinned 17 ± 3), so it waits on item 1 (`core/loop.ts` header).
    3. `SIG_NEAR` 20 (CIEDE2000), the distance under which a top counts as close to a single's own signature colour and is re-rolled (register section 4, Crowd palette: a single "never wears a top close to its own signature colour"); no document gives the number (`render/figure-look.ts`).
    4. The Tailored rig's neck measures 0.03 h where 04 §7.1 item 2 gives 0.04; the rig's proportions change only with the owner (07 S4.10).

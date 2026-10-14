@@ -173,7 +173,7 @@ One `Visitor` type for every person. Fields used by the rules: `id, name, sex ('
 
 ### 4.2 Arrivals (`src/entities/visitor.ts`, factory)
 1. Target population by phase: night 3, dawn 6, morning 16, midday 20, afternoon 24, golden hour 20, dusk 14, evening 9. Multiply by the weather and season arrival factors (sections 3.3, 3.4) and round.
-2. While `people < target` and `people < 30`, the next arrival comes `rnd(6, 14)` s after the last. Otherwise nobody arrives (the "+" chip is the exception, section 12.2).
+2. While `people < target` and `people < 30`, the next arrival comes after a gap set by the park's **pace** (register section 4, Park pace and Options; owner 2026-10-14): `rnd(6, 14)` s after the last in a **Calm** park, `rnd(3, 6)` s in a **Lively** one (`LIVELY_GAP_MIN`, `LIVELY_GAP_MAX`, tuned so that seed 101 at 8× from f 0.30 has 16 ± 3 people by f 0.45 and 24 ± 3 by f 0.70, 07 S4.7 item 2; it gives 16 and 25, where Calm gives 9 and 17). One draw either way; the targets, factors, weights, caps and the re-roll of items 1, 3, 4 and 7 are the same for both. Otherwise nobody arrives (the "+" chip is the exception, section 12.2). The pace is park state, saved with the park (a park saved before it existed is Calm); a new park takes the player's preferred pace from the profile (Lively for a new player) through the logged `park.pace` command (03 §5.1), and a change in Options applies to the park in play the same way from its next step.
 3. Gate by the weights in section 2.4. The visitor appears on `outside`, steps to the gate tile, then runs its routine.
 4. Archetype weights per arrival: single 30, couple 12, family 12, elder 10, tourist 12, jogger 8, artist 4, dog walker 8, busker 4. At most 1 artist, 1 AI busker and 2 dog walkers in the park at once; a roll that hits a full archetype becomes `single`.
 5. Starting needs: hunger `rnd(0.2, 0.5)`, energy `rnd(0.5, 0.9)`, comfort 0.7, social `rnd(0.2, 0.6)`.
@@ -689,7 +689,7 @@ Chips, card and overlay layout refresh every 0.35 s (GV `updateHUD` 10845); the 
 | Progress | two ladders with the tier marks, points, and the next unlock on each; the unlock table 7.4 | — |
 | Events | last 40 lines (GV `feedEv` cap 40, 10723), "Day N · phase" per line | go to the subject with a 5.2 s focus pin (GV `goToEvent` 10751, `drawFocusMark` 10764) |
 | Avatar picker | six cards with side, tier, lock | enter avatar mode |
-| Options | language EN/ES, sound on/off, speed, the park seed (`sheet.options.seed`); dev flag reveals sound check and perf | — |
+| Options | language EN/ES, sound on/off, speed, **Park pace** Calm / Lively (`sheet.options.pace`; remembered in the profile and given to every new park, Lively for a new player; a change also applies to the park in play as a logged `park.pace` command, section 4.2 item 2; register section 4, Park pace and Options), the park seed (`sheet.options.seed`); dev flag reveals sound check and perf; opened by **Options** at the end of rail row 3 (register 3.9) | — |
 
 Census and Events are mutually exclusive (GV 10748).
 

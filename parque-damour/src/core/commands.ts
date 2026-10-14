@@ -10,6 +10,11 @@
 // Layering (03 2.1): this file is core, so it cannot import the conductor or the tools. The tick it stamps (setTickSource), the step
 // `replay` drives (setStepper) and the handlers are handed in by the layers above. It reads play/mode.ts, a leaf with no imports, for
 // the mode rules of 03 5.3: the second named exception of 03 2.1 (L0 row).
+// Park pace (owner 2026-10-14, register section 4 "Park pace and Options"): `park.pace` { pace: 'calm' | 'lively' } is a park-side kind
+// allowed in both modes, logged and replayed like `speed`; entities/visitor.ts registers it (the arrivals gap). It is not a paused kind
+// (loop.PAUSED_KINDS): a change made while paused applies at the first step after the unpause, like a tool, so the live order stays the
+// replay order and no pace applies to a park that is not running. enqueueAfterNew carries a command queued right after a New into the
+// park the New starts (a park.new drops what is queued behind it, 03 4.6): the shell's profile pace for a new park (save/store.ts).
 import type { XY } from './math.ts';
 import type { GateId, PairId, Side, VisitorId } from './ids.ts';
 import { emit } from './events.ts';
@@ -38,6 +43,12 @@ export const AVATAR_SIDE: Readonly<Record<AvatarId, 'cupid' | 'mischief'>> = {
 export type Hit = { kind: 'visitor' | 'creature' | 'prop' | 'tile' | 'none'; id: number; tile: XY | null };
 export type Target = { kind: 'tile'; x: number; y: number } | { kind: 'visitor'; id: VisitorId } | { kind: 'pair'; id: PairId } | { kind: 'park' };
 
+/** The park's pace (register section 4, Park pace and Options): the arrivals gap of 02 4.2 item 2. A park without one is calm. */
+export type Pace = 'calm' | 'lively';
+export function isPace(v: unknown): v is Pace {
+  return v === 'calm' || v === 'lively';
+}
+
 export type ToolPayload =
   | { tool: 'path' | 'lawn' | 'pond'; at: XY; size: 1 | 2 | 3; stroke: number } // one command per painted centre; stroke groups them for undo
   | { tool: 'bed' | 'tree' | 'bench' | 'lamp' | 'remove'; at: XY }
@@ -55,6 +66,7 @@ export type Command = { tick: number; seq: number } & (
   | { side: 'park'; kind: 'speed'; payload: { speed: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 } }
   | { side: 'park'; kind: 'park.new'; payload: { seed: number } }
   | { side: 'park'; kind: 'visitor.call'; payload: { gate: GateId | null } }
+  | { side: 'park'; kind: 'park.pace'; payload: { pace: Pace } }
   | { side: 'park'; kind: 'debug.weather'; payload: { kind: WeatherKind } } // DEV builds and tests only
 );
 export type CommandKind = Command['kind'];
@@ -73,6 +85,7 @@ export function fail(reason: ReasonKey): Result {
 const SIDE_ORDER: Readonly<Record<Side, number>> = { park: 0, cupid: 1, mischief: 2 };
 
 let pending: Command[] = [];
+let afterNew: CommandInput[] = []; // enqueueAfterNew: queued for the park a pending park.new starts
 let logList: Command[] = [];
 let seqCounter = 0;
 let generation = 0; // bumped by clearPending, so applyPending notices a new park in the middle of a batch
@@ -100,6 +113,16 @@ export function enqueue(c: CommandInput): Command {
   const cmd = { ...c, tick: tickSource() + 1, seq: ++seqCounter } as Command;
   pending.push(cmd);
   return cmd;
+}
+
+/**
+ * Queue `c` for the park the player sees next: with a `park.new` pending (New confirmed, not applied yet), `c` waits beside it and is
+ * queued at once after it applies, for the new park's first step (tick 1, a fresh seq), since a park.new drops what is queued behind it
+ * (03 4.6); with none pending, this is enqueue. The shell's call right after a New or a Begin (save/store.ts enqueueProfilePace).
+ */
+export function enqueueAfterNew(c: CommandInput): void {
+  if (pending.some((p) => p.kind === 'park.new')) afterNew.push(c);
+  else enqueue(c);
 }
 
 /** Apply a command at the current tick at once and log it (the harness `apply`). */
@@ -153,6 +176,7 @@ function validate(c: Command): ReasonKey | null {
     case 'speed':
     case 'park.new':
     case 'visitor.call':
+    case 'park.pace':
       return side === 'park' ? null : 'reason.wrong_side';
     case 'debug.weather':
       if (side !== 'park') return 'reason.wrong_side';
@@ -175,6 +199,8 @@ export function applyCommand(c: Command): Result {
   if (why) return reject(c, why);
   const h = handlers.get(c.kind);
   if (!h) return reject(c, 'reason.not_here');
+  const carried = c.kind === 'park.new' ? afterNew : null; // taken before the reset, which empties afterNew with the queue
+  if (carried) afterNew = [];
   const res = h(c as never);
   if (!res.ok) return reject(c, res.reason);
   if (c.kind !== 'park.new') {
@@ -182,6 +208,7 @@ export function applyCommand(c: Command): Result {
     if (logList.length > LOG_CAP) logList.splice(0, logList.length - LOG_CAP);
   }
   emit({ kind: 'applied', tick: c.tick, params: { kind: c.kind, side: c.side } });
+  if (carried) for (const x of carried) enqueue(x); // the new park's tick 1, after the reset: enqueueAfterNew
   return OK;
 }
 
@@ -209,9 +236,10 @@ export function onRestoreCommands(fn: () => void): void {
   restoreHooks.push(fn);
 }
 
-/** Drop everything queued: a new park or a restore makes the queued commands meaningless. */
+/** Drop everything queued (enqueueAfterNew's waiting commands too): a new park or a restore makes the queued commands meaningless. */
 export function clearPending(): void {
   pending = [];
+  afterNew = [];
   generation++;
 }
 

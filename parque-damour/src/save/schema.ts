@@ -11,7 +11,11 @@
 // and the tile reached (`run`, `at`), and `sched` (new, optional) holds what the schedulers count between steps: the arrivals timer, the
 // names held, the regulars arrived today, the pigeon gatherings announced. Without them a restored park would not reach the same hash
 // (08 3.2 run 6). A save written before part B has none of them and restores to the empty values.
-import type { Command } from '../core/commands.ts';
+// Park pace (owner 2026-10-14, register section 4 "Park pace and Options"): ParkSaveV1 gains `pace` (optional: a save without one is
+// calm, so every park saved before keeps its arrivals) and ProfileV1's settings gain `pace`, the pace the player prefers for new parks
+// (optional: a profile without one, new or older, reads Lively, store.ts profilePace). No schema version change: an absent field reads
+// its default, as every profile field does (migrate.ts profileFrom).
+import type { Command, Pace } from '../core/commands.ts';
 import type { IdsState, Side } from '../core/ids.ts';
 import type { Override, WeatherKind } from '../core/weather.ts';
 import type { Prop } from '../world/grid.ts';
@@ -36,7 +40,7 @@ export type ProfileV1 = {
   tierC: Tier;
   tierM: Tier;
   unlocked: string[]; // ability and avatar ids already announced, so the "Unlocked" toast fires once per id (03 3.9)
-  settings: { lang: Lang; muted: boolean; speed: number }; // speed is the dial 1-8; the pause is never stored (03 4.6)
+  settings: { lang: Lang; muted: boolean; speed: number; pace?: Pace }; // speed is the dial 1-8, never the pause (03 4.6); pace: Lively if absent
   stylePick: string | null; // written only by the Style Board's Choose (04 4.4); the game draws A whatever it holds
   musicPick: string | null; // written only by the Music Board's Choose (05 6.5 item 1); the game never reads it
   parksPlayed: number; // parks begun with New (03 11)
@@ -97,6 +101,7 @@ export type ParkSaveV1 = {
   feed: Array<Record<string, unknown>>; // last 40
   log: Command[]; // last 600
   treeTurn: number; // the species the tree tool plants next: 0 plane, 1 chestnut, 2 lime (02 8.3; play/tools.ts nextSpecies)
+  pace?: Pace; // the park's pace (visitor.ts, the park.pace command); calm when absent. Saved and hashed (store.ts stateHash)
 };
 
 /** The schedulers' counters between steps (S4 part B): saved and hashed so a round trip lands on the same hash (08 3.2 run 6). */

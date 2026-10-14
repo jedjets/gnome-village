@@ -4,14 +4,15 @@
 // (a due regular replaces a generated single), 02 12.2 ("+": single 60 %), 03 4.4 (the decide cadence and its one MODE branch) and the
 // draw order the visitor.ts header documents / 08 2.3 arrivals.test.ts rows that need no running loop / 07 S4.6 step 1.
 // Part A drives the scheduler directly (stepArrivals with the clock held); part B runs the seeded day through the loop (the counts by
-// f 0.45 and 0.70, never above 30, the gardener from 10 s, one vendor per kiosk, the visitor.call command). 07 S4.7 item 2 asks for
-// 16 +- 3 people by f 0.45 and 24 +- 3 by f 0.70; with 02 4.2's 6-14 s gap (06 1.8) and register 3.4's 0.25-0.5 day visit that cannot
-// happen: 54 s bring about 6 arrivals of 1.29 people each (couple and family 12 % each bring two, a tourist pair 12 % x 40 %), so about
-// 8 visitors and the 2 staff by f 0.45, and about 17 in the park by f 0.70 once the first leave. The rows below pin what the rules give,
-// +- 3 as 07 allows (a deviation in the hand-back; the owner may shorten the gap or change 07's numbers).
+// f 0.45 and 0.70, never above 30, the gardener from 10 s, one vendor per kiosk, the visitor.call command).
+// Park pace (owner 2026-10-14, register section 4 "Park pace and Options"): a Calm park keeps 02 4.2's 6-14 s gap (06 1.8), which with
+// register 3.4's 0.25-0.5 day visit gives 07 S4.7 item 2's seed 101 only 9 people by f 0.45 and 17 by f 0.70 (54 s bring about 6
+// arrivals of 1.29 people each: couple and family 12 % each bring two, a tourist pair 12 % x 40 %); its rows pin what the rules give,
+// 10 +- 3 and 17 +- 3. A Lively park draws LIVELY_GAP_MIN-MAX (3-6 s), tuned so that seed 101 meets the plan's numbers, 16 +- 3 and 24 +- 3
+// (it gives 16 and 25); everything else (targets, factors, weights, caps, the re-roll, one draw per gap) is the same.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SIM_DT, newPark, setSpeed, setTick, simulate, tick } from '../src/core/loop.ts';
-import { applyNow, log } from '../src/core/commands.ts';
+import { applyNow, enqueue, log, type Pace } from '../src/core/commands.ts';
 import { clearListeners, on } from '../src/core/events.ts';
 import { props } from '../src/world/grid.ts';
 import { gardener, vendorFor } from '../src/entities/staff.ts';
@@ -23,12 +24,32 @@ import { GATES } from '../src/world/park.ts';
 import { setMode } from '../src/play/mode.ts';
 import { REGULARS } from '../src/entities/names.ts';
 import {
-  ARCHETYPE_WEIGHTS, ARRIVAL_GAP_MAX, ARRIVAL_GAP_MIN, CALL_SINGLE, NEVER, PHASE_TARGET, SEASON_ARRIVALS, WEATHER_ARRIVALS, arriveGroup,
+  ARCHETYPE_WEIGHTS, ARRIVAL_GAP_MAX, ARRIVAL_GAP_MIN, CALL_SINGLE, LIVELY_GAP_MAX, LIVELY_GAP_MIN, NEVER, PHASE_TARGET, SEASON_ARRIVALS,
+  WEATHER_ARRIVALS, arriveGroup,
   arrivalsState, archetypeForRoll, callVisitor, capArchetype, compatible, currentTarget, decideCadence, gateForRoll, needsReroll, people,
   removeVisitor, setAvatarDecide, signatureOf, spawnVisitor, stepArrivals, targetPeople, visitors, type Visitor,
 } from '../src/entities/visitor.ts';
 
 const tickAt = (day: number, f: number): number => Math.round((day - 1 + f - 0.3) * STEPS_PER_DAY);
+const setPace = (pace: Pace): void => void expect(applyNow({ side: 'park', kind: 'park.pace', payload: { pace } }).ok).toBe(true);
+
+/** The step of each arrival over 30 minutes of stepArrivals at midday (target 20) from a park held at `pace`. */
+function arrivalSteps(pace: Pace): number[] {
+  setPace(pace);
+  setTick(tickAt(1, 0.5));
+  W.kind = 'fair';
+  const at: number[] = [];
+  let n = 0;
+  for (let step = 1; step <= 20 * 60 * 30; step++) {
+    stepArrivals(SIM_DT);
+    if (people() !== n) {
+      expect(people()).toBeGreaterThan(n);
+      n = people();
+      at.push(step);
+    }
+  }
+  return at;
+}
 
 beforeEach(() => {
   newPark(101);
@@ -63,21 +84,22 @@ describe('targets (02 4.2 item 1; 06 1.3, 14.1, 15)', () => {
   });
 });
 
+/** One arrival at midday on seed 101 from sim seed 55, at `pace`: who came, the draws it made and the gap it drew. */
+function oneArrival(pace: Pace): { names: string[]; draws: number; t: number } {
+  newPark(101);
+  setPace(pace);
+  setTick(tickAt(1, 0.5));
+  seedSim(55);
+  const n0 = rngN();
+  stepArrivals(SIM_DT);
+  return { names: visitors.map((v) => v.name), draws: rngN() - n0, t: arrivalsState().arrivalT };
+}
+
 describe('the gap and the target (02 4.2 item 2; 08 2.3 "consecutive arrival ticks differ by 360 to 840 steps")', () => {
   it('arrivals come 6 to 14 s apart while below the target, the first at once, and stop at the target', () => {
     expect([ARRIVAL_GAP_MIN, ARRIVAL_GAP_MAX]).toEqual([6, 14]);
-    setTick(tickAt(1, 0.5)); // midday: target 20
-    W.kind = 'fair';
-    const at: number[] = [];
-    let n = 0;
-    for (let step = 1; step <= 20 * 60 * 30; step++) {
-      stepArrivals(SIM_DT);
-      if (people() !== n) {
-        expect(people()).toBeGreaterThan(n);
-        n = people();
-        at.push(step);
-      }
-    }
+    expect(arrivalsState().pace).toBe('calm'); // a new park is calm
+    const at = arrivalSteps('calm'); // midday: target 20
     expect(at[0]).toBe(1);
     for (let k = 1; k < at.length; k++) {
       const gap = (at[k] as number) - (at[k - 1] as number);
@@ -92,6 +114,28 @@ describe('the gap and the target (02 4.2 item 2; 08 2.3 "consecutive arrival tic
       stepArrivals(SIM_DT);
       expect(people()).toBeGreaterThanOrEqual(20);
     }
+  });
+  it('a Lively park: arrivals come 3 to 6 s apart (180 to 360 steps), the first at once, and stop at the same target (register section 4)', () => {
+    expect([LIVELY_GAP_MIN, LIVELY_GAP_MAX]).toEqual([3, 6]);
+    expect(LIVELY_GAP_MAX).toBeLessThanOrEqual(ARRIVAL_GAP_MIN); // never longer than a Calm gap
+    const at = arrivalSteps('lively');
+    expect(at[0]).toBe(1);
+    for (let k = 1; k < at.length; k++) {
+      const gap = (at[k] as number) - (at[k - 1] as number);
+      expect(gap).toBeGreaterThanOrEqual(180);
+      expect(gap).toBeLessThanOrEqual(360);
+    }
+    expect(people()).toBeGreaterThanOrEqual(20);
+    expect(people()).toBeLessThanOrEqual(21);
+    expect(arrivalsState()).toEqual({ arrivalT: 0, pace: 'lively' });
+  });
+  it('the pace changes only the gap: the same seed and roll bring the same arrival with the same draws, one draw for either gap', () => {
+    const calm = oneArrival('calm'), lively = oneArrival('lively');
+    expect(lively.names).toEqual(calm.names);
+    expect(lively.draws).toBe(calm.draws);
+    expect(calm.t).toBeGreaterThanOrEqual(6);
+    expect(lively.t).toBeGreaterThanOrEqual(3);
+    expect(lively.t).toBeLessThan(6);
   });
   it('an arrival draws the gate, then the archetype, then the group, then the gap', () => {
     setTick(tickAt(1, 0.5));
@@ -315,22 +359,40 @@ describe('the decide cadence and its one MODE branch (03 4.4; GV 5696)', () => {
 const kiosks = (): typeof props => props.filter((p) => p.kind === 'kiosk');
 const vendors = (): Visitor[] => visitors.filter((v) => v.archetype === 'vendor');
 
+/** Seed 101's first day at 8x from f 0.30, the pace sent as the shell sends it (a park.pace command applied at step 1, `null`: none). */
+function seededDay(pace: Pace | null): { at45: number; at70: number; most: number } {
+  clearListeners();
+  newPark(101);
+  setSpeed(8);
+  if (pace) enqueue({ side: 'park', kind: 'park.pace', payload: { pace } });
+  let at45 = -1, at70 = -1, most = 0;
+  for (let step = 1; step <= 21600; step++) {
+    simulate(SIM_DT, 3); // the real loop's lite bits at 8x (03 4.1 item 3)
+    most = Math.max(most, people());
+    if (step === tickAt(1, 0.45)) at45 = people();
+    if (step === tickAt(1, 0.7)) at70 = people();
+  }
+  return { at45, at70, most };
+}
+
 describe('the seeded day through the loop (07 S4.7 item 2; 02 4.2 items 1-2, 8; 08 2.3 arrivals rows)', () => {
-  it('at 8x from f 0.30 on seed 101: 10 +- 3 people by f 0.45, 17 +- 3 by f 0.70, never above 30 all day', () => {
-    clearListeners();
-    newPark(101);
-    setSpeed(8);
-    let at45 = -1, at70 = -1, most = 0;
-    for (let step = 1; step <= 21600; step++) {
-      simulate(SIM_DT, 3); // the real loop's lite bits at 8x (03 4.1 item 3)
-      most = Math.max(most, people());
-      if (step === tickAt(1, 0.45)) at45 = people();
-      if (step === tickAt(1, 0.7)) at70 = people();
-    }
+  it('Calm, at 8x from f 0.30 on seed 101: 10 +- 3 people by f 0.45, 17 +- 3 by f 0.70, never above 30 all day', () => {
+    const calm = seededDay(null); // no command: a new park is calm
+    expect(seededDay('calm')).toEqual(calm); // the same as a Calm command: calm adds no draw
+    const { at45, at70, most } = calm;
     expect(at45).toBeGreaterThanOrEqual(10 - 3);
     expect(at45).toBeLessThanOrEqual(10 + 3);
     expect(at70).toBeGreaterThanOrEqual(17 - 3);
     expect(at70).toBeLessThanOrEqual(17 + 3);
+    expect(most).toBeLessThanOrEqual(30);
+  }, 60_000);
+
+  it('Lively, at 8x from f 0.30 on seed 101: 16 +- 3 people by f 0.45, 24 +- 3 by f 0.70 (07 S4.7 item 2), never above 30 all day', () => {
+    const { at45, at70, most } = seededDay('lively');
+    expect(at45).toBeGreaterThanOrEqual(16 - 3);
+    expect(at45).toBeLessThanOrEqual(16 + 3);
+    expect(at70).toBeGreaterThanOrEqual(24 - 3);
+    expect(at70).toBeLessThanOrEqual(24 + 3);
     expect(most).toBeLessThanOrEqual(30);
   }, 60_000);
 

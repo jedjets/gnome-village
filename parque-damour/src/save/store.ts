@@ -18,6 +18,12 @@
 // S4 part B: the visitors, the creatures, the regulars, the paving job and the schedulers' counters (`sched`: the arrivals timer, the names
 // held, the regulars arrived today, the gatherings announced) are in the snapshot and the hash; a restore puts them back after setLog, whose
 // hooks clear the undo stack. The ids state was already both.
+// Park pace (owner 2026-10-14, register section 4 "Park pace and Options"): the park's pace (visitor.ts) is saved as `pace` and restored
+// (calm when a save has none); the state hash covers it only when it is not calm, so every calm park, and every park from before, keeps
+// its hash (the det fixtures). The profile's settings.pace is the pace a new park gets: profilePace (Lively when the profile has none,
+// the owner's default for new players), setProfilePace, and enqueueProfilePace, the shell's one call that sends it as a logged
+// `park.pace` command right after a Begin's newPark or a New's park.new (core/commands.ts enqueueAfterNew). Continue sends none: the
+// restored park keeps its own pace.
 // TODO(S5): the feed (ui/feed.ts, which this layer cannot import) joins the snapshot through a hook; the profile's cp and mp join the
 // state hash (03 11) in the slice that first awards points, which re-records the det fixtures (S3 must keep them: 07 S3.7 item 1).
 import { FNV_SEED, fnvStep } from '../core/math.ts';
@@ -26,7 +32,7 @@ import { idsState, setIdsState } from '../core/ids.ts';
 import { T } from '../core/clock.ts';
 import { emit } from '../core/events.ts';
 import { W, markWetUnknown, overridesState, setOverridesState } from '../core/weather.ts';
-import { log, setLog } from '../core/commands.ts';
+import { enqueueAfterNew, log, setLog, type Pace } from '../core/commands.ts';
 import { SIM_DT, setTick, tick } from '../core/loop.ts';
 import { getAvatar, getMode, getPlayer, setMode } from '../play/mode.ts';
 import { nextSpecies, setNextSpecies } from '../play/tools.ts';
@@ -193,6 +199,32 @@ export function setMusicPick(pick: string): void {
   const { p, failed } = profileToWrite();
   p.musicPick = pick;
   warnFirst([wroteFail(writeProfile(p)), PROFILE_KEY], [failed, PROFILE_KEY]);
+}
+
+/* ---------- the park pace a new park gets (register section 4, Park pace and Options; owner 2026-10-14) ---------- */
+
+/** The pace of a profile that has none (a new player, or a profile from before the field): Lively, the owner's "2 Y". */
+export const PACE_DEFAULT: Pace = 'lively';
+
+/** The pace the player prefers for new parks: the profile's settings.pace, or PACE_DEFAULT when it has none. */
+export function profilePace(): Pace {
+  return getProfile().settings.pace ?? PACE_DEFAULT;
+}
+
+/** Remember `pace` in the profile (the Options sheet). Kept in memory; written, held back and reported as saveProfile. */
+export function setProfilePace(pace: Pace): void {
+  const { p, failed } = profileToWrite();
+  p.settings.pace = pace;
+  warnFirst([wroteFail(writeProfile(p)), PROFILE_KEY], [failed, PROFILE_KEY]);
+}
+
+/**
+ * The shell's one call for a new park (main.ts, from the Options stage on): right after a Begin's newPark and right after a New's
+ * `park.new` enqueue, it sends the profile's pace as a logged `park.pace` command, which applies at the new park's first step (with a
+ * New pending it waits for that park: commands.ts enqueueAfterNew). Continue does not call it: a restored park keeps its own pace.
+ */
+export function enqueueProfilePace(): void {
+  enqueueAfterNew({ side: 'park', kind: 'park.pace', payload: { pace: profilePace() } });
 }
 
 /* ---------- the park key (register 3.11, 03 11) ---------- */
@@ -388,6 +420,7 @@ export function snapshot(): ParkSaveV1 {
     ...lists(),
     log: log().map((c) => ({ ...c })),
     treeTurn: nextSpecies(),
+    pace: arrivalsState().pace,
   };
 }
 
@@ -443,7 +476,7 @@ function restoreLife(s: ParkSaveV1): void {
     arrivedDay: sc?.arrivedDay ?? 0,
     arrivedToday: sc?.arrivedToday ?? 0,
   });
-  setArrivalsState({ arrivalT: sc?.arrivalT ?? 0 });
+  setArrivalsState({ arrivalT: sc?.arrivalT ?? 0, pace: s.pace }); // a save without a pace is calm
   setCreaturesState(s.creatures ?? []);
   setGatheredState(sc?.gathered ?? []);
   resetStaff();
@@ -485,8 +518,8 @@ class Hasher {
 /**
  * FNV-1a over tick, the sim stream's state and draw count, the full weather block with the ice timers, the id counters and free lists,
  * the paving tally and job, the nine layers' bytes and the canonical JSON of the props and the rest of the engine's lists (visitors,
- * creatures, regulars and the schedulers' counters among them), each sorted by id (03 11). Not hashed: the seed, the feed, the log, the
- * pinned pair, the visual stream, T.speed.
+ * creatures, regulars and the schedulers' counters among them), each sorted by id, and the park's pace when it is not calm (03 11). Not
+ * hashed: the seed, the feed, the log, the pinned pair, the visual stream, T.speed.
  */
 export function stateHash(): number {
   const hs = new Hasher();
@@ -508,6 +541,8 @@ export function stateHash(): number {
   hs.part('alumni', canon(l.alumni));
   hs.part('tally', canon(l.tally));
   hs.part('mode', canon(l.mode));
+  const pace = arrivalsState().pace;
+  if (pace !== 'calm') hs.part('pace', pace); // calm hashes as nothing: a calm park keeps the hash it had before the pace existed
   return hs.value;
 }
 

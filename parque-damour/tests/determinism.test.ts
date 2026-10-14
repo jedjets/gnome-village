@@ -8,6 +8,9 @@
 // the arrivals on, so det-s2 and det-s3 changed by design and were re-recorded (07 S4.7 item 1), and the stage's review fixes moved all
 // three once more (each fixture's note holds the old and the new values); det-s2 still proves that no later slice moves an S4 path. Runs 4 and 6 compare against run 1's numbers, kept per
 // fixture, instead of running the same 64,800 steps again (the file's time budget, 08 3.2 item 8).
+// Park pace (owner 2026-10-14, register section 4 "Park pace and Options"): det-s4l is det-s4 with `park.pace` lively at tick 1, as the
+// shell sends a new player's pace, so the six runs cover a Lively park (its pace saved, restored and hashed). The three fixtures before
+// it hold no pace command: their parks are calm, which hashes as nothing, so their values did not move.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -20,7 +23,7 @@ import { I, KIND, Kind, WEAR, props } from '../src/world/grid.ts';
 import { idsState, nextEffectId } from '../src/core/ids.ts';
 import { W } from '../src/core/weather.ts';
 import '../src/play/tools.ts'; // registers the `tool` and `undo` handlers (S3)
-import { CAP_PEOPLE, people } from '../src/entities/visitor.ts';
+import { CAP_PEOPLE, arrivalsState, people } from '../src/entities/visitor.ts';
 
 /** The 64,800-step runs take seconds each; vitest's default is 5 s. */
 const LONG = 120_000;
@@ -28,7 +31,7 @@ const LONG = 120_000;
 type FixtureCommand = { tick: number } & CommandInput;
 type Fixture = { seed: number; steps: number; commands: FixtureCommand[]; expect: { rngN: number; stateHash: number } };
 const load = (name: string): Fixture => JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures', name + '.json'), 'utf8')) as Fixture;
-const FIXTURES = { 'det-s2': load('det-s2'), 'det-s3': load('det-s3'), 'det-s4': load('det-s4') } as const;
+const FIXTURES = { 'det-s2': load('det-s2'), 'det-s3': load('det-s3'), 'det-s4': load('det-s4'), 'det-s4l': load('det-s4l') } as const;
 const fixture = FIXTURES['det-s2']; // the state-hash tests below run on det-s2's park
 
 type Hook = (step: number) => void;
@@ -122,6 +125,14 @@ describe('the fixtures (08 3.2 item 1)', () => {
     expect(s4.commands.at(-1)).toEqual({ tick: 64800, side: 'park', kind: 'speed', payload: { speed: 0 } });
   });
 
+  it('det-s4l is det-s4 plus park.pace lively at tick 1, its first command (register section 4, Park pace and Options)', () => {
+    const s4 = FIXTURES['det-s4'], s4l = FIXTURES['det-s4l'];
+    expect([s4l.seed, s4l.steps]).toEqual([s4.seed, s4.steps]);
+    expect(s4l.commands[0]).toEqual({ tick: 1, side: 'park', kind: 'park.pace', payload: { pace: 'lively' } });
+    expect(s4l.commands.slice(1)).toEqual(s4.commands);
+    expect(s4l.expect).not.toEqual(s4.expect); // a Lively park is another park
+  });
+
 });
 
 /** Run 1's numbers per fixture, kept for runs 4 and 6 (the same steps from the same seed and log give the same numbers: runs 1 and 2). */
@@ -135,7 +146,7 @@ function run1(name: keyof typeof FIXTURES): { hash: number; rngN: number; tick: 
   return a;
 }
 
-for (const name of ['det-s2', 'det-s3', 'det-s4'] as const) {
+for (const name of ['det-s2', 'det-s3', 'det-s4', 'det-s4l'] as const) {
   const fx = FIXTURES[name];
   describe(`determinism over 3 sim days, ${name} (brief 9 row 5; 08 3.2)`, () => {
     it('runs 1 and 2: the same seed and commands give the same hash, draw count and tick; run 3: one extra setWeather differs', () => {
@@ -150,11 +161,12 @@ for (const name of ['det-s2', 'det-s3', 'det-s4'] as const) {
           if (step === 3240) atMidday = people();
         },
       });
-      if (name === 'det-s4') {
+      if (name === 'det-s4' || name === 'det-s4l') {
         expect([atMidday, most]).toEqual([CAP_PEOPLE, CAP_PEOPLE]);
         expect(rejected.length).toBeGreaterThan(0);
         expect(new Set(rejected)).toEqual(new Set(['reason.park_full']));
       } else expect(most).toBeLessThanOrEqual(CAP_PEOPLE);
+      expect(arrivalsState().pace).toBe(name === 'det-s4l' ? 'lively' : 'calm'); // only det-s4l sends a pace
       console.log(name + ': seed ' + fx.seed + ' steps ' + a.tick + ' rngN ' + a.rngN + ' stateHash ' + a.hash + ' (0x' + a.hash.toString(16) + ')');
       expect(a.tick).toBe(64800);
       expect(a.rngN).toBeGreaterThan(0);

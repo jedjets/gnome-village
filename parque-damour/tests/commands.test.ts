@@ -1,11 +1,16 @@
 // tests/commands.test.ts
 // Locks register 2.9 / 03 5 / 02 14 / 08 2.1: enqueue stamps tick + 1 and a rising seq; commands apply in (tick, side, seq) order; a future
 // tick waits; the log keeps 600; a rejected command is not logged; the side and mode rules of 03 5.3; replay. Also core/ids (03 2.3, 3.1).
+// Park pace (owner 2026-10-14, register section 4 "Park pace and Options"): `park.pace` applies, logs, replays, is allowed in both modes,
+// rejects a payload that is no pace, is not a paused kind; enqueueAfterNew carries the shell's pace into the park a New starts.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SIM_DT, newPark, setSpeed, setTick, simulate, tick } from '../src/core/loop.ts';
+import { PAUSED_KINDS, SIM_DT, newPark, setSpeed, setTick, simulate, tick } from '../src/core/loop.ts';
 import {
-  LOG_CAP, OK, applyCommand, applyNow, applyPending, enqueue, fail, log, pendingCount, registerHandler, replay, resetCommands, type Command,
+  LOG_CAP, OK, applyCommand, applyNow, applyPending, enqueue, enqueueAfterNew, fail, log, pendingCount, registerHandler, replay, resetCommands,
+  type Command,
 } from '../src/core/commands.ts';
+import { arrivalsState } from '../src/entities/visitor.ts';
+import { parkSeed } from '../src/world/gen.ts';
 import { clearListeners, drain, watch, type GameEvent } from '../src/core/events.ts';
 import { T } from '../src/core/clock.ts';
 import { W } from '../src/core/weather.ts';
@@ -193,6 +198,98 @@ describe('core/commands the S2 kinds', () => {
     expect(viaCommand).not.toBe(h);
     newPark(9);
     expect(stateHash()).toBe(viaCommand);
+  });
+});
+
+const pace = (p: 'calm' | 'lively'): Parameters<typeof enqueue>[0] => ({ side: 'park', kind: 'park.pace', payload: { pace: p } });
+
+describe('core/commands park.pace (register section 4, Park pace and Options; 03 5.1, 5.3; 02 4.2 item 2)', () => {
+  it('park.pace sets the park\'s pace and is logged, in creator and in avatar mode; a new park is calm', () => {
+    expect(arrivalsState().pace).toBe('calm');
+    expect(applyNow(pace('lively'))).toEqual(OK);
+    expect(arrivalsState().pace).toBe('lively');
+    setMode('avatar', 'a_pigeon', 7); // allowed in both modes, like speed (03 5.3)
+    expect(applyNow(pace('calm'))).toEqual(OK);
+    expect(arrivalsState().pace).toBe('calm');
+    setMode('creator');
+    expect(log().map((c) => [c.kind, c.payload])).toEqual([['park.pace', { pace: 'lively' }], ['park.pace', { pace: 'calm' }]]);
+    applyNow(pace('lively'));
+    newPark(3);
+    expect(arrivalsState().pace).toBe('calm');
+  });
+  it('a payload that is no pace is reason.not_here and another side is wrong_side: nothing changes and nothing is logged', () => {
+    applyNow(pace('lively'));
+    const n = log().length;
+    expect(applyCommand(bad({ side: 'park', kind: 'park.pace', payload: { pace: 'fast' } }))).toEqual({ ok: false, reason: 'reason.not_here' });
+    expect(applyCommand(bad({ side: 'park', kind: 'park.pace', payload: {} }))).toEqual({ ok: false, reason: 'reason.not_here' });
+    expect(applyCommand(bad({ side: 'cupid', kind: 'park.pace', payload: { pace: 'calm' } }))).toEqual({ ok: false, reason: 'reason.wrong_side' });
+    expect(arrivalsState().pace).toBe('lively');
+    expect(log()).toHaveLength(n);
+    drain(0);
+    expect(rejected.map((e) => e.params?.reason)).toEqual(['reason.not_here', 'reason.not_here', 'reason.wrong_side']);
+  });
+  it('it applies at the next step, not in a paused frame (it is no paused kind), and the pace is in the state hash', () => {
+    expect(PAUSED_KINDS.has('park.pace')).toBe(false);
+    const h = stateHash();
+    enqueue(pace('lively'));
+    applyPending(tick() + 1, PAUSED_KINDS); // a paused frame: speed and park.new only (03 4.6)
+    expect([arrivalsState().pace, pendingCount()]).toEqual(['calm', 1]);
+    expect(stateHash()).toBe(h);
+    applyPending(tick() + 1);
+    expect(arrivalsState().pace).toBe('lively');
+    expect(stateHash()).not.toBe(h); // a lively park hashes its pace (03 11) ...
+    applyNow(pace('calm'));
+    expect(stateHash()).toBe(h); // ... and a calm one hashes as a park from before the pace existed
+  });
+  it('a replay from a snapshot reproduces a pace change and the arrivals it brings', () => {
+    const snap = JSON.parse(JSON.stringify(snapshot())) as ReturnType<typeof snapshot>;
+    for (let step = 1; step <= 1500; step++) {
+      if (step === 100) enqueue(pace('lively'));
+      if (step === 1200) enqueue(pace('calm'));
+      simulate(SIM_DT, 0);
+    }
+    const a = { hash: stateHash(), pace: arrivalsState().pace };
+    const cmds = log().map((c) => ({ ...c }));
+    expect(cmds.map((c) => [c.kind, c.tick])).toEqual([['park.pace', 100], ['park.pace', 1200]]);
+    restore(snap);
+    replay(cmds, 1500);
+    expect({ hash: stateHash(), pace: arrivalsState().pace }).toEqual(a);
+    restore(snap);
+    for (let step = 1; step <= 1500; step++) simulate(SIM_DT, 0); // no pace change: a calm park all along
+    expect(stateHash()).not.toBe(a.hash);
+  });
+  it('enqueueAfterNew: queued right after a New, the command reaches the new park\'s first step; without a New pending it is enqueue', () => {
+    for (let k = 0; k < 30; k++) simulate(SIM_DT, 0);
+    enqueue({ side: 'park', kind: 'park.new', payload: { seed: 5 } });
+    enqueueAfterNew(pace('lively'));
+    enqueue(tool()); // queued behind the New as before: dropped with the old park (03 4.6)
+    simulate(SIM_DT, 0); // the park.new step: tick 0, nothing else runs
+    expect([tick(), parkSeed(), arrivalsState().pace, pendingCount()]).toEqual([0, 5, 'calm', 1]);
+    simulate(SIM_DT, 0);
+    expect([tick(), arrivalsState().pace, pendingCount()]).toEqual([1, 'lively', 0]);
+    expect(log().map((c) => [c.kind, c.tick, c.seq])).toEqual([['park.pace', 1, 1]]); // the new park's log, its sequence from 1
+    expect(applied).toEqual([]);
+    // the same New confirmed while paused: the park.new applies in the paused frame, the pace waits for the first step
+    enqueue({ side: 'park', kind: 'park.new', payload: { seed: 6 } });
+    enqueueAfterNew(pace('lively'));
+    applyPending(tick() + 1, PAUSED_KINDS);
+    expect([tick(), parkSeed(), arrivalsState().pace, pendingCount()]).toEqual([0, 6, 'calm', 1]);
+    applyPending(tick() + 1, PAUSED_KINDS);
+    expect(pendingCount()).toBe(1);
+    simulate(SIM_DT, 0);
+    expect([tick(), arrivalsState().pace]).toEqual([1, 'lively']);
+    // no New pending: plain enqueue, for the next step
+    const before = pendingCount();
+    enqueueAfterNew(pace('calm'));
+    expect(pendingCount()).toBe(before + 1);
+    simulate(SIM_DT, 0);
+    expect(arrivalsState().pace).toBe('calm');
+    // a waiting command goes with the New it waited for when the queue is dropped (a restore or a direct newPark)
+    enqueue({ side: 'park', kind: 'park.new', payload: { seed: 7 } });
+    enqueueAfterNew(pace('lively'));
+    newPark(8);
+    applyNow({ side: 'park', kind: 'park.new', payload: { seed: 9 } });
+    expect([pendingCount(), arrivalsState().pace]).toEqual([0, 'calm']);
   });
 });
 

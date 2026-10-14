@@ -5,6 +5,8 @@
 // 08 2.6 save.test.ts rows (each `it` named as the row), plus the store contract of 07 S3 step 9. The store on a fresh page (one warn
 // per call before the profile is in memory) and the hold after a failed profile read are in tests/save-profile.test.ts.
 // Node has no localStorage: tests/mem-storage.ts's MemStorage stands in for it, installed on globalThis by each test (never in src/).
+// Park pace (owner 2026-10-14, register section 4 "Park pace and Options"): the park's pace is saved as `pace`, round-trips and is hashed
+// when it is not calm; a save without one (every park saved before) restores as calm with the hash it always had.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SIM_DT, newPark, setSpeed, simulate, tick } from '../src/core/loop.ts';
 import { T } from '../src/core/clock.ts';
@@ -24,6 +26,7 @@ import {
   saveBeforeNew, savePark, saveProfile, snapshot, stateHash, stepAutosave, worldHash,
 } from '../src/save/store.ts';
 import { migratePark } from '../src/save/migrate.ts';
+import { arrivalsState } from '../src/entities/visitor.ts';
 import type { ParkSaveV1 } from '../src/save/schema.ts';
 import { MemStorage, install, installBlocked } from './mem-storage.ts';
 
@@ -121,6 +124,50 @@ describe('the save round trip (08 2.6 rows 1 and 7; register 3.11; 03 11)', () =
   });
 });
 
+const setPace = (pace: 'calm' | 'lively'): void => void expect(applyNow({ side: 'park', kind: 'park.pace', payload: { pace } }).ok).toBe(true);
+
+describe('the park\'s pace in the save (register section 4, Park pace and Options; 03 3.10, 11; 08 2.6)', () => {
+  it('the pace round-trips and is hashed: a Lively park restores Lively with its hash, through JSON and through localStorage', () => {
+    steps(60);
+    const calm = stateHash();
+    expect(snapshot().pace).toBe('calm');
+    setPace('lively');
+    const h = stateHash();
+    expect(h).not.toBe(calm); // the hash covers the pace (03 11)
+    const s = clone(snapshot());
+    expect(s.pace).toBe('lively');
+    expect(savePark()).toBe(true);
+    steps(1200);
+    const live = { hash: stateHash(), rngN: rngN(), arrivals: arrivalsState() };
+    newPark(5);
+    expect(arrivalsState().pace).toBe('calm');
+    restore(s);
+    expect([arrivalsState().pace, stateHash()]).toEqual(['lively', h]);
+    steps(1200);
+    expect({ hash: stateHash(), rngN: rngN(), arrivals: arrivalsState() }).toEqual(live);
+    newPark(5);
+    restore(loadPark() as ParkSaveV1);
+    expect([arrivalsState().pace, stateHash()]).toEqual(['lively', h]);
+  });
+
+  it('a save without a pace (every park saved before it existed) loads as calm, with the hash a calm park has', () => {
+    steps(60);
+    const h = stateHash(); // calm
+    const s = clone(snapshot());
+    delete s.pace;
+    setPace('lively');
+    restore(s);
+    expect([arrivalsState().pace, stateHash()]).toEqual(['calm', h]);
+    mem.map.set(PARK_KEY, JSON.stringify(s)); // the same through the key, past migratePark
+    setPace('lively');
+    restore(loadPark() as ParkSaveV1);
+    expect([arrivalsState().pace, stateHash()]).toEqual(['calm', h]);
+    setPace('lively');
+    restore({ ...s, pace: 'fast' as unknown as 'calm' }); // anything that is no pace reads calm as well
+    expect(arrivalsState().pace).toBe('calm');
+  });
+});
+
 describe('what a snapshot holds (08 2.6 rows 2 to 5; 03 3.2, 3.10, 11; register 3.3)', () => {
   it('no object reference in a saved field', () => {
     playSome();
@@ -182,7 +229,7 @@ describe('what a snapshot holds (08 2.6 rows 2 to 5; 03 3.2, 3.10, 11; register 
   it('the excluded things are excluded', () => {
     const s = snapshot();
     expect(Object.keys(s).sort()).toEqual(
-      ['alumni', 'creatures', 'effects', 'feed', 'ids', 'layers', 'log', 'mode', 'paving', 'pairs', 'pinnedPair', 'props', 'regulars',
+      ['alumni', 'creatures', 'effects', 'feed', 'ids', 'layers', 'log', 'mode', 'pace', 'paving', 'pairs', 'pinnedPair', 'props', 'regulars',
         'rng', 'sched', 'seed', 'sides', 'tally', 'tick', 'treeTurn', 'v', 'visitors', 'weather'].sort(),
     );
     const banned = /^(undo|stack|cam|camera|selection|selected|armed|tool|toast|particles|parts|speed)$/i;
