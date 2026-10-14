@@ -103,12 +103,13 @@ const SCENE_SETS = {
   // on the spot that shows the most of the 14 body-language states in real sim time (states), at zoom 2.4 on the busiest spot (close)
   // and at zoom 0.30 (fit); f 0.90 at the fountain, the lamps lit, after Close and a tap on empty ground cleared the selection; and day 2
   // at f 0.6725 at zoom 2.0 between the two walkers' dogs, the poodle trotting on a taut lead and the terrier standing on a slack one (dogs)
-  // Since the Options stage (owner 2026-10-14) Begin gives the park the profile's pace, a new player's Lively, so more people arrive than
-  // in the Calm park these lines were written for and the line-up differs: the dogs scene finds the walkers' dogs where they are (the
-  // two nearest each other, or the one in the park; on seed 101 that is now the terrier at a gate) with the camera only, as centreBest,
-  // where it framed a fixed spot
+  // Since the Options stage (owner 2026-10-14) Begin gives a park the profile's pace, a new player's Lively; these scenes stay on the
+  // Calm park they were composed for, by a real tap: while paused at tick 0, Options, Calm and the sheet's close (calmCrowd; that
+  // park.pace applies after Begin's at the first step and draws no rng, so the line-up is the one every park had before the stage).
+  // The Lively park is the ui set's. The dogs scene fails unless both walkers' dogs, the terrier and the poodle, are in the clear band
+  // between the chips and the rail, one trotting and one standing (bothDogs).
   s4: [
-    { name: 'crowd', turn: 0, z: 1.3, at: [22.5, 25.2], abs: 0.552, pre: 'callCrowd' },
+    { name: 'crowd', turn: 0, z: 1.3, at: [22.5, 25.2], abs: 0.552, pre: 'calmCrowd' },
     { name: 'table-0', turn: 0, z: 2.4, at: [16, 44] },
     { name: 'table-1', turn: 1, z: 2.4, at: [16, 44] },
     { name: 'table-2', turn: 2, z: 2.4, at: [16, 44] },
@@ -119,7 +120,7 @@ const SCENE_SETS = {
     { name: 'close', turn: 0, z: 2.4, act: 'busiest' },
     { name: 'fit', turn: 0, z: 0.3 },
     { name: 'night', turn: 0, z: 1.3, at: [22, 25], abs: 0.9, act: 'clearSelection' },
-    { name: 'dogs', turn: 0, z: 2.0, at: [33, 28.6], abs: 1.6725, act: 'dogsInView' },
+    { name: 'dogs', turn: 0, z: 2.0, at: [33, 28.6], abs: 1.6725, act: 'bothDogs' },
   ],
   // ui: the Options stage (register section 4 "Park pace and Options", owner 2026-10-14), driven by real taps: rail row 3 ending with
   // Options at the start view (rail); a real unpause and pause so Begin's profile pace applies (a new player: Lively), then Options
@@ -201,6 +202,16 @@ const ACTIONS = {
   async callCrowd(page) {
     for (let k = 0; k < 22; k++) await page.click('#bAdd');
   },
+  /** s4: Options, Calm (pressed) and the close, tapped while paused at tick 0 (Calm applies after Begin's Lively), then callCrowd. */
+  async calmCrowd(page) {
+    await page.click('#bOptions');
+    await page.waitForFunction(() => document.getElementById('options').classList.contains('on'), { timeout: 5_000 });
+    await page.click('#optionsList [data-k="pace:calm"]');
+    await page.waitForFunction(() => document.querySelector('#optionsList [data-k="pace:calm"]')?.getAttribute('aria-pressed') === 'true', { timeout: 5_000 });
+    await page.click('#options .x');
+    await page.waitForFunction(() => !document.getElementById('options').classList.contains('on'), { timeout: 5_000 });
+    await ACTIONS.callCrowd(page);
+  },
   /**
    * s4: a real tap on the head point (03 8.2: 8z above the drawn ground, at a sitter's seat) of the single nearest the middle of the
    * clear band, then the follow settles (zoom 1.8; camera.ts followStep eases with k = 1 - 0.02^dt, so a second and a half).
@@ -249,28 +260,27 @@ const ACTIONS = {
   async busiest(page) {
     await centreBest(page, 'count');
   },
-  /** s4: the camera (turn 0, the scene's zoom) on the middle of the two walkers' dogs nearest each other; the sim is not touched. */
-  async dogsInView(page) {
-    const n = await page.evaluate(() => {
-      const pd = window.__PD, z = pd.cam.z;
-      const dogs = pd.creatures.filter((c) => c.kind === 'dog' && !c.outside);
-      let best = dogs.length === 1 ? { x: dogs[0].x, y: dogs[0].y } : null, bd = Infinity;
-      for (let i = 0; i < dogs.length; i++) {
-        for (let j = i + 1; j < dogs.length; j++) {
-          const d = Math.hypot(dogs[i].x - dogs[j].x, dogs[i].y - dogs[j].y);
-          if (d < bd) {
-            bd = d;
-            best = { x: (dogs[i].x + dogs[j].x) / 2, y: (dogs[i].y + dogs[j].y) / 2 };
-          }
-        }
-      }
-      if (best) {
-        pd.cam.ox = -((best.x - 23.5) - (best.y - 23.5)) * 13 * z;
-        pd.cam.oy = -((best.x - 23.5) + (best.y - 23.5)) * 6.5 * z;
-      }
-      return dogs.length;
+  /**
+   * s4, read only (register section 4 row Figure rig: both dogs, one per dog walker): the park is Calm and the terrier and the poodle
+   * are both in the clear band between the chips and the rail, one trotting (a taut lead) and one standing (a slack one).
+   */
+  async bothDogs(page) {
+    const r = await page.evaluate(async () => {
+      const pd = window.__PD;
+      const { breedOf } = await import('/src/render/figure-look.ts');
+      const top = Math.max(...[...document.querySelectorAll('.hud .chip')].map((c) => c.getBoundingClientRect().bottom));
+      const bottom = document.getElementById('rail').getBoundingClientRect().top;
+      const dogs = pd.creatures.filter((c) => c.kind === 'dog' && !c.outside).map((c) => {
+        const o = pd.visitors.find((v) => v.id === c.ownerId), s = pd.screenOf(c.x, c.y);
+        const seen = s.x > 0 && s.x < innerWidth && s.y > top && s.y < bottom;
+        return { breed: breedOf(o ? o.lookSeed : c.id), st: c.st, seen, at: `${c.x.toFixed(1)},${c.y.toFixed(1)}` };
+      });
+      return { pace: pd.snapshot().pace ?? 'calm', dogs };
     });
-    if (n === 0) throw new Error('s4 dogs: no walker\'s dog in the park');
+    const seen = r.dogs.filter((d) => d.seen);
+    const ok = r.pace === 'calm' && ['terrier', 'poodle'].every((b) => seen.some((d) => d.breed === b)) &&
+      seen.some((d) => d.st === 'walk') && seen.some((d) => d.st !== 'walk');
+    if (!ok) throw new Error(`s4 dogs: want the Calm park's terrier and poodle in view, one trotting and one standing; got ${JSON.stringify(r)}`);
   },
   /** The bandstand armed and a tap on the lawn tile (25, 33): the 3 x 3 ghost (24..26, 32..34) centred on it, green. */
   async ghostOk(page) {
