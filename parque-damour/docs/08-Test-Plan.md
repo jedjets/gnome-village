@@ -259,10 +259,10 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 
 | File | Test | Assertion |
 |---|---|---|
-| `save.test.ts` | the round trip keeps the hash | `h = stateHash()`; `restore(JSON.parse(JSON.stringify(snapshot())))`; `stateHash() === h` after 1000 more ticks on both paths; the hash covers the fields S4 added to the save, the paving job's `paving.run` and `paving.at` and the schedulers' counters `sched` (`arrivalT`, `held`, `arrivedDay`, `arrivedToday`, `gathered`), so a park restored without them parts from its twin (03 §3.10) |
+| `save.test.ts` | the round trip keeps the hash | `h = stateHash()`; `restore(JSON.parse(JSON.stringify(snapshot())))`; `stateHash() === h` after 1000 more ticks on both paths (since S4 the hash includes the whole `paving` block, its `run` and `at` among it, and `sched`: 03 §3.10) |
 | `save.test.ts` | no object reference in a saved field | a recursive walk of `snapshot()` finds only numbers, strings, booleans, null, arrays and plain objects; every `*Id` field is a number |
 | `save.test.ts` | typed arrays survive as base64 | `KIND`, `WEAR`, `OCC`, `WATER`, `ICE`, `WET`, `PETALS`, `BEDC`, `PAVEDAY` are byte-equal after the round trip |
-| `save.test.ts` | the excluded things are excluded | the snapshot's top-level fields are exactly those of 03 §3.10 (`sched` among them since S4; `paving` holds `runsToday`, `day`, `run` and `at`), and it has no undo stack, camera, selection, armed tool, toast, particles or `T.speed` (03 §3.10) |
+| `save.test.ts` | the excluded things are excluded | the snapshot's top-level fields are exactly those of 03 §3.10 (`sched` among them since S4), and it has no undo stack, camera, selection, armed tool, toast, particles or `T.speed` (03 §3.10) |
 | `save.test.ts` | size under 1 MB | the starter park with 100 extra props and 30 visitors serialises under 1,048,576 bytes; the 600-entry log included |
 | `save.test.ts` | keys and autosave triggers | `savePark()` writes `parque:park-v1` and `parque:profile-v1`; `stepAutosave` writes at 30 sim s and not at 29; a thrown `localStorage` error is caught and emits one `warn` |
 | `save-profile.test.ts` | the storage throws on the read | no profile write after a failed profile read: `savePark` and the autosave write the park key only, `saveProfile`, `clearPark` and the picks write nothing to `parque:profile-v1`, the stored points stay, one `warn` (`save.read`); a later `loadProfile` that succeeds brings the points back and lifts the hold (owner 2026-10-13; 03 §11) |
