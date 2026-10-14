@@ -22,7 +22,7 @@ import { screenInto } from './project.ts';
 import { depthOf, footprintDepth, type Drawable } from './order.ts';
 import { GC, faceLight, h01, lampGlow, mix, shade, style } from './ambient.ts';
 import { drawBarge, drawSail, prism, sailX, sq, vis, xy } from './backdrop.ts';
-import { drawBistroTable } from './props.ts';
+import { drawBistroTable, untinted } from './props.ts';
 import { BOULEVARD, streetLampDrawables, streetTreeDrawables } from './boulevard.ts';
 import { gamePen, gameProj } from './flora.ts';
 import { resetTransform } from './ground.ts';
@@ -188,7 +188,9 @@ function drawRail(d: Drawable, ctx: CanvasRenderingContext2D): void {
   }
 }
 
-/** A gate pillar (stone, 0.9 EH, a cap, a single-globe lamp of 0.5 EH, 04 6.2 item 5) and its iron leaf swung open outward (04 6.4). */
+/** A gate pillar (stone, 0.9 EH, a cap, a single-globe lamp of 0.5 EH, 04 6.2 item 5) and its iron leaf swung open outward (04 6.4). The
+ *  lit globe and its halo are untinted as every lamp's (owner 2026-10-13; 04 6.2 item 3): the globe brightens out of the tinted paper over
+ *  the lamps' fade, as the park's do; the unlit globe keeps the tint. */
 function drawPillar(d: Drawable, ctx: CanvasRenderingContext2D): void {
   const p = PILLARS[(d as Item).ref] as Pillar, P = style().palette, z = cam.z;
   const leafFirst = depthOf(p.hx + p.nx * 0.45, p.hy + p.ny * 0.45) < depthOf(p.x, p.y);
@@ -203,12 +205,12 @@ function drawPillar(d: Drawable, ctx: CanvasRenderingContext2D): void {
   ctx.stroke();
   const glow = lampGlow(), gr = Math.max(1, 0.09 * TW * z);
   if (glow > 0.01) {
-    ctx.fillStyle = GC(P.halo, 0.3 * glow);
+    ctx.fillStyle = css(hx(P.halo), 0.3 * glow);
     ctx.beginPath();
     ctx.arc(b.x, b.y - gr, gr * 3.2, 0, TAU);
     ctx.fill();
   }
-  ctx.fillStyle = glow > 0.5 ? css(hx(P.lamp)) : GC(P.paper, 0.9);
+  ctx.fillStyle = glow > 0.01 ? untinted(glow < 1 ? mix(P.paper, P.lamp, glow) : P.lamp, 1, glow, 0.9 + 0.1 * glow) : GC(P.paper, 0.9);
   ctx.beginPath();
   ctx.arc(b.x, b.y - gr, gr, 0, TAU);
   ctx.fill();

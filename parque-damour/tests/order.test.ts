@@ -1,10 +1,19 @@
 // tests/order.test.ts
 // Locks 03 7.2 and 08 2.9 (order.test.ts row): the counting sort by depth in 1/64-tile buckets (GV 6365-6373), stable, ties by lower id
-// on every call; apron and far-bank depths below zero; a multi-tile prop at the largest depth of its footprint.
+// on every call; apron and far-bank depths below zero; a multi-tile prop at the largest depth of its footprint; and the kiosk's back and
+// front halves against its vendor at the counter (03 7.2 item 2, the bandstand's back-and-front idiom) at all four quarter turns.
 import { describe, it, expect } from 'vitest';
 import { DEPTH_BUCKETS, sortByDepth, depthOf, footprintDepth, type Drawable } from '../src/render/order.ts';
-import { setAngle } from '../src/render/camera.ts';
+import { cam, centreOn, setAngle, setViewport } from '../src/render/camera.ts';
 import { mulberry32 } from '../src/core/rng.ts';
+import { genPark } from '../src/world/gen.ts';
+import { props, type Prop } from '../src/world/grid.ts';
+import { propDrawables } from '../src/render/props.ts';
+import { kioskBackDepth } from '../src/render/props-park.ts';
+import { peopleDrawables } from '../src/render/people.ts';
+import { byId, resetVisitors, spawnVisitor, type Visitor } from '../src/entities/visitor.ts';
+import { resetCreatures } from '../src/entities/creatures.ts';
+import { ensureVendors, vendorFor } from '../src/entities/staff.ts';
 
 function mk(id: number, depth: number, kind = 't'): Drawable {
   return { depth, kind, id, x: 0, y: 0, z: 0, draw: () => undefined };
@@ -109,5 +118,46 @@ describe('depth of a footprint (03 7.2 item 2)', () => {
       expect(footprintDepth(30, 10, 3, 3)).toBeCloseTo(m, 9);
       expect(footprintDepth(7, 9, 1, 1)).toBeCloseTo(depthOf(7, 9), 12);
     }
+  });
+});
+
+describe('03 7.2 item 2: the kiosk paints in two halves round its vendor at the counter (props.ts propDrawables, props-park.ts kioskBackDepth)', () => {
+  it('turn 0 and 3 the vendor after both halves, turn 1 before both, turn 2 between: over the awning turned away, under body and roof', () => {
+    genPark(101);
+    resetVisitors();
+    resetCreatures();
+    ensureVendors();
+    const k = props.find((p) => p.kind === 'kiosk') as Prop;
+    expect(k).toMatchObject({ x: 14, y: 44, w: 2, h: 2, rot: 0 });
+    const v = byId(vendorFor(k.id)) as Visitor;
+    expect(v).toMatchObject({ archetype: 'vendor', x: 14.3, y: 45.75 }); // the counter: the serving tile (14, 46) + (0.3, -0.25)
+    // a passer-by two tiles past the counter, behind the awning's far rim at turn 2
+    const w = spawnVisitor('single', 'g_north') as Visitor;
+    Object.assign(w, { x: 14, y: 47, path: null, st: 'idle' });
+    const want = [
+      ['k1', 'k2', 'v'], // turn 0: the counter faces the camera, the vendor in front of the whole kiosk
+      ['v', 'k1', 'k2'], // turn 1: the vendor behind the kiosk and its awning's far rim, the awning edge across the apron (s4-table-1)
+      ['k1', 'v', 'k2'], // turn 2: the vendor beside the far side, in front of the far rim: over the awning edge, under body and roof
+      ['k1', 'k2', 'v'], // turn 3
+    ];
+    for (const [t, ang] of [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2].entries()) {
+      setViewport(390, 844, 2);
+      setAngle(ang);
+      cam.angT = ang;
+      cam.z = 2.4;
+      centreOn(16, 44); // the s4-table shots' view
+      const list: Drawable[] = [...propDrawables(), ...peopleDrawables()];
+      sortByDepth(list);
+      const label = (d: Drawable): string => {
+        if (d.kind === 'prop' && d.id === k.id) return 'k' + String((d as Drawable & { part?: number }).part);
+        return d.kind !== 'visitor' ? '' : d.id === v.id ? 'v' : d.id === w.id ? 'w' : '';
+      };
+      const o = list.map(label).filter((l) => l !== '');
+      expect(o.filter((l) => l !== 'w'), `turn ${t}`).toEqual(want[t]);
+      // the back half sorts at the awning's far rim: sqrt 2 x the outer apothem (0.98 cos 22.5 deg) before the kiosk's centre
+      expect(kioskBackDepth(k.x, k.y), `turn ${t}`).toBeCloseTo(depthOf(14.5, 44.5) - Math.SQRT2 * 0.98 * Math.cos(Math.PI / 8), 9);
+      if (t === 2) expect(o, 'turn 2: one behind the far rim paints under both halves').toEqual(['w', 'k1', 'v', 'k2']);
+    }
+    resetVisitors();
   });
 });

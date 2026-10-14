@@ -524,7 +524,7 @@ Units: footprint in tiles; height in EH units (1 EH = 26 px at zoom 1; a grown v
 2. Two arms curve out and up 0.22 tile each side; three globes: left, right and a higher centre one (0.12 tile higher).
 3. Unlit globes are `paper` at alpha 0.9 with a `zinc` cap; lit globes are `lamp` with a `paper` highlight dot top-left and the halo of 6.1. Lit globes and their halo are drawn untinted (owner, 2026-10-13): the night ambient tint does not darken the lit globes, their highlight, their glow or the head halo of the park's lamps and the street lamps, as it does not darken the gate lamps' globes and the lit windows; a lamp coming on brightens out of the tinted colour over its 0.02-day fade (10.1 item 4). Unlit globes keep the tint; the ground pool (item 4) is unchanged; the Style Gate board draws its lamps as at the gate.
 4. Charm: a lit lamp counts +1 within 3 tiles (register 3.5); the ground pool makes that radius readable: pool radius = 1.6 tiles at full alpha, fading to 0 at 3 tiles.
-5. Gate pillars carry a single-globe version (0.5 EH).
+5. Gate pillars carry a single-globe version (0.5 EH); its lit globe and its halo are untinted as item 3 (owner, 2026-10-13), the globe brightening out of the tinted `paper` over the fade.
 
 ### 6.3 Trees: three species, four seasons
 | Species | Height (EH) | Form | Trunk | Spring | Summer | Autumn | Winter |

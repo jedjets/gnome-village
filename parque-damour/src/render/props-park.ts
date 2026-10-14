@@ -8,11 +8,12 @@
 // (archVoid: the flattened sin^0.55 arch over dusky water).
 // Verdict: ADAPT. Changes: regular octagons, frustums (prism to cone) and turned boxes replace GV's house kit; faces are shown by faceVis
 // on their slanted normals and lit by faceLight; a bandstand and a bridge draw in two parts, back and front, so people inside paint between
-// them (GV frontFix 8871 idea; 03 7.2).
+// them (GV frontFix 8871 idea; 03 7.2); so does a kiosk, its back the awning faces turned away, so its vendor at a counter turned away
+// paints over them and under the body and roof.
 // Dropped from the range: logs, cobbles, planks, thatch, chimneys, smoke and the build stages of the house kit (6952-8044).
 // TODO(S4): the bandstand's string lights at night while a busker plays (06 4); TODO(S9): the kiosk's winter steam, awning flap in breeze,
 // snow on the deck and roofs (04 6.1).
-import { TW } from './camera.ts';
+import { TW, rotVec } from './camera.ts';
 import { faceLight, fillEllipse, fillPoly, GC, h01, lampGlow, mix, scaleHex, shade, strokeLine, type Pen, type Proj, type Pt } from './ambient.ts';
 import { TAU, clamp01 } from '../core/math.ts';
 import type { Prop } from '../world/grid.ts';
@@ -83,6 +84,11 @@ function box(pen: Pen, proj: Proj, cx: number, cy: number, hu: number, hv: numbe
 /** Whether octagon face i (face 0 looks east, 2 south) is turned to the viewer. */
 function visF(i: number): boolean {
   return faceVis(Math.cos((i / 8) * TAU), Math.sin((i / 8) * TAU));
+}
+/** Octagon face i turned to the viewer (1), away (-1) or edge-on at a quarter turn (0), past rounding (visF reads the sign of a 1e-16). */
+function sideF(i: number): -1 | 0 | 1 {
+  const r = rotVec(Math.cos((i / 8) * TAU), Math.sin((i / 8) * TAU)), d = r.x + r.y;
+  return d > 1e-9 ? 1 : d < -1e-9 ? -1 : 0;
 }
 /** The points of a list from last to first, as a new array. */
 function backward<T>(a: readonly T[]): T[] {
@@ -197,32 +203,38 @@ export const KIOSK: KioskSpec = {
  * A kiosk whose north-west tile is (x, y), serving on `rot` (0 south, then 1 west, 2 north, 3 east: the serving tile is south of the
  * south-west tile at rot 0, 02 8.3): a stone plinth; the green octagonal body (foliageSummer x 0.8, 04 6.1) with moulded panels; the
  * serving window over its counter, lamp-lit at night; a menu board on the face beside it; a stone cornice; a striped awning over the three
- * serving faces with a scalloped valance; the zinc cone with ribs and a gilt finial, 1.6 EH in all. Awning faces turned away paint first.
+ * serving faces with a scalloped valance; the zinc cone with ribs and a gilt finial, 1.6 EH in all. Awning faces turned away (or edge-on)
+ * paint first: part 1 is those alone (the back, sorted at kioskBackDepth), part 2 the rest (the front), 0 both (03 7.2).
  */
-export function drawKiosk(pen: Pen, proj: Proj, x: number, y: number, rot: number, night: boolean): void {
+export function drawKiosk(pen: Pen, proj: Proj, x: number, y: number, rot: number, night: boolean, part: 0 | 1 | 2 = 0): void {
   const { ctx, z } = pen, P = pen.spec.palette, K = KIOSK, cx = x + 0.5, cy = y + 0.5;
   const sf = ((((rot + 2) % 4) * 2 + 6) % 8 + 8) % 8; // compass (0 N, 1 E, 2 S, 3 W) to the octagon face: face 0 looks east, 2 south
   const green = scaleHex(P[K.wall], [K.wallK, K.wallK, K.wallK]), top = K.body + K.cornice;
   const inner = ngon(cx, cy, K.r + 0.04, K.body, 8), outer = ngon(cx, cy, K.r + K.awningOut, K.body - K.awningDrop, 8);
   const awn = [(sf + 7) % 8, sf, (sf + 1) % 8], per = Math.max(1, Math.round(K.stripes / awn.length));
-  const awning = (front: boolean): void => {
+  const awning = (side: -1 | 0 | 1): void => {
+    const L = side + 1; // the light of a face turned away, edge-on (halfway) or turned to the viewer
     awn.forEach((fi, k) => {
-      if (visF(fi) !== front) return;
+      if (sideF(fi) !== side) return;
       const fj = (fi + 1) % 8, i0 = inner[fi] as W3, i1 = inner[fj] as W3, o0 = outer[fi] as W3, o1 = outer[fj] as W3;
       for (let s = 0; s < per; s++) {
         const t0 = s / per, t1 = (s + 1) / per, hex = (k * per + s) % 2 === 0 ? P[K.stripeA] : P[K.stripeB];
         const A0 = lerp3(i0, i1, t0), A1 = lerp3(i0, i1, t1), B0 = lerp3(o0, o1, t0), B1 = lerp3(o0, o1, t1);
-        fillPoly(pen, quad(proj, A0, A1, B1, B0), hex, { light: front ? 1.02 : 0.9, grad: { from: proj(...A0), to: proj(...B0), k0: 1.0, k1: 0.88 } });
+        fillPoly(pen, quad(proj, A0, A1, B1, B0), hex, { light: ([0.9, 0.96, 1.02] as const)[L], grad: { from: proj(...A0), to: proj(...B0), k0: 1.0, k1: 0.88 } });
         const edge: Pt[] = [proj(...B0), proj(...B1)];
         for (let q = 4; q >= 0; q--) {
           const w = lerp3(o0, o1, t0 + ((t1 - t0) * q) / 4);
           edge.push(proj(w[0], w[1], w[2] - (q % 2 ? K.valance : K.valance * 0.4)));
         }
-        fillPoly(pen, edge, hex, { light: front ? 0.95 : 0.85 });
+        fillPoly(pen, edge, hex, { light: ([0.85, 0.9, 0.95] as const)[L] });
       }
     });
   };
-  awning(false);
+  if (part !== 2) {
+    awning(-1);
+    awning(0); // an edge-on face over its turned-away neighbour's valance; with the back, so a vendor beside it paints over it
+  }
+  if (part === 1) return;
   frustum(pen, proj, cx, cy, K.r + 0.04, 0, K.r + 0.04, K.plinth, P[K.trim], { light: 0.94 });
   frustum(pen, proj, cx, cy, K.r, K.plinth, K.r, K.body, green);
   const ring0 = ngon(cx, cy, K.r, 0, 8);
@@ -257,10 +269,18 @@ export function drawKiosk(pen: Pen, proj: Proj, x: number, y: number, rot: numbe
     }
   }
   frustum(pen, proj, cx, cy, K.r + 0.06, K.body, K.r + 0.06, top, P[K.trim]);
-  awning(true);
+  awning(1);
   frustum(pen, proj, cx, cy, K.roofR, top, 0, K.apex, P[K.roof]);
   ribs(pen, proj, cx, cy, [[K.roofR, top], [0, K.apex]], P[K.roof]);
   finial(pen, proj, cx, cy, K.apex, P[K.gilt]);
+}
+/**
+ * The painter depth of the kiosk at (x, y)'s back part (drawKiosk part 1): its awning's far rim, the centre's depth less sqrt 2 x the outer
+ * octagon's apothem (the rim's own depth at the quarter turns). A figure between that rim and the kiosk, as its vendor at a counter turned
+ * away (staff.ts spawnVendor), paints over the awning faces turned away and under the body and roof; one behind the rim paints under both.
+ */
+export function kioskBackDepth(x: number, y: number): number {
+  return depthOf(x + 0.5, y + 0.5) - Math.SQRT2 * (KIOSK.r + KIOSK.awningOut) * Math.cos(TAU / 16);
 }
 
 /* ---------- the bandstand (04 6.1 row bandstand; 06 4): the owner's pick 3B, a Belle Époque kiosque a musique ---------- */

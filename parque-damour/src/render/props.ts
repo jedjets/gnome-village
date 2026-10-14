@@ -11,8 +11,8 @@
 // direction's brush draws every face; the bench and the table order their parts by the projection, so all four facings and every camera
 // angle paint right (the board's own order is unchanged); a wet bench darkens to x 0.86; a lamp's glow fades in (glow), and the game's lit
 // globes are free of the night tint (bright; owner 2026-10-13); in the game the fountain leaves its spray and ripples to effects.ambientFx
-// (03 7.7 item 4); a bandstand, a bridge and a cafe table are two drawables, back and front, so people inside or seated paint between them
-// (GV frontFix 8871 idea; 03 7.2, 16 risk 8). Dropped from the range: the house kit beyond the box primitives (6952-8044), the gnome,
+// (03 7.7 item 4); a bandstand, bridge, kiosk or cafe table is two drawables, back and front, so people inside, serving or seated paint
+// between (GV frontFix 8871 idea; 03 7.2, 16 risk 8). Dropped from the range: the house kit beyond the box primitives (6952-8044), the gnome,
 // critter and part branches of drawProp (figures.ts, creatures.ts, effects.ts). TODO(S6): crumbs, peel, sprinkler, rowboat, umbrella.
 // TODO(S9): halo breath, snow caps.
 import { EH, TH, TW, cam, view } from './camera.ts';
@@ -28,7 +28,7 @@ import { iceState } from '../world/water.ts';
 import { screenInto } from './project.ts';
 import { depthOf, footprintDepth, type Drawable } from './order.ts';
 import { SPECIES_HEIGHT, drawHedge, drawTreeProp, gamePen, gameProj, renderCtx, type Species } from './flora.ts';
-import { drawBandstand, drawBench, drawBridge, drawKiosk, drawPicnic } from './props-park.ts';
+import { drawBandstand, drawBench, drawBridge, drawKiosk, drawPicnic, kioskBackDepth } from './props-park.ts';
 import { drawEasel } from './figure-props.ts';
 
 export { treeSprite } from './flora.ts';
@@ -80,7 +80,7 @@ export type LampOpts = { lit: boolean; charm?: boolean; breath?: number; glow?: 
 
 /** A palette colour scaled by L with the night tint (ambient.lit) taken off by the share k, 0 to 1: at k 1 the colour as the palette has
  *  it, so a lamp coming on (k its glow) brightens out of the tinted colour over the fade instead of popping (04 10.1 item 4). */
-function untinted(hex: string, L: number, k: number, a = 1): string {
+export function untinted(hex: string, L: number, k: number, a = 1): string {
   const c = hx(hex), raw: [number, number, number] = [c[0] * L, c[1] * L, c[2] * L];
   return css(mixc(tinted(raw), raw, k), a);
 }
@@ -497,7 +497,7 @@ function wetOf(p: Prop): number {
 }
 
 /** Draw one prop (03 2.7 drawProp(p, s)): s its north-west tile's centre on screen, c the context (draw.ts's when left out), part 1 or 2
- *  the back or front half of a bandstand, bridge or table (0 the whole); a kind with no drawing yet (S6) draws nothing. */
+ *  the back or front half of a bandstand, bridge, kiosk or table (0 the whole); a kind with no drawing yet (S6) draws nothing. */
 export function drawProp(p: Prop, s: XY, c?: CanvasRenderingContext2D, part: 0 | 1 | 2 = 0): void {
   const ctx = renderCtx(c), pen = gamePen(ctx), proj = gameProj;
   switch (p.kind) {
@@ -513,7 +513,7 @@ export function drawProp(p: Prop, s: XY, c?: CanvasRenderingContext2D, part: 0 |
       drawFountain(pen, proj, p.x, p.y, { frozen: iceState().on === 1, fx: false });
       break;
     case 'kiosk':
-      drawKiosk(pen, proj, p.x, p.y, p.rot, lampGlow() > 0.5);
+      drawKiosk(pen, proj, p.x, p.y, p.rot, lampGlow() > 0.5, part);
       break;
     case 'table':
       drawBistroTable(pen, proj, p.x, p.y, part);
@@ -572,9 +572,9 @@ function shallowDepth(p: Prop): number {
 
 /**
  * The props as painter drawables for this frame (03 7.2): depth is the deepest footprint tile; a bandstand or bridge gives a back half at
- * its shallowest depth less 0.5 and a front half at its deepest plus 0.49, a table its far chair at that chair's depth and the rest at
- * its tile's, and a picnic blanket lies at its shallowest less 0.5, so people inside, seated or on them paint between. Culled (03 15.2
- * item 6): trees under 2.5 px tall, other props under 1.5 px, and anything off screen. The objects and the array are reused (one frame).
+ * its shallowest depth less 0.5 and a front half at its deepest plus 0.49, a kiosk a back half at kioskBackDepth, a table its far chair
+ * at that chair's depth and the rest at its tile's, a picnic blanket its shallowest less 0.5, so people inside, serving, seated or on
+ * them paint between. Culled (03 15.2 item 6): trees under 2.5 px tall, other props under 1.5 px, off screen. Reused next frame.
  */
 export function propDrawables(): Drawable[] {
   PROP_OUT.length = 0;
@@ -587,9 +587,9 @@ export function propDrawables(): Drawable[] {
     screenInto(p.x + (p.w - 1) / 2, p.y + (p.h - 1) / 2, 0, S0);
     const half = (big * 0.75 + (tree ? 1.9 : 0.4)) * TW * z, up = hEH * EH * z + 4, dn = big * TH * 0.75 * z + 4;
     if (S0.x + half < 0 || S0.x - half > cw || S0.y + dn < 0 || S0.y - up > chh) continue;
-    if (p.kind === 'bandstand' || p.kind === 'bridge') {
-      addDrawable(p, 1, shallowDepth(p) - 0.5);
-      addDrawable(p, 2, footprintDepth(p.x, p.y, p.w, p.h) + 0.49);
+    if (p.kind === 'bandstand' || p.kind === 'bridge' || p.kind === 'kiosk') {
+      addDrawable(p, 1, p.kind === 'kiosk' ? kioskBackDepth(p.x, p.y) : shallowDepth(p) - 0.5);
+      addDrawable(p, 2, footprintDepth(p.x, p.y, p.w, p.h) + (p.kind === 'kiosk' ? 0 : 0.49)); // a vendor at a counter turned to us is after it
     } else if (p.kind === 'table') {
       addDrawable(p, 1, Math.min(depthOf(p.x - CHAIR_U, p.y), depthOf(p.x + CHAIR_U, p.y)));
       addDrawable(p, 2, footprintDepth(p.x, p.y, p.w, p.h));
