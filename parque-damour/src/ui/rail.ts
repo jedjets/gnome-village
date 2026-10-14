@@ -11,6 +11,8 @@
 // (03 4.6, hard rule 2); Fit is the camera's two-way toggle; New calls the handler main.ts hands in (the confirm). A big stamp or run
 // keeps its ghost here (armed): a tap shows it, a second tap on the same tile or Place enqueues it, Cancel drops it, and the ghost is
 // checked again each frame because the world may change under it (a paused command applying, an undo).
+// Options (register 3.9 and section 4 "Park pace and Options", owner 2026-10-14): row 3 ends with #bOptions, which opens the Options
+// sheet (sheets.ts; a second press closes it, as the chips do).
 // Dropped from the range: the spring tool's size 4 and its names (11063, 11072), sizelbl's Flow (11068), the build sheet (11010-11017).
 // TODO(S6): abilities, cooldown chip, locked pills; TODO(S7): mode through the `mode` event; TODO(S8): mute through audio.
 import { T } from '../core/clock.ts';
@@ -21,7 +23,7 @@ import { depth } from '../play/undo.ts';
 import { fitToggle, follow, turn } from '../render/camera.ts';
 import { $, setBodyClass, toast, layoutOverlays } from './dom.ts';
 import { t, onLang } from './i18n.ts';
-import { closeSheets } from './sheets.ts';
+import { closeSheets, toggleSheet } from './sheets.ts';
 
 export type Group = 'park' | 'cupid' | 'mischief';
 type Dial = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
@@ -359,6 +361,7 @@ export function buildRail(h: RailHandlers): void {
   });
   $('photoX').addEventListener('click', () => setBodyClass('photo', false));
   $('bNew').addEventListener('click', h.onNew);
+  $('bOptions').addEventListener('click', () => toggleSheet('options'));
 
   onLang(paintLabels);
   syncSpeed();

@@ -103,6 +103,10 @@ const SCENE_SETS = {
   // on the spot that shows the most of the 14 body-language states in real sim time (states), at zoom 2.4 on the busiest spot (close)
   // and at zoom 0.30 (fit); f 0.90 at the fountain, the lamps lit, after Close and a tap on empty ground cleared the selection; and day 2
   // at f 0.6725 at zoom 2.0 between the two walkers' dogs, the poodle trotting on a taut lead and the terrier standing on a slack one (dogs)
+  // Since the Options stage (owner 2026-10-14) Begin gives the park the profile's pace, a new player's Lively, so more people arrive than
+  // in the Calm park these lines were written for and the line-up differs: the dogs scene finds the walkers' dogs where they are (the
+  // two nearest each other, or the one in the park; on seed 101 that is now the terrier at a gate) with the camera only, as centreBest,
+  // where it framed a fixed spot
   s4: [
     { name: 'crowd', turn: 0, z: 1.3, at: [22.5, 25.2], abs: 0.552, pre: 'callCrowd' },
     { name: 'table-0', turn: 0, z: 2.4, at: [16, 44] },
@@ -115,7 +119,19 @@ const SCENE_SETS = {
     { name: 'close', turn: 0, z: 2.4, act: 'busiest' },
     { name: 'fit', turn: 0, z: 0.3 },
     { name: 'night', turn: 0, z: 1.3, at: [22, 25], abs: 0.9, act: 'clearSelection' },
-    { name: 'dogs', turn: 0, z: 2.0, at: [33, 28.6], abs: 1.6725 },
+    { name: 'dogs', turn: 0, z: 2.0, at: [33, 28.6], abs: 1.6725, act: 'dogsInView' },
+  ],
+  // ui: the Options stage (register section 4 "Park pace and Options", owner 2026-10-14), driven by real taps: rail row 3 ending with
+  // Options at the start view (rail); a real unpause and pause so Begin's profile pace applies (a new player: Lively), then Options
+  // opens the sheet with Lively pressed (options); ES tapped in the sheet, the whole shell in Spanish (options-es); EN and then Calm
+  // tapped and applied by a real unpause and pause (options-calm); the same sheet with body.dev, its Sound check and perf rows
+  // (options-dev). The first four are the player's view: body.dev, which a DEV build always sets (03 10.2), is taken off for them.
+  ui: [
+    { name: 'rail', turn: 0, z: 1.3, act: 'playerView' },
+    { name: 'options', keep: true, act: 'openOptions' },
+    { name: 'options-es', keep: true, act: 'optionsEs' },
+    { name: 'options-calm', keep: true, act: 'optionsCalm' },
+    { name: 'options-dev', keep: true, act: 'optionsDev' },
   ],
   s3: [
     { name: 'rail', turn: 0, z: 1.3 },
@@ -233,6 +249,29 @@ const ACTIONS = {
   async busiest(page) {
     await centreBest(page, 'count');
   },
+  /** s4: the camera (turn 0, the scene's zoom) on the middle of the two walkers' dogs nearest each other; the sim is not touched. */
+  async dogsInView(page) {
+    const n = await page.evaluate(() => {
+      const pd = window.__PD, z = pd.cam.z;
+      const dogs = pd.creatures.filter((c) => c.kind === 'dog' && !c.outside);
+      let best = dogs.length === 1 ? { x: dogs[0].x, y: dogs[0].y } : null, bd = Infinity;
+      for (let i = 0; i < dogs.length; i++) {
+        for (let j = i + 1; j < dogs.length; j++) {
+          const d = Math.hypot(dogs[i].x - dogs[j].x, dogs[i].y - dogs[j].y);
+          if (d < bd) {
+            bd = d;
+            best = { x: (dogs[i].x + dogs[j].x) / 2, y: (dogs[i].y + dogs[j].y) / 2 };
+          }
+        }
+      }
+      if (best) {
+        pd.cam.ox = -((best.x - 23.5) - (best.y - 23.5)) * 13 * z;
+        pd.cam.oy = -((best.x - 23.5) + (best.y - 23.5)) * 6.5 * z;
+      }
+      return dogs.length;
+    });
+    if (n === 0) throw new Error('s4 dogs: no walker\'s dog in the park');
+  },
   /** The bandstand armed and a tap on the lawn tile (25, 33): the 3 x 3 ghost (24..26, 32..34) centred on it, green. */
   async ghostOk(page) {
     await page.click('.tool[data-id="bandstand"]');
@@ -277,6 +316,42 @@ const ACTIONS = {
     await page.click('.tool[data-id="bridge"]');
     await tapTile(page, 30, 33);
     await page.waitForFunction(() => document.getElementById('depth').classList.contains('no'), { timeout: 5_000 });
+  },
+  /** ui: the player's view: body.dev (always on in a DEV build, 03 10.2) off, so the Options sheet shows no dev rows. */
+  async playerView(page) {
+    await page.evaluate(() => document.body.classList.remove('dev'));
+  },
+  /** ui: a real unpause and pause applies Begin's park.pace (a new player's Lively), then Options opens the sheet with Lively pressed. */
+  async openOptions(page) {
+    await runBriefly(page);
+    await page.waitForFunction(() => window.__PD.snapshot().pace === 'lively', { timeout: 5_000 });
+    await page.click('#bOptions');
+    await page.waitForFunction(
+      () => document.getElementById('options').classList.contains('on') &&
+        document.querySelector('#optionsList [data-k="pace:lively"]')?.getAttribute('aria-pressed') === 'true',
+      { timeout: 5_000 },
+    );
+  },
+  /** ui: ES tapped in the sheet: the tables, <html lang> and the profile (intro.ts chooseLang); the sheet repaints in Spanish. */
+  async optionsEs(page) {
+    await page.click('#optionsList [data-k="lang:es"]');
+    await page.waitForFunction(() => document.documentElement.lang === 'es' && document.getElementById('bOptions').textContent === 'Opciones', { timeout: 5_000 });
+  },
+  /** ui: EN, then Calm tapped and applied by a real unpause and pause; the park and the profile are calm, Calm is pressed. */
+  async optionsCalm(page) {
+    await page.click('#optionsList [data-k="lang:en"]');
+    await page.waitForFunction(() => document.documentElement.lang === 'en', { timeout: 5_000 });
+    await page.click('#optionsList [data-k="pace:calm"]');
+    await runBriefly(page);
+    await page.waitForFunction(
+      () => window.__PD.snapshot().pace === 'calm' && JSON.parse(localStorage.getItem('parque:profile-v1') || '{}').settings?.pace === 'calm' &&
+        document.querySelector('#optionsList [data-k="pace:calm"]')?.getAttribute('aria-pressed') === 'true',
+      { timeout: 5_000 },
+    );
+  },
+  /** ui: body.dev back on: the sheet shows the Sound check and perf rows (03 10.2). */
+  async optionsDev(page) {
+    await page.evaluate(() => document.body.classList.add('dev'));
   },
   /** Row 3's New: the confirm opens (No is pressed after the capture by the next page load; this is the last scene). */
   async confirmNew(page) {
@@ -448,7 +523,22 @@ async function scenes(browser, slice, set, url, errors, written) {
       // and row 2's line (the tool's name or the ranked reason) whole, never cut (02 8.2: row 2 shows the reason)
       const lay = await page.evaluate(() => {
         const d = document.getElementById('depth');
+        // a fixed rail never scrolls the page, so a control past the edge shows only here (the Park strip scrolls on purpose)
+        const out = [];
+        for (const el of document.querySelectorAll('#rail .grp, #rail .gb, #rail .ctx, #rail .chip')) {
+          const b = el.getBoundingClientRect();
+          if (el.offsetParent !== null && !el.closest('#tools') && (b.left < -0.5 || b.right > innerWidth + 0.5)) out.push(`${el.id || el.className} ${Math.round(b.left)}..${Math.round(b.right)}`);
+        }
+        // an open sheet sits between the HUD chips and the rail (no overlap)
+        const sh = document.querySelector('div.sheet.on'), sb = sh?.getBoundingClientRect();
+        const chips = Math.max(...[...document.querySelectorAll('.hud .chip')].map((c) => c.getBoundingClientRect().bottom));
+        const railTop = document.getElementById('rail').getBoundingClientRect().top;
+        let sheet = sb && (sb.top < chips || sb.bottom > railTop) ? `${sh.id} ${Math.round(sb.top)}..${Math.round(sb.bottom)}, chips end ${Math.round(chips)}` : '';
+        // the Options sheet shows every row without a scroll (a census of 30 scrolls on purpose)
+        if (sh?.id === 'options' && sh.scrollHeight > sh.clientHeight + 1) sheet += ` options scrolls ${sh.scrollHeight} > ${sh.clientHeight}`;
         return {
+          out,
+          sheet,
           rail: document.getElementById('rail').getBoundingClientRect().height,
           sw: document.documentElement.scrollWidth,
           vw: window.innerWidth,
@@ -459,6 +549,8 @@ async function scenes(browser, slice, set, url, errors, written) {
       if (lay.rail > 0.4 * lay.vh) errors.push(`layout [${sc.name}]: the rail is ${lay.rail} px, over 40 % of ${lay.vh}`);
       if (lay.sw > lay.vw) errors.push(`layout [${sc.name}]: horizontal scroll ${lay.sw} > ${lay.vw}`);
       if (lay.depth) errors.push(`layout [${sc.name}]: row 2's line is cut: ${lay.depth}`);
+      if (lay.out.length) errors.push(`layout [${sc.name}]: rail controls past the edge: ${lay.out.join(', ')}`);
+      if (lay.sheet) errors.push(`layout [${sc.name}]: the open sheet overlaps the chips or the rail: ${lay.sheet}`);
       const file = path.join(SHOTS, `${slice}-${sc.name}.png`);
       await page.screenshot({ path: file });
       written.push(file);

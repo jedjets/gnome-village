@@ -16,6 +16,9 @@
 //      the tick is 0 at once, the pause holds (the tick stays 0), and the unpause runs the new park.
 //   5. Reload: Continue is offered again (the new park autosaved on pagehide); Begin asks the New confirm first; No keeps the intro.
 //  5b. Continue by the keyboard, Enter pressed twice: the game starts once (one Sound press toggles once, one pause is one command).
+//  5c. Options: Calm then reload keeps Calm for the park and the preference (register section 4, Park pace and Options, owner
+//      2026-10-14): the park New started is Lively (a new player's profile pace); Options shows it pressed; Calm tapped turns the park
+//      calm at the next step and writes the profile; after a reload and Continue the park and the profile are still calm, Calm pressed.
 //   6. A Spanish browser (navigator.language es-ES), a fresh profile: the intro is in Spanish; after Begin and a reload it still is;
 //      EN tapped on the intro survives a reload (register 3.12).
 // Every action is a real tap or click (puppeteer's mouse at __PD.screenOf of a tile, or the DOM control). Exits 1 on any failed check,
@@ -195,6 +198,9 @@ async function run(base) {
     await sleep(200);
     const speeds = await page.evaluate((s) => window.__PD.log().filter((c) => c.seq > s && c.kind === 'speed').length, seq0);
     check(speeds === 1, `Enter twice on Continue: one press of pause is one speed command (${speeds})`);
+
+    // 5c. Options: Calm then reload keeps Calm for the park and the preference
+    await paceCheck(page);
   } finally {
     await browser.close();
   }
@@ -344,6 +350,46 @@ async function pausedNewCheck(page, seedBefore) {
   await page.click('#bHalt');
   await page.waitForFunction(() => window.__PD.tick() > 0, { timeout: 5_000 }).catch(() => {});
   check((await page.evaluate(() => window.__PD.tick())) > 0, 'the unpause runs the fresh park');
+}
+
+/**
+ * 5c. Options: Calm then reload keeps Calm for the park and the preference (register section 4, Park pace and Options; owner
+ * 2026-10-14). The restored park is the one New started in 4b, which took the profile's pace with the New (a new player: Lively). The
+ * pause lifted, Options opens with Lively pressed; Calm tapped: the logged `park.pace` turns the park calm at the next step and the
+ * profile stores calm; a reload (pagehide autosaves) and Continue: the park is calm, the profile still says calm, Calm is pressed.
+ */
+async function paceCheck(page) {
+  const state = () =>
+    page.evaluate(() => {
+      return {
+        park: window.__PD.snapshot().pace,
+        stored: JSON.parse(localStorage.getItem('parque:profile-v1') || '{}').settings?.pace ?? null,
+        calm: document.querySelector('#optionsList [data-k="pace:calm"]')?.getAttribute('aria-pressed') === 'true',
+        lively: document.querySelector('#optionsList [data-k="pace:lively"]')?.getAttribute('aria-pressed') === 'true',
+      };
+    });
+  await page.click('#bHalt'); // 5b ended paused
+  await page.waitForFunction(() => window.__PD.T.speed > 0, { timeout: 5_000 });
+  await page.click('#bOptions');
+  await page.waitForFunction(() => document.getElementById('options').classList.contains('on'), { timeout: 5_000 }).catch(() => {});
+  const s0 = await state();
+  check(s0.park === 'lively' && s0.lively && !s0.calm, `Options: the park New started is ${s0.park}, Lively pressed (${s0.lively})`);
+  const seq0 = await page.evaluate(() => window.__PD.log().reduce((m, c) => Math.max(m, c.seq), 0));
+  await page.click('#optionsList [data-k="pace:calm"]');
+  await page.waitForFunction(() => window.__PD.snapshot().pace === 'calm', { timeout: 5_000 }).catch(() => {});
+  const s1 = await state();
+  const logged = await page.evaluate((s) => window.__PD.log().filter((c) => c.seq > s && c.kind === 'park.pace').map((c) => c.payload.pace), seq0);
+  check(s1.park === 'calm' && s1.stored === 'calm' && s1.calm && JSON.stringify(logged) === '["calm"]',
+    `Options: Calm tapped: the park is ${s1.park}, the profile ${s1.stored}, logged ${JSON.stringify(logged)}`);
+  await page.reload({ waitUntil: 'load' });
+  await introReady(page);
+  await page.click('#bContinue');
+  await painted(page);
+  await page.click('#bOptions');
+  await page.waitForFunction(() => document.getElementById('options').classList.contains('on'), { timeout: 5_000 }).catch(() => {});
+  const s2 = await state();
+  check(s2.park === 'calm' && s2.stored === 'calm' && s2.calm && !s2.lively,
+    `Options: Calm then reload keeps Calm for the park and the preference (park ${s2.park}, profile ${s2.stored}, Calm pressed ${s2.calm})`);
 }
 
 /**

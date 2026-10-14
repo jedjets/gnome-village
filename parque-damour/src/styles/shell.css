@@ -83,6 +83,10 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
 #row2 .gb:disabled{opacity:1;color:var(--stone)} /* a disabled Place or Undo keeps its glass and reads in --stone (04 5.2 item 2) */
 #row3{display:flex;gap:6px;align-items:center;justify-content:space-between;pointer-events:none;flex-wrap:wrap}
 #row3 > *{pointer-events:auto}
+/* row 3's labels never break inside a button; a group wraps its buttons only on a phone narrower than its width (a pill of one line,
+   a rounded block of two) */
+#row3 .grp{max-width:100%;flex-wrap:wrap;justify-content:center;border-radius:22px}
+#row3 .gb{white-space:nowrap}
 .grp{display:flex;gap:4px;background:var(--glass);border:1px solid var(--glass-line);border-radius:999px;
   padding:4px;backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);box-shadow:var(--shadow)}
 .gb{border:0;background:transparent;border-radius:999px;padding:5px 8px;font:inherit;font-size:12px;line-height:1.3;
@@ -90,7 +94,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
 .gb.glass{background:var(--glass);border:1px solid var(--glass-line);box-shadow:var(--shadow);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}
 .gb:disabled{opacity:.35;cursor:default}
 #bRotL,#bRotR{padding:5px 6px;min-width:26px;font-size:11px}
-.gb[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
+.gb[aria-pressed="true"],.gb[aria-expanded="true"]{background:var(--ink);color:var(--on-ink)} /* expanded: Options while its sheet is open */
 .gb:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
 #sizewrap{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;color:var(--ink-soft);padding:0 12px 0 4px;
   border-left:1px solid var(--glass-line);min-height:30px}
@@ -150,6 +154,17 @@ div.sheet .row.sel small{color:var(--on-ink-soft)}
 div.sheet .row.ev{display:block}
 div.sheet .row.ev span{display:block;font-size:12px;line-height:1.32}
 #evlog{max-height:34vh}
+/* the Options sheet (04 5.6; register section 4 "Park pace and Options", owner 2026-10-14): one row per setting in the census row's
+   well, the name left, the control right (row 1's segmented switch, .grp of .gb), a one-line hint under both; dev rows only under body.dev */
+#optionsList .opt{display:grid;grid-template-columns:1fr auto;gap:0 10px;align-items:center;margin-top:4px;padding:3px 3px 3px 10px;
+  border-radius:10px;border:1px solid var(--glass-line);background:var(--well);color:var(--ink)}
+#optionsList .opt > b{font-size:13px;font-weight:700;line-height:1.3}
+#optionsList .opt > small{grid-column:1/3;font-size:11px;line-height:1.3;color:var(--ink-soft);padding:1px 0 3px}
+#optionsList .grp{padding:2px;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+#optionsList .gb{min-height:36px;min-width:60px;padding:5px 12px}
+#optionsList .val{min-height:42px;display:flex;align-items:center;padding:0 12px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+#optionsList .row{min-height:44px;align-items:center;padding-left:10px}
+body:not(.dev) #optionsList .dev{display:none}
 #snd .row{display:flex;flex-wrap:wrap;gap:5px;background:none;border:0;padding:0;cursor:default}
 #snd button{font:inherit;font-size:12px;padding:5px 9px;border-radius:999px;border:1px solid var(--glass-line);background:var(--well-2);color:var(--ink)}
 body.sheet #card{opacity:0!important;pointer-events:none!important}

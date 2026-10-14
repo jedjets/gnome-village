@@ -16,6 +16,11 @@
 // follows through people.ts followPos (a sitter at its seat, a pigeon at its flight height), draw gets the selected visitor for the ring,
 // the feed's listeners are wired, a Park tool other than the hand clears the selection (card.initCard), and a new park clears the
 // selection and the feed.
+// Park pace and Options (owner 2026-10-14, register section 4): every new park the shell starts gets the profile's pace through
+// store.enqueueProfilePace, right after Begin's newPark, after the fresh park of a Continue whose restore threw, and after New's
+// `park.new` (never inside newPark or afterNewPark: the harness's newPark runs both, and the det runs must not gain a command); a
+// Continue that restores keeps the saved park's pace. Begin's pace shows pressed in the Options sheet while its first step waits
+// (sheets.paceQueued; a park started paused). The Options sheet gets the dev perf overlay's state and switch as hooks.
 // TODO(S6): an armed ability's target; TODO(S7): avatar.tap; TODO(S8): initAudio on Begin and Continue.
 import { newPark as loopNewPark, onFrame, onFrameEnd, setSpeed, start } from './core/loop.ts';
 import { T } from './core/clock.ts';
@@ -38,10 +43,12 @@ import { $, applyDom, layoutOverlays, openConfirm, toast } from './ui/dom.ts';
 import { showIntro, startLang } from './ui/intro.ts';
 import { activeTool, armedGhost, brushSize, buildRail, cancelGhost, syncSpeed, tapGhost, toolClass, updateRail } from './ui/rail.ts';
 import { initHud, updateHud } from './ui/hud.ts';
-import { initSheets } from './ui/sheets.ts';
+import { initSheets, paceQueued } from './ui/sheets.ts';
 import { clearSel, initCard, select, selectedVisitor } from './ui/card.ts';
 import { clearFeed, initFeed } from './ui/feed.ts';
-import { clearPark, getProfile, loadPark, resetAutosave, restore, saveBeforeNew, savePark, stepAutosave } from './save/store.ts';
+import {
+  clearPark, enqueueProfilePace, getProfile, loadPark, profilePace, resetAutosave, restore, saveBeforeNew, savePark, stepAutosave,
+} from './save/store.ts';
 import type { ParkSaveV1 } from './save/schema.ts';
 import { installHarness } from './debug/harness.ts';
 import { FT, ftNote, qualityLevel, setPerfCounts, setPerfOn } from './debug/perf.ts';
@@ -203,15 +210,25 @@ function onPointerUp(e: PointerEvent): void {
 
 /* ---------- New (02 12.5 item 4; 03 11) ---------- */
 
-/** Row 3 New: the confirm; Yes writes the park whole once more (A24) and enqueues `park.new` with a fresh seed. */
+/** Row 3 New: the confirm; Yes writes the park whole once more (A24), enqueues `park.new` with a fresh seed and the profile's pace. */
 function askNew(): void {
   openConfirm('confirm.new_park', () => {
     saveBeforeNew();
     enqueue({ side: 'park', kind: 'park.new', payload: { seed: freshSeed() } });
+    enqueueProfilePace(); // carried with the New: the new park's tick 0 (commands.ts enqueueAfterNew)
   });
 }
 
 /* ---------- boot ---------- */
+
+/**
+ * The profile's pace for the park Begin just started (store.enqueueProfilePace; register section 4, Park pace and Options): it applies
+ * at the new park's first step (tick 1), and the Options sheet shows it pressed while that step waits (a park started paused, `#halt`).
+ */
+function beginPace(): void {
+  enqueueProfilePace();
+  paceQueued(profilePace());
+}
 
 let live = false; // a park is on screen: the autosave may write (never from the intro, which would save an empty world)
 
@@ -230,15 +247,19 @@ function begin(canvas: HTMLCanvasElement, from: Start, halt: boolean): void {
       resetAutosave();
     } catch {
       newPark(freshSeed()); // migrate.ts checked the save, so this is a damaged layer: start fresh and say so
+      beginPace();
       toast('toast.load_failed');
     }
-  } else newPark(from.seed);
+  } else {
+    newPark(from.seed);
+    beginPace();
+  }
   live = true;
   setupInput(canvas, { onTap, toolClass: gesture, onStrokeStart, onPaint });
   canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
   canvas.addEventListener('pointerup', onPointerUp, { passive: true });
   canvas.addEventListener('pointercancel', onPointerUp, { passive: true });
-  initSheets();
+  initSheets({ perfOn: () => FT.on, setPerf: setPerfOn }); // the Options sheet's dev perf entry (03 2.1: ui/ may not import debug/)
   initFeed();
   setFollowLookup(followPos);
   buildRail({ onNew: askNew });

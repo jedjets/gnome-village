@@ -80,14 +80,19 @@
       <input id="spdR" type="range" min="1" max="8" value="1" step="1" data-t-aria="aria.speed">
       <span id="spdLbl">1&times;</span>
     </div>
+    <!-- row 3 ends with Options (register 3.9; owner 2026-10-14): the camera's group and the actions' group, so at 390 px the row is two
+         lines (the speed and the camera, then the actions) and no group is wider than the row (04 5.4 item 5) -->
     <div class="grp">
       <button class="gb" id="bRotL" type="button" data-t-aria="aria.rotate_left">&#9664;</button>
       <button class="gb" id="bRotR" type="button" data-t-aria="aria.rotate_right">&#9654;</button>
       <button class="gb" id="bFit" type="button" data-t="rail.fit" data-t-aria="aria.fit">Fit</button>
+    </div>
+    <div class="grp">
       <button class="gb" id="bMute" type="button" aria-pressed="false" data-t-aria="aria.sound">Sound</button>
       <button class="gb" id="bMode" type="button" aria-pressed="false" data-t-aria="aria.mode">Be someone</button>
       <button class="gb" id="bPhoto" type="button" data-t="rail.photo" data-t-aria="aria.photo">Photo</button>
       <button class="gb" id="bNew" type="button" data-t="rail.new" data-t-aria="aria.new">New</button>
+      <button class="gb" id="bOptions" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="options" data-t="rail.options" data-t-aria="aria.options">Options</button>
     </div>
   </div>
 </div>

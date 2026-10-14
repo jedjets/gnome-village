@@ -142,3 +142,42 @@ describe('the visitors on screen: card, census, archetypes and ages (06 16.3, 16
     setLang('en');
   });
 });
+
+/** The ES column of the 06 section 16 tables, by key; a TODO cell is not a wording yet. */
+function table06es(): Map<string, string> {
+  const out = new Map<string, string>();
+  const md = readFileSync(join(ROOT, 'docs', '06-Content-Tables.md'), 'utf8');
+  for (const m of md.matchAll(/^\| `([a-zA-Z0-9_.]+)` \| (.*?) \| (.*?) \|$/gm)) if (m[3] !== 'TODO') out.set(m[1] as string, m[3] as string);
+  return out;
+}
+
+describe('the Options sheet and rail row 3\'s Options (register 3.10 and section 4 "Park pace and Options"; 06 16.10; 02 12.4)', () => {
+  // the keys of 06 16.10's Options rows, which the sheet uses
+  const SHEET = [
+    'sheet.options.title', 'sheet.options.pace', 'sheet.options.pace.calm', 'sheet.options.pace.calm_hint', 'sheet.options.pace.lively',
+    'sheet.options.pace.lively_hint', 'sheet.options.language', 'sheet.options.sound', 'sheet.options.speed', 'sheet.options.seed',
+    'sheet.options.sound_check', 'sheet.options.perf', 'sheet.options.on', 'sheet.options.off',
+  ];
+  // the keys this stage defines that 06 has no row for yet (hand-back: Assumptions)
+  const NEW = ['rail.options', 'aria.options', 'sheet.options.lang_en', 'sheet.options.lang_es', 'sheet.options.speed_hint', 'toast.sound_check_later'];
+  it('every key of the sheet, the button and its aria-label is in both tables, with the same {params}', () => {
+    for (const k of [...SHEET, ...NEW, 'aria.sheet_options']) {
+      expect(en[k], k).toBeTruthy();
+      expect(es[k], k).toBeTruthy();
+      expect([...(es[k] as string).matchAll(/\{(\w+)\}/g)].map((m) => m[1]), k).toEqual([...(en[k] as string).matchAll(/\{(\w+)\}/g)].map((m) => m[1]));
+    }
+  });
+  it('the English wording is 06\'s, copied exactly, and so is the Spanish of the five pace rows the Pace stage wrote', () => {
+    const doc = table06(), docEs = table06es();
+    for (const k of SHEET) expect(en[k], k).toBe(doc.get(k));
+    const pace = SHEET.filter((k) => k.startsWith('sheet.options.pace'));
+    expect(pace).toHaveLength(5);
+    for (const k of pace) expect(es[k], k).toBe(docEs.get(k));
+  });
+  it('the seed fills in both languages', () => {
+    setLang('es');
+    expect(t('sheet.options.seed', { seed: '101' })).toBe('Semilla del parque 101');
+    setLang('en');
+    expect(t('sheet.options.seed', { seed: '101' })).toBe('Park seed 101');
+  });
+});
