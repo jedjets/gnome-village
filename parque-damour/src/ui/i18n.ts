@@ -1,7 +1,6 @@
 // src/ui/i18n.ts
 // t(key, params), plural, gender, the language switch and <html lang> (03 section 12, register 3.12).
 // Nothing ported: GV had only the intro's `langs` table (12200-12213). NEW.
-// TODO(S3): the choice persists in profile.settings.lang through save/store.ts.
 import { en } from './strings/en.ts';
 import { es } from './strings/es.ts';
 

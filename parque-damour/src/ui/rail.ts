@@ -163,7 +163,7 @@ export function setTool(id: ToolId): void {
   document.querySelectorAll<HTMLButtonElement>('#tools .tool').forEach((b) => {
     b.setAttribute('aria-pressed', b.dataset.id === id ? 'true' : 'false');
   });
-  if (id !== 'hand') follow(null); // TODO(S4): card.clearSel() as well (GV 11070)
+  if (id !== 'hand') follow(null);
   paintRow2();
 }
 

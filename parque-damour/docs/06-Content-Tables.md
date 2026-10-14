@@ -634,12 +634,14 @@ Conventions (03 §12): keys are lowercase, dot-separated, `area.item[.detail]`. 
 | `hud.phase.golden` | Golden hour | TODO |
 | `hud.phase.dusk` | Dusk | TODO |
 | `hud.phase.evening` | Evening | TODO |
-| `hud.day` | Day {n} | TODO |
+| `hud.day` | Day {n} · {season} | Día {n} · {season} |
 | `hud.season.spring` | Spring | TODO |
 | `hud.season.summer` | Summer | TODO |
 | `hud.season.autumn` | Autumn | TODO |
 | `hud.season.winter` | Winter | TODO |
 | `hud.visitors` | {n} visitors | {n} visitantes |
+| `hud.visitors.one` | {n} visitor | {n} visitante |
+| `hud.visitors.other` | {n} visitors | {n} visitantes |
 | `hud.romance.pair` | {a} & {b} · {stage} | {a} & {b} · {stage} |
 | `hud.romance.none` | No one courting yet | TODO |
 | `hud.cupid` | Cupid | TODO |
@@ -647,6 +649,8 @@ Conventions (03 §12): keys are lowercase, dot-separated, `area.item[.detail]`. 
 | `hud.title` | Parque D'Amour | Parque D'Amour |
 
 The Points chip is `t('hud.cupid')` `#tCP` · `t('hud.mischief')` `#tMP`; the numbers are written to the two `<b>` elements of 03 §10.1, never through a string.
+
+The clock chip's day is `t('hud.day', { n, season: '@hud.season.<season>' })`: the season param is itself a key, so the chip reads "Day 3 · Autumn". The Visitors chip's count is `plural('hud.visitors', n)` of the people in the park (cameos excluded, 03 §3.11), which picks `hud.visitors.one` for 1 and `hud.visitors.other` otherwise ("1 visitor", "12 visitors"); the bare `hud.visitors` is the Visitors chip of the style board's HUD sample (`style-board.html`, 04 §4.2 tile 13).
 
 ### 16.4 Sides, stages, archetypes, ages, weather, endings
 | Key | EN | ES |
@@ -926,7 +930,7 @@ The Points chip is `t('hud.cupid')` `#tCP` · `t('hud.mischief')` `#tMP`; the nu
 | Key | EN | ES |
 |---|---|---|
 | `sheet.close` | Close | TODO |
-| `sheet.census.title` | Visitors | TODO |
+| `sheet.census.title` | Census | Censo |
 | `sheet.census.summary` | {n} in the park · {k} courting | TODO |
 | `sheet.census.room.one` | room for {n} more | TODO |
 | `sheet.census.room.other` | room for {n} more | TODO |
@@ -957,6 +961,8 @@ The Points chip is `t('hud.cupid')` `#tCP` · `t('hud.mischief')` `#tMP`; the nu
 | `sheet.options.off` | Off | TODO |
 | `sheet.sound.title` | Sound check | TODO |
 | `sheet.sound.muted` | Sound is muted | TODO |
+
+The Visitors chip opens the sheet titled Census (register 3.10: "Visitors chip … opens Census"; 02 §12.2, §12.4); "visitors" is the chip's own word (`hud.visitors`, 16.3).
 
 ### 16.11 Feed lines (stored as `{ key, params }` and rendered at display time)
 | Key | EN | ES |
