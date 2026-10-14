@@ -13,8 +13,11 @@
 // Park pace (owner 2026-10-14, register section 4 "Park pace and Options"): `park.pace` { pace: 'calm' | 'lively' } is a park-side kind
 // allowed in both modes, logged and replayed like `speed`; entities/visitor.ts registers it (the arrivals gap). It is not a paused kind
 // (loop.PAUSED_KINDS): a change made while paused applies at the first step after the unpause, like a tool, so the live order stays the
-// replay order and no pace applies to a park that is not running. enqueueAfterNew carries a command queued right after a New into the
-// park the New starts (a park.new drops what is queued behind it, 03 4.6): the shell's profile pace for a new park (save/store.ts).
+// replay order. enqueueAfterNew carries a command queued right after a New into the park the New starts (a park.new drops what is queued
+// behind it, 03 4.6): the shell's profile pace for a new park (save/store.ts). The carried command is part of the New: it applies with
+// it, at the new park's tick 0 and logged there, before anything else in that park, so a New confirmed while paused and saved before the
+// unpause keeps it (no pending command is saved), and a replay of the new park's log applies a tick-0 command first, at step 1: the same
+// order and state.
 import type { XY } from './math.ts';
 import type { GateId, PairId, Side, VisitorId } from './ids.ts';
 import { emit } from './events.ts';
@@ -116,9 +119,10 @@ export function enqueue(c: CommandInput): Command {
 }
 
 /**
- * Queue `c` for the park the player sees next: with a `park.new` pending (New confirmed, not applied yet), `c` waits beside it and is
- * queued at once after it applies, for the new park's first step (tick 1, a fresh seq), since a park.new drops what is queued behind it
- * (03 4.6); with none pending, this is enqueue. The shell's call right after a New or a Begin (save/store.ts enqueueProfilePace).
+ * Queue `c` for the park the player sees next: with a `park.new` pending (New confirmed, not applied yet), `c` waits beside it, since a
+ * park.new drops what is queued behind it (03 4.6), and applies as part of the New, right after the reset: at the new park's tick 0,
+ * logged there with a fresh seq, in the paused frame of 03 4.6 as in a running step, so a save made before the first step holds it. With
+ * none pending, this is enqueue. The shell's call right after a New or a new park of its own (save/store.ts enqueueProfilePace).
  */
 export function enqueueAfterNew(c: CommandInput): void {
   if (pending.some((p) => p.kind === 'park.new')) afterNew.push(c);
@@ -208,7 +212,7 @@ export function applyCommand(c: Command): Result {
     if (logList.length > LOG_CAP) logList.splice(0, logList.length - LOG_CAP);
   }
   emit({ kind: 'applied', tick: c.tick, params: { kind: c.kind, side: c.side } });
-  if (carried) for (const x of carried) enqueue(x); // the new park's tick 1, after the reset: enqueueAfterNew
+  if (carried) for (const x of carried) applyNow(x); // part of the New, after the reset: the new park's tick 0 (enqueueAfterNew)
   return OK;
 }
 

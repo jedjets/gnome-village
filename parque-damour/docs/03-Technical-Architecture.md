@@ -418,7 +418,7 @@ type ToolPayload =
   | { tool: 'hedge'|'canal'; tiles: XY[] };                                         // the finished run, max 14 tiles
 type Target = { kind: 'tile'; x: number; y: number } | { kind: 'visitor'; id: VisitorId } | { kind: 'pair'; id: PairId } | { kind: 'park' };
 ```
-`hand` is not a command (it only selects). Camera moves, Fit, rotate, photo mode, sheets, language, mute, pin and dev toggles are UI-only and never enter the log (design §14.3). The park's pace is a command (`park.pace`, owner 2026-10-14): it changes the arrivals, so it is logged and replayed like `speed`. A payload that is not `'calm'` or `'lively'` is rejected `reason.not_here`. The shell sends the profile's pace to every new park with `store.enqueueProfilePace()` right after a Begin's `newPark` or a New's `park.new` (`commands.enqueueAfterNew` keeps it beside a pending `park.new`, which drops what is queued behind it (4.6), and queues it for the new park's tick 1); a Continue sends none, so the restored park keeps its own pace.
+`hand` is not a command (it only selects). Camera moves, Fit, rotate, photo mode, sheets, language, mute, pin and dev toggles are UI-only and never enter the log (design §14.3). The park's pace is a command (`park.pace`, owner 2026-10-14): it changes the arrivals, so it is logged and replayed like `speed`. A payload that is not `'calm'` or `'lively'` is rejected `reason.not_here`. The shell sends the profile's pace to every new park it starts with `store.enqueueProfilePace()`: right after a Begin's `newPark`, right after the `newPark(freshSeed())` that replaces a Continue whose restore threw (`main.ts` `begin`'s catch), and right after a New's `park.new` enqueue; never inside `main.ts`'s `newPark` or `afterNewPark`, which the harness's `newPark` runs too. After a `newPark` the pace applies at the new park's first step (tick 1). With a `park.new` pending, `commands.enqueueAfterNew` keeps it beside the New, which drops what is queued behind it (4.6), and applies it as part of the New, right after the reset: at the new park's tick 0, logged there, before anything else in that park, in a paused frame as in a running step. A New confirmed while paused and saved before the unpause (the page hidden) therefore keeps the pace, and a replay of the new park's log applies the tick-0 command first, at step 1, which gives the same state. A Continue that restores sends none, so the restored park keeps its own pace.
 
 ### 5.2 Enqueue and apply
 
@@ -439,7 +439,7 @@ type Target = { kind: 'tile'; x: number; y: number } | { kind: 'visitor'; id: Vi
 | `speed`, `park.new`, `visitor.call`, `park.pace` | `park` | allowed |
 | `debug.weather` | `park` | allowed; rejected in a production build |
 
-A command whose `side` is not in the Allowed column is rejected with `reason.wrong_side` (section 5.4). `park.pace` is not one of the paused kinds of 4.6 (`speed`, `park.new`): a pace changed while paused applies at the first step after the unpause, as a tool does, so the live order stays the replay order; the one sent right after a New waits for that park and applies at its tick 1 (5.1).
+A command whose `side` is not in the Allowed column is rejected with `reason.wrong_side` (section 5.4). `park.pace` is not one of the paused kinds of 4.6 (`speed`, `park.new`): a pace changed while paused applies at the first step after the unpause, as a tool does, so the live order stays the replay order; the one sent right after a New waits for that park and applies with the New, at its tick 0 (5.1).
 
 ### 5.4 Validation and rejection reasons
 

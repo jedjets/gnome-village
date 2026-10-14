@@ -357,8 +357,8 @@ export function arriveGroup(arch: Archetype, gate: GateId): Visitor[] {
 
 /**
  * Phase 7 of a step (02 4.2 items 1-4, 03 6.3 item 1): while the people in the park are fewer than the target and fewer than 30, an
- * arrival comes 6 to 14 s after the last; at the target nobody comes and the timer stays run out, so the next arrival comes as soon as
- * there is room.
+ * arrival comes the pace's gap after the last (ARRIVAL_GAP_MIN-MAX, 6 to 14 s, in a Calm park; LIVELY_GAP_MIN-MAX, 3 to 6 s, in a Lively
+ * one; one draw either way); at the target nobody comes and the timer stays run out, so the next arrival comes as soon as there is room.
  */
 export function stepArrivals(dt: number): void {
   if (arrivalT > 0) arrivalT = Math.max(0, arrivalT - dt);

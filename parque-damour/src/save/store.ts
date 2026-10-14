@@ -22,7 +22,8 @@
 // (calm when a save has none); the state hash covers it only when it is not calm, so every calm park, and every park from before, keeps
 // its hash (the det fixtures). The profile's settings.pace is the pace a new park gets: profilePace (Lively when the profile has none,
 // the owner's default for new players), setProfilePace, and enqueueProfilePace, the shell's one call that sends it as a logged
-// `park.pace` command right after a Begin's newPark or a New's park.new (core/commands.ts enqueueAfterNew). Continue sends none: the
+// `park.pace` command after every new park the shell starts: a Begin's newPark, the fresh park that replaces a Continue whose restore
+// threw (main.ts begin's catch), and a New's park.new (core/commands.ts enqueueAfterNew). A Continue that restores sends none: the
 // restored park keeps its own pace.
 // TODO(S5): the feed (ui/feed.ts, which this layer cannot import) joins the snapshot through a hook; the profile's cp and mp join the
 // state hash (03 11) in the slice that first awards points, which re-records the det fixtures (S3 must keep them: 07 S3.7 item 1).
@@ -219,9 +220,12 @@ export function setProfilePace(pace: Pace): void {
 }
 
 /**
- * The shell's one call for a new park (main.ts, from the Options stage on): right after a Begin's newPark and right after a New's
- * `park.new` enqueue, it sends the profile's pace as a logged `park.pace` command, which applies at the new park's first step (with a
- * New pending it waits for that park: commands.ts enqueueAfterNew). Continue does not call it: a restored park keeps its own pace.
+ * The shell's one call for a new park (main.ts, from the Options stage on), made at three places: right after begin's newPark(from.seed)
+ * (Begin), right after the newPark(freshSeed()) in begin's catch (a Continue whose restore threw starts a fresh park), and right after
+ * askNew's `park.new` enqueue (New). It sends the profile's pace as a logged `park.pace` command: after a newPark it applies at the new
+ * park's first step; with a New pending it waits for that park and applies with the New at its tick 0, so a New confirmed while paused
+ * and saved before the unpause keeps it (commands.ts enqueueAfterNew). Never inside main.ts's newPark or afterNewPark: the harness's
+ * newPark runs both, so the det runs would gain a command. A Continue that restores does not call it: the restored park keeps its pace.
  */
 export function enqueueProfilePace(): void {
   enqueueAfterNew({ side: 'park', kind: 'park.pace', payload: { pace: profilePace() } });

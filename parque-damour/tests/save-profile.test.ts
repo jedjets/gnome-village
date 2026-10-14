@@ -7,17 +7,19 @@
 // browser's storage.
 // Park pace (owner 2026-10-14, "1 Y 2 Y"; register section 4 "Park pace and Options"): the profile remembers the pace the player prefers
 // for new parks (settings.pace), Lively for a new player and for a profile from before the field; enqueueProfilePace sends it to a new
-// park as a logged park.pace command (after a Begin or a New), and a Continue keeps the saved park's own pace.
+// park as a logged park.pace command (after a Begin, a New, or the fresh park that replaces a Continue whose restore threw), and a
+// Continue keeps the saved park's own pace. A New confirmed while paused carries the pace with it, so a save before the unpause keeps it.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { SIM_DT, newPark, setSpeed, simulate, tick } from '../src/core/loop.ts';
-import { enqueue, log, pendingCount } from '../src/core/commands.ts';
+import { PAUSED_KINDS, SIM_DT, newPark, setSpeed, simulate, tick } from '../src/core/loop.ts';
+import { applyNow, applyPending, enqueue, log, pendingCount } from '../src/core/commands.ts';
+import { parkSeed } from '../src/world/gen.ts';
 import { clearListeners, type GameEvent } from '../src/core/events.ts';
 import { setMode } from '../src/play/mode.ts';
 import { arrivalsState } from '../src/entities/visitor.ts';
 import { defaultProfile } from '../src/save/migrate.ts';
 import {
-  PACE_DEFAULT, PARK_KEY, PROFILE_KEY, clearAll, enqueueProfilePace, getProfile, loadPark, loadProfile, profilePace, restore, savePark,
-  saveProfile, setProfilePace, snapshot, stateHash,
+  PACE_DEFAULT, PARK_KEY, PROFILE_KEY, clearAll, clearPark, enqueueProfilePace, getProfile, loadPark, loadProfile, profilePace, restore,
+  saveBeforeNew, savePark, saveProfile, setProfilePace, snapshot, stateHash,
 } from '../src/save/store.ts';
 import type { ParkSaveV1 } from '../src/save/schema.ts';
 import { MemStorage, install, installBlocked } from './mem-storage.ts';
@@ -194,21 +196,51 @@ describe('the pace a new park gets (register section 4, Park pace and Options; o
     }
   });
 
-  it('enqueueProfilePace right after a New: the pace survives the park.new and applies at the new park\'s first step', () => {
+  it('enqueueProfilePace right after a New: the pace survives the park.new and applies with it, at the new park\'s tick 0', () => {
     setProfilePace('lively');
     for (let k = 0; k < 120; k++) simulate(SIM_DT, 0);
     enqueue({ side: 'park', kind: 'park.new', payload: { seed: 7 } }); // New's Yes, then the shell's one call
     enqueueProfilePace();
     simulate(SIM_DT, 0);
-    expect([tick(), arrivalsState().pace]).toEqual([0, 'calm']);
+    expect([tick(), arrivalsState().pace, pendingCount()]).toEqual([0, 'lively', 0]);
+    expect(log().map((c) => [c.tick, c.kind])).toEqual([[0, 'park.pace']]);
     simulate(SIM_DT, 0);
     expect([tick(), arrivalsState().pace]).toEqual([1, 'lively']);
-    expect(log().map((c) => [c.tick, c.kind])).toEqual([[1, 'park.pace']]);
     const viaNew = stateHash();
     newPark(7); // a Begin on the same seed with the same call reaches the same park at tick 1
     enqueueProfilePace();
     simulate(SIM_DT, 0);
     expect(stateHash()).toBe(viaNew);
+  });
+
+  it('a New confirmed while paused and saved before the unpause continues with the profile\'s pace (the page hidden at tick 0)', () => {
+    setProfilePace('lively');
+    for (let k = 0; k < 600; k++) simulate(SIM_DT, 0);
+    expect(applyNow({ side: 'park', kind: 'speed', payload: { speed: 0 } }).ok).toBe(true); // paused
+    expect(saveBeforeNew()).toBe(true);
+    enqueue({ side: 'park', kind: 'park.new', payload: { seed: 4242 } }); // New's Yes, then the shell's one call
+    enqueueProfilePace();
+    applyPending(tick() + 1, PAUSED_KINDS); // the paused frames of 03 4.6: the New applies, still paused
+    applyPending(tick() + 1, PAUSED_KINDS);
+    expect(clearPark()).toBe(true); // main.ts's watcher of the applied park.new
+    expect(savePark()).toBe(true); // visibilitychange: the page is hidden before the player unpauses
+    const h = stateHash();
+    newPark(7);
+    restore(loadPark() as ParkSaveV1); // the next page's Continue
+    expect([parkSeed(), tick(), arrivalsState().pace, profilePace(), stateHash()]).toEqual([4242, 0, 'lively', 'lively', h]);
+  });
+
+  it('a Continue whose restore throws starts a fresh park, which gets the profile\'s pace like a Begin (main.ts begin\'s catch)', () => {
+    setProfilePace('lively');
+    for (let k = 0; k < 60; k++) simulate(SIM_DT, 0);
+    const bad = snapshot();
+    newPark(5);
+    expect(() => restore({ ...bad, layers: { ...bad.layers, KIND: 'AAAA' } })).toThrow(); // a damaged layer
+    newPark(9); // the fresh park, then the shell's one call
+    enqueueProfilePace();
+    simulate(SIM_DT, 0);
+    expect([parkSeed(), tick(), arrivalsState().pace]).toEqual([9, 1, 'lively']);
+    expect(log().map((c) => [c.tick, c.kind, c.payload])).toEqual([[1, 'park.pace', { pace: 'lively' }]]);
   });
 
   it('Continue keeps the saved park\'s own pace, whatever the profile prefers', () => {

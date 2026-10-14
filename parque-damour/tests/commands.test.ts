@@ -2,7 +2,8 @@
 // Locks register 2.9 / 03 5 / 02 14 / 08 2.1: enqueue stamps tick + 1 and a rising seq; commands apply in (tick, side, seq) order; a future
 // tick waits; the log keeps 600; a rejected command is not logged; the side and mode rules of 03 5.3; replay. Also core/ids (03 2.3, 3.1).
 // Park pace (owner 2026-10-14, register section 4 "Park pace and Options"): `park.pace` applies, logs, replays, is allowed in both modes,
-// rejects a payload that is no pace, is not a paused kind; enqueueAfterNew carries the shell's pace into the park a New starts.
+// rejects a payload that is no pace, is not a paused kind; enqueueAfterNew carries the shell's pace into the park a New starts and applies
+// it with the New, at that park's tick 0 (a New confirmed while paused included).
 import { describe, it, expect, beforeEach } from 'vitest';
 import { PAUSED_KINDS, SIM_DT, newPark, setSpeed, setTick, simulate, tick } from '../src/core/loop.ts';
 import {
@@ -258,24 +259,29 @@ describe('core/commands park.pace (register section 4, Park pace and Options; 03
     for (let step = 1; step <= 1500; step++) simulate(SIM_DT, 0); // no pace change: a calm park all along
     expect(stateHash()).not.toBe(a.hash);
   });
-  it('enqueueAfterNew: queued right after a New, the command reaches the new park\'s first step; without a New pending it is enqueue', () => {
+  it('enqueueAfterNew: queued right after a New, the command applies with it, at the new park\'s tick 0; without a New pending it is enqueue', () => {
     for (let k = 0; k < 30; k++) simulate(SIM_DT, 0);
     enqueue({ side: 'park', kind: 'park.new', payload: { seed: 5 } });
     enqueueAfterNew(pace('lively'));
     enqueue(tool()); // queued behind the New as before: dropped with the old park (03 4.6)
-    simulate(SIM_DT, 0); // the park.new step: tick 0, nothing else runs
-    expect([tick(), parkSeed(), arrivalsState().pace, pendingCount()]).toEqual([0, 5, 'calm', 1]);
-    simulate(SIM_DT, 0);
-    expect([tick(), arrivalsState().pace, pendingCount()]).toEqual([1, 'lively', 0]);
-    expect(log().map((c) => [c.kind, c.tick, c.seq])).toEqual([['park.pace', 1, 1]]); // the new park's log, its sequence from 1
+    simulate(SIM_DT, 0); // the park.new step: tick 0, nothing else runs; the carried pace applies with the New
+    expect([tick(), parkSeed(), arrivalsState().pace, pendingCount()]).toEqual([0, 5, 'lively', 0]);
+    expect(log().map((c) => [c.kind, c.tick, c.seq])).toEqual([['park.pace', 0, 1]]); // the new park's log, its sequence from 1
+    for (let k = 0; k < 600; k++) simulate(SIM_DT, 0);
     expect(applied).toEqual([]);
-    // the same New confirmed while paused: the park.new applies in the paused frame, the pace waits for the first step
+    // the new park's log replays to the same state: a tick-0 command applies first, at step 1 (03 5.2 item 5)
+    const live = { hash: stateHash(), pace: arrivalsState().pace };
+    const cmds = log().map((c) => ({ ...c }));
+    newPark(5);
+    replay(cmds, 600);
+    expect({ hash: stateHash(), pace: arrivalsState().pace }).toEqual(live);
+    // the same New confirmed while paused: the park.new applies in the paused frame and the pace with it, before any step, so a save
+    // made before the unpause holds it (register section 4: the profile's pace is applied to new parks)
     enqueue({ side: 'park', kind: 'park.new', payload: { seed: 6 } });
     enqueueAfterNew(pace('lively'));
     applyPending(tick() + 1, PAUSED_KINDS);
-    expect([tick(), parkSeed(), arrivalsState().pace, pendingCount()]).toEqual([0, 6, 'calm', 1]);
-    applyPending(tick() + 1, PAUSED_KINDS);
-    expect(pendingCount()).toBe(1);
+    expect([tick(), parkSeed(), arrivalsState().pace, pendingCount()]).toEqual([0, 6, 'lively', 0]);
+    expect(snapshot().pace).toBe('lively');
     simulate(SIM_DT, 0);
     expect([tick(), arrivalsState().pace]).toEqual([1, 'lively']);
     // no New pending: plain enqueue, for the next step
