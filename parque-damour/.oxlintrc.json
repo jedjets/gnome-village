@@ -1,0 +1,65 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["eslint", "typescript", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "env": {
+    "browser": true,
+    "es2022": true
+  },
+  "ignorePatterns": ["node_modules", "dist", "shots", "scratch", ".tmp"],
+  "rules": {
+    "no-unused-vars": "error",
+    "eqeqeq": "error",
+    "no-var": "error",
+    "prefer-const": "error",
+    "no-console": ["warn", { "allow": ["warn", "error"] }],
+    "no-underscore-dangle": ["warn", { "allow": ["__PD"] }],
+    "unicorn/no-array-sort": "off"
+  },
+  "overrides": [
+    {
+      "files": ["src/**"],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          { "object": "Math", "property": "random", "message": "Use rng() or vrng() (03 P10)" },
+          { "object": "Date", "property": "now", "message": "Only core/loop.ts reads the wall clock (03 P3)" },
+          { "object": "performance", "property": "now", "message": "Only core/loop.ts reads the wall clock (03 P3)" }
+        ]
+      }
+    },
+    {
+      "files": ["src/core/loop.ts"],
+      "rules": { "no-restricted-properties": "off" }
+    },
+    {
+      "files": ["src/core/**", "src/world/**", "src/entities/**", "src/play/**", "src/save/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/render/*", "**/audio/*", "**/ui/*", "**/debug/*", "../render/*", "../audio/*", "../ui/*", "../debug/*"],
+                "message": "Layer rule (03 section 2.1): core, world, entities, play and save never import render, audio, ui or debug."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["tools/**", "vite.config.ts"],
+      "env": { "node": true, "browser": false },
+      "rules": { "no-console": "off" }
+    },
+    {
+      "files": ["tests/**"],
+      "env": { "node": true },
+      "rules": { "no-console": "off" }
+    }
+  ]
+}

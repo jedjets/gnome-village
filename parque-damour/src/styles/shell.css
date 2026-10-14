@@ -1,0 +1,231 @@
+/* src/styles/shell.css
+   The paper HUD shell: stage, chips, rail, card, sheets, toast, feed, intro, photo mode, confirm, safe areas, reduced motion.
+   Ported from GV CSS 24-230. PORT; ids are Parque's (03 10.1), body.avatar replaces body.gnome, every colour is a token,
+   no text under 11 px (04 5.2 type scale).
+   S3: the Park strip's pills (icon above the label, the --moss swatch border, 04 5.4 items 2 and 8; the fills of icon set 3), row 2
+   as one context bar (#depth, #sizewrap, Place / Cancel; GV #gbar 184-195), Undo, and the New confirm (the centred paper card,
+   scratch/s3-options.html confirm 1; both picked by the owner on 2026-10-13, register section 4).
+   S4 part C: the card's bars in their tokens (Mood and Full --moss, Rested --sky, any of them --ember below its low mark; 04 5.5 item 1),
+   the census summary's two parts with a dot between (the dot is punctuation, not a string: 03 P7).
+   TODO(S6): .tool.locked with the tier word, the #cdChip ring; TODO(S11): audit. */
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--body-bg);
+  font-family:var(--ui);color:var(--ink);overscroll-behavior:none;touch-action:none}
+#stage{position:fixed;inset:0;display:block}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
+
+/* ---------- floating chips (GV 35-74) ---------- */
+.hud{position:fixed;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top,0px) + 8px) 10px 0;
+  display:flex;gap:6px;align-items:flex-start;justify-content:space-between;pointer-events:none;z-index:5;flex-wrap:wrap}
+.chip{pointer-events:auto;background:var(--glass);border:1px solid var(--glass-line);border-radius:999px;
+  padding:4px 9px;font:inherit;font-size:12px;font-weight:500;line-height:1.3;letter-spacing:.005em;color:var(--ink);
+  backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);box-shadow:var(--shadow);white-space:nowrap;
+  font-variant-numeric:tabular-nums;display:flex;gap:8px;align-items:center;cursor:pointer;text-align:left}
+.chip b{font-weight:700}
+.chip .sep{width:1px;height:11px;background:var(--glass-line);flex:0 0 1px}
+.chip:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+#hudR{flex-direction:column;align-items:flex-end;display:flex;gap:6px;margin-left:auto}
+#hudVisitorsWrap{cursor:default;gap:0}
+#hudVisitors{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;display:inline-flex;align-items:center;gap:8px;border-radius:999px}
+#hudVisitors:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+#hudRomance{max-width:min(62vw,300px);overflow:hidden}
+#hudRomance span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--display);font-size:12px}
+#tCP{color:var(--berry)}
+#tMP{color:var(--ember)}
+.dotm{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:-3px;background:var(--sky)}
+#bAdd{margin-left:2px;width:18px;height:18px;border-radius:50%;border:1px solid var(--glass-line);background:var(--ink);color:var(--on-ink);
+  font:inherit;font-size:13px;font-weight:700;line-height:1;padding:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+#bAdd:disabled{opacity:.35}
+
+/* ---------- bottom rail (GV 76-122) ---------- */
+#rail{position:fixed;left:0;right:0;bottom:0;z-index:6;
+  padding:8px 8px calc(env(safe-area-inset-bottom,0px) + 8px);
+  display:flex;flex-direction:column;gap:7px;pointer-events:none}
+#row1{display:flex;gap:6px;align-items:center;min-width:0;pointer-events:none}
+#groups{flex:0 0 auto;pointer-events:auto}
+#tools{flex:1 1 auto;min-width:0;min-height:8px;display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;padding:2px 2px 3px;
+  scrollbar-width:none;pointer-events:auto;scroll-snap-type:x proximity}
+#tools::-webkit-scrollbar{display:none}
+.tool{flex:0 0 auto;scroll-snap-align:center;background:var(--glass);border:1px solid var(--glass-line);
+  border-radius:14px;padding:7px 11px 6px;display:flex;flex-direction:column;align-items:center;gap:3px;
+  font:inherit;font-size:11px;line-height:1.3;font-weight:600;color:var(--ink-soft);letter-spacing:.02em;
+  backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);box-shadow:var(--shadow);cursor:pointer;
+  transition:transform .13s ease,background .13s ease,color .13s ease}
+.tool .sw{width:17px;height:17px;border-radius:6px;border:1.5px solid var(--swatch-line);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.tool .sw svg{width:15px;height:15px;display:block}
+.tool.park .sw{border-color:var(--moss)}
+/* the icons' small fills (set 3, owner 2026-10-13): the direction A accents of tokens.css, the lines stay currentColor */
+.tool .sw svg .f-rose{fill:var(--rose)} .tool .sw svg .f-lawn{fill:var(--lawn)} .tool .sw svg .f-gravel{fill:var(--gravel)}
+.tool .sw svg .f-water{fill:var(--water)} .tool .sw svg .f-awning{fill:var(--awning)}
+.tool .lb{white-space:nowrap}
+.tool .tier{font-size:11px;font-weight:700;color:var(--stone)}
+.tool.locked{opacity:.6}
+#tools.more{-webkit-mask-image:linear-gradient(90deg,black 84%,transparent);mask-image:linear-gradient(90deg,black 84%,transparent)}
+#tools.more.before{-webkit-mask-image:linear-gradient(90deg,transparent,black 10%,black 84%,transparent);mask-image:linear-gradient(90deg,transparent,black 10%,black 84%,transparent)}
+#tools.before:not(.more){-webkit-mask-image:linear-gradient(90deg,transparent,black 10%);mask-image:linear-gradient(90deg,transparent,black 10%)}
+.tool[aria-pressed="true"]{background:var(--ink);color:var(--on-ink);border-color:var(--ink);transform:translateY(-2px)}
+.tool[aria-pressed="true"] .sw{border-color:var(--on-ink-line)}
+.tool:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+#row2{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;pointer-events:none}
+#row2 > *{pointer-events:auto}
+#row2 .ctx{display:flex;align-items:center;gap:6px;min-height:44px;max-width:100%;min-width:0;background:var(--glass);
+  border:1px solid var(--glass-line);border-radius:999px;padding:3px 3px 3px 14px;box-shadow:var(--shadow);
+  backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}
+#depth{font-family:var(--display);font-style:italic;font-size:12px;line-height:1.3;color:var(--ink);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;min-width:0;padding-right:4px}
+#depth.no{background:var(--ember);border-radius:14px;padding:3px 10px;margin-left:-9px;
+  white-space:normal;text-overflow:clip;text-wrap:balance} /* a refused reason wraps, never cut (02 8.2: row 2 shows it) */
+#row2 .ctx .gb{min-height:36px;padding:6px 14px;flex:0 0 auto} /* Place and Cancel keep their width; the line wraps instead */
+#bPlace:not(:disabled){background:var(--ink);color:var(--on-ink)}
+#bCancel{background:var(--well-2);border:1px solid var(--glass-line)}
+#bUndo{min-height:44px;padding:6px 16px}
+#row2 .gb:disabled{opacity:1;color:var(--stone)} /* a disabled Place or Undo keeps its glass and reads in --stone (04 5.2 item 2) */
+#row3{display:flex;gap:6px;align-items:center;justify-content:space-between;pointer-events:none;flex-wrap:wrap}
+#row3 > *{pointer-events:auto}
+/* row 3's labels never break inside a button; a group wraps its buttons only on a phone narrower than its width (a pill of one line,
+   a rounded block of two) */
+#row3 .grp{max-width:100%;flex-wrap:wrap;justify-content:center;border-radius:22px}
+#row3 .gb{white-space:nowrap}
+.grp{display:flex;gap:4px;background:var(--glass);border:1px solid var(--glass-line);border-radius:999px;
+  padding:4px;backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);box-shadow:var(--shadow)}
+.gb{border:0;background:transparent;border-radius:999px;padding:5px 8px;font:inherit;font-size:12px;line-height:1.3;
+  font-weight:600;color:var(--ink-soft);cursor:pointer;min-width:30px}
+.gb.glass{background:var(--glass);border:1px solid var(--glass-line);box-shadow:var(--shadow);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}
+.gb:disabled{opacity:.35;cursor:default}
+#bRotL,#bRotR{padding:5px 6px;min-width:26px;font-size:11px}
+.gb[aria-pressed="true"],.gb[aria-expanded="true"]{background:var(--ink);color:var(--on-ink)} /* expanded: Options while its sheet is open */
+.gb:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+#sizewrap{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;color:var(--ink-soft);padding:0 12px 0 4px;
+  border-left:1px solid var(--glass-line);min-height:30px}
+#size,#spdR{-webkit-appearance:none;appearance:none;width:96px;height:3px;border-radius:2px;
+  background:var(--paper-2);outline:none}
+#spdR{width:92px;margin:0 2px}
+#size::-webkit-slider-thumb,#spdR::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+  background:var(--ink);border:2px solid var(--on-ink);box-shadow:var(--thumb-shadow)}
+#size::-moz-range-thumb,#spdR::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--ink);border:2px solid var(--on-ink)}
+#spdLbl{font-size:12px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;min-width:30px;text-align:right;padding-right:4px}
+#spd{align-items:center}
+#cdChip{font-size:11px}
+
+/* ---------- the card (GV 125-138; strip variant 173-178) ---------- */
+#card{position:fixed;z-index:7;left:50%;transform:translateX(-50%) translateY(8px);
+  bottom:calc(env(safe-area-inset-bottom,0px) + 108px);background:var(--glass);
+  border:1px solid var(--glass-line);border-radius:14px;padding:7px 12px 8px;box-shadow:var(--shadow);
+  backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);min-width:186px;max-width:min(300px,88vw);
+  opacity:0;pointer-events:none;transition:opacity .18s,transform .18s}
+#card.on{opacity:1;transform:translateX(-50%);pointer-events:auto}
+#card h3{margin:0 0 1px;font-family:var(--display);font-size:16px;font-weight:700;letter-spacing:.005em;line-height:1.3}
+#card .sub{font-size:11px;color:var(--ink-soft);margin-bottom:4px}
+#card .rel{font-size:11px;color:var(--ink-soft);margin:-2px 0 4px;line-height:1.3}
+.bar{display:grid;grid-template-columns:46px 1fr;gap:6px;align-items:center;margin-top:3px;font-size:11px;
+  color:var(--ink-soft);letter-spacing:.03em;text-transform:uppercase;font-weight:600}
+.bar i{display:block;height:4px;border-radius:3px;background:var(--paper-2);overflow:hidden;font-style:normal}
+.bar i>u{display:block;height:100%;border-radius:3px;text-decoration:none;background:var(--moss);width:0}
+.bar[data-need="rest"] i>u{background:var(--sky)}
+.bar[data-need="heart"] i>u{background:var(--berry)}
+.bar.low i>u{background:var(--ember)}
+#card .doing{margin-top:5px;font-size:12px;font-style:italic;font-family:var(--display);color:var(--ink)}
+#cPin{position:absolute;right:8px;top:6px;border:0;background:none;font:inherit;font-size:16px;color:var(--berry);cursor:pointer;padding:2px 6px}
+body.avatar #card{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:8px;padding:6px 11px 7px;width:min(300px,88vw);min-width:0}
+body.avatar #card h3{font-size:14px;margin:0}
+body.avatar #card .sub{margin:0;flex:1 1 auto;white-space:nowrap;font-size:11px}
+body.avatar #card .rel{flex-basis:100%;margin:0 0 2px}
+body.avatar #card .bars{flex-basis:100%;display:flex;gap:8px;margin-top:4px}
+body.avatar #card .bar{flex:1 1 0;margin-top:0;grid-template-columns:auto 1fr;gap:4px;font-size:11px}
+body.avatar #card .doing{flex-basis:100%;margin-top:3px;font-size:11px}
+
+/* ---------- sheets (GV 48-72, 196-225); `div.sheet`, never `.sheet`: body.sheet (03 10.2) must not match a sheet rule (it hid the page) ---------- */
+div.sheet{position:fixed;z-index:8;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 108px);width:min(94vw,420px);
+  background:var(--glass);border:1px solid var(--glass-line);border-radius:16px;padding:10px 12px 12px;box-shadow:var(--shadow);
+  backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);display:none;max-height:52vh;overflow-y:auto}
+div.sheet.on{display:block}
+div.sheet h4{margin:0 0 6px;font-size:14px;font-weight:600;line-height:1.3}
+div.sheet .x{position:absolute;right:8px;top:6px;border:0;background:none;font:inherit;font-size:18px;padding:2px 6px;color:var(--ink);cursor:pointer}
+div.sheet .sum{font-size:11px;color:var(--ink-soft);margin-bottom:6px;line-height:1.3}
+#censusSum span + span::before{content:" \00B7  "}
+div.sheet .row{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:baseline;width:100%;text-align:left;font:inherit;padding:5px 8px;
+  border-radius:10px;border:1px solid var(--glass-line);background:var(--well);color:var(--ink);cursor:pointer;margin-top:4px}
+div.sheet .row b{font-size:13px;font-weight:700}
+div.sheet .row small{font-size:11px;color:var(--ink-soft);line-height:1.3}
+div.sheet .row small.r{grid-column:1/3}
+div.sheet .row.sel{background:var(--ink);color:var(--on-ink)}
+div.sheet .row.sel small{color:var(--on-ink-soft)}
+div.sheet .row.ev{display:block}
+div.sheet .row.ev span{display:block;font-size:12px;line-height:1.32}
+#evlog{max-height:34vh}
+/* the Options sheet (04 5.6; register section 4 "Park pace and Options", owner 2026-10-14): one row per setting in the census row's
+   well, the name left, the control right (row 1's segmented switch, .grp of .gb), a one-line hint under both; dev rows only under body.dev */
+#optionsList .opt{display:grid;grid-template-columns:1fr auto;gap:0 10px;align-items:center;margin-top:4px;padding:3px 3px 3px 10px;
+  border-radius:10px;border:1px solid var(--glass-line);background:var(--well);color:var(--ink)}
+#optionsList .opt > b{font-size:13px;font-weight:700;line-height:1.3}
+#optionsList .opt > small{grid-column:1/3;font-size:11px;line-height:1.3;color:var(--ink-soft);padding:1px 0 3px}
+#optionsList .grp{padding:2px;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+#optionsList .gb{min-height:36px;min-width:60px;padding:5px 12px}
+#optionsList .val{min-height:42px;display:flex;align-items:center;padding:0 12px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+#optionsList .row{min-height:44px;align-items:center;padding-left:10px}
+body:not(.dev) #optionsList .dev{display:none}
+#snd .row{display:flex;flex-wrap:wrap;gap:5px;background:none;border:0;padding:0;cursor:default}
+#snd button{font:inherit;font-size:12px;padding:5px 9px;border-radius:999px;border:1px solid var(--glass-line);background:var(--well-2);color:var(--ink)}
+body.sheet #card{opacity:0!important;pointer-events:none!important}
+
+/* ---------- toast, feed, perf (GV 157-163) ---------- */
+#hint{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 150px);
+  z-index:8;background:var(--toast);color:var(--on-ink);font-size:12px;font-weight:500;padding:7px 14px;
+  border-radius:16px;opacity:0;transition:opacity .3s;pointer-events:none;max-width:88vw;text-align:center;line-height:1.35}
+#hint.on{opacity:1}
+#feed{position:fixed;left:10px;top:calc(env(safe-area-inset-top,0px) + 86px);z-index:5;max-width:min(66vw,300px);
+  pointer-events:none;opacity:0;transition:opacity .4s;font-size:11px;line-height:1.3;color:var(--ink-soft)}
+#feed.on{opacity:1}
+#feed .ev{background:var(--glass);border:1px solid var(--glass-line);border-radius:999px;padding:3px 9px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:var(--shadow);transition:opacity 1s;pointer-events:auto;cursor:pointer}
+#feed:not(.on) .ev{pointer-events:none}
+#perf{position:fixed;left:12px;top:calc(env(safe-area-inset-top,0px) + 58px);z-index:6;pointer-events:none;
+  font:600 11px/1.35 ui-monospace,Menlo,Consolas,monospace;color:var(--ink);background:var(--well-2);
+  border:1px solid var(--glass-line);border-radius:10px;padding:5px 8px;white-space:pre;letter-spacing:.01em}
+
+/* ---------- photo mode (GV 164-168) ---------- */
+body.photo .hud,body.photo #rail,body.photo #card,body.photo #hint,body.photo #feed,body.photo .sheet{opacity:0!important;pointer-events:none!important}
+#photoX{position:fixed;right:10px;top:calc(env(safe-area-inset-top,0px) + 10px);z-index:30;width:34px;height:34px;border-radius:50%;
+  border:1px solid var(--glass-line);background:var(--glass);color:var(--ink);font:inherit;font-size:18px;line-height:1;cursor:pointer;
+  display:none;box-shadow:var(--shadow)}
+body.photo #photoX{display:block}
+
+/* ---------- avatar mode (GV 169, 183; 03 10.2) ---------- */
+body.avatar #tools,body.avatar #row2 .ctx,body.avatar #sizewrap,body.avatar #bPlace,body.avatar #bCancel,body.avatar #bUndo{display:none!important}
+
+/* ---------- intro (GV 140-156) ---------- */
+#intro{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+  padding:calc(env(safe-area-inset-top,0px) + 22px) 22px calc(env(safe-area-inset-bottom,0px) + 22px);
+  background:radial-gradient(120% 80% at 50% 12%,var(--intro-0) 0%,var(--intro-1) 55%,var(--intro-2) 100%);
+  transition:opacity .5s ease}
+#intro.gone{opacity:0;pointer-events:none}
+#introbox{max-width:340px;text-align:center}
+#introbox .mark{margin:0 auto 14px;display:block}
+#introbox h1{font-family:var(--display);font-size:34px;line-height:1.05;font-weight:700;margin:0 0 10px;
+  letter-spacing:-.015em;text-wrap:balance}
+#introbox p{margin:0 0 8px;font-size:14px;line-height:1.55;color:var(--ink-soft);text-wrap:pretty}
+#begin,#bContinue{display:block;margin:10px auto 0;border:0;border-radius:999px;background:var(--ink);color:var(--on-ink);font:inherit;
+  font-size:15px;font-weight:700;letter-spacing:.02em;padding:12px 30px;cursor:pointer;line-height:1.3;
+  box-shadow:var(--shadow-lift)}
+#iP{margin-bottom:18px}
+#begin:focus-visible,#bContinue:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+#lang{margin-top:14px;display:flex;gap:4px;justify-content:center}
+#lang button{border:1px solid var(--glass-line);background:transparent;border-radius:999px;padding:4px 11px;
+  font:inherit;font-size:11px;font-weight:600;color:var(--ink-soft);cursor:pointer}
+#lang button[aria-pressed="true"]{background:var(--ink);color:var(--on-ink);border-color:var(--ink)}
+
+/* ---------- confirm (03 10.1; 02 12.5 item 4): a paper card over the dimmed page, above the intro (it also asks on Begin) ---------- */
+#confirm{position:fixed;inset:0;z-index:25;display:flex;align-items:center;justify-content:center;background:var(--glass-line);
+  padding:calc(env(safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 16px)}
+#confirm .card{width:min(84vw,300px);background:var(--paper);border:1px solid var(--glass-line);border-radius:16px;
+  padding:18px 18px 14px;box-shadow:var(--shadow-lift);text-align:center}
+#confirm p{margin:0;font-family:var(--display);font-size:16px;font-weight:600;line-height:1.35;color:var(--ink);text-wrap:balance}
+#confirm .b{display:flex;gap:8px;justify-content:center;margin-top:14px}
+#confirm button{min-width:96px;min-height:40px;border-radius:999px;font:inherit;font-size:14px;font-weight:700;line-height:1.3;
+  padding:8px 18px;cursor:pointer}
+#confirm .yes{background:var(--ink);color:var(--on-ink);border:1px solid var(--ink)}
+#confirm .no{background:var(--well-2);color:var(--ink);border:1px solid var(--glass-line)}
+#confirm button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+@media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important;animation-duration:.01ms!important}}

@@ -1,0 +1,32 @@
+{
+  "name": "parque-damour",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Parque D'Amour: a phone-first Canvas 2D game set in a quaint Paris park. Slice 0 scaffold.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "oxlint src tests tools vite.config.ts",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "shot": "node tools/shot.mjs",
+    "shot:style": "node tools/shot-style.mjs",
+    "check": "npm run typecheck && npm run lint && npm test && npm run build",
+    "audio-smoke": "node tools/audio-smoke.mjs",
+    "shot:board": "node tools/shot-board.mjs",
+    "det": "node tools/det.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "jsdom": "^30.1.2",
+    "oxlint": "^1.87.0",
+    "puppeteer-core": "^25.13.0",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.4",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^5.0.3"
+  }
+}
