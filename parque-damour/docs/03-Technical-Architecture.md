@@ -730,7 +730,7 @@ Clock chip single tap after 400 ms opens Events, double tap under 380 ms toggles
 
 ### 10.3 `layoutOverlays` (PORT of GV 10689–10699)
 
-Measures `#rail` height once per call; sets `bottom = height + 8` on `#card`, `#census`, `#romances`, `#progress`, `#evlog`, `#picker`, `#options`, `#snd`; toggles `body.sheet`; puts `#hint` above the card when the card is on (`+10`). Called by `toast`, `updateHud` every 0.35 s, on resize and 220 ms after `orientationchange` (GV 12132). `focusY` (GV 11282) uses the same measurements for camera follow.
+Measures `#rail` height once per call; sets `bottom = height + 8` on `#card`, `#census`, `#romances`, `#progress`, `#evlog`, `#picker`, `#options`, `#snd`; toggles `body.sheet`; puts `#hint` above the card when the card is on (`+10`); and sets `--sheet-cap` on `<html>` to the room between the lowest `.hud .chip` + 8 px (`SHEET_GAP`) and the sheets' bottom, which `shell.css` applies as `max-height: min(52vh, var(--sheet-cap))` (`#evlog` `min(34vh, …)`), so no sheet covers the chips and a capped one scrolls inside (owner 2026-10-17). Called by `toast`, `updateHud` every 0.35 s, on resize and 220 ms after `orientationchange` (GV 12132). `focusY` (GV 11282) uses the same measurements for camera follow.
 
 ### 10.4 Data-driven rail (ADAPT of GV 11038–11061)
 

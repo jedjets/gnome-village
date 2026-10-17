@@ -10,7 +10,8 @@
 //     scene asks for a later time, __PD.seedVisual(seed) and __PD.fxStep(1/60, 120) for reproducible particles, #hint and #perf hidden,
 //     __PD.draw(), capture shots/<slice>-<name>.png at 390x844, deviceScaleFactor 3 (08 4.1 items 3 and 4).
 // Exits 1 on any console error, page error, failed request or system-fallback font (08 4.1 item 5), and in the scene mode on a rail
-// taller than 40 % of the viewport or a horizontal scroll (04 5.4 item 8, AGENTS 4 item 4).
+// taller than 40 % of the viewport or a horizontal scroll (04 5.4 item 8, AGENTS 4 item 4), a rail button under 36 x 36 px (04 5.4 item 7)
+// and an open sheet over the HUD chips or the rail; a scene with `vp` = [w, h] resizes the page first (the ui set's small phones).
 // Every page opens in its own browser context, so no saved park from an earlier page makes Begin ask the New confirm (S3).
 // Usage: npm run shot -- <slice> [--url <url>] [--days <n>] [--smoke]
 //   <slice>   default s0; letters, digits, - and _ only
@@ -133,6 +134,14 @@ const SCENE_SETS = {
     { name: 'options-es', keep: true, act: 'optionsEs' },
     { name: 'options-calm', keep: true, act: 'optionsCalm' },
     { name: 'options-dev', keep: true, act: 'optionsDev' },
+    // small phones (owner 2026-10-17): the same park at 320 x 568 and 360 x 740 (`vp`), the player's view, the rail alone, then the
+    // Options and the Census sheets each capped between the chips and the rail by layoutOverlays (they scroll inside when capped)
+    { name: 'rail-320', vp: [320, 568], turn: 0, z: 1.3, act: 'smallRail' },
+    { name: 'options-320', keep: true, act: 'smallOptions' },
+    { name: 'census-320', keep: true, act: 'smallCensus' },
+    { name: 'rail-360', vp: [360, 740], turn: 0, z: 1.3, act: 'smallRail' },
+    { name: 'options-360', keep: true, act: 'smallOptions' },
+    { name: 'census-360', keep: true, act: 'smallCensus' },
   ],
   s3: [
     { name: 'rail', turn: 0, z: 1.3 },
@@ -363,6 +372,25 @@ const ACTIONS = {
   async optionsDev(page) {
     await page.evaluate(() => document.body.classList.add('dev'));
   },
+  /** ui small phones: every sheet closed by its close button, the player's view (body.dev off). */
+  async smallRail(page) {
+    for (const id of ['options', 'census']) {
+      if (await page.$eval('#' + id, (el) => el.classList.contains('on'))) await page.click(`#${id} .x`);
+    }
+    await page.evaluate(() => document.body.classList.remove('dev'));
+    await page.waitForFunction(() => !document.body.classList.contains('sheet'), { timeout: 5_000 });
+  },
+  /** ui small phones: Options opens its sheet from row 3. */
+  async smallOptions(page) {
+    await page.click('#bOptions');
+    await page.waitForFunction(() => document.getElementById('options').classList.contains('on'), { timeout: 5_000 });
+  },
+  /** ui small phones: Options closed, then the Visitors chip opens the Census. */
+  async smallCensus(page) {
+    await page.click('#options .x');
+    await page.click('#hudVisitors');
+    await page.waitForFunction(() => document.getElementById('census').classList.contains('on'), { timeout: 5_000 });
+  },
   /** Row 3's New: the confirm opens (No is pressed after the capture by the next page load; this is the last scene). */
   async confirmNew(page) {
     await page.click('.tool[data-id="hand"]');
@@ -517,6 +545,11 @@ async function scenes(browser, slice, set, url, errors, written) {
           }
         }, steps);
       }
+      if (sc.vp) {
+        // a resize: main.ts's listener runs layoutOverlays for the new rail
+        await page.setViewport({ width: sc.vp[0], height: sc.vp[1], deviceScaleFactor: PHONE.dpr });
+        await sleep(300);
+      }
       if (!sc.keep) await frame(page, sc);
       if (sc.act) await ACTIONS[sc.act](page);
       await page.evaluate((seed) => {
@@ -539,16 +572,25 @@ async function scenes(browser, slice, set, url, errors, written) {
           const b = el.getBoundingClientRect();
           if (el.offsetParent !== null && !el.closest('#tools') && (b.left < -0.5 || b.right > innerWidth + 0.5)) out.push(`${el.id || el.className} ${Math.round(b.left)}..${Math.round(b.right)}`);
         }
+        // 04 5.4 item 7: every rail button's tap target (its border box) at least 36 x 36 px
+        const small = [];
+        for (const el of document.querySelectorAll('#rail button')) {
+          const b = el.getBoundingClientRect();
+          if (el.offsetParent !== null && (b.width < 35.5 || b.height < 35.5)) small.push(`${el.id || el.dataset.group || el.dataset.id || el.className} ${b.width.toFixed(1)}x${b.height.toFixed(1)}`);
+        }
         // an open sheet sits between the HUD chips and the rail (no overlap)
         const sh = document.querySelector('div.sheet.on'), sb = sh?.getBoundingClientRect();
         const chips = Math.max(...[...document.querySelectorAll('.hud .chip')].map((c) => c.getBoundingClientRect().bottom));
         const railTop = document.getElementById('rail').getBoundingClientRect().top;
         let sheet = sb && (sb.top < chips || sb.bottom > railTop) ? `${sh.id} ${Math.round(sb.top)}..${Math.round(sb.bottom)}, chips end ${Math.round(chips)}` : '';
-        // the Options sheet shows every row without a scroll (a census of 30 scrolls on purpose)
-        if (sh?.id === 'options' && sh.scrollHeight > sh.clientHeight + 1) sheet += ` options scrolls ${sh.scrollHeight} > ${sh.clientHeight}`;
+        // the Options sheet shows every row without a scroll at 390 x 844 (a census of 30 scrolls on purpose; on a smaller phone a sheet
+        // capped between the chips and the rail scrolls inside, owner 2026-10-17)
+        if (sh?.id === 'options' && innerHeight >= 844 && sh.scrollHeight > sh.clientHeight + 1) sheet += ` options scrolls ${sh.scrollHeight} > ${sh.clientHeight}`;
         return {
           out,
+          small,
           sheet,
+          box: sb ? `${sh.id} ${Math.round(sb.top)}..${Math.round(sb.bottom)}, chips end ${Math.round(chips)}, rail top ${Math.round(railTop)}` : '',
           rail: document.getElementById('rail').getBoundingClientRect().height,
           sw: document.documentElement.scrollWidth,
           vw: window.innerWidth,
@@ -560,11 +602,12 @@ async function scenes(browser, slice, set, url, errors, written) {
       if (lay.sw > lay.vw) errors.push(`layout [${sc.name}]: horizontal scroll ${lay.sw} > ${lay.vw}`);
       if (lay.depth) errors.push(`layout [${sc.name}]: row 2's line is cut: ${lay.depth}`);
       if (lay.out.length) errors.push(`layout [${sc.name}]: rail controls past the edge: ${lay.out.join(', ')}`);
+      if (lay.small.length) errors.push(`layout [${sc.name}]: rail buttons under 36 x 36: ${lay.small.join(', ')}`);
       if (lay.sheet) errors.push(`layout [${sc.name}]: the open sheet overlaps the chips or the rail: ${lay.sheet}`);
       const file = path.join(SHOTS, `${slice}-${sc.name}.png`);
       await page.screenshot({ path: file });
       written.push(file);
-      console.log(`${slice}-${sc.name}: rail ${Math.round(lay.rail)} px of ${lay.vh}`);
+      console.log(`${slice}-${sc.name}: rail ${Math.round(lay.rail)} px of ${lay.vh} (${Math.round((100 * lay.rail) / lay.vh)} %)${lay.box ? ', sheet ' + lay.box : ''}`);
     }
     await page.browserContext().close();
   } finally {

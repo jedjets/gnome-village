@@ -184,7 +184,7 @@ Avatars (possessable, unlocked by tier): `a_pigeon` (Mischief T0), `a_pomeranian
 - Feed line, toast, photo mode and intro (Begin, Continue, EN/ES) as GV.
 
 ### 3.11 Persistence
-- `parque:profile-v1`: points, tiers, unlocks, settings (lang, muted, speed), style pick, music pick.
+- `parque:profile-v1`: points, tiers, unlocks, settings (lang, muted, speed, pace), style pick, music pick.
 - `parque:park-v1`: versioned snapshot: seed, clock, weather, tile layers, props, visitors, pairs, creatures, feed, MODE and PLAYER, undo-irrelevant.
 - Autosave on `visibilitychange` hidden, `pagehide`, and every 30 sim seconds. Continue restores silently. New asks to confirm.
 - All cross-references are ids; a migration function per schema version.

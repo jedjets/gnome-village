@@ -93,7 +93,12 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
   font-weight:600;color:var(--ink-soft);cursor:pointer;min-width:30px}
 .gb.glass{background:var(--glass);border:1px solid var(--glass-line);box-shadow:var(--shadow);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}
 .gb:disabled{opacity:.35;cursor:default}
-#bRotL,#bRotR{padding:5px 6px;min-width:26px;font-size:11px}
+#bRotL,#bRotR{padding:5px 6px;min-width:36px;font-size:11px}
+/* 04 5.4 item 7 (owner 2026-10-17): every rail button's tap target is at least 36 x 36 px. The switch's and row 3's buttons keep their
+   26 px look: a 5 px transparent border above and below (the hit area; the fill is clipped to the padding box) and a -5 px margin, so
+   the groups keep their height; the focus ring stays round the fill */
+#rail .grp > .gb{min-width:36px;min-height:36px;border:5px solid transparent;border-left:0;border-right:0;margin:-5px 0;background-clip:padding-box}
+#rail .grp > .gb:focus-visible{outline-offset:-4px}
 .gb[aria-pressed="true"],.gb[aria-expanded="true"]{background:var(--ink);color:var(--on-ink)} /* expanded: Options while its sheet is open */
 .gb:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
 #sizewrap{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;color:var(--ink-soft);padding:0 12px 0 4px;
@@ -107,6 +112,13 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
 #spdLbl{font-size:12px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;min-width:30px;text-align:right;padding-right:4px}
 #spd{align-items:center}
 #cdChip{font-size:11px}
+/* a phone narrower than 340 px (owner 2026-10-17): the speed dial and the actions' padding tighten so row 3 is two lines, the speed and
+   the camera, then the actions, and the rail stays under 40 % of a 320 x 568 screen */
+@media (max-width:340px){
+  #spdR{width:64px}
+  #row3 .grp > .gb{padding-left:6px;padding-right:6px}
+  #row3{gap:6px 4px}
+}
 
 /* ---------- the card (GV 125-138; strip variant 173-178) ---------- */
 #card{position:fixed;z-index:7;left:50%;transform:translateX(-50%) translateY(8px);
@@ -138,7 +150,8 @@ body.avatar #card .doing{flex-basis:100%;margin-top:3px;font-size:11px}
 /* ---------- sheets (GV 48-72, 196-225); `div.sheet`, never `.sheet`: body.sheet (03 10.2) must not match a sheet rule (it hid the page) ---------- */
 div.sheet{position:fixed;z-index:8;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 108px);width:min(94vw,420px);
   background:var(--glass);border:1px solid var(--glass-line);border-radius:16px;padding:10px 12px 12px;box-shadow:var(--shadow);
-  backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);display:none;max-height:52vh;overflow-y:auto}
+  backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);display:none;max-height:min(52vh,var(--sheet-cap,52vh));overflow-y:auto}
+/* --sheet-cap: set by dom.ts layoutOverlays, the room between the HUD chips (+ 8 px) and the rail (+ 8 px); owner 2026-10-17 */
 div.sheet.on{display:block}
 div.sheet h4{margin:0 0 6px;font-size:14px;font-weight:600;line-height:1.3}
 div.sheet .x{position:absolute;right:8px;top:6px;border:0;background:none;font:inherit;font-size:18px;padding:2px 6px;color:var(--ink);cursor:pointer}
@@ -153,7 +166,7 @@ div.sheet .row.sel{background:var(--ink);color:var(--on-ink)}
 div.sheet .row.sel small{color:var(--on-ink-soft)}
 div.sheet .row.ev{display:block}
 div.sheet .row.ev span{display:block;font-size:12px;line-height:1.32}
-#evlog{max-height:34vh}
+#evlog{max-height:min(34vh,var(--sheet-cap,34vh))}
 /* the Options sheet (04 5.6; register section 4 "Park pace and Options", owner 2026-10-14): one row per setting in the census row's
    well, the name left, the control right (row 1's segmented switch, .grp of .gb), a one-line hint under both; dev rows only under body.dev */
 #optionsList .opt{display:grid;grid-template-columns:1fr auto;gap:0 10px;align-items:center;margin-top:4px;padding:3px 3px 3px 10px;

@@ -48,10 +48,15 @@ export function anySheetOpen(): boolean {
   return SHEET_IDS.some((id) => document.getElementById(id)?.classList.contains('on'));
 }
 
+/** The gap in CSS px between an open sheet and the bottom of the HUD chips above it (owner 2026-10-17). */
+export const SHEET_GAP = 8;
+
 /**
  * The overlays stack from the rail up (03 10.3; GV 10689-10699): the rail's height is measured once per call, the card and every sheet
  * sit at that height + 8 px, body.sheet follows the sheets, and the toast sits 10 px above the card when the card is on (4 px above
- * the rail otherwise). Called by toast, updateHud every 0.35 s, on resize and 220 ms after orientationchange.
+ * the rail otherwise). Every sheet's height is capped (`--sheet-cap`, read by shell.css under its own 52 vh or 34 vh) so it ends
+ * SHEET_GAP px below the lowest HUD chip: on a small phone a sheet sits between the chips and the rail and scrolls inside (owner
+ * 2026-10-17). Called by toast, updateHud every 0.35 s, on resize and 220 ms after orientationchange.
  */
 export function layoutOverlays(): void {
   const rail = document.getElementById('rail');
@@ -61,6 +66,12 @@ export function layoutOverlays(): void {
     const el = document.getElementById(id);
     if (el) el.style.bottom = base + 'px';
   }
+  let chips = 0;
+  document.querySelectorAll('.hud .chip').forEach((c) => {
+    chips = Math.max(chips, c.getBoundingClientRect().bottom);
+  });
+  const cap = Math.max(0, Math.floor(window.innerHeight - base - chips - SHEET_GAP));
+  document.documentElement.style.setProperty('--sheet-cap', cap + 'px');
   document.body.classList.toggle('sheet', anySheetOpen());
   let top = base + 4;
   const card = document.getElementById('card');
