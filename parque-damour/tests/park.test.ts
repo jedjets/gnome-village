@@ -3,7 +3,7 @@
 // (the quay, the river, the pavement, the railing pieces, the street trees and lamps, the facade blocks, the skyline). Also the empty
 // charm API (03 6.7, S2 stub). And the street-lamp sprite's repaint gate (03 15.2 item 4), which the street lamps' draw budget rests on.
 import { describe, it, expect } from 'vitest';
-import { N, inB } from '../src/world/grid.ts';
+import { N, clearLayers, inB } from '../src/world/grid.ts';
 import {
   APRON, BACKDROP, GATES, SKYLINE, bandRects, facadeBlocks, gateById, isBoundary, isGateTile, nearestGate, railPieces, streetLamps, streetTrees,
 } from '../src/world/park.ts';
@@ -298,14 +298,16 @@ describe('render/boulevard the street-lamp sprite repaints (03 15.2 item 4 colou
   });
 });
 
-describe('world/charm the empty field API (S2)', () => {
-  it('every tile reads zero and the dirty flag clears on a rebuild', () => {
+describe('world/charm the field API (S2, filled in S5: tests/charm.test.ts holds the rules)', () => {
+  it('an empty park off the river reads zero, the dirty flag clears on a rebuild, and addSource hands out an id', () => {
+    clearLayers();
+    rebuildCharm([], false);
     expect(charmAt(23, 23)).toEqual({ total: 0, player: 0 });
     expect(charmAt(23, 23, 4)).toEqual({ total: 0, player: 0 });
     markCharmDirty();
     expect(charmDirty()).toBe(true);
     rebuildCharm([], false);
     expect(charmDirty()).toBe(false);
-    expect(addSource({ kind: 'busker', x: 1, y: 1, r: 8, amount: 3, player: true, until: 10 })).toBe(0);
+    expect(addSource({ kind: 'busker', x: 1, y: 1, r: 8, amount: 3, player: true, until: 10 })).toBeGreaterThan(0);
   });
 });
