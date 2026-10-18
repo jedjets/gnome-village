@@ -15,7 +15,7 @@ import { rnd } from '../core/rng.ts';
 import { emit } from '../core/events.ts';
 import { weatherAt } from '../core/weather.ts';
 import type { XY } from '../core/math.ts';
-import { propById } from '../world/grid.ts';
+import { BLOCK, I, inB, propById, rebuildBlock } from '../world/grid.ts';
 import { LOOP_CORNERS } from './staff.ts';
 import { goTo } from './move.ts';
 import { finish, release, startLeave, takeSeat, walkDirect } from './act.ts';
@@ -28,13 +28,15 @@ export const SNATCH_HUFF_T = 3;
 export const LOST_STEP_T = 5;
 export const LOST_NEAR = 2;
 export const FLAP_FLEE = 3;
+/** The follower of a Stroll walks this far behind the leader (02 6.2 stage 4: "the other at 0.5 tile"). */
+export const STROLL_GAP = 0.5;
 /** Hearts (04 7.6 item 1): Notice 2, Bench 1 every 10 s, Picnic 1 every 8 s, Kiss 6; the ring sparkle 8 s into the Proposal. */
 export const HEARTS = { notice: 2, kiss: 6, benchEvery: 10, picnicEvery: 8, ringAt: 8 } as const;
 /** Rung thresholds a stage in progress yields to (02 5.2 rungs 2-5). */
 const RAIN_SHELTER = 0.6, COMFORT_SHELTER = 0.3, COMFORT_LEAVE = 0.1, HUNGER_EAT = 0.6, ENERGY_REST = 0.25;
 
-function fx(x: number, y: number, kind: string, n: number, ids: number[]): void {
-  emit({ kind: 'fx', tick: nowTick(), x, y, ids, params: { fx: kind, n, romance: 1 } });
+function fx(x: number, y: number, kind: string, n: number, ids: number[], tone = 0): void {
+  emit({ kind: 'fx', tick: nowTick(), x, y, ids, params: { fx: kind, n, romance: 1, tone } }); // tone: two-tone hearts from stage 3 (04 7.3)
 }
 
 /** True when one of rungs 2-5 (or 2-3) would fire on `v` now (02 6.2 "Interrupted by"). */
@@ -70,12 +72,12 @@ function clock(p: Pair, a: Visitor, b: Visitor, dt: number): void {
   if (!a.job.left) {
     a.job.left = 1; // the stage's first counted step
     if (k === 1) fx(m.x, m.y, 'heart', HEARTS.notice, [a.id, b.id]);
-    if (k === 6) fx(m.x, m.y, 'heart', HEARTS.kiss, [a.id, b.id]);
+    if (k === 6) fx(m.x, m.y, 'heart', HEARTS.kiss, [a.id, b.id], 1);
   }
   const t0 = p.stageT;
   p.stageT -= dt;
   const every = st === 'bench' ? HEARTS.benchEvery : st === 'picnic' ? HEARTS.picnicEvery : 0;
-  if (every && Math.floor(t0 / every) !== Math.floor(p.stageT / every) && p.stageT > 0) fx(m.x, m.y, 'heart', 1, [a.id, b.id]);
+  if (every && Math.floor(t0 / every) !== Math.floor(p.stageT / every) && p.stageT > 0) fx(m.x, m.y, 'heart', 1, [a.id, b.id], 1);
   if (k === 7 && t0 > 15 - HEARTS.ringAt && p.stageT <= 15 - HEARTS.ringAt) fx(m.x, m.y, 'spark', 8, [a.id, b.id]);
   if (p.stageT <= 0) {
     if (st === 'picnic') for (const v of [a, b]) v.hunger = Math.min(v.hunger, 0.1); // they ate (02 6.2 stage 5)
@@ -86,11 +88,29 @@ function clock(p: Pair, a: Visitor, b: Visitor, dt: number): void {
 /** A stroll's legs: the initiator round the loop's corners, the other half a tile behind (every 0.5 s, GV follow idiom). */
 function strollStep(v: Visitor, o: Visitor, dt: number): void {
   if (v.job.kind === 'follow') {
+    // as one unit (register 3.4; 02 6.2 stage 4): half a tile behind the leader along its heading, every step, on an open tile;
+    // where that tile is blocked, a walk toward it (every 0.5 s)
+    const wp = o.path?.[o.pi];
+    let ux = (wp ? wp.x : o.ptx) - o.x, uy = (wp ? wp.y : o.pty) - o.y;
+    const d = Math.hypot(ux, uy);
+    if (d < 1e-6 || !o.path) {
+      ux = o.x - v.x;
+      uy = o.y - v.y;
+    }
+    const n = Math.hypot(ux, uy) || 1;
+    const tx = o.x - (ux / n) * STROLL_GAP, ty = o.y - (uy / n) * STROLL_GAP;
+    rebuildBlock();
+    if (inB(Math.round(tx), Math.round(ty)) && BLOCK[I(Math.round(tx), Math.round(ty))] === 0 && Math.hypot(tx - v.x, ty - v.y) < 2) {
+      v.face = tx - v.x - (ty - v.y) < 0 ? -1 : tx - v.x - (ty - v.y) > 0 ? 1 : v.face;
+      v.x = tx;
+      v.y = ty;
+      v.path = null;
+      return;
+    }
     v.t -= dt;
     if (v.t > 0) return;
     v.t = 0.5;
-    const d = Math.hypot(v.x - o.x, v.y - o.y) || 1;
-    walkDirect(v, o.x + ((v.x - o.x) / d) * 0.5, o.y + ((v.y - o.y) / d) * 0.5);
+    walkDirect(v, tx, ty);
     return;
   }
   if (v.path) return;

@@ -13,8 +13,8 @@
 // Dropped from the range: chips, zzz, logs, smoke, fireflies, valley mist, lightning and rumble, rain rings and splashes (S9 reshapes
 // the weather overlay and its rain), the text glyphs of zzz and notes (04 section 8 asks for a drawn note).
 // TODO(S9): drawWeatherOverlay (GV 10062-10105 on sim time), petals, leaves, notes, flash, fireworks, lamp halos (04 section 8, 10.2);
-// S5: the romance hooks (romanceHearts, ringSparkle, heartbreakFx, happilyFx, fireworksFx), each marked TODO(S5-art): the existing S1
-// heart and spark particles until the owner picks the romance art; the Chat stage's bubbles are drawn by people.ts with drawChatBubble.
+// S5: the romance particles as the owner picked them (register section 4 row "Romance art", 2026-10-18): hearts 3 two-tone from stage
+// 3, heartbreak 1, Happily fireworks 2 (romance-fx.ts draws them, a particle carrying `rom`); the Chat bubbles are people.ts's.
 // TODO(S6): poopDot, hat, the wasp circling a table.
 import { mulberry32, vrng, vrnd } from '../core/rng.ts';
 import { TAU, clamp01, type XY } from '../core/math.ts';
@@ -23,9 +23,11 @@ import { W } from '../core/weather.ts';
 import { watch, type GameEvent } from '../core/events.ts';
 import { props } from '../world/grid.ts';
 import { iceState } from '../world/water.ts';
-import { TH, TW, cam, view } from './camera.ts';
+import { EH, TH, TW, cam, view } from './camera.ts';
 import { screenInto } from './project.ts';
 import { depthOf, type Drawable } from './order.ts';
+import { burstHeart, heartSplit, shell, tinyHeart } from './romance-fx.ts';
+import { byId, signatureOf } from '../entities/visitor.ts';
 import { GC, fillPoly, inkLine, shade, style, type Pen, type Pt, type StyleSpec } from './ambient.ts';
 
 /** A heart of size s (8 z in the game): two arcs r 0.22 s and a point (GV 8622); `hexR` colours the right lobe for a two-tone heart. */
@@ -190,6 +192,7 @@ export const FX_KINDS: readonly FxKind[] = [
 export type Part = {
   k: FxKind; x: number; y: number; z: number; vx: number; vy: number; vz: number; l: number; m: number; ph: number;
   r0?: number; r1?: number; gap?: number; db?: number; n: number;
+  rom?: 1 | 2 | 3; hl?: string; hr?: string; wait?: number; // S5: a romance heart, heartbreak or firework (romance-fx.ts), its colours, its delay
 };
 export const PARTS_CAP = 220; // register 3.3, 03 3.11
 export const GRAVITY = 2.6; // EH per sim second squared (GV 2405)
@@ -255,7 +258,7 @@ export function stepParticles(dt: number): void {
     p.y += p.vy * dt;
     p.z += p.vz * dt;
     if (p.k === 'heart' || p.k === 'note') p.vz *= float; // they float up and slow (GV 2399, per 1/60 s there)
-    else if (p.k !== 'ring' && p.k !== 'wasp' && p.k !== 'flash') {
+    else if (p.k !== 'ring' && p.k !== 'wasp' && p.k !== 'flash' && p.k !== 'firework') {
       p.vz -= GRAVITY * dt;
       if (p.k === 'drop' || p.k === 'petal' || p.k === 'leaf') p.vx += lean;
     }
@@ -336,42 +339,65 @@ function onFx(ev: GameEvent): void {
   const k = ev.params?.fx, n = ev.params?.n;
   if (typeof k !== 'string' || ev.x === undefined || ev.y === undefined || !(FX_KINDS as readonly string[]).includes(k)) return;
   const count = typeof n === 'number' ? n : 1;
-  if (ev.params?.romance && k === 'heart') romanceHearts(ev.x, ev.y, count);
-  else if (ev.params?.romance && k === 'spark') ringSparkle(ev.x, ev.y, count);
+  if (ev.params?.romance && k === 'heart') romanceHearts(ev.x, ev.y, count, ev.params.tone ? ev.ids ?? [] : []);
+  else if (ev.params?.romance && k === 'spark') return; // the ring sparkle is drawn with the ring box (romance-art.ts)
   else spawn(k as FxKind, ev.x, ev.y, count);
 }
 watch('fx', onFx);
 
-/* ---------- the romance effects (04 7.6, 8): hooks until the owner picks the art (register row 26) ---------- */
+/* ---------- the romance effects (register section 4 row "Romance art", owner 2026-10-18; 04 7.6, 8; romance-fx.ts draws them) ---------- */
 
 /** Hearts per stage (04 7.6 item 1): Notice 2, Bench 1 every 10 s, Picnic 1 every 8 s, Kiss 6, Happily 12. */
 export const HAPPILY_HEARTS = 12;
-/**
- * A pair's hearts. TODO(S5-art): the two-tone hearts of 04 7.6 item 2 (each lobe in one lover's signature colour from stage 3) wait for
- * the owner's pick of the romance art; until then the existing S1 heart particle (GV heartFx 2389, drawHeart) in `rose`.
- */
-export function romanceHearts(x: number, y: number, n: number): void {
-  spawn('heart', x, y, n);
+/** Fireworks 2 over Happily: a shell every 0.8 s for 10 s (04 8), within 1.5 tiles of the spot; each rises 0.8 s and bursts 1.2 s. */
+export const FW_SHELLS = 13;
+export const FW_EVERY = 0.8;
+export const FW_LIFE = 2;
+export const HEARTBREAK_T = 1.2;
+
+/** The two signature colours of a pair's members (04 7.3 rule 3), from their ids; rose for both when none. */
+function tones(ids: readonly number[]): [string, string] {
+  const P = style().palette, a = byId(ids[0] ?? 0), b = byId(ids[1] ?? 0);
+  if (!a || !b) return [P.rose, P.rose];
+  return [P.signature[signatureOf(a.lookSeed)] ?? P.rose, P.signature[signatureOf(b.lookSeed)] ?? P.rose];
 }
-/** The Proposal's ring sparkle at 8 s. TODO(S5-art): the `lamp` 4-point stars of 04 8; until then the existing spark particle. */
-export function ringSparkle(x: number, y: number, n: number): void {
-  spawn('spark', x, y, n);
+/** A pair's hearts, the picked variant 3 (tiny, paper-rimmed, gold twinkles), two-tone in the members' signatures when `ids` name them. */
+export function romanceHearts(x: number, y: number, n: number, ids: readonly number[] = []): void {
+  const [hl, hr] = tones(ids);
+  const r = { v: 0.45, vz0: 0.5, vz1: 1.1, l: 1.6, z: 0.8 }; // GV heartFx 2389, spread wider so a Kiss's six read apart (the picked page)
+  for (let i = 0; i < n; i++)
+    addPart({ k: 'heart', x, y, z: r.z, vx: vrnd(-r.v, r.v), vy: vrnd(-r.v, r.v), vz: vrnd(r.vz0, r.vz1), l: r.l, m: r.l, ph: vrnd(0, TAU), rom: 1, hl, hr });
 }
-/** Parted: the heart that splits in two (04 7.6 item 3). TODO(S5-art): draws nothing until the owner picks the art. */
-export function heartbreakFx(_x: number, _y: number): void {
-  /* TODO(S5-art) */
+/** Parted: heartbreak 1, one cracked heart splitting into two halves that drift apart over 1.2 s (04 7.6 item 3). */
+export function heartbreakFx(x: number, y: number): void {
+  addPart({ k: 'heart', x, y, z: 1.1, vx: 0, vy: 0, vz: 0, l: HEARTBREAK_T, m: HEARTBREAK_T, ph: 0, rom: 2 });
 }
-/** Happily: 12 hearts (the existing particle) and the fireworks of 04 8 for 10 s over the spot. TODO(S5-art): the fireworks draw nothing yet. */
-export function happilyFx(x: number, y: number): void {
-  romanceHearts(x, y, HAPPILY_HEARTS);
+/** Happily: 12 hearts, then fireworks 2 over the spot for 10 s (04 8). */
+export function happilyFx(x: number, y: number, ids: readonly number[] = []): void {
+  romanceHearts(x, y, HAPPILY_HEARTS, ids);
   fireworksFx(x, y);
 }
-/** TODO(S5-art): the fireworks shells and sparks (04 8: 1 shell per 0.8 s for 10 s, 24 sparks in rose, lamp, sky); nothing yet. */
-export function fireworksFx(_x: number, _y: number): void {
-  /* TODO(S5-art) */
+export function fireworksFx(x: number, y: number): void {
+  for (let k = 0; k < FW_SHELLS; k++) {
+    const wait = k * FW_EVERY;
+    addPart({ k: 'firework', x: x + vrnd(-1.5, 1.5), y: y + vrnd(-1.5, 1.5), z: 0, vx: 0, vy: 0, vz: 0, l: wait + FW_LIFE, m: wait + FW_LIFE, ph: vrnd(0, TAU), rom: 3, wait });
+  }
 }
-watch('happily', (ev) => happilyFx(ev.x ?? 0, ev.y ?? 0));
+watch('happily', (ev) => happilyFx(ev.x ?? 0, ev.y ?? 0, ev.ids ?? []));
 watch('parted', (ev) => heartbreakFx(ev.x ?? 0, ev.y ?? 0));
+
+/** A romance particle (romance-fx.ts): the tiny heart, the heartbreak, the firework's shell then its heart-shaped burst. */
+function drawRomance(pen: Pen, p: Part, q: XY, a: number): void {
+  const s = 8 * pen.z, P = pen.spec.palette, age = p.m - p.l;
+  if (p.rom === 1) tinyHeart(pen, q.x, q.y, s, a, p.hl ?? P.rose, p.hr ?? P.rose, p.ph + age * 2);
+  else if (p.rom === 2) heartSplit(pen, q.x, q.y, s, age);
+  else {
+    const t = age - (p.wait ?? 0);
+    if (t < 0) return;
+    if (t < 0.8) shell(pen, q.x, q.y, t / 0.8, pen.z);
+    else burstHeart(pen, { x: q.x, y: q.y - 4 * EH * pen.z, t: t - 0.8, seed: p.ph }, pen.z);
+  }
+}
 
 /* ---------- particles as painter drawables (03 7.2 item 2: a particle uses its ground point) and their drawing (GV drawPart 8609) ---------- */
 type FxDrawable = Drawable & { p: Part | null };
@@ -445,6 +471,10 @@ export function drawPart(p: Part, ctx: CanvasRenderingContext2D): void {
     ctx.arc(q.x, q.y, Math.max(0.5, r), 0, TAU);
     ctx.fill();
   };
+  if (p.rom) {
+    drawRomance(pen, p, q, a);
+    return;
+  }
   switch (p.k) {
     case 'drop':
       drawSprayDot(pen, q.x, q.y, s, 0.7 * (0.55 + 0.45 * a));

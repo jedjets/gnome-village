@@ -667,9 +667,10 @@ The striped top in the crowd is the Breton of palette A: **burgundy on cream** (
 5. Done when: at zoom 1.3 a screenshot shows the difference between Chat and huff on a 28.6 px figure without zooming the image.
 
 ### 7.6 Hearts and blush
-1. Heart particle: GV `drawPart` heart (8622): two arcs r 0.22·s and a triangle, `s = 8·z`, colour `rose`; rises `vz` 0.5–1.0 for 1.6 s (GV `heartFx` 2389). Notice: 2 hearts; Bench every 10 s: 1; Picnic every 8 s: 1; Kiss: 6; Happily: 12 then fireworks.
-2. Two-tone hearts for pairs from stage 3 (7.3 rule 3); blush as 7.5 rule 2, growing ×1.3 at Kiss and Proposal.
-3. Heartbreak (Parted): one heart that splits into two halves drifting apart over 1.2 s, colour `rose` ×0.85.
+Picked by the owner on 2026-10-18 (register section 4 row "Romance art": hearts **3**, heartbreak **1**); built in `src/render/romance-fx.ts`.
+1. Heart particle (hearts 3): a tiny heart, GV's heart shape (`drawHeart`, 8622) at 0.62 of `s = 8·z`, with a `paper` rim behind (1.25×) and a `lamp` 4-point twinkle beside it; rises `vz` 0.5–1.1 for 1.6 s, spread ±0.45 tile/s (GV `heartFx` 2389, wider so a Kiss's six read apart). Notice: 2 hearts; Bench every 10 s: 1; Picnic every 8 s: 1; Kiss: 6; Happily: 12 then fireworks.
+2. Two-tone hearts for pairs from stage 3 (7.3 rule 3): each lobe in one lover's signature colour; Notice and Chat in `rose`. Blush as 7.5 rule 2, growing ×1.3 at Kiss and Proposal.
+3. Heartbreak (Parted, heartbreak 1): one heart cracked down a zigzag `ink` line that splits into two halves drifting apart and tipping over 1.2 s, colour `rose` mixed 15 % toward `ink`.
 
 ---
 
@@ -684,7 +685,7 @@ Cap 220 particles (register 3.3), spawned on the visual RNG only; the simulation
 | rain | global or `m_raincloud` | GV formula (1.9) | GV dashes; under a raincloud only inside its 5×5 | screen-space |
 | snow | winter | GV formula | GV discs; crowns and roofs whiten | screen-space |
 | fountain spray | fountain, not frozen | 12/s | `paper` dots r 0.1·s rising 0.6 EH then falling, alpha 0.7; ripple rings on the disc 0.5/s (GV ring 8620) | 30 |
-| fireworks | Happily, `c_fireworks` | 1 shell per 0.8 s for 10 s (30 s for the ability) | a `paper` dot rising 4 EH over 0.8 s, then 24 sparks in `rose`, `lamp`, `sky` fanning r 1.2 EH, fading 1.2 s; a soft flash alpha 0.10 on burst | 80 |
+| fireworks | Happily, `c_fireworks` | 1 shell per 0.8 s for 10 s (30 s for the ability) | fireworks **2** (owner 2026-10-18): a `paper` dot rising 4 EH over 0.8 s, then a soft heart-shaped burst of 28 sparks in `rose` and `lamp` with short trails, a `rose` glow, sinking 0.25 EH as it fades over 1.2 s, and 7 `paper` glitter stars twinkling in it | 80 |
 | poop splat (tasteful) | `m_pigeon`, `a_pigeon` swoop | 1 | a `paper` blob r 0.3·hr with a `#DCE9F1` edge on the hat or hair, no brown, no drip; gone at the end of `wipe` | 1 per victim |
 | sprinkler | `m_sprinkler` | 3 arcs rotating | `sky` drops r 0.12·s on 3 arcs r 1.5 tiles, 1 rev/s; tiles inside shimmer with `WET` | 24 |
 | fog | `m_fog`, mist weather | none | the per-cell fog mix (1.7 rule 5) plus the full-canvas wash of `PAL.fog` at `FOGA * 0.55` after the entity pass (03 §7.8.2); no mist particles | 0 |
@@ -692,7 +693,7 @@ Cap 220 particles (register 3.3), spawned on the visual RNG only; the simulation
 | splash | soaked, drenched, paddling | 5 | GV drop (8618) `#A9D3E6` | none |
 | wasp | `m_wasp` | 1 | GV bee (8617) circling the table r 0.4 tile at 2 Hz | 1 |
 | notes | busker, bandstand, serenade | 1 per 0.6 s | `ink` note glyph drawn as a path (head ellipse + stem + flag), rising, swaying | 12 |
-| flash, ring sparkle | tourist photo; proposal at 8 s | 1; 8 | a `paper` disc r 0.5 EH at alpha 0.6 for 0.12 s; `lamp` 4-point stars r 0.15·s for 1 s | 8 |
+| flash, ring sparkle | tourist photo; proposal at 8 s | 1; 8 | a `paper` disc r 0.5 EH at alpha 0.6 for 0.12 s; `lamp` 4-point stars r 0.15·s round the ring's `paper` stone for 1 s, drawn with the open ring box (proposal 1) | 8 |
 | hat flying | `m_flock` duck | 1 per victim | the hat shape on an arc 2 tiles long, spinning, landing on the ground as a pickup | none |
 | raincloud | `m_raincloud` | 1 | a 3-blob cloud (`zinc` ×1.1) 2.5 tiles wide hovering 2 EH up with rain dashes beneath | 1 |
 | sunbeam | `c_sunbeam` | 1 | a warm pool: radial gradient 7×7 tiles from `AT` at alpha 0.18 to 0; particles none | 1 |
@@ -729,10 +730,10 @@ Rules: particles are drawn in the painter's cell of their tile (GV `putWalker` ~
 | Notice (4 s) | both stop; turn to face over 0.4 s; 2 hearts; a 0.1 rad lean toward each other |
 | Chat (20–30 s) | stand 0.8 tile apart facing; chat bubbles alternate every 3 s; the listener nods (head bob 0.03h at 1 Hz) |
 | Bench (40–60 s) | walk to the bench; sit side by side (crouch 0.24h); the pair leans 0.08 rad toward each other; 1 heart every 10 s |
-| Stroll (60 s) | walk as one unit 0.5 tile apart; a 1 px `ink` line between the near hands (holding hands) at `h ≥ 12`; in step (shared `walkPh`) |
+| Stroll (60 s) | walk as one unit 0.5 tile apart, **arm in arm** (owner 2026-10-18, replacing the hand-holding line): the leader's near arm crooked at the waist, the follower's near arm through it, her hand drawn on his forearm; in step (one walk phase); drawn arm in arm while the two are within 0.9 tile |
 | Picnic (50–80 s) | sit on the blanket or at the table; eat (arm to mouth every 2 s); 1 heart every 8 s |
-| Kiss (10 s) | face; lean in 0.25 rad over 1 s; hold 1 s; 6 hearts; lean back |
-| Proposal (15 s) | the initiator kneels (crouch 0.30h) at 0 s; ring sparkle at 8 s; the other claps hands to face at 12 s; both stand and embrace (two rigs overlapping 0.3h, arms around) at 15 s |
+| Kiss (10 s) | kiss **1** (owner 2026-10-18): face; both lean in 0.25 rad over 1 s, eyes closed; the left one's hand at the other's waist, the other's hand on that one's arm; hold; 6 hearts; lean back over the last second |
+| Proposal (15 s) | proposal **1** (owner 2026-10-18): the initiator on one knee (crouch 0.20h as the picked page drew it, not 0.30h; the back knee down, the back foot on its toes) holding an open ring box (a `lamp` band with a `paper` stone) at 0 s; the other surprised; ring sparkle at 8 s; her hands to her mouth at 12 s, drawn over her head; both stand and embrace (arms around, eyes closed) for the last second, then Happily |
 | Happily | 12 hearts, fireworks 10 s, the pair walks off as one unit |
 | Parted | huff 6 s facing away, arms folded; the split heart; they walk to different gates |
 

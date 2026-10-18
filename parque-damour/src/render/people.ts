@@ -45,6 +45,7 @@ import { blit, spriteFor, spriteFrame, type Sprite, type SpriteLight } from './f
 import { SEATS, seatPos } from '../entities/staff.ts';
 import { pairById } from '../entities/romance.ts';
 import { drawChatBubble } from './effects.ts';
+import { drawPairArt } from './romance-art.ts';
 
 /** A seat's height in EH units (props-park.ts drawBench seatE 0.2; props.ts drawBistroTable's chair seat 0.3; a blanket on the ground). */
 export const SEAT_E: Readonly<Partial<Record<Prop['kind'], number>>> = { bench: 0.2, table: 0.3, picnic: 0 };
@@ -204,6 +205,10 @@ function prepare(pd: PersonDrawable, v: Visitor): void {
 function drawPerson(d: Drawable, c: CanvasRenderingContext2D): void {
   const pd = d as PersonDrawable, v = pd.v;
   if (!v) return;
+  // a pair in a picked romance pose (kiss, proposal, embrace, arm in arm) is drawn as one, at the initiator's drawable (romance-art.ts)
+  INK.pen = gamePen(c);
+  INK.warm = pd.warm;
+  if (drawPairArt(INK, v, pd.face) !== 'none') return;
   prepare(pd, v);
   // from sprites, except while the zoom moves (figures from 12 px) and for a walker in a lamp's warmth (it changes at every step)
   const sprite = (pd.h < SPRITE_H || !zooming) && !(POSE.state === 'walk' && POSE.warm > 0);

@@ -43,7 +43,7 @@ const fixture = FIXTURES['det-s2']; // the state-hash tests below run on det-s2'
 type Hook = (step: number) => void;
 
 /** det-s2's values since S5, the romance core (see the test that reads it). */
-const DET_S2_S5 = { rngN: 27406, stateHash: 89033558 };
+const DET_S2_S5 = { rngN: 26992, stateHash: 854600468 };
 
 /** The kind of the prop whose footprint covers (x, y). */
 function propKindAt(x: number, y: number): string | undefined {

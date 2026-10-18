@@ -21,9 +21,9 @@ import { land } from '../src/entities/embarrass.ts';
 
 /**
  * Found by scanning seeds 1 to 200 (07 S5.7 item 2): a pair reaches Happily within 3 days on a plain new park (calm, as newPark gives).
- * Of the 200, three do: 95 (at step 16,388, day 1), 115 (44,789) and 149 (59,677); the first is kept.
+ * Of the 200, one does: 56 (at step 17,870, day 1).
  */
-const S_HAPPILY = 95;
+const S_HAPPILY = 56;
 /**
  * Found by the same scan: at the first pair at stage 3 with no stage running, three `land` calls on its initiator land without a backfire
  * and the two leave by different gates. Of the 200 seeds, 101 and 135 do; the first is kept.
@@ -295,6 +295,25 @@ describe('the seven stages (02 6.2; 06 8)', () => {
     p.affinity = 0.92;
     p.formedDay = T.day - 1;
     expect(nextStageReady(p)).toBe(true);
+  });
+});
+
+describe('the Stroll moves as one unit (register 3.4; 02 6.2 stage 4)', () => {
+  it('the follower keeps half a tile behind the leader (an open tile; round a blocked corner it walks up), both at 2.4', () => {
+    const { p, a, b } = pairAt(18, 26, 1, 3, 0.6);
+    expect(startStage(p, 4, false)).toBe(true);
+    let n = 0, at = 0, most = 0;
+    for (let s = 0; s < 3000; s++) {
+      simulate(SIM_DT, 1);
+      if (a.st !== 'stroll') continue;
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      n++;
+      if (Math.abs(d - 0.5) <= 0.05) at++;
+      most = Math.max(most, d);
+    }
+    expect(n).toBeGreaterThan(2500);
+    expect(at / n).toBeGreaterThan(0.9);
+    expect(most).toBeLessThan(2);
   });
 });
 

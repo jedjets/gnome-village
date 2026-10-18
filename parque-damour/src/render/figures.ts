@@ -409,10 +409,10 @@ export function poseOf(v: Visitor, face: 1 | -1, tSim: number, out: Opts): Opts 
 }
 
 /**
- * The romance poses of 04 9.2 and 9.3 (the lean toward each other at Notice 0.1 rad and Bench 0.08, the Kiss lean of 0.25 rad, the
- * Proposal's kneel at 0.30 h and the embrace, and the reaction poses: wipe, shake, stumble, flap, huddle, baffled, lost, duck, the laugh).
- * TODO(S5-art): the new poses wait for the owner's pick between the variants (register row 26; 07 S5.6 step 6); until then a romance or
- * reaction state draws with the rig's existing poses (stateOf) and faces (exprOf), and this hook changes nothing.
+ * The single-figure romance and reaction poses (04 9.2 Notice and Bench leans, 9.3 reactions). The owner's picks of 2026-10-18 (register
+ * section 4 row "Romance art") cover the pair poses, which romance-art.ts draws (kiss 1, proposal 1 with the embrace, Stroll arm in arm);
+ * TODO(S5-art): the leans of Notice and Bench and the reaction poses of 04 9.3 were not among the picked variants and keep the rig's own
+ * poses (stateOf) and faces (exprOf) until an options round shows them; this hook changes nothing.
  */
 export function romancePose(_v: Visitor, out: Opts): Opts {
   return out;

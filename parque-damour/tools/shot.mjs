@@ -121,7 +121,19 @@ const SCENE_SETS = {
     { name: 'close', turn: 0, z: 2.4, act: 'busiest' },
     { name: 'fit', turn: 0, z: 0.3 },
     { name: 'night', turn: 0, z: 1.3, at: [22, 25], abs: 0.9, act: 'clearSelection' },
-    { name: 'dogs', turn: 0, z: 2.0, at: [33, 28.6], abs: 1.6725, act: 'bothDogs' },
+    { name: 'dogs', turn: 0, z: 2.0, at: [33, 28.6], abs: 1.6725, act: 'placeDogs' },
+  ],
+  // s5: the romance core (07 S5.7 item 5), built through the harness's modules (the sim's own functions, a dev page): a pair seated at
+  // Bench by the inner loop, pinned, with the pair card open from its selection (pair-card); the Romance chip naming it with the card
+  // cleared (chip); the Romances sheet with it and a second pair at Chat (romances); then day 1 at f 0.76 a pair at Kiss by the fountain,
+  // its six hearts 0.5 s into their rise (kiss: `fx` sets the particle steps). The camera is on the pair at zoom 2.0 and 2.4.
+  s5: [
+    { name: 'pair-card', turn: 0, z: 2.0, at: [21, 28], abs: 0.45, act: 's5Bench' },
+    { name: 'chip', keep: true, act: 's5Chip' },
+    { name: 'romances', keep: true, act: 's5Romances' },
+    { name: 'kiss', turn: 0, z: 3.0, at: [21.5, 26.0], abs: 0.76, act: 's5Kiss', fx: 30 },
+    { name: 'proposal', turn: 0, z: 3.0, at: [21.5, 27.5], act: 's5Proposal', fx: 30 },
+    { name: 'stroll', turn: 0, z: 3.0, at: [18, 26], act: 's5Stroll', fx: 30 },
   ],
   // ui: the Options stage (register section 4 "Park pace and Options", owner 2026-10-14), driven by real taps: rail row 3 ending with
   // Options at the start view (rail); a real unpause and pause so Begin's profile pace applies (a new player: Lively), then Options
@@ -206,7 +218,92 @@ async function centreBest(page, by) {
 }
 
 /** Scene actions (s3, s4), run after the camera is set and before the capture; `pre` actions (s4) run before the scene's simulate. */
+/** s5: a pair of two new singles at (x, y) and (x + 1, y), at `stage` with `aff`, its next stage `next` started; returns its id. */
+async function s5Pair(page, x, y, stage, aff, next, pin) {
+  return page.evaluate(async (x, y, stage, aff, next, pin) => {
+    const V = await import('/src/entities/visitor.ts');
+    const R = await import('/src/entities/romance.ts');
+    const S = await import('/src/entities/romance-stages.ts');
+    const mk = (sex, dx) => {
+      const v = V.spawnVisitor('single', 'g_west', { sex, seeks: sex === 'f' ? 'm' : 'f' });
+      Object.assign(v, { x: x + dx, y, path: null, st: 'idle', t: 0, hunger: 0.2, energy: 0.9, comfort: 0.9, leaveAt: 99, decideT: 5 });
+      return v;
+    };
+    const a = mk('f', 0), b = mk('m', 1);
+    const p = R.tryForm(a, b, true);
+    Object.assign(p, { stage, affinity: aff, doing: 0, formedDay: 0 });
+    for (const v of [a, b]) Object.assign(v, { st: 'idle', job: {}, path: null });
+    if (next) S.startStage(p, next, false);
+    if (pin) R.setPin(p.id);
+    return p.id;
+  }, x, y, stage, aff, next, pin);
+}
+/** s5: step until `ok` holds for the pair (both seated, or both at the kiss with its clock started), then pause. */
+async function s5Until(page, id, what) {
+  const ok = await page.evaluate(async (id, what) => {
+    const pd = window.__PD;
+    for (let k = 0; k < 600; k++) {
+      const p = pd.pairs.find((q) => q.id === id);
+      const a = p && pd.visitors.find((v) => v.id === p.a), b = p && pd.visitors.find((v) => v.id === p.b);
+      const still = a && b && !a.path && !b.path;
+      if (what === 'bench' && a && b && a.st === 'bench' && b.st === 'bench') return true;
+      if (what === 'kiss' && still && a.st === 'kiss' && p.stageT < 9.9) return true;
+      if (what === 'proposal' && still && a.st === 'proposal' && p.stageT < 2.5) return true;
+      if (what === 'stroll' && a && b && a.st === 'stroll' && p.stageT < 57 && Math.hypot(a.x - b.x, a.y - b.y) <= 0.9) return true;
+      pd.simulate(10);
+    }
+    return false;
+  }, id, what);
+  if (!ok) throw new Error(`s5: the pair never reached ${what}`);
+  await page.evaluate(() => window.__PD.setSpeed(0));
+}
+
 const ACTIONS = {
+  /** s5: a pair at Bench (a bench by the inner loop), pinned, the pair card from its selection, the follow settled. */
+  async s5Bench(page) {
+    const id = await s5Pair(page, 20, 27, 2, 0.5, 3, true);
+    await s5Until(page, id, 'bench');
+    await page.evaluate(async (id) => {
+      const C = await import('/src/ui/card.ts');
+      const p = window.__PD.pairs.find((q) => q.id === id);
+      C.select({ kind: 'visitor', id: p.a, tile: null });
+    }, id);
+    await page.waitForFunction(() => document.getElementById('card').classList.contains('pair'), { timeout: 5_000 });
+    await sleep(1600);
+  },
+  /** s5: the selection cleared; the Romance chip names the pinned pair. */
+  async s5Chip(page) {
+    await page.evaluate(async () => (await import('/src/ui/card.ts')).clearSel());
+    await sleep(500);
+  },
+  /** s5: a second pair at Chat, then the Romance chip opens the Romances sheet. */
+  async s5Romances(page) {
+    await s5Pair(page, 27, 20, 1, 0.35, 0, false);
+    await page.click('#hudRomance');
+    await page.waitForFunction(() => document.getElementById('romances').classList.contains('on'), { timeout: 5_000 });
+    await sleep(400);
+  },
+  /** s5: Close, then a pair at Kiss beside the fountain at f 0.76 with its six hearts. */
+  /** s5 (a look at the picked art): a Proposal by the fountain 12.5 s in, her hands to her mouth; a Stroll arm in arm. */
+  async s5Proposal(page) {
+    const id = await s5Pair(page, 21, 27.5, 6, 0.96, 7, true);
+    await s5Until(page, id, 'proposal');
+  },
+  async s5Stroll(page) {
+    const id = await s5Pair(page, 18, 26, 3, 0.6, 4, true);
+    await s5Until(page, id, 'stroll');
+    await page.evaluate((id) => {
+      const pd = window.__PD, p = pd.pairs.find((q) => q.id === id), a = pd.visitors.find((v) => v.id === p.a);
+      const C = pd.cam;
+      C.follow = { kind: 'visitor', id: a.id };
+    }, id);
+    await sleep(1600);
+  },
+  async s5Kiss(page) {
+    if (await page.$eval('#romances', (el) => el.classList.contains('on'))) await page.click('#romances .x');
+    const id = await s5Pair(page, 21, 26.2, 5, 0.85, 6, true);
+    await s5Until(page, id, 'kiss');
+  },
   /** s4: 22 presses of the Visitors chip's "+" while paused: 22 visitor.call commands that the first step applies. */
   async callCrowd(page) {
     for (let k = 0; k < 22; k++) await page.click('#bAdd');
@@ -273,6 +370,38 @@ const ACTIONS = {
    * s4, read only (register section 4 row Figure rig: both dogs, one per dog walker): the park is Calm and the terrier and the poodle
    * are both in the clear band between the chips and the rail, one trotting (a taut lead) and one standing (a slack one).
    */
+  /**
+   * s4 (since S5): the sim no longer brings the two walkers' dogs together on their own (pairs forming moved the stream), so the scene
+   * places them: a terrier's walker standing at (32, 28.6) and a poodle's walking east from (34, 29) (walkers spawned until both breeds
+   * are there), then bothDogs checks the picture as before.
+   */
+  async placeDogs(page) {
+    await page.evaluate(async () => {
+      const pd = window.__PD;
+      const V = await import('/src/entities/visitor.ts');
+      const L = await import('/src/render/figure-look.ts');
+      const M = await import('/src/entities/move.ts');
+      const walkers = () => pd.visitors.filter((v) => v.archetype === 'dogwalker');
+      for (let k = 0; k < 60; k++) {
+        const br = walkers().map((v) => L.breedOf(v.lookSeed));
+        if (br.includes('terrier') && br.includes('poodle')) break;
+        if (walkers().length >= 2) V.removeVisitor(walkers()[0].id);
+        V.spawnVisitor('dogwalker', 'g_east');
+      }
+      const t = walkers().find((v) => L.breedOf(v.lookSeed) === 'terrier'), p = walkers().find((v) => L.breedOf(v.lookSeed) === 'poodle');
+      Object.assign(t, { x: 32, y: 28.6, path: null, st: 'idle', t: 30, job: {}, leaveAt: 99, decideT: 99 });
+      Object.assign(p, { x: 34, y: 29, path: null, st: 'wander', job: { kind: 'wander' }, leaveAt: 99, decideT: 99 });
+      pd.simulate(2);
+      for (const c of pd.creatures) {
+        const o = c.kind === 'dog' && pd.visitors.find((v) => v.id === c.ownerId);
+        if (o) Object.assign(c, { x: o.x - 0.6, y: o.y + 0.4, outside: false });
+      }
+      M.goTo(p, 38, 29);
+      pd.simulate(40);
+      pd.setSpeed(0);
+    });
+    await ACTIONS.bothDogs(page);
+  },
   async bothDogs(page) {
     const r = await page.evaluate(async () => {
       const pd = window.__PD;
@@ -552,12 +681,12 @@ async function scenes(browser, slice, set, url, errors, written) {
       }
       if (!sc.keep) await frame(page, sc);
       if (sc.act) await ACTIONS[sc.act](page);
-      await page.evaluate((seed) => {
+      await page.evaluate((seed, fx) => {
         const pd = window.__PD;
         pd.seedVisual(seed);
-        pd.fxStep(1 / 60, 120);
+        pd.fxStep(1 / 60, fx);
         pd.draw();
-      }, SEED);
+      }, SEED, sc.fx ?? 120);
       // the HUD repaints the chips every 0.35 s: wait past one repaint so the clock chip shows this scene's time; the live loop's frames
       // in between draw the same picture (paused, particles still)
       await new Promise((r) => setTimeout(r, 450));

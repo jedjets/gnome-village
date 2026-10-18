@@ -30,11 +30,11 @@ const garment = (S: Skel) => (x: number, y: number): Pt => {
 };
 
 /** Draw a person whose feet stand at p in the Tailored rig; returns the skeleton in local px (facing frame), or null under 3 px. */
-export function drawRigPerson(c: Ink, p: Pt, look: RigLook, o: Opts): Skel | null {
+export function drawRigPerson(c: Ink, p: Pt, look: RigLook, o: Opts, S0?: Skel): Skel | null {
   const { ctx, z } = c.pen;
   const h = FH * z * look.scale;
   if (h < LOD.body) return null; // 04 7.1 rule 5: nothing below 3 px
-  const S = solveH(look, o, h);
+  const S = S0 ?? solveH(look, o, h); // S5: a solved romance pose (figure-pose.ts) instead of the state's own
   ctx.save();
   ctx.translate(p.x, p.y);
   ctx.scale(o.face, 1);

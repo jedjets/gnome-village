@@ -63,11 +63,12 @@ export const ISO_TW = 26;
 export const ISO_TH = 13;
 
 /** States spaceOut leaves alone (02 5.3 NO_SPACE: sit, chat, picnic, kiss, proposal, boat, shelter, chess and every reaction state of
- * 02 6.4 with the backfire laugh). brain.ts re-exports the set (03 2.5). */
+ * 02 6.4 with the backfire laugh), and S5's Stroll, whose two move as one unit half a tile apart (register 3.4; a deviation from 02 5.3's
+ * list, which spaced them 0.77 tiles apart and pushed the leader off its loop). brain.ts re-exports the set (03 2.5). */
 export const NO_SPACE: Readonly<Record<string, true>> = {
   sit: true, chat: true, picnic: true, kiss: true, proposal: true, boat: true, shelter: true, chess: true,
   wipe: true, shake: true, stumble: true, chase: true, huff: true, flap: true, huddle: true, distracted: true, baffled: true, lost: true,
-  duck: true, laugh: true,
+  duck: true, laugh: true, stroll: true,
 };
 
 /** Tiles per second for `v` now (02 5.4). */
