@@ -22,7 +22,8 @@ import { gateById } from '../world/park.ts';
 import { blockedFor, NO_SPACE } from './move.ts';
 import { walkable } from './astar.ts';
 import { SHELTERED } from './needs.ts';
-import { romanceStep } from './romance.ts';
+import { formStep, leaving, pairOf, partnerOf, romanceStep } from './romance.ts';
+import { actRomance } from './act-romance.ts';
 import { creatures } from './creatures.ts';
 import { TIDY_EVERY, facilities, freeSeats, nearestTile, paveAdvance, paveNext, servingTile, tileXY, vendorFor } from './staff.ts';
 import {
@@ -62,6 +63,7 @@ export const R_WANDER = 6;
 export const R_CHILD_CHASE_PIGEON = 5;
 export const CHILD_CHASE = 0.22; // per decision (GV childPlay 4754)
 export const KIOSK_QUEUE = 2; // a third customer goes elsewhere (02 4.3 vendor)
+export const STAFF_REACTION_MAX = 4; // s (04 9.3 rules; 02 13 T9)
 
 /* ---------- lookups ---------- */
 
@@ -143,9 +145,10 @@ function reactionRung(v: Visitor): boolean {
   if (!k) return false;
   release(v);
   const [st, t] = REACTION[k];
+  const p = pairOf(v), o = p ? partnerOf(p, v) : undefined;
   v.st = st;
-  v.t = t;
-  v.job = {};
+  v.t = v.archetype === 'gardener' || v.archetype === 'vendor' ? Math.min(t, STAFF_REACTION_MAX) : t; // staff react 4 s at most (04 9.3, 02 T9)
+  v.job = st === 'lost' && o ? { visitorId: o.id } : {}; // a lost visitor stops when the partner is near (act-romance.ts)
   v.path = null;
   v.pendingEmb = null;
   return true;
@@ -167,7 +170,8 @@ function shelterRung(v: Visitor): boolean {
 /** Rung 3: the visit is over or comfort is gone: out by the nearest gate; a couple leaves together by one gate (02 4.3 couple item 4). */
 function leaveRung(v: Visitor): boolean {
   if (T.abs < v.leaveAt && v.comfort >= COMFORT_LEAVE) return false;
-  const p = v.coupleOf ? byId(v.coupleOf) : undefined;
+  const along = leaving(v); // a pair from stage 2 leaves together, else v alone (02 6.5 "other dissolutions")
+  const p = v.coupleOf ? byId(v.coupleOf) : along;
   release(v);
   if (p && p.st === 'goLeave' && p.gateOut) startLeave(v, p.gateOut);
   else startLeaveNearest(v, avoidGate(v));
@@ -461,6 +465,7 @@ function gardenerDecide(v: Visitor): void {
 
 /** Rung 7: the archetype's routine (02 4.3). An activity in progress carries on; an idle between activities waits it out. */
 function routine(v: Visitor): boolean {
+  if (v.archetype === 'single' && formStep(v)) return true; // pair formation while strolling or idle (02 4.3 single item 6, 6.1)
   if (v.st !== 'idle' || v.t > 0) return true;
   switch (v.archetype) {
     case 'single':
@@ -509,9 +514,14 @@ export function decide(v: Visitor): void {
   if (leaveRung(v)) return; // rung 3
   if (eatRung(v)) return; // rung 4
   if (restRung(v)) return; // rung 5
-  if (romanceStep(v)) return; // rung 6 (S5)
+  if (romanceStep(v)) return; // rung 6
   if (routine(v)) return; // rung 7
   wanderRung(v); // rung 8
 }
 
-setBrain({ decide, act, busy: BUSY });
+/** act.ts's states, with the romance and reaction states of act-romance.ts first (03 2.5). */
+function actAll(v: Visitor, dt: number): void {
+  if (!actRomance(v, dt)) act(v, dt);
+}
+
+setBrain({ decide, act: actAll, busy: BUSY });

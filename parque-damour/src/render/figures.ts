@@ -17,6 +17,7 @@ import { FH, opts, solveH, type Expr as RigExpr, type Ink, type Item, type Opts,
 import { drawRigPerson } from './figure-garments.ts';
 import { lookOf, newLook } from './figure-look.ts';
 import type { Visitor } from '../entities/visitor.ts';
+import { pairById } from '../entities/romance.ts';
 import { speedOf } from '../entities/move.ts';
 
 export { FH } from './figure-rig.ts';
@@ -338,9 +339,21 @@ export function stateOf(v: Visitor): State {
   }
 }
 
-/** The face of 04 7.5 item 3 for a visitor's state: flat while idle or walking (the romance stages' faces are S5's). */
+/**
+ * The face of 04 7.5 item 3 for a visitor's state: flat while idle or walking; S5's stages: Notice and Chat the chat face, Bench, Stroll
+ * and Picnic the bench face, Kiss the kiss face, the Proposal's initiator (the lower id) proposing and the other receiving, the backfire
+ * laugh, the Parted huff (the rig's approved S4 faces).
+ */
 export function exprOf(v: Visitor): RigExpr {
+  if (v.job.pairId) {
+    if (v.st === 'notice' || v.st === 'chat') return 'chat';
+    if (v.st === 'bench' || v.st === 'stroll' || v.st === 'picnic') return 'bench';
+    if (v.st === 'kiss') return 'kiss';
+    if (v.st === 'proposal') return pairById(v.job.pairId)?.a === v.id ? 'propose' : 'receive';
+  }
   switch (v.st) {
+    case 'laugh':
+      return 'laugh';
     case 'wipe':
     case 'shake':
     case 'huddle':
@@ -385,12 +398,23 @@ export function poseOf(v: Visitor, face: 1 | -1, tSim: number, out: Opts): Opts 
   out.ph = tSim * speedOf(v) * WALK_K + v.id * 1.7;
   out.expr = exprOf(v);
   out.neutral = false;
+  romancePose(v, out);
   const still = st === 'idle' || st === 'sit' || st === 'read' || st === 'feed';
   out.breath = still ? BREATH_RAD * Math.sin(Math.PI * 2 * BREATH_HZ * tSim + v.id) : 0;
   const seed = v.lookSeed >>> 0;
   const period = GLANCE_MIN + GLANCE_SPAN * ((seed % 997) / 997);
   const t = (tSim + ((seed >>> 10) % 1009) / 1009 * period) % period;
   out.lookAt = still && t < GLANCE_T ? (face === 1 ? -1 : 1) : 0;
+  return out;
+}
+
+/**
+ * The romance poses of 04 9.2 and 9.3 (the lean toward each other at Notice 0.1 rad and Bench 0.08, the Kiss lean of 0.25 rad, the
+ * Proposal's kneel at 0.30 h and the embrace, and the reaction poses: wipe, shake, stumble, flap, huddle, baffled, lost, duck, the laugh).
+ * TODO(S5-art): the new poses wait for the owner's pick between the variants (register row 26; 07 S5.6 step 6); until then a romance or
+ * reaction state draws with the rig's existing poses (stateOf) and faces (exprOf), and this hook changes nothing.
+ */
+export function romancePose(_v: Visitor, out: Opts): Opts {
   return out;
 }
 

@@ -13,7 +13,9 @@
 // Dropped from the range: chips, zzz, logs, smoke, fireflies, valley mist, lightning and rumble, rain rings and splashes (S9 reshapes
 // the weather overlay and its rain), the text glyphs of zzz and notes (04 section 8 asks for a drawn note).
 // TODO(S9): drawWeatherOverlay (GV 10062-10105 on sim time), petals, leaves, notes, flash, fireworks, lamp halos (04 section 8, 10.2);
-// TODO(S5): the Chat stage's alternating talk bubbles (drawChatBubble is here; 04 7.5 item 4). TODO(S6): poopDot, hat, the wasp circling a table.
+// S5: the romance hooks (romanceHearts, ringSparkle, heartbreakFx, happilyFx, fireworksFx), each marked TODO(S5-art): the existing S1
+// heart and spark particles until the owner picks the romance art; the Chat stage's bubbles are drawn by people.ts with drawChatBubble.
+// TODO(S6): poopDot, hat, the wasp circling a table.
 import { mulberry32, vrng, vrnd } from '../core/rng.ts';
 import { TAU, clamp01, type XY } from '../core/math.ts';
 import { DAYLEN, T } from '../core/clock.ts';
@@ -333,9 +335,43 @@ export function fxStep(dt: number, n = 1): void {
 function onFx(ev: GameEvent): void {
   const k = ev.params?.fx, n = ev.params?.n;
   if (typeof k !== 'string' || ev.x === undefined || ev.y === undefined || !(FX_KINDS as readonly string[]).includes(k)) return;
-  spawn(k as FxKind, ev.x, ev.y, typeof n === 'number' ? n : 1);
+  const count = typeof n === 'number' ? n : 1;
+  if (ev.params?.romance && k === 'heart') romanceHearts(ev.x, ev.y, count);
+  else if (ev.params?.romance && k === 'spark') ringSparkle(ev.x, ev.y, count);
+  else spawn(k as FxKind, ev.x, ev.y, count);
 }
 watch('fx', onFx);
+
+/* ---------- the romance effects (04 7.6, 8): hooks until the owner picks the art (register row 26) ---------- */
+
+/** Hearts per stage (04 7.6 item 1): Notice 2, Bench 1 every 10 s, Picnic 1 every 8 s, Kiss 6, Happily 12. */
+export const HAPPILY_HEARTS = 12;
+/**
+ * A pair's hearts. TODO(S5-art): the two-tone hearts of 04 7.6 item 2 (each lobe in one lover's signature colour from stage 3) wait for
+ * the owner's pick of the romance art; until then the existing S1 heart particle (GV heartFx 2389, drawHeart) in `rose`.
+ */
+export function romanceHearts(x: number, y: number, n: number): void {
+  spawn('heart', x, y, n);
+}
+/** The Proposal's ring sparkle at 8 s. TODO(S5-art): the `lamp` 4-point stars of 04 8; until then the existing spark particle. */
+export function ringSparkle(x: number, y: number, n: number): void {
+  spawn('spark', x, y, n);
+}
+/** Parted: the heart that splits in two (04 7.6 item 3). TODO(S5-art): draws nothing until the owner picks the art. */
+export function heartbreakFx(_x: number, _y: number): void {
+  /* TODO(S5-art) */
+}
+/** Happily: 12 hearts (the existing particle) and the fireworks of 04 8 for 10 s over the spot. TODO(S5-art): the fireworks draw nothing yet. */
+export function happilyFx(x: number, y: number): void {
+  romanceHearts(x, y, HAPPILY_HEARTS);
+  fireworksFx(x, y);
+}
+/** TODO(S5-art): the fireworks shells and sparks (04 8: 1 shell per 0.8 s for 10 s, 24 sparks in rose, lamp, sky); nothing yet. */
+export function fireworksFx(_x: number, _y: number): void {
+  /* TODO(S5-art) */
+}
+watch('happily', (ev) => happilyFx(ev.x ?? 0, ev.y ?? 0));
+watch('parted', (ev) => heartbreakFx(ev.x ?? 0, ev.y ?? 0));
 
 /* ---------- particles as painter drawables (03 7.2 item 2: a particle uses its ground point) and their drawing (GV drawPart 8609) ---------- */
 type FxDrawable = Drawable & { p: Part | null };

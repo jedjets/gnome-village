@@ -12,12 +12,15 @@
 // full"; the "+" stops the click's propagation as GV's did (it is #hudVisitors's sibling, 03 10.1, so the census chip never sees it
 // either way) and repaints an open census; the frame call ages the feed line (GV 10842) and repaints an open census every 1.2 s
 // (sheets.ts), and the 0.35 s repaint refreshes the card (GV 10860).
-// TODO(S5): the Romance chip; TODO(S6): the Points chip; TODO(S7): body.avatar from the `mode` event.
+// S5: the Romance chip names the featured pair, "A & B · Stage" (romance.ts featured: the pin, else the highest stage), or "No one
+// courting yet" (06 16.3), and pulses once when the featured pair's stage changes (02 12.2).
+// TODO(S6): the Points chip; TODO(S7): body.avatar from the `mode` event.
 import { T, SEASON_KEYS } from '../core/clock.ts';
 import { enqueue } from '../core/commands.ts';
 import { watch } from '../core/events.ts';
 import { W } from '../core/weather.ts';
-import { people } from '../entities/visitor.ts';
+import { byId, people } from '../entities/visitor.ts';
+import { STAGE_IDS, featured, shownStage } from '../entities/romance.ts';
 import { WCOLD } from '../render/ambient.ts';
 import { $, ageToast, layoutOverlays, toast } from './dom.ts';
 import { plural, t, onLang } from './i18n.ts';
@@ -39,10 +42,37 @@ function paint(): void {
   $('tPhase').textContent = t('hud.phase.' + T.phase);
   $('tDay').textContent = t('hud.day', { n: T.day, season: '@hud.season.' + SEASON_KEYS[T.season] });
   $('tPop').textContent = plural('hud.visitors', people());
-  $('tRom').textContent = t('hud.romance.none');
+  romanceChip();
   $('tCP').textContent = '0';
   $('tMP').textContent = '0';
   document.body.dataset.day = String(T.day);
+}
+
+/** The featured pair and stage the chip last showed, for the pulse on a stage change (02 12.2). */
+let shownRom = { id: 0, stage: 0 };
+/** The pulse lasts this long (04 9.1 card show, 0.18 s each way). */
+export const PULSE_MS = 600;
+let pulseT = 0;
+
+function romanceChip(): void {
+  const p = featured(), a = p ? byId(p.a) : undefined, b = p ? byId(p.b) : undefined;
+  const el = $('tRom');
+  if (!p || !a || !b) {
+    el.textContent = t('hud.romance.none');
+    shownRom = { id: 0, stage: 0 };
+    return;
+  }
+  const k = shownStage(p);
+  el.textContent = t('hud.romance.pair', { a: a.name, b: b.name, stage: '@stage.' + STAGE_IDS[k] });
+  if (shownRom.id === p.id && shownRom.stage !== k) {
+    const chip = $('hudRomance');
+    chip.classList.remove('pulse');
+    void chip.offsetWidth; // restart the animation
+    chip.classList.add('pulse');
+    window.clearTimeout(pulseT);
+    pulseT = window.setTimeout(() => chip.classList.remove('pulse'), PULSE_MS);
+  }
+  shownRom = { id: p.id, stage: k };
 }
 
 /** The frame listeners for the command results (03 5.4); registered once. */

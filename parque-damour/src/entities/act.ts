@@ -68,7 +68,7 @@ function open(x: number, y: number): boolean {
 }
 
 /** Walk `v` to (x, y) directly when its tile is open (no A*: a child's circle, a short follow), else by A*. */
-function walkDirect(v: Visitor, x: number, y: number): void {
+export function walkDirect(v: Visitor, x: number, y: number): void {
   if (open(Math.round(x), Math.round(y))) {
     v.path = [{ x, y }];
     v.pi = 0;
@@ -308,7 +308,21 @@ function seatStep(v: Visitor): void {
     return;
   }
   if (v.path) return;
-  // arrived: take a seat that nobody already sits on (02 4.3 bench, table, picnic)
+  takeSeat(v, p);
+  const kind = v.job.kind === 'with' ? (byId(v.job.visitorId ?? 0)?.job.kind === 'picnic' ? 'picnic' : 'sit') : v.job.kind;
+  v.st = kind === 'read' ? 'read' : kind === 'feed' ? 'feed' : kind === 'snack' ? 'eat' : kind === 'chess' ? 'chess' : kind === 'picnic' ? 'picnic' : 'sit';
+  if (kind === 'feed') {
+    v.t = FEED_T;
+    v.job.left = 3;
+    const a = approachOf(p);
+    if (a) dropCrumbs(a.x, a.y, v.id); // the first handful at once, then every 10 s (06 1.8)
+  } else if (kind === 'read') v.t = FEED_T;
+  else if (kind === 'snack') v.t = KIOSK_EAT_T;
+  else if (kind === 'chess') v.t = CHESS_T;
+}
+
+/** Arrived at a seat prop: take a seat nobody already sits on (02 4.3 bench, table, picnic; act-romance.ts for a pair's seats). */
+export function takeSeat(v: Visitor, p: Prop): void {
   let k = 0;
   for (let s = 0; s < 2; s++) {
     const at = seatPos(p, s);
@@ -322,16 +336,6 @@ function seatStep(v: Visitor): void {
   v.y = at.y;
   v.sitPropId = p.id;
   if (!p.data.sitters?.includes(v.id)) (p.data.sitters ??= []).push(v.id);
-  const kind = v.job.kind === 'with' ? (byId(v.job.visitorId ?? 0)?.job.kind === 'picnic' ? 'picnic' : 'sit') : v.job.kind;
-  v.st = kind === 'read' ? 'read' : kind === 'feed' ? 'feed' : kind === 'snack' ? 'eat' : kind === 'chess' ? 'chess' : kind === 'picnic' ? 'picnic' : 'sit';
-  if (kind === 'feed') {
-    v.t = FEED_T;
-    v.job.left = 3;
-    const a = approachOf(p);
-    if (a) dropCrumbs(a.x, a.y, v.id); // the first handful at once, then every 10 s (06 1.8)
-  } else if (kind === 'read') v.t = FEED_T;
-  else if (kind === 'snack') v.t = KIOSK_EAT_T;
-  else if (kind === 'chess') v.t = CHESS_T;
   emit({ kind: 'sit', tick: nowTick(), x: v.x, y: v.y, ids: [v.id], params: { prop: p.kind } });
 }
 

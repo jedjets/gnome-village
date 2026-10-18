@@ -25,6 +25,7 @@ import type { XY } from '../core/math.ts';
 import type { Visitor } from '../entities/visitor.ts';
 import type { Creature } from '../entities/creatures.ts';
 import type { RegularState } from '../entities/names.ts';
+import type { Alumni, Pair } from '../entities/romance.ts';
 
 export const SCHEMA_VERSION = 1;
 
@@ -87,12 +88,12 @@ export type ParkSaveV1 = {
   ids: IdsState;
   props: Prop[];
   visitors: Visitor[];
-  pairs: SaveRec[];
+  pairs: Pair[];
   creatures: Creature[];
   effects: SaveRec[];
   sides: { cooldowns: Record<Side, Record<string, number>>; charges: Record<Side, Record<string, number>> };
   regulars: RegularState[];
-  alumni: Array<Record<string, unknown>>;
+  alumni: Alumni[];
   pinnedPair: number;
   paving: { runsToday: number; day: number; run?: XY[]; at?: number };
   sched?: SchedSave;
@@ -111,4 +112,6 @@ export type SchedSave = {
   arrivedDay: number; // the day arrivedToday counts (names.ts)
   arrivedToday: number; // regulars arrived that day, at most 3 (02 4.5 item 3)
   gathered: number[]; // crumbs props whose gathering was announced (creatures.ts)
+  rolled?: number[]; // S5: the two ids of every encounter that rolled today, flat (romance.ts, 02 6.1 item 5)
+  alumniDay?: number; // S5: the day the alumni return was last rolled (romance.ts alumniRoll)
 };

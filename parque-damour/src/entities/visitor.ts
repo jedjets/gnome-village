@@ -25,14 +25,10 @@
 //     parent's)), decideT (1). So an elder makes 8 draws, a generated single 10 (12 with the re-roll), a returning regular 6.
 // lookSeed: the low 3 bits are the signature colour index (04 7.3; signatureOf); bit 3 a hat and bit 4 a purse for those whose
 // archetype does not fix them; the renderer reads the rest (lookSeed >>> 5) for hair, coat and skin.
-// Part B of S4 (07 S4.6 steps 6-11, 17): core/loop.ts runs stepArrivals (phase 7) and stepVisitors (phase 8: spaceOut, then per visitor
-// stepNeeds, the cadence, act, moveStep with wearAt, removal at the outside tile); brain.ts hands in decide, act and BUSY at load
-// (setBrain), so this file never imports brain.ts or act.ts; this file registers the `visitor.call` command (03 5.1); save/store.ts saves
-// and restores the list (visitorsState, setVisitorsState) and the arrivals timer. A new park empties the list (resetVisitors) without a
-// draw. Two fields beyond 03 3.3: `plan`, the routine's progress that survives an interruption (a tourist's next viewpoint, a jogger's
-// or dog walker's finished laps, an artist who has painted, the gardener's next tidy), and the Job counters `step` and `left` (the
-// corner of a loop and the legs or crumbs left). A spawn with `drawless` makes no draw (a kiosk's vendor, so the kiosk and its undo
-// leave the sim stream as it was: 08 2.5 undo row 1).
+// S4 part B: loop.ts runs stepArrivals (phase 7) and stepVisitors (phase 8); brain.ts hands in decide, act and BUSY (setBrain), romance.ts
+// its pair hooks (setPairHooks, S5), so this file imports neither; it registers `visitor.call` (03 5.1); store.ts saves the list and the
+// timer. A new park empties the list without a draw. Beyond 03 3.3: `plan` (a routine's progress across an interruption) and the Job
+// counters `step` and `left`. A `drawless` spawn makes no draw (a kiosk's vendor: 08 2.5 undo row 1).
 // Park pace (owner 2026-10-14, register section 4): this file registers `park.pace` and keeps the park's pace with the arrivals timer
 // (arrivalsState); a Calm park draws 02 4.2's 6-14 s gap, a Lively one LIVELY_GAP_MIN-MAX, one draw either way. A new park is calm.
 import type { XY } from '../core/math.ts';
@@ -330,7 +326,7 @@ export function arriveGroup(arch: Archetype, gate: GateId): Visitor[] {
       if (f && m) {
         f.coupleOf = m.id;
         m.coupleOf = f.id;
-        // TODO(S5): romance.ts makes them a Pair at stage 3 (Bench) with affinity rnd(0.55, 0.70) and sets both pairId (register 3.4).
+        pairHooks.couple(f, m); // romance.ts: a Pair at stage 3 with affinity rnd(0.55, 0.70) (register 3.4)
       }
       break;
     }
@@ -384,11 +380,12 @@ export function callVisitor(gate?: GateId | null): Result {
 
 /**
  * Take a visitor out of the park (02 4.5 item 1, 6.5): the name is free again, a regular schedules the return (two draws), every seat
- * that lists it is freed, and every link to the visitor drops to 0. romance.ts (S5) dissolves a Pair before its member leaves.
+ * that lists it is freed, and every link to the visitor drops to 0; romance.ts drops a Pair it is still in (setPairHooks).
  */
 export function removeVisitor(id: VisitorId): void {
   const v = index.get(id);
   if (!v) return;
+  pairHooks.removed(v);
   releaseName(v.name);
   if (v.regularId !== 0) regularLeft(v.regularId, T.day);
   // every seat drops the id, not only v.sitPropId's: an undo puts a removed or turned prop back with the sitters it had then
@@ -414,6 +411,13 @@ export function leaveIfOutside(v: Visitor): boolean {
 }
 
 /* ---------- the decide cadence (03 4.4, GV 5696) ---------- */
+
+/** romance.ts hands in its couple arrival and removal hooks at load (S5), so this file never imports it. */
+export type PairHooks = { couple: (f: Visitor, m: Visitor) => void; removed: (v: Visitor) => void };
+let pairHooks: PairHooks = { couple: () => {}, removed: () => {} };
+export function setPairHooks(h: PairHooks): void {
+  pairHooks = h;
+}
 
 /** play/avatar.ts (S7) hands in its decide at boot, so entities never import it (03 4.4). */
 export function setAvatarDecide(fn: (v: Visitor) => void): void {

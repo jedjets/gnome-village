@@ -43,6 +43,8 @@ import { breedOf, lookOf, newLook } from './figure-look.ts';
 import { DOG_EH, DOG_TROT_HZ, PIGEON_FLAP_HZ, PIGEON_WALK_HZ, drawDog, drawDogOf, drawLead, drawPigeonOf, drawPigeonState, pigeonStateOf } from './creatures.ts';
 import { blit, spriteFor, spriteFrame, type Sprite, type SpriteLight } from './figure-sprites.ts';
 import { SEATS, seatPos } from '../entities/staff.ts';
+import { pairById } from '../entities/romance.ts';
+import { drawChatBubble } from './effects.ts';
 
 /** A seat's height in EH units (props-park.ts drawBench seatE 0.2; props.ts drawBistroTable's chair seat 0.3; a blanket on the ground). */
 export const SEAT_E: Readonly<Partial<Record<Prop['kind'], number>>> = { bench: 0.2, table: 0.3, picnic: 0 };
@@ -137,6 +139,15 @@ function headingOf(v: Visitor, out: XY): XY {
     }
     return out;
   }
+  // a pair standing together faces each other (02 6.2 Notice, Chat, Kiss, Proposal; the backfire laugh); the Parted huff faces away
+  const p = pairById(v.job.pairId ?? v.pairId);
+  const o = p && !v.path && FACING[v.st] ? byId(p.a === v.id ? p.b : p.a) : v.st === 'huff' && v.job.kind === 'parted' ? byId(v.job.visitorId ?? 0) : undefined;
+  if (o) {
+    const k = v.st === 'huff' ? -1 : 1;
+    out.x = (o.x - v.x) * k;
+    out.y = (o.y - v.y) * k;
+    return out;
+  }
   const easel = v.st === 'paint' ? propById(v.job.propId ?? 0) : undefined;
   if (easel) {
     out.x = easel.x - v.x; // the artist faces the easel (02 4.3 artist)
@@ -153,6 +164,9 @@ function headingOf(v: Visitor, out: XY): XY {
   }
   return out;
 }
+
+/** The states in which the two of a pair face each other when they stand still (04 9.2). */
+const FACING: Readonly<Record<string, true>> = { notice: true, chat: true, kiss: true, proposal: true, laugh: true };
 
 /** Forget the facings of actors that have left (a few hundred ids a session at most; swept when the map outgrows the lists). */
 function sweep(): void {
@@ -195,6 +209,7 @@ function drawPerson(d: Drawable, c: CanvasRenderingContext2D): void {
   const sprite = (pd.h < SPRITE_H || !zooming) && !(POSE.state === 'walk' && POSE.warm > 0);
   if (sprite && typeof document !== 'undefined') {
     blit(c, figureSprite(v, pd.h), pd.sx, pd.sy, cam.z, view.dpr);
+    chatBubble(pd, v, c);
     return;
   }
   INK.pen = gamePen(c);
@@ -202,6 +217,19 @@ function drawPerson(d: Drawable, c: CanvasRenderingContext2D): void {
   P0.x = pd.sx;
   P0.y = pd.sy;
   drawVisitor(INK, P0, LOOK, POSE);
+  chatBubble(pd, v, c);
+}
+
+/** The Chat stage's talk bubbles (02 6.2 stage 2; 04 7.5 item 4): above one speaker at a time, alternating every 3 s of sim time. */
+export const CHAT_TURN_S = 3;
+function chatBubble(pd: PersonDrawable, v: Visitor, c: CanvasRenderingContext2D): void {
+  if (v.st !== 'chat' || v.path || pd.h < SPRITE_H) return;
+  const p = pairById(v.job.pairId ?? 0);
+  if (!p) return;
+  const turn = Math.floor(tSim() / CHAT_TURN_S + p.id) % 2;
+  if ((turn === 0 ? p.a : p.b) !== v.id) return;
+  const hr = pd.h * 0.12;
+  drawChatBubble(gamePen(c), pd.sx + pd.face * hr * 1.6, pd.sy - pd.h * 1.08, hr * 1.4, pd.face);
 }
 
 /* ---------- figures and creatures from sprites (figure-sprites.ts; 03 15.2, 7.9) ---------- */

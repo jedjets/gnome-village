@@ -13,9 +13,11 @@
 // park holds still and a screenshot repeats (08 4.5); drawn in phase 7 over the scene (03 7.9) for whoever card.ts selected, which
 // main.ts hands in (render cannot import ui, 03 2.1); h is the figure's drawn height (render/people.ts anchorOf). Dropped: 8435's
 // avatar-mode skip (the possessed one wears no ring: S7).
-// TODO(S6): the armed area ability's square at alpha 0.25 in the side's accent (03 7.8 item 3). TODO(S5): the featured pair's rose ring
-// on both members (04 7.1 rule 9, 7.3 item 4), the focus pin for 5.2 s after goToEvent (GV drawFocusMark 10764).
+// S5: the focus pin for 5.2 s after goToEvent (GV drawFocusMark 10764), timed on the frame clock (loop.ts now: a UI transition, 04 9.1).
+// TODO(S6): the armed area ability's square at alpha 0.25 in the side's accent (03 7.8 item 3). TODO(S5-art): the featured pair's rose
+// ring on both members (04 7.1 rule 9, 7.3 item 4) waits for the owner's pick of the romance art.
 import { DAYLEN, T } from '../core/clock.ts';
+import { now } from '../core/loop.ts';
 import { css, hx, mixc, type XY } from '../core/math.ts';
 import type { Ghost } from '../play/tools.ts';
 import { byId } from '../entities/visitor.ts';
@@ -68,9 +70,54 @@ export function drawGhost(c: CanvasRenderingContext2D, g: Ghost | null): void {
   }
 }
 
-/** The focus pin at an event's place for 5.2 s after goToEvent (GV drawFocusMark 10764). S5 fills it. */
-export function drawFocusMark(): void {
-  // TODO(S5)
+/** The focus pin's life (GV goToEvent 10764: until now + 5200) and its bob (04 9.1: 3 px at 0.8 Hz). */
+export const FOCUS_MS = 5200;
+let mark: { x: number; y: number; until: number } | null = null;
+const MP: XY = { x: 0, y: 0 };
+
+/** The Events sheet flew to a place (ui/sheets.ts goToEvent): the pin stands over tile (x, y) for 5.2 s of the frame clock (UI time). */
+export function setFocusMark(x: number, y: number): void {
+  mark = { x, y, until: now() + FOCUS_MS };
+}
+export function focusMark(): Readonly<{ x: number; y: number; until: number }> | null {
+  return mark;
+}
+
+/**
+ * The focus pin (GV drawFocusMark 10764-10773): an ink teardrop with a paper dot in the air over the event's place, fading in over 0.25 s
+ * and out over the last 0.7 s, bobbing 3 px at 0.8 Hz (04 5.6, 9.1). ADAPT: direction A's ink and paper (04 4.5) where GV wrote rgba
+ * literals; 12 px above the ground point (GV's place height), the ground being flat.
+ */
+export function drawFocusMark(c: CanvasRenderingContext2D | null = null): void {
+  const m = mark;
+  if (!m || !c) return;
+  const t = now(), left = m.until - t;
+  if (left <= 0 || left > FOCUS_MS + 800) {
+    mark = null;
+    return;
+  }
+  const a = Math.min(1, left / 700) * Math.min(1, (FOCUS_MS - left) / 250);
+  const bob = Math.sin((t / 1000) * Math.PI * 2 * 0.8) * 3;
+  screenInto(m.x, m.y, 0, MP);
+  const x = MP.x, y = MP.y - 12 * cam.z - 10 - bob, s = 7;
+  const P = style().palette;
+  c.save();
+  c.globalAlpha = Math.max(0, a);
+  c.fillStyle = css(hx(P.ink), 0.9);
+  c.beginPath();
+  c.moveTo(x, y + s * 1.3);
+  c.lineTo(x - s * 0.72, y + s * 0.1);
+  c.lineTo(x + s * 0.72, y + s * 0.1);
+  c.closePath();
+  c.fill();
+  c.beginPath();
+  c.arc(x, y - s * 0.3, s * 0.95, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = P.paper;
+  c.beginPath();
+  c.arc(x, y - s * 0.3, s * 0.38, 0, Math.PI * 2);
+  c.fill();
+  c.restore();
 }
 
 const RING: Anchor = { x: 0, y: 0, gx: 0, gy: 0, h: 0, e: 0, sit: false };

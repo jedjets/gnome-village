@@ -18,8 +18,15 @@
 // (ui/ may not import debug/, 03 2.1). Every string through t(). The open sheet repaints when what it shows changes (checked every
 // frame from hud.ts) or the language changes. Escape and the close button close any sheet; focus goes back to the control that opened
 // it (a tap that gave no focus leaves none to go back to).
-// TODO(S5): romances, evlog with goToEvent; TODO(S6): progress; TODO(S7): picker; TODO(S8): the Sound check sheet.
-import { T } from '../core/clock.ts';
+// S5 (02 12.4; 04 5.6): the Romances sheet, pairs by stage descending (the shown stage, then the featured order): "A & B", the stage
+// chip, the affinity bar, "n today" embarrassments and a Pin per row (romance.ts setPin), the footer "Today: Happily n · Parted m"
+// counted from the day's happily and parted events; a row selects the pair (the pair card). The Events sheet (GV renderEvLog 10743):
+// the feed's last 40, newest first, "Day N · phase" over each line; a row, or a tap on the feed line (GV 12176), flies there
+// (goToEvent, GV 10751): a visitor still in the park is selected and followed with the card; otherwise the camera follows the place
+// and the 5.2 s focus pin stands over it (render/ghost.ts setFocusMark).
+// TODO(S6): progress; TODO(S7): picker; TODO(S8): the Sound check sheet.
+import { T, phaseOf } from '../core/clock.ts';
+import { watch } from '../core/events.ts';
 import { enqueue, pendingCount, type Pace } from '../core/commands.ts';
 import { CAP_PEOPLE, arrivalsState, visitors, byId, type Visitor } from '../entities/visitor.ts';
 import { parkSeed } from '../world/gen.ts';
@@ -28,6 +35,10 @@ import { $, confirmOpen, layoutOverlays, toast, SHEET_IDS, type SheetId } from '
 import { lang, onLang, plural, t } from './i18n.ts';
 import { chooseLang } from './intro.ts';
 import { select, selectedVisitor } from './card.ts';
+import { feedEntries, type FeedEntry } from './feed.ts';
+import { STAGE_IDS, pairById, pairs, partnerOf, pinnedPair, setPin, shownStage, type Pair } from '../entities/romance.ts';
+import { cam, clampCam, follow } from '../render/camera.ts';
+import { setFocusMark } from '../render/ghost.ts';
 
 /** What main.ts hands the sheets: the dev perf overlay's state and switch (debug/perf.ts, which ui/ may not import, 03 2.1). */
 export type SheetHooks = { perfOn?: () => boolean; setPerf?: (on: boolean) => void };
@@ -85,13 +96,17 @@ export function toggleSheet(id: SheetId): void {
 export function renderSheet(id: SheetId): void {
   if (id === 'census') renderCensus();
   else if (id === 'options') renderOptions();
-  // TODO(S5-S11): the other sheets; until then they show the placeholder paragraph from index.html.
+  else if (id === 'romances') renderRomances();
+  else if (id === 'evlog') renderEvents();
+  // TODO(S6-S8): the other sheets; until then they show the placeholder paragraph from index.html.
 }
 
 /** Every frame with real seconds (hud.ts): the census repaints every 1.2 s while it is open. */
 export function updateSheets(dtr: number): void {
   const open = sheetOpen();
   if (open === 'options' && optionsKey() !== paintedKey) renderOptions(); // a pace applied, a New, the dial, #bMute, the language
+  if (open === 'romances' && romancesKey() !== romKey) renderRomances(); // a stage, a bar, a pin, a pair come or gone
+  if (open === 'evlog' && feedEntries()[0] !== evTop) renderEvents();
   if (open !== 'census') {
     censusT = 0;
     return;
@@ -101,8 +116,9 @@ export function updateSheets(dtr: number): void {
 }
 
 /** The one the census row names beside the person: a couple's other half, a child's parent or a parent's child; S5 adds the Pair. */
-function partnerOf(v: Visitor): Visitor | undefined {
-  // TODO(S5): a member of a Pair names the other member
+function partnerOfV(v: Visitor): Visitor | undefined {
+  const p = pairById(v.pairId);
+  if (p) return partnerOf(p, v);
   const id = v.coupleOf || v.childOf || v.parentOf;
   return id ? byId(id) : undefined;
 }
@@ -129,7 +145,7 @@ export function renderCensus(): void {
     row.type = 'button';
     row.dataset.id = String(v.id);
     row.append(el('b', v.name), el('small', t('sheet.census.row', { archetype: '@archetype.' + v.archetype, doing: '@doing.' + v.st })));
-    const p = partnerOf(v);
+    const p = partnerOfV(v);
     if (p) row.append(el('small', t('sheet.census.partner', { b: p.name }), 'r'));
     rows.push(row);
   }
@@ -137,6 +153,106 @@ export function renderCensus(): void {
   const n = rows.length;
   // two spans; shell.css puts the " · " between them, so no sentence is built here (03 P7)
   sum.replaceChildren(el('span', t('sheet.census.summary', { n, k: pairs.size })), el('span', plural('sheet.census.room', Math.max(0, CAP_PEOPLE - n))));
+}
+
+/* ---------- Romances (02 12.4; 04 5.6) ---------- */
+
+/** Today's endings, counted from the frame events (UI state: a reload starts the day's count again). */
+let today = { day: 0, h: 0, p: 0 };
+function countEnding(kind: 'h' | 'p', tick: number): void {
+  const day = Math.floor(0.3 + tick / 21600) + 1;
+  if (today.day !== day) today = { day, h: 0, p: 0 };
+  today[kind]++;
+}
+let romKey = '';
+function sortedPairs(): Pair[] {
+  return pairs.slice().sort((x, y) => shownStage(y) - shownStage(x) || x.formedDay - y.formedDay || x.id - y.id);
+}
+function romancesKey(): string {
+  return [lang(), pinnedPair(), T.day, today.h, today.p, ...sortedPairs().map((p) => `${p.id}:${shownStage(p)}:${Math.round(p.affinity * 100)}:${p.embToday}`)].join('|');
+}
+
+/** One row per pair (04 5.6): "A & B" in Fraunces, the stage chip, the affinity bar, "n today", Pin; the footer is the sum line. */
+export function renderRomances(): void {
+  const list = document.getElementById('romancesList'), sum = document.getElementById('romancesSum');
+  if (!list || !sum) return;
+  romKey = romancesKey();
+  if (today.day !== T.day) today = { day: T.day, h: 0, p: 0 };
+  const rows: HTMLElement[] = [];
+  for (const p of sortedPairs()) {
+    const a = byId(p.a), b = byId(p.b);
+    if (!a || !b) continue;
+    const row = el('div', '', 'row rom');
+    row.dataset.pair = String(p.id);
+    row.setAttribute('role', 'button');
+    row.tabIndex = 0;
+    const k = shownStage(p);
+    const bar = el('i', '', 'abar');
+    const u = el('u', '');
+    u.style.width = Math.round(p.affinity * 100) + '%';
+    bar.append(u);
+    const pin = el('button', t(pinnedPair() === p.id ? 'card.unpin' : 'card.pin'), 'gb pin');
+    pin.type = 'button';
+    pin.dataset.pin = String(p.id);
+    pin.setAttribute('aria-pressed', pinnedPair() === p.id ? 'true' : 'false');
+    row.append(
+      el('b', t('card.pair.title', { a: a.name, b: b.name })),
+      pin,
+      el('small', t('stage.of', { stage: '@stage.' + STAGE_IDS[k], n: k }), 'stg'),
+      bar,
+      el('small', t('card.pair.emb', { n: p.embToday }), 'r'),
+    );
+    rows.push(row);
+  }
+  if (rows.length === 0) rows.push(el('div', t('sheet.romances.empty'), 'sum'));
+  list.replaceChildren(...rows);
+  sum.textContent = t('sheet.romances.today', { h: today.h, p: today.p });
+}
+
+/* ---------- Events (02 12.4; GV renderEvLog 10743, goToEvent 10751) ---------- */
+
+let evTop: FeedEntry | undefined;
+let evSel: FeedEntry | null = null;
+
+/** The last 40 lines, newest first, "Day N · phase" over each (04 5.6). */
+export function renderEvents(): void {
+  const list = document.getElementById('evList');
+  if (!list) return;
+  const es = feedEntries();
+  evTop = es[0];
+  if (es.length === 0) {
+    list.replaceChildren(el('div', t('sheet.events.empty'), 'sum'));
+    return;
+  }
+  list.replaceChildren(
+    ...es.map((e, k) => {
+      const row = el('button', '', e === evSel ? 'row ev sel' : 'row ev');
+      row.type = 'button';
+      row.dataset.k = String(k);
+      const day = Math.floor(e.abs) + 1, f = e.abs - Math.floor(e.abs);
+      row.append(el('small', t('sheet.events.when', { n: day, phase: '@hud.phase.' + phaseOf(f) })), el('span', t(e.key, e.params)));
+      return row;
+    }),
+  );
+}
+
+/**
+ * Fly to an event (GV goToEvent 10751): its first id, a visitor still in the park, is selected and followed with the card; otherwise the
+ * camera follows the place and the focus pin stands over it for 5.2 s (GV drawFocusMark 10764).
+ */
+export function goToEvent(e: FeedEntry | undefined): void {
+  if (!e) return;
+  evSel = e;
+  const v = byId(e.ids[0] ?? 0);
+  if (v) select({ kind: 'visitor', id: v.id, tile: null });
+  else {
+    select({ kind: 'none', id: 0, tile: null });
+    follow({ kind: 'point', x: e.x, y: e.y });
+    if (cam.z < 1.3) cam.z = 1.5;
+    clampCam();
+    setFocusMark(e.x, e.y);
+  }
+  if (sheetOpen() === 'evlog') renderEvents();
 }
 
 /* ---------- Options (register 3.10, section 4 "Park pace and Options"; 02 12.4; 04 5.6) ---------- */
@@ -286,6 +402,37 @@ export function initSheets(h: SheetHooks = {}): void {
     select({ kind: 'visitor', id, tile: null });
     renderCensus();
   });
+  // a Romances row selects the pair (the pair card, 02 12.4); its Pin features it (02 6.6)
+  document.getElementById('romancesList')?.addEventListener('click', (e) => {
+    const t0 = e.target as HTMLElement | null;
+    const pin = t0?.closest<HTMLElement>('[data-pin]');
+    if (pin) {
+      const id = Number(pin.dataset.pin);
+      setPin(pinnedPair() === id ? 0 : id);
+      renderRomances();
+      return;
+    }
+    const p = pairById(Number(t0?.closest<HTMLElement>('[data-pair]')?.dataset.pair ?? 0));
+    if (!p) return;
+    closeSheets();
+    select({ kind: 'visitor', id: p.a, tile: null });
+  });
+  // an Events row flies to its event; the feed line opens Events and flies to the newest, or closes it (GV 12176-12178)
+  document.getElementById('evList')?.addEventListener('click', (e) => {
+    const row = (e.target as HTMLElement | null)?.closest<HTMLElement>('.row');
+    if (row?.dataset.k !== undefined) goToEvent(feedEntries()[Number(row.dataset.k)]);
+  });
+  document.getElementById('feed')?.addEventListener('click', (e) => {
+    if (!(e.target as HTMLElement | null)?.closest('.ev')) return;
+    if (sheetOpen() === 'evlog') {
+      closeSheets();
+      return;
+    }
+    openSheet('evlog');
+    goToEvent(feedEntries()[0]);
+  });
+  watch('happily', (e) => countEnding('h', e.tick));
+  watch('parted', (e) => countEnding('p', e.tick));
   document.getElementById('optionsList')?.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-k]');
     if (b?.dataset.k) onOption(b.dataset.k);

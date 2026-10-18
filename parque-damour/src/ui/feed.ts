@@ -10,8 +10,10 @@
 // habitués from the start (02 4.5 item 2), so their first visit reads as a return as well.
 // Dropped from the range: feedAll (10702, 10718: the harness's 400-line text log; the harness reads feedEntries), nameIn and logActor,
 // evNote (10742: S5's Events sheet), todName (hud.ts writes the phase word), the inline HTML escaping (textContent).
-// TODO(S5): a tap on the line opens Events and flies to the event (GV 12176, goToEvent 10751); the stage, embarrassment, cast, unlock,
-// tally and season lines (02 12.5 item 2). The park save's `feed` (register 3.11) is store.ts's to fill from feedState().
+// S5: the romance lines (pair formed, each stage, Happily, renewed vows, Parted, leaving together or alone, an alumni return, each
+// embarrassment landed or backfired) from the sim events that carry a feed key, with nested `@` keys for the stage and the item (03 12
+// item 6), and the day tally stub; the park save keeps the list through store.ts setFeedIO (main.ts wires feedState and setFeedState);
+// a tap on the line opens Events (sheets.ts, GV 12176). TODO(S6): the cast, unlock and real tally lines; TODO(S9): the season lines.
 import { START_ABS, STEPS_PER_DAY } from '../core/clock.ts';
 import { watch, type GameEvent } from '../core/events.ts';
 import { clamp01 } from '../core/math.ts';
@@ -92,7 +94,10 @@ export function feedState(): FeedEntry[] {
 
 /** Put a saved list back (newest first, at most 40); no line shows until the next entry. */
 export function setFeedState(s: readonly FeedEntry[]): void {
-  entries = s.slice(0, FEED_CAP).map((e) => ({ ...e, params: { ...e.params }, ids: e.ids.slice() }));
+  entries = s
+    .filter((e) => typeof e?.key === 'string')
+    .slice(0, FEED_CAP)
+    .map((e) => ({ ...e, params: { ...e.params }, ids: Array.isArray(e.ids) ? e.ids.slice() : [] }));
   line = null;
   paint();
 }
@@ -106,11 +111,28 @@ function absOf(ev: GameEvent): number {
   return START_ABS + ev.tick / STEPS_PER_DAY;
 }
 
-/** A `step` or `peck` that carries a feed key in its params (the gardener's and the pigeons' lines, S4 part B). */
+/** The params a line keeps: the names, the stage and the item (nested `@` keys stay keys, 03 12 item 6); the sim's meta goes. */
+const META: ReadonlySet<string> = new Set(['feed', 'couple', 'ending', 'kind', 'source', 'landed', 'score', 'surface', 'regularId']);
+function lineParams(p: Params | undefined): Params {
+  const out: Params = {};
+  if (p) for (const k of Object.keys(p)) if (!META.has(k)) out[k] = p[k] as string | number;
+  return out;
+}
+
+/**
+ * An event that carries a feed key in its params: the gardener's and the pigeons' lines (`step`, `peck`, S4 part B) and, since S5, a
+ * pair formed, a stage completed, Happily, renewed vows, Parted, leaving together or alone (`step`), an alumni couple's return, an
+ * embarrassment landed or backfired (02 12.5 item 2).
+ */
 function fromParams(ev: GameEvent): void {
   const key = ev.params?.feed;
   if (typeof key !== 'string' || !key.startsWith('feed.')) return;
-  pushFeed({ key, params: {}, abs: absOf(ev), x: ev.x ?? 0, y: ev.y ?? 0, ids: ev.ids ?? [] });
+  pushFeed({ key, params: lineParams(ev.params), abs: absOf(ev), x: ev.x ?? 0, y: ev.y ?? 0, ids: ev.ids ?? [] });
+}
+
+/** The day's tally at each new day (02 7.3): a stub at 0 until S6 keeps the per-park points. TODO(S6): the real tally. */
+function fromNewDay(ev: GameEvent): void {
+  pushFeed({ key: 'feed.tally', params: { cp: 0, mp: 0 }, abs: absOf(ev), x: 23.5, y: 23.5, ids: [] });
 }
 
 /** A regular came in through a gate: "{name} is back" (06 16.11 feed.regular_return). */
@@ -127,8 +149,8 @@ let wired = false;
 export function initFeed(): void {
   if (wired) return;
   wired = true;
-  watch('step', fromParams);
-  watch('peck', fromParams);
+  for (const k of ['step', 'peck', 'formed', 'stage', 'happily', 'parted', 'embarrassed', 'backfired'] as const) watch(k, fromParams);
   watch('arrive', fromArrive);
+  watch('newday', fromNewDay);
   onLang(paint);
 }

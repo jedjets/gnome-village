@@ -25,8 +25,9 @@
 // `park.pace` command after every new park the shell starts: a Begin's newPark, the fresh park that replaces a Continue whose restore
 // threw (main.ts begin's catch), and a New's park.new (core/commands.ts enqueueAfterNew). A Continue that restores sends none: the
 // restored park keeps its own pace.
-// TODO(S5): the feed (ui/feed.ts, which this layer cannot import) joins the snapshot through a hook; the profile's cp and mp join the
-// state hash (03 11) in the slice that first awards points, which re-records the det fixtures (S3 must keep them: 07 S3.7 item 1).
+// S5: the pairs, the alumni and the day's romance counters (sched.rolled, sched.alumniDay) are saved and hashed; the pinned pair is saved
+// and not hashed (UI state per client, 02 14.3); the feed joins the snapshot through the hook main.ts hands in (setFeedIO; not hashed).
+// TODO(S6): the profile's cp and mp join the state hash (03 11) in the slice that first awards points, which re-records the det fixtures.
 import { FNV_SEED, fnvStep } from '../core/math.ts';
 import { rngN, setSimState, setVisState, simState, visState } from '../core/rng.ts';
 import { idsState, setIdsState } from '../core/ids.ts';
@@ -48,6 +49,7 @@ import { arrivalsState, setArrivalsState, setVisitorsState, visitorsState } from
 import { namesState, regularsState, resetNames, setNamesState } from '../entities/names.ts';
 import { creaturesState, gatheredState, setCreaturesState, setGatheredState } from '../entities/creatures.ts';
 import { pavingState, resetStaff, setPavingState } from '../entities/staff.ts';
+import { alumniState, pairsState, pinnedPair, romanceSched, setRomanceState } from '../entities/romance.ts';
 import { defaultProfile, migratePark, migrateProfile } from './migrate.ts';
 import { SCHEMA_VERSION, type LayersSave, type ParkSaveV1, type ProfileV1, type SchedSave, type WeatherSave } from './schema.ts';
 
@@ -391,8 +393,18 @@ function weatherBlock(): WeatherSave {
 
 /** The schedulers' counters (schema.ts SchedSave). */
 function schedState(): SchedSave {
-  const n = namesState();
-  return { arrivalT: arrivalsState().arrivalT, held: n.held, arrivedDay: n.arrivedDay, arrivedToday: n.arrivedToday, gathered: gatheredState() };
+  const n = namesState(), r = romanceSched();
+  return {
+    arrivalT: arrivalsState().arrivalT, held: n.held, arrivedDay: n.arrivedDay, arrivedToday: n.arrivedToday, gathered: gatheredState(),
+    rolled: r.rolled, alumniDay: r.alumniDay,
+  };
+}
+
+/** The feed is the UI's (ui/feed.ts, which this layer may not import, 03 2.1): main.ts hands in its reader and writer (S5). */
+type FeedIO = { get: () => Array<Record<string, unknown>>; set: (s: Array<Record<string, unknown>>) => void };
+let feedIO: FeedIO = { get: () => [], set: () => {} };
+export function setFeedIO(io: FeedIO): void {
+  feedIO = io;
 }
 
 /** What the engine owns beyond the layers; the lists the later slices fill (pairs, effects, alumni, feed) are empty until then. */
@@ -401,12 +413,12 @@ function lists(): Pick<
   'visitors' | 'pairs' | 'creatures' | 'effects' | 'sides' | 'regulars' | 'alumni' | 'pinnedPair' | 'paving' | 'sched' | 'mode' | 'tally' | 'feed'
 > {
   return {
-    visitors: visitorsState(), pairs: [], creatures: creaturesState(), effects: [],
+    visitors: visitorsState(), pairs: pairsState(), creatures: creaturesState(), effects: [],
     sides: { cooldowns: { park: {}, cupid: {}, mischief: {} }, charges: { park: {}, cupid: {}, mischief: {} } },
-    regulars: regularsState(), alumni: [], pinnedPair: 0, paving: pavingState(), sched: schedState(),
+    regulars: regularsState(), alumni: alumniState(), pinnedPair: pinnedPair(), paving: pavingState(), sched: schedState(),
     mode: { mode: getMode(), player: getPlayer(), avatar: getAvatar() },
     tally: { day: 1, cp: 0, mp: 0 },
-    feed: [],
+    feed: feedIO.get(),
   };
 }
 
@@ -468,7 +480,8 @@ export function restore(s: ParkSaveV1): void {
   markCharmDirty();
 }
 
-/** The visitors, the creatures, the regulars, the paving job and the schedulers' counters (S4 part B); a save without them (S3) has none. */
+/** The visitors, the creatures, the regulars, the paving job, the schedulers' counters (S4 part B), the pairs, the alumni, the pin and the
+ * feed (S5); a save without them has none. */
 function restoreLife(s: ParkSaveV1): void {
   setVisitorsState(s.visitors ?? []);
   resetNames();
@@ -485,6 +498,8 @@ function restoreLife(s: ParkSaveV1): void {
   setGatheredState(sc?.gathered ?? []);
   resetStaff();
   setPavingState(s.paving);
+  setRomanceState(s.pairs ?? [], s.alumni ?? [], sc, s.pinnedPair ?? 0); // a save from before S5 has none
+  feedIO.set(Array.isArray(s.feed) ? s.feed : []);
 }
 
 /** Key-sorted JSON, so two equal records hash alike whatever order their fields were written in. */

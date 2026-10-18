@@ -161,7 +161,7 @@ export function draw(ghost: Ghost | null = null, sel = 0): void {
   css(c);
   drawGhost(c, ghost);
   drawSelection(c, sel);
-  drawFocusMark();
+  drawFocusMark(c);
   // 8 the weather overlay and the fog wash (S9)
   drawWeatherOverlay();
 }

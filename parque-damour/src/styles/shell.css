@@ -178,6 +178,27 @@ div.sheet .row.ev span{display:block;font-size:12px;line-height:1.32}
 #optionsList .val{min-height:42px;display:flex;align-items:center;padding:0 12px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
 #optionsList .row{min-height:44px;align-items:center;padding-left:10px}
 body:not(.dev) #optionsList .dev{display:none}
+/* S5, the romance core (02 12.2-12.4; 04 5.5 item 2, 5.6): the Romance chip's pulse on a stage change; the pair card (two name buttons
+   with the --berry heart between, the stage chip, the Heart bar with the 1 px --ink gate tick, two doing lines, Pin as a .gb); the
+   Romances rows ("A & B", Pin, the stage chip, the affinity bar, "n today"). Token colours only (04 4.5). */
+@keyframes romPulse{0%{transform:scale(1)}40%{transform:scale(1.06)}100%{transform:scale(1)}}
+#hudRomance.pulse{animation:romPulse .6s ease-out}
+#card h3 .nm{border:0;background:none;padding:0;margin:0;font:inherit;color:inherit;cursor:pointer}
+#card h3 .hrt{font-style:normal;color:var(--berry);margin:0 5px;font-size:13px}
+#card .sub.chipline{display:inline-block;border-radius:999px;background:var(--well);border:1px solid var(--glass-line);padding:0 7px;color:var(--ink)}
+#card .rel.link{cursor:pointer;text-decoration:underline;text-decoration-color:var(--glass-line)}
+.bar i{position:relative}
+.bar i>b.tick{position:absolute;top:0;bottom:0;width:1px;background:var(--ink)}
+#card.pair{min-width:220px}
+#card.pair .doing + .doing{margin-top:1px}
+#cPin.gb{position:absolute;right:7px;top:6px;font-size:11px;font-weight:700;padding:3px 9px;color:var(--ink);border:1px solid var(--glass-line);background:var(--well)}
+#cPin.gb[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
+#romancesList .row.rom{grid-template-columns:1fr auto;align-items:center}
+#romancesList .row.rom > b{font-family:var(--display);font-size:13px}
+#romancesList .row.rom .pin{font-size:11px;font-weight:700;padding:3px 10px;min-height:30px;border:1px solid var(--glass-line)}
+#romancesList .row.rom .stg{justify-self:start;border-radius:999px;background:var(--paper-2);padding:0 7px;color:var(--ink)}
+#romancesList .row.rom .abar{display:block;height:4px;border-radius:3px;background:var(--paper-2);overflow:hidden;font-style:normal;align-self:center}
+#romancesList .row.rom .abar>u{display:block;height:100%;border-radius:3px;background:var(--berry);text-decoration:none}
 #snd .row{display:flex;flex-wrap:wrap;gap:5px;background:none;border:0;padding:0;cursor:default}
 #snd button{font:inherit;font-size:12px;padding:5px 9px;border-radius:999px;border:1px solid var(--glass-line);background:var(--well-2);color:var(--ink)}
 body.sheet #card{opacity:0!important;pointer-events:none!important}

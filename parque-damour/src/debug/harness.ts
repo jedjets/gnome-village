@@ -13,6 +13,8 @@
 // S4 part B: the State group gains visitors and creatures (the live lists, read only), the Park group callVisitor (it enqueues the logged
 // `visitor.call` command, 03 5.1, as setWeather does).
 // Park pace (owner 2026-10-14): the Park group gains setPace, which enqueues the logged `park.pace` command as setWeather does.
+// S5: the State group gains pairs, featured and alumni (read only); the Park group land (07 S5.6 step 5: no ability triggers an
+// embarrassment yet, so the harness lands one directly, as an ability will) and setPin (the Romances sheet's pin, UI state).
 import { T } from '../core/clock.ts';
 import { seedVisual, rngN } from '../core/rng.ts';
 import { SIM_DT, SP, setSpeed, simulate, tick } from '../core/loop.ts';
@@ -29,6 +31,8 @@ import { clearAll, loadPark, restore, savePark, snapshot, stateHash, worldHash }
 import '../play/tools.ts';
 import { visitors } from '../entities/visitor.ts';
 import { creatures } from '../entities/creatures.ts';
+import { alumniState, featured, pairs, setPin } from '../entities/romance.ts';
+import { land } from '../entities/embarrass.ts';
 import { FT, qualityLevel } from './perf.ts';
 
 export type HarnessApi = { newPark: (seed: number) => void };
@@ -40,6 +44,9 @@ export function buildHarness(api: HarnessApi) {
     layers: { KIND, WEAR, OCC, WATER, ICE, WET, PETALS, BEDC, PAVEDAY },
     visitors,
     creatures,
+    pairs,
+    featured,
+    alumni: alumniState,
     props,
     cam,
   };
@@ -87,6 +94,9 @@ export function buildHarness(api: HarnessApi) {
     setPace: (pace: Pace): void => {
       enqueue({ side: 'park', kind: 'park.pace', payload: { pace } });
     },
+    /** Land an embarrassment of `kind` on visitor `id` now, as the mischief side (embarrass.ts land; not a command until S6). */
+    land: (kind: Parameters<typeof land>[0], id: number) => land(kind, id, 'mischief'),
+    setPin,
   };
   const render = {
     draw,

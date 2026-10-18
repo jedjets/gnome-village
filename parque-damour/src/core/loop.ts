@@ -11,7 +11,8 @@
 // S4 part B fills phases 5 (the regulars' day), 7 (arrivals and the gardener's entry), 8 (visitors), 9 (creatures) and 12 (the 1.2 s
 // planning tick in the order of 03 4.3: the facility index, the staff's paving search, the vendor check, the pigeon top-up; every 72
 // steps, counted in whole ticks like the wear so no float sum drifts); a new park also seeds its creatures (six pigeons and the
-// pomeranian's record) and clears the staff. Phases 6 and 10 stay empty for S5 and S6, as does the rest of phase 5. The vendor check of
+// pomeranian's record) and clears the staff. S5 fills phase 10 (stepRomance), the day reset's embarrassments and pairs, and the planning
+// tick's alumni roll; phase 6 stays empty for S6. The vendor check of
 // the planning tick also takes away an easel whose artist no longer paints at it (act.ts dropStrayEasels; 02 4.3 artist item 2: the
 // easel leaves with the artist): the one the remove tool took and an undo put back after the artist stopped painting.
 // Known deviation: the starter kiosk's vendor comes at the first planning tick (step 72), not at step 0 as 02 4.2 item 8 reads ("when
@@ -36,6 +37,8 @@ import { ensureGardener, ensureVendors, facilities, resetStaff, stepStaffPlannin
 import { seedCreatures, stepCreatures, topUpPigeons } from '../entities/creatures.ts';
 import { dropStrayEasels } from '../entities/act.ts';
 import '../entities/brain.ts'; // hands decide, act and BUSY to visitor.ts (setBrain) at load
+import { alumniRoll, newDay, stepRomance } from '../entities/romance.ts';
+import { resetDay } from '../entities/embarrass.ts';
 
 export const SIM_DT = 1 / 60;
 /** The planning tick: every 1.2 s, 72 steps (03 4.3; GV planT 12038). */
@@ -121,7 +124,9 @@ export function simulate(dt: number, _lite: number): void {
   stepIce(dt);
   lap('weather');
   if (isNewDay()) {
-    stepRegularReturns(); // 5 day reset: the regulars' memory; abilities.resetCharges, embarrass.resetDay, the tally (S5, S6)
+    stepRegularReturns(); // 5 day reset: the regulars' memory, the embarrassments of the day, the pairs apart (S5); charges, tally (S6)
+    resetDay();
+    newDay();
   }
   lap('day');
   /* 6 stepAbilities (S6) */
@@ -133,18 +138,20 @@ export function simulate(dt: number, _lite: number): void {
   lap('visitors');
   stepCreatures(dt); // 9 pigeons, dogs, crumbs
   lap('creatures');
-  /* 10 stepRomance (S5) */
+  stepRomance(dt); // 10 romance: retry timers, together, charm conversion, endings
   lap('romance');
   if (tickN % 60 === 0) decayWear(); // 11 wear: once per sim second, counted in whole steps so no float sum drifts
   lap('wear');
   if (tickN % PLAN_STEPS === 0) {
     // 12 the planning tick (03 4.3): (1) the facility index, (2) the staff (the paving search every 60 s), (3) a vendor per kiosk and
-    // no easel without its painting artist, (4) the pigeon top-up every 90 s; (5) the alumni roll and (6) the featured pair are S5's
+    // no easel without its painting artist, (4) the pigeon top-up every 90 s, (5) the alumni roll once a day; (6) the featured pair is
+    // computed where it is read (romance.ts featured, cheap)
     facilities();
     stepStaffPlanning(tickN);
     ensureVendors();
     dropStrayEasels();
     topUpPigeons(tickN);
+    alumniRoll();
   }
   lap('plan');
   if (charmDirty()) rebuildCharm(props, T.lamps); // 13 charm

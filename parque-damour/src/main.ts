@@ -45,11 +45,14 @@ import { activeTool, armedGhost, brushSize, buildRail, cancelGhost, syncSpeed, t
 import { initHud, updateHud } from './ui/hud.ts';
 import { initSheets, paceQueued } from './ui/sheets.ts';
 import { clearSel, initCard, select, selectedVisitor } from './ui/card.ts';
-import { clearFeed, initFeed } from './ui/feed.ts';
+import { clearFeed, feedState, initFeed, setFeedState, type FeedEntry } from './ui/feed.ts';
 import {
-  clearPark, enqueueProfilePace, getProfile, loadPark, profilePace, resetAutosave, restore, saveBeforeNew, savePark, stepAutosave,
+  clearPark, enqueueProfilePace, getProfile, loadPark, profilePace, resetAutosave, restore, saveBeforeNew, savePark, setFeedIO, stepAutosave,
 } from './save/store.ts';
 import type { ParkSaveV1 } from './save/schema.ts';
+
+// the park save keeps the feed's 40 lines (register 3.11); save/ may not import ui/, so the shell hands it the reader and the writer (S5)
+setFeedIO({ get: () => feedState() as unknown as Array<Record<string, unknown>>, set: (s) => setFeedState(s as unknown as FeedEntry[]) });
 import { installHarness } from './debug/harness.ts';
 import { FT, ftNote, qualityLevel, setPerfCounts, setPerfOn } from './debug/perf.ts';
 

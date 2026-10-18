@@ -11,6 +11,10 @@
 // Park pace (owner 2026-10-14, register section 4 "Park pace and Options"): det-s4l is det-s4 with `park.pace` lively at tick 1, as the
 // shell sends a new player's pace, so the six runs cover a Lively park (its pace saved, restored and hashed). The three fixtures before
 // it hold no pace command: their parks are calm, which hashes as nothing, so their values did not move.
+// S5 (the romance core): pairs forming change the sim by design, so the four fixtures were re-recorded once (the sanctioned S5 re-record;
+// each fixture's note holds the old and the new values), and det-s5 is det-s4l plus a picnic blanket, a bed and a lamp by the fountain
+// (charm and a picnic spot) at ticks 4,000 to 4,200: a full Lively park where couples arrive as Pairs and singles pair up over 3 days.
+// Run 1 now also checks that every fixture forms pairs and completes stages.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -31,13 +35,15 @@ const LONG = 120_000;
 type FixtureCommand = { tick: number } & CommandInput;
 type Fixture = { seed: number; steps: number; commands: FixtureCommand[]; expect: { rngN: number; stateHash: number } };
 const load = (name: string): Fixture => JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures', name + '.json'), 'utf8')) as Fixture;
-const FIXTURES = { 'det-s2': load('det-s2'), 'det-s3': load('det-s3'), 'det-s4': load('det-s4'), 'det-s4l': load('det-s4l') } as const;
+const FIXTURES = {
+  'det-s2': load('det-s2'), 'det-s3': load('det-s3'), 'det-s4': load('det-s4'), 'det-s4l': load('det-s4l'), 'det-s5': load('det-s5'),
+} as const;
 const fixture = FIXTURES['det-s2']; // the state-hash tests below run on det-s2's park
 
 type Hook = (step: number) => void;
 
-/** det-s2's values since S4 part B and its review fixes (see the test that reads it). */
-const DET_S2_S4 = { rngN: 27599, stateHash: 3808997934 };
+/** det-s2's values since S5, the romance core (see the test that reads it). */
+const DET_S2_S5 = { rngN: 27406, stateHash: 89033558 };
 
 /** The kind of the prop whose footprint covers (x, y). */
 function propKindAt(x: number, y: number): string | undefined {
@@ -87,8 +93,9 @@ describe('the fixtures (08 3.2 item 1)', () => {
     expect(fixture.commands.at(-1)).toEqual({ tick: 64800, side: 'park', kind: 'speed', payload: { speed: 0 } });
     // S2 recorded rngN 912, stateHash 2925709919; S4 part B re-recorded them, the arrivals on (07 S4.7 item 1): rngN 27245, stateHash
     // 3065084456, then rngN 27599, stateHash 3808997934 after the stage's review fixes (a couple's second waits seated for the first,
-    // act.ts seatedStep). No later slice may move these.
-    expect(fixture.expect).toEqual(DET_S2_S4);
+    // act.ts seatedStep). S5 re-recorded them once, the sanctioned re-record of the romance core (pairs forming change the sim: the
+    // couples' Pairs, the formation rolls, the stages, the charm conversion; see the fixture's note). No later slice may move these.
+    expect(fixture.expect).toEqual(DET_S2_S5);
   });
 
   it('det-s3 is det-s2 plus 7 park commands: a bench, a 3-centre stroke and an undo inside run 5\'s window, a tree and a bandstand before 40,000', () => {
@@ -133,6 +140,14 @@ describe('the fixtures (08 3.2 item 1)', () => {
     expect(s4l.expect).not.toEqual(s4.expect); // a Lively park is another park
   });
 
+  it('det-s5 is det-s4l plus a picnic blanket, a bed and a lamp by the fountain at ticks 4,000 to 4,200 (S5: pairs forming)', () => {
+    const s4l = FIXTURES['det-s4l'], s5 = FIXTURES['det-s5'];
+    expect([s5.seed, s5.steps]).toEqual([s4l.seed, s4l.steps]);
+    const extra = s5.commands.filter((c) => c.tick >= 4000 && c.tick <= 4200);
+    expect(extra.map(toolName)).toEqual(['picnic', 'bed', 'lamp']);
+    expect(s5.commands.filter((c) => !extra.includes(c))).toEqual(s4l.commands);
+  });
+
 });
 
 /** Run 1's numbers per fixture, kept for runs 4 and 6 (the same steps from the same seed and log give the same numbers: runs 1 and 2). */
@@ -146,7 +161,7 @@ function run1(name: keyof typeof FIXTURES): { hash: number; rngN: number; tick: 
   return a;
 }
 
-for (const name of ['det-s2', 'det-s3', 'det-s4', 'det-s4l'] as const) {
+for (const name of ['det-s2', 'det-s3', 'det-s4', 'det-s4l', 'det-s5'] as const) {
   const fx = FIXTURES[name];
   describe(`determinism over 3 sim days, ${name} (brief 9 row 5; 08 3.2)`, () => {
     it('runs 1 and 2: the same seed and commands give the same hash, draw count and tick; run 3: one extra setWeather differs', () => {
@@ -154,6 +169,10 @@ for (const name of ['det-s2', 'det-s3', 'det-s4', 'det-s4l'] as const) {
       // 30 are reason.park_full and nothing else is refused (07 S4.7 item 1)
       const rejected: string[] = [];
       on('rejected', (e) => rejected.push(String(e.params?.reason)));
+      // S5: every fixture now has pairs forming (07 S5.7 item 1): couples arrive as Pairs and singles pair up and climb the stages
+      let formed = 0, stages = 0;
+      on('formed', () => formed++);
+      on('stage', () => stages++);
       let most = 0, atMidday = 0;
       const a = run(fx, {
         hook: (step) => {
@@ -161,13 +180,15 @@ for (const name of ['det-s2', 'det-s3', 'det-s4', 'det-s4l'] as const) {
           if (step === 3240) atMidday = people();
         },
       });
-      if (name === 'det-s4' || name === 'det-s4l') {
+      expect(formed).toBeGreaterThan(0);
+      expect(stages).toBeGreaterThan(0);
+      if (name === 'det-s4' || name === 'det-s4l' || name === 'det-s5') {
         expect([atMidday, most]).toEqual([CAP_PEOPLE, CAP_PEOPLE]);
         expect(rejected.length).toBeGreaterThan(0);
         expect(new Set(rejected)).toEqual(new Set(['reason.park_full']));
       } else expect(most).toBeLessThanOrEqual(CAP_PEOPLE);
-      expect(arrivalsState().pace).toBe(name === 'det-s4l' ? 'lively' : 'calm'); // only det-s4l sends a pace
-      console.log(name + ': seed ' + fx.seed + ' steps ' + a.tick + ' rngN ' + a.rngN + ' stateHash ' + a.hash + ' (0x' + a.hash.toString(16) + ')');
+      expect(arrivalsState().pace).toBe(name === 'det-s4l' || name === 'det-s5' ? 'lively' : 'calm'); // det-s4l and det-s5 send a pace
+      console.log(name + ': seed ' + fx.seed + ' steps ' + a.tick + ' rngN ' + a.rngN + ' stateHash ' + a.hash + ' (0x' + a.hash.toString(16) + ') formed ' + formed + ' stages ' + stages);
       expect(a.tick).toBe(64800);
       expect(a.rngN).toBeGreaterThan(0);
       expect(a.rngN).toBe(fx.expect.rngN);
