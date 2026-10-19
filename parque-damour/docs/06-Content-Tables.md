@@ -623,6 +623,8 @@ Conventions (03 §12): keys are lowercase, dot-separated, `area.item[.detail]`. 
 | `rail.cooldown` | {s} s | {s} s |
 | `rail.charges` | {left}/{max} | {left}/{max} |
 | `rail.ready` | Ready | Listo |
+| `rail.soon` | Coming soon | Muy pronto |
+| `rail.pick` | Pick an ability | Elige una habilidad |
 
 ### 16.3 HUD chips
 | Key | EN | ES |
@@ -944,6 +946,10 @@ The clock chip's day is `t('hud.day', { n, season: '@hud.season.<season>' })`: t
 | `sheet.progress.cupid` | Cupid Points | Puntos de Cupido |
 | `sheet.progress.mischief` | Mischief Points | Puntos de Travesura |
 | `sheet.progress.points` | {n} points · T{tier} | {n} puntos · T{tier} |
+| `sheet.progress.points.one` | {n} point · T{tier} | {n} punto · T{tier} |
+| `sheet.progress.points.other` | {n} points · T{tier} | {n} puntos · T{tier} |
+| `sheet.progress.unlocks` | Unlocks | Desbloqueos |
+| `sheet.progress.avatar` | Avatar: {name} | Avatar: {name} |
 | `sheet.progress.next` | Next: {item} at {n} | Siguiente: {item} a los {n} |
 | `sheet.progress.done` | Everything unlocked | Todo desbloqueado |
 | `sheet.events.title` | Events | TODO |

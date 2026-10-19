@@ -149,8 +149,8 @@ export function contributed(p: Pair): boolean {
 
 /**
  * Phase 5 on a new day (03 4.2): the finished day's tally is emitted for the feed's `feed.tally` line, and the count starts over.
- * TODO(S6-ui): the param is `tally`, not `feed`, on purpose: ui/feed.ts (outside this stage's files) still pushes its own zero line on
- * `newday` (`fromNewDay`), and a `feed` param here would make two lines. When the UI stage deletes `fromNewDay`, rename `tally` to `feed`.
+ * The param is `tally`, which ui/feed.ts reads for the one "Today: Cupid n · Mischief m" line (the zero stub on `newday` is gone), so
+ * no `feed` param is needed; tests/progression.test.ts guards the single line.
  */
 export function stepProgression(): void {
   emit({ kind: 'step', tick: nowTick(), x: 23.5, y: 23.5, params: { tally: 'feed.tally', cp: tally.cp, mp: tally.mp } });

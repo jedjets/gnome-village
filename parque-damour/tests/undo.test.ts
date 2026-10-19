@@ -19,6 +19,8 @@ import { I, KIND, Kind, OCC, propById, props, removeProp } from '../src/world/gr
 import { setMode } from '../src/play/mode.ts';
 import { nextSpecies, propAt } from '../src/play/tools.ts';
 import { UNDO_DEPTH, canUndo, clearUndo, depth } from '../src/play/undo.ts';
+import { cooldownLeft, effectsState, sidesState } from '../src/play/abilities.ts';
+import { points, resetProgress, setProgress } from '../src/play/progression.ts';
 import { CAP_PEOPLE, byId, people, removeVisitor, spawnVisitor, visitors, type Visitor } from '../src/entities/visitor.ts';
 import { vendorFor } from '../src/entities/staff.ts';
 import { namesHeld } from '../src/entities/names.ts';
@@ -399,5 +401,21 @@ describe('undo never touches the rest (02 8.5 item 3)', () => {
   });
 
   it.todo('a Parted pair is unchanged by an undo (needs pairs: S5 entities/romance.ts; 07 S5)');
-  it.todo('an ability cooldown is unchanged by an undo (needs abilities: S6 play/abilities.ts; 07 S6)');
+  it('an ability cooldown, its effects and the profile points are unchanged by an undo, and the cast itself is not on the stack (02 9.1 item 4, 02 8.5 item 3; 07 S6)', () => {
+    resetProgress();
+    setProgress({ cp: 70, mp: 70 });
+    tool({ tool: 'path', at: at(31, 14), size: 1, stroke: 1 });
+    const cmd: CommandInput = { side: 'cupid', kind: 'ability', payload: { id: 'c_petals', target: { kind: 'tile', x: 6, y: 12 } } };
+    expect(reasonOf(applyNow(cmd))).toBe('ok');
+    const frozen = (): string => JSON.stringify({ s: sidesState(), e: effectsState(), p: points() });
+    const before = frozen();
+    expect(cooldownLeft('cupid', 'c_petals')).toBeGreaterThan(29.9);
+    expect(depth()).toBe(1); // the path only: the cast is not a park tool
+    expect(reasonOf(undo())).toBe('ok'); // the path goes back
+    expect(canUndo()).toBe(false);
+    expect(frozen()).toBe(before);
+    expect(reasonOf(undo())).toBe('reason.nothing_to_undo'); // a second undo has nothing, and the cast is still there
+    expect(reasonOf(applyNow(cmd))).toBe('reason.cooldown');
+    expect(frozen()).toBe(before);
+  });
 });
