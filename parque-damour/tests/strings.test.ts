@@ -224,4 +224,27 @@ describe('the abilities, the unlocks and the Progress sheet (06 16.2, 16.6, 16.1
     expect(t('feed.cast.c_petals', { spot: '@spot.fountain' })).toBe('Cayeron pétalos por la fuente');
     setLang('en');
   });
+  it('the UI stage\'s strings (07 S6.6 steps 6-9): the strips, the locked toast, the chip, the Progress sheet, in both tables with the same {params}', () => {
+    const ui = [
+      'rail.locked_at', 'rail.tier', 'rail.cooldown', 'rail.charges', 'rail.ready', 'rail.soon', 'rail.cupid', 'rail.mischief', 'hud.cupid', 'hud.mischief',
+      'sheet.progress.title', 'sheet.progress.cupid', 'sheet.progress.mischief', 'sheet.progress.points', 'sheet.progress.next', 'sheet.progress.done',
+      'sheet.progress.unlocks', 'sheet.progress.avatar', 'feed.tally', 'feed.unlock', 'toast.unlocked', 'reason.cooldown', 'reason.locked', 'aria.points',
+      'aria.sheet_progress', 'aria.group_cupid', 'aria.group_mischief',
+    ];
+    for (const k of ui) {
+      expect(en[k], k).toBeTruthy();
+      expect(es[k], k).toBeTruthy();
+      expect(params(es[k] as string), k).toEqual(params(en[k] as string));
+    }
+    setLang('en');
+    expect(t('rail.locked_at', { side: '@rail.cupid', tier: 2 })).toBe('Unlocks at Cupid T2');
+    expect(t('sheet.progress.next', { item: '@ability.c_umbrella.name', n: 20 })).toBe('Next: Umbrella at 20');
+    expect(t('sheet.progress.avatar', { name: '@avatar.a_pigeon.name' })).toBe('Avatar: Pigeon');
+    expect(t('reason.cooldown', { s: 12 })).toBe('not yet (12 s)');
+    setLang('es');
+    expect(t('rail.locked_at', { side: '@rail.mischief', tier: 3 })).toBe('Se abre en Travesura T3');
+    expect(t('sheet.progress.next', { item: '@ability.c_umbrella.name', n: 20 })).toBe(`Siguiente: ${es['ability.c_umbrella.name']} a los 20`);
+    expect(t('feed.tally', { cp: 3, mp: 1 })).toBe('Hoy: Cupido 3 · Travesura 1');
+    setLang('en');
+  });
 });

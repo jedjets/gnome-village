@@ -23,7 +23,7 @@ import { drawWater } from './water.ts';
 import { drawLampPool, lampOn, propDrawables } from './props.ts';
 import { gamePen } from './flora.ts';
 import { drawWeatherOverlay, particleDrawables } from './effects.ts';
-import { drawFocusMark, drawGhost, drawSelection, type Ghost } from './ghost.ts';
+import { drawAimMark, drawFocusMark, drawGhost, drawSelection, type Ghost } from './ghost.ts';
 import { peopleDrawables } from './people.ts';
 import { sortByDepth, type Drawable } from './order.ts';
 
@@ -157,9 +157,10 @@ export function draw(ghost: Ghost | null = null, sel = 0): void {
   for (const d of particleDrawables()) ITEMS.push(d);
   sortByDepth(ITEMS);
   for (const d of ITEMS) d.draw(d, c);
-  // 7 the ghost panes (S3), the selection ring (S4), the focus pin (S5)
+  // 7 the ghost panes (S3), the armed area ability's square (S6), the selection ring (S4), the focus pin (S5)
   css(c);
   drawGhost(c, ghost);
+  drawAimMark(c);
   drawSelection(c, sel);
   drawFocusMark(c);
   // 8 the weather overlay and the fog wash (S9)

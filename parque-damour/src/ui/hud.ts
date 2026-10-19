@@ -14,19 +14,25 @@
 // (sheets.ts), and the 0.35 s repaint refreshes the card (GV 10860).
 // S5: the Romance chip names the featured pair, "A & B · Stage" (romance.ts featured: the pin, else the highest stage), or "No one
 // courting yet" (06 16.3), and pulses once when the featured pair's stage changes (02 12.2).
-// TODO(S6): the Points chip; TODO(S7): body.avatar from the `mode` event.
+// S6 (07 S6.6 step 8; 02 7.4, 12.2; 04 5.2 item 6): the Points chip shows the profile's Cupid and Mischief Points (progression.points) and
+// flashes the number that gained to --ink for FLASH_MS (shell.css `.flash`); an `unlock` event toasts "Unlocked: Musician (Cupid T1)"
+// through t() once per tier crossed (the first item of the row: the feed line, feed.ts, names each one); a refusal that needs a number
+// (the seconds of a cooldown, the tier of a locked ability) gets it from ability-strip.refusalParams, since `rejected` carries none.
+// TODO(S7): body.avatar from the `mode` event.
 import { T, SEASON_KEYS } from '../core/clock.ts';
 import { enqueue } from '../core/commands.ts';
 import { watch } from '../core/events.ts';
 import { W } from '../core/weather.ts';
 import { byId, people } from '../entities/visitor.ts';
 import { STAGE_IDS, featured, shownStage } from '../entities/romance.ts';
+import { points } from '../play/progression.ts';
 import { WCOLD } from '../render/ambient.ts';
 import { $, ageToast, layoutOverlays, toast } from './dom.ts';
 import { plural, t, onLang } from './i18n.ts';
 import { renderCensus, sheetOpen, toggleSheet, updateSheets } from './sheets.ts';
 import { updateCard } from './card.ts';
 import { ageFeed } from './feed.ts';
+import { refusalParams } from './ability-strip.ts';
 
 /** What main.ts hands the HUD: the clock chip's double tap (the perf overlay under body.dev). */
 export type HudHooks = { onClockDoubleTap?: () => void };
@@ -43,9 +49,29 @@ function paint(): void {
   $('tDay').textContent = t('hud.day', { n: T.day, season: '@hud.season.' + SEASON_KEYS[T.season] });
   $('tPop').textContent = plural('hud.visitors', people());
   romanceChip();
-  $('tCP').textContent = '0';
-  $('tMP').textContent = '0';
+  pointsChip();
   document.body.dataset.day = String(T.day);
+}
+
+/** The Points chip's flash lasts this long (04 5.2 item 6). */
+export const FLASH_MS = 300;
+/** The points the chip last showed (-1: none yet, so a Continue with points flashes nothing), and the flash timers. */
+const shownPts = { cp: -1, mp: -1 };
+const flashT = { cp: 0, mp: 0 };
+
+/** Cupid n | Mischief m (02 12.2): the number that gained flashes to --ink. */
+function pointsChip(): void {
+  const p = points();
+  for (const k of ['cp', 'mp'] as const) {
+    const el = $(k === 'cp' ? 'tCP' : 'tMP');
+    el.textContent = String(p[k]);
+    if (shownPts[k] >= 0 && p[k] > shownPts[k]) {
+      el.classList.add('flash');
+      window.clearTimeout(flashT[k]);
+      flashT[k] = window.setTimeout(() => el.classList.remove('flash'), FLASH_MS);
+    }
+    shownPts[k] = p[k];
+  }
 }
 
 /** The featured pair and stage the chip last showed, for the pulse on a stage change (02 12.2). */
@@ -82,7 +108,17 @@ function watchResults(): void {
   watching = true;
   watch('rejected', (ev) => {
     const r = ev.params?.reason;
-    if (typeof r === 'string' && r.startsWith('reason.')) toast(r);
+    if (typeof r === 'string' && r.startsWith('reason.')) toast(r, refusalParams(r));
+  });
+  // a tier reached: one toast per ladder and tier (the row's items arrive in one step; the first is named, the feed line names each)
+  let lastUnlock = '';
+  watch('unlock', (ev) => {
+    const p = ev.params;
+    if (!p) return;
+    const k = [p.side, p.tier, ev.tick].join('|');
+    if (k === lastUnlock) return;
+    lastUnlock = k;
+    toast(String(p.toast ?? 'toast.unlocked'), { item: p.item ?? '', side: p.side ?? '', tier: p.tier ?? 0 });
   });
   watch('applied', (ev) => {
     if (ev.params?.kind === 'undo') toast('toast.undone');

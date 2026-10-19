@@ -490,4 +490,7 @@ export const en: Record<string, string> = {
   'sheet.progress.done': 'Everything unlocked',
   'feed.unlock': 'Unlocked: {item} ({side} T{tier})',
   'toast.unlocked': 'Unlocked: {item} ({side} T{tier})',
+  'rail.soon': 'Coming soon',
+  'sheet.progress.unlocks': 'Unlocks',
+  'sheet.progress.avatar': 'Avatar: {name}',
 };

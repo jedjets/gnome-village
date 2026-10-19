@@ -21,7 +21,10 @@
 // `park.new` (never inside newPark or afterNewPark: the harness's newPark runs both, and the det runs must not gain a command); a
 // Continue that restores keeps the saved park's pace. Begin's pace shows pressed in the Options sheet while its first step waits
 // (sheets.paceQueued; a park started paused). The Options sheet gets the dev perf overlay's state and switch as hooks.
-// TODO(S6): an armed ability's target; TODO(S7): avatar.tap; TODO(S8): initAudio on Begin and Continue.
+// S6 (03 8.2 item 2): with an ability armed (ui/ability-strip.ts) a tap on the world is its target: ability-strip.tapAbility resolves it by
+// the ability's type from pickAt and the tile, enqueues the logged `ability` command and leaves the ability armed (the sim validates
+// again; a refusal comes back as `rejected` and hud.ts toasts it).
+// TODO(S7): avatar.tap; TODO(S8): initAudio on Begin and Continue.
 import { newPark as loopNewPark, onFrame, onFrameEnd, setSpeed, start } from './core/loop.ts';
 import { T } from './core/clock.ts';
 import { enqueue } from './core/commands.ts';
@@ -42,6 +45,7 @@ import { ambientFx, clearParticles, particles, stepParticles } from './render/ef
 import { $, applyDom, layoutOverlays, openConfirm, toast } from './ui/dom.ts';
 import { showIntro, startLang } from './ui/intro.ts';
 import { activeTool, armedGhost, brushSize, buildRail, cancelGhost, syncSpeed, tapGhost, toolClass, updateRail } from './ui/rail.ts';
+import { armedAbility, tapAbility } from './ui/ability-strip.ts';
 import { initHud, updateHud } from './ui/hud.ts';
 import { initSheets, paceQueued } from './ui/sheets.ts';
 import { clearSel, initCard, select, selectedVisitor } from './ui/card.ts';
@@ -123,6 +127,10 @@ function gesture(): Gesture {
 
 function onTap(sx: number, sy: number): void {
   if (getMode() === 'avatar') return; // TODO(S7): avatar.tap with pickAt and screenToTile(allowApron)
+  if (armedAbility() !== null) {
+    tapAbility(pickAt(sx, sy, pickPeople(), pickCreatures()), screenToTile(sx, sy, true)); // 03 8.2 item 2: the target by the ability's type
+    return;
+  }
   const cls = toolClass();
   if (cls === 'none') {
     select(pickAt(sx, sy, pickPeople(), pickCreatures())); // the hand: a person is selected and followed, anything else clears (03 8.2 item 4)

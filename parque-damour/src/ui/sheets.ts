@@ -24,7 +24,9 @@
 // the feed's last 40, newest first, "Day N · phase" over each line; a row, or a tap on the feed line (GV 12176), flies there
 // (goToEvent, GV 10751): a visitor still in the park is selected and followed with the card; otherwise the camera follows the place
 // and the 5.2 s focus pin stands over it (render/ghost.ts setFocusMark).
-// TODO(S6): progress; TODO(S7): picker; TODO(S8): the Sound check sheet.
+// S6 (02 12.4; 04 5.6): the Progress sheet is progress.ts (the two ladders, the tier ticks, the next unlock, the unlock table); this file
+// opens it and repaints it when what it shows changes (a point gained, the language), checked every frame from hud.ts.
+// TODO(S7): picker; TODO(S8): the Sound check sheet.
 import { T, phaseOf } from '../core/clock.ts';
 import { watch } from '../core/events.ts';
 import { enqueue, pendingCount, type Pace } from '../core/commands.ts';
@@ -39,6 +41,7 @@ import { feedEntries, type FeedEntry } from './feed.ts';
 import { STAGE_IDS, pairById, pairs, partnerOf, pinnedPair, setPin, shownStage, type Pair } from '../entities/romance.ts';
 import { cam, clampCam, follow } from '../render/camera.ts';
 import { setFocusMark } from '../render/ghost.ts';
+import { progressKey, progressPainted, renderProgress } from './progress.ts';
 
 /** What main.ts hands the sheets: the dev perf overlay's state and switch (debug/perf.ts, which ui/ may not import, 03 2.1). */
 export type SheetHooks = { perfOn?: () => boolean; setPerf?: (on: boolean) => void };
@@ -98,7 +101,8 @@ export function renderSheet(id: SheetId): void {
   else if (id === 'options') renderOptions();
   else if (id === 'romances') renderRomances();
   else if (id === 'evlog') renderEvents();
-  // TODO(S6-S8): the other sheets; until then they show the placeholder paragraph from index.html.
+  else if (id === 'progress') renderProgress();
+  // TODO(S7-S8): the picker and the sound check; until then they show the placeholder paragraph from index.html.
 }
 
 /** Every frame with real seconds (hud.ts): the census repaints every 1.2 s while it is open. */
@@ -107,6 +111,7 @@ export function updateSheets(dtr: number): void {
   if (open === 'options' && optionsKey() !== paintedKey) renderOptions(); // a pace applied, a New, the dial, #bMute, the language
   if (open === 'romances' && romancesKey() !== romKey) renderRomances(); // a stage, a bar, a pin, a pair come or gone
   if (open === 'evlog' && feedEntries()[0] !== evTop) renderEvents();
+  if (open === 'progress' && progressKey() !== progressPainted()) renderProgress(); // a point gained, the language
   if (open !== 'census') {
     censusT = 0;
     return;

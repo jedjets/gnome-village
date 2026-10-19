@@ -14,8 +14,10 @@
 // main.ts hands in (render cannot import ui, 03 2.1); h is the figure's drawn height (render/people.ts anchorOf). Dropped: 8435's
 // avatar-mode skip (the possessed one wears no ring: S7).
 // S5: the focus pin for 5.2 s after goToEvent (GV drawFocusMark 10764), timed on the frame clock (loop.ts now: a UI transition, 04 9.1).
-// TODO(S6): the armed area ability's square at alpha 0.25 in the side's accent (03 7.8 item 3). TODO(S5-art): the featured pair's rose
-// ring on both members (04 7.1 rule 9, 7.3 item 4) waits for the owner's pick of the romance art.
+// S6 (03 7.8 item 3): the armed area ability's square, marked by ui/ability-strip.ts at each tap (setAimMark) and drawn by phase 7 at alpha
+// 0.25 in the side's accent: the palette's rose for Cupid (the --berry of tokens.css) and lamp amber for Mischief (--ember), the fill with a
+// hairline of the same colour at 0.55; it stands 3 s of the frame clock (UI time, like the focus pin) and fades over the last 0.6 s.
+// TODO(S5-art): the featured pair's rose ring on both members (04 7.1 rule 9, 7.3 item 4) waits for the owner's pick of the romance art.
 import { DAYLEN, T } from '../core/clock.ts';
 import { now } from '../core/loop.ts';
 import { css, hx, mixc, type XY } from '../core/math.ts';
@@ -118,6 +120,54 @@ export function drawFocusMark(c: CanvasRenderingContext2D | null = null): void {
   c.arc(x, y - s * 0.3, s * 0.38, 0, Math.PI * 2);
   c.fill();
   c.restore();
+}
+
+/** The armed area ability's square (03 7.8 item 3): alpha 0.25 in the side's accent, 3 s, the last 0.6 s fading. */
+export const AIM_MS = 3000;
+export const AIM_FADE_MS = 600;
+export const AIM_ALPHA = 0.25;
+export type AimSide = 'cupid' | 'mischief';
+let aim: { x: number; y: number; r: number; side: AimSide; until: number } | null = null;
+
+/** ui/ability-strip.ts: the tap at tile (x, y) with an `area` ability armed; r is the square's half-width (3 x 3 is 1). */
+export function setAimMark(x: number, y: number, r: number, side: AimSide): void {
+  aim = { x, y, r, side, until: now() + AIM_MS };
+}
+export function clearAimMark(): void {
+  aim = null;
+}
+export function aimMark(): Readonly<{ x: number; y: number; r: number; side: AimSide; until: number }> | null {
+  return aim;
+}
+
+/** The square over tiles x - r .. x + r, y - r .. y + r at ground level, filled at AIM_ALPHA with a hairline; nothing once it has expired. */
+export function drawAimMark(c: CanvasRenderingContext2D): void {
+  const m = aim;
+  if (!m) return;
+  const left = m.until - now();
+  if (left <= 0) {
+    aim = null;
+    return;
+  }
+  const a = AIM_ALPHA * Math.min(1, left / AIM_FADE_MS);
+  const p = style().palette, col = hx(m.side === 'cupid' ? p.rose : p.lamp);
+  const lo = -m.r - 0.5, hi = m.r + 0.5;
+  screenInto(m.x + lo, m.y + lo, 0, A);
+  screenInto(m.x + hi, m.y + lo, 0, B);
+  screenInto(m.x + hi, m.y + hi, 0, C);
+  screenInto(m.x + lo, m.y + hi, 0, D);
+  c.beginPath();
+  c.moveTo(A.x, A.y);
+  c.lineTo(B.x, B.y);
+  c.lineTo(C.x, C.y);
+  c.lineTo(D.x, D.y);
+  c.closePath();
+  c.fillStyle = css(col, a);
+  c.fill();
+  c.strokeStyle = css(col, Math.min(1, a * 2.2));
+  c.lineWidth = Math.max(1, 1.2 * cam.z);
+  c.lineJoin = 'round';
+  c.stroke();
 }
 
 const RING: Anchor = { x: 0, y: 0, gx: 0, gy: 0, h: 0, e: 0, sit: false };

@@ -7,7 +7,9 @@
    scratch/s3-options.html confirm 1; both picked by the owner on 2026-10-13, register section 4).
    S4 part C: the card's bars in their tokens (Mood and Full --moss, Rested --sky, any of them --ember below its low mark; 04 5.5 item 1),
    the census summary's two parts with a dot between (the dot is punctuation, not a string: 03 P7).
-   TODO(S6): .tool.locked with the tier word, the #cdChip ring; TODO(S11): audit. */
+   S6 (04 5.2 item 6, 5.4 items 2-4, 5.6): the Cupid and Mischief pills (a flat swatch in --berry or --ember, a locked one at opacity .45
+   with the tier badge for its swatch), row 2's cooldown chip with its ring, the Points chip's flash, and the Progress sheet's ladders
+   and unlock table. TODO(S11): audit. */
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
 html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--body-bg);
@@ -33,6 +35,8 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
 #hudRomance span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--display);font-size:12px}
 #tCP{color:var(--berry)}
 #tMP{color:var(--ember)}
+#tCP,#tMP{transition:color .15s}
+#tCP.flash,#tMP.flash{color:var(--ink)} /* the number that gained flashes to --ink for 0.3 s (04 5.2 item 6) */
 .dotm{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:-3px;background:var(--sky)}
 #bAdd{margin-left:2px;width:18px;height:18px;border-radius:50%;border:1px solid var(--glass-line);background:var(--ink);color:var(--on-ink);
   font:inherit;font-size:13px;font-weight:700;line-height:1;padding:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
@@ -59,8 +63,12 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
 .tool .sw svg .f-rose{fill:var(--rose)} .tool .sw svg .f-lawn{fill:var(--lawn)} .tool .sw svg .f-gravel{fill:var(--gravel)}
 .tool .sw svg .f-water{fill:var(--water)} .tool .sw svg .f-awning{fill:var(--awning)}
 .tool .lb{white-space:nowrap}
-.tool .tier{font-size:11px;font-weight:700;color:var(--stone)}
-.tool.locked{opacity:.6}
+.tool .tier{font-size:11px;font-weight:700;color:var(--stone);min-height:17px;display:flex;align-items:center}
+.tool.locked{opacity:.45}
+/* the ability pills (04 5.4 item 2): the swatch is a plain colour chip in the side's accent, its border the same; pressed, the border goes pale */
+.tool.cupid .sw{background:var(--berry);border-color:var(--berry)}
+.tool.mischief .sw{background:var(--ember);border-color:var(--ember)}
+.tool.cupid[aria-pressed="true"] .sw,.tool.mischief[aria-pressed="true"] .sw{border-color:var(--on-ink-line)}
 #tools.more{-webkit-mask-image:linear-gradient(90deg,black 84%,transparent);mask-image:linear-gradient(90deg,black 84%,transparent)}
 #tools.more.before{-webkit-mask-image:linear-gradient(90deg,transparent,black 10%,black 84%,transparent);mask-image:linear-gradient(90deg,transparent,black 10%,black 84%,transparent)}
 #tools.before:not(.more){-webkit-mask-image:linear-gradient(90deg,transparent,black 10%);mask-image:linear-gradient(90deg,transparent,black 10%)}
@@ -111,7 +119,15 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
 #size::-moz-range-thumb,#spdR::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--ink);border:2px solid var(--on-ink)}
 #spdLbl{font-size:12px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;min-width:30px;text-align:right;padding-right:4px}
 #spd{align-items:center}
-#cdChip{font-size:11px}
+/* row 2's cooldown chip (04 5.4 item 4): the ring empties over the cooldown, then the seconds left in tabular numerals (or Ready), then left/max */
+#cdChip{gap:6px;padding:3px 12px 3px 6px;min-height:30px;cursor:default}
+#cdChip svg{width:22px;height:22px;flex:0 0 22px;display:block}
+#cdChip .trk{stroke:var(--paper-2)}
+#cdChip.cupid .arc{stroke:var(--berry)}
+#cdChip.mischief .arc{stroke:var(--ember)}
+#cdChip .nm{font-weight:600}
+#cdChip .cd{min-width:2.3em;font-variant-numeric:tabular-nums}
+#cdChip .ch{color:var(--ink-soft);font-variant-numeric:tabular-nums}
 /* a phone narrower than 340 px (owner 2026-10-17): the speed dial and the actions' padding tighten so row 3 is two lines, the speed and
    the camera, then the actions, and the rail stays under 40 % of a 320 x 568 screen */
 @media (max-width:340px){
@@ -203,6 +219,34 @@ body:not(.dev) #optionsList .dev{display:none}
 #snd .row{display:flex;flex-wrap:wrap;gap:5px;background:none;border:0;padding:0;cursor:default}
 #snd button{font:inherit;font-size:12px;padding:5px 9px;border-radius:999px;border:1px solid var(--glass-line);background:var(--well-2);color:var(--ink)}
 body.sheet #card{opacity:0!important;pointer-events:none!important}
+/* S6, the Progress sheet (02 12.4; 04 5.6): a ladder per side (name and points, the bar in the side's accent with a tick at each tier, the
+   numbers under them, the next unlock), then the unlock table, a row per tier with the ones not yet reached in --stone */
+#progressList .ladder{margin-top:4px;padding:5px 10px 6px;border-radius:10px;border:1px solid var(--glass-line);background:var(--well)}
+#progressList .lh{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+#progressList .lh b{font-size:13px;font-weight:700}
+#progressList .lh span{font-size:11px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+#progressList .lbar{position:relative;margin:8px 0 0}
+#progressList .lbar i{display:block;height:6px;border-radius:3px;background:var(--paper-2);overflow:hidden;font-style:normal}
+#progressList .lbar u{display:block;height:100%;border-radius:3px;text-decoration:none}
+#progressList .ladder.cupid .lbar u{background:var(--berry)}
+#progressList .ladder.mischief .lbar u{background:var(--ember)}
+#progressList .lbar .tk{position:absolute;top:-3px;width:1px;height:12px;background:var(--ink);opacity:.5}
+#progressList .ltk{position:relative;height:15px;margin-top:2px;font-size:11px;line-height:15px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+#progressList .ltk span{position:absolute;top:0;transform:translateX(-50%)}
+#progressList .ltk span.end{transform:translateX(-100%)}
+#progressList .nx{display:block;font-size:11px;line-height:1.3;color:var(--ink-soft)}
+#progressList .ut{margin:9px 0 0;font-size:12px;font-weight:600;line-height:1.3;color:var(--ink-soft);letter-spacing:.03em}
+#progressList .utab{margin-top:4px;padding-left:7px;border-left:3px solid var(--berry)}
+#progressList .utab.mischief{border-left-color:var(--ember)}
+#progressList .uh{display:block;font-size:11px;line-height:1.3;color:var(--ink-soft)}
+#progressList .urow{display:grid;grid-template-columns:24px 1fr auto;gap:8px;align-items:baseline;margin-top:3px;padding:2px 8px;border-radius:8px;
+  border:1px solid var(--glass-line);background:var(--well);color:var(--ink)}
+#progressList .urow b{font-size:13px;font-weight:700}
+#progressList .urow .its{font-size:12px;line-height:1.3}
+#progressList .urow .its span + span::before{content:" \00B7  "}
+#progressList .urow .its .av{font-family:var(--display);font-style:italic}
+#progressList .urow small{font-size:11px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+#progressList .urow.locked,#progressList .urow.locked small{color:var(--stone)}
 
 /* ---------- toast, feed, perf (GV 157-163) ---------- */
 #hint{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 150px);
@@ -227,7 +271,7 @@ body.photo .hud,body.photo #rail,body.photo #card,body.photo #hint,body.photo #f
 body.photo #photoX{display:block}
 
 /* ---------- avatar mode (GV 169, 183; 03 10.2) ---------- */
-body.avatar #tools,body.avatar #row2 .ctx,body.avatar #sizewrap,body.avatar #bPlace,body.avatar #bCancel,body.avatar #bUndo{display:none!important}
+body.avatar #tools,body.avatar #row2 .ctx,body.avatar #sizewrap,body.avatar #bPlace,body.avatar #bCancel,body.avatar #bUndo,body.avatar #cdChip{display:none!important}
 
 /* ---------- intro (GV 140-156) ---------- */
 #intro{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;

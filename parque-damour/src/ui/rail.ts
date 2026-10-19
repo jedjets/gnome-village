@@ -14,7 +14,11 @@
 // Options (register 3.9 and section 4 "Park pace and Options", owner 2026-10-14): row 3 ends with #bOptions, which opens the Options
 // sheet (sheets.ts; a second press closes it, as the chips do).
 // Dropped from the range: the spring tool's size 4 and its names (11063, 11072), sizelbl's Flow (11068), the build sheet (11010-11017).
-// TODO(S6): abilities, cooldown chip, locked pills; TODO(S7): mode through the `mode` event; TODO(S8): mute through audio.
+// S6 (07 S6.6 step 6; 02 8.1, 9.1; 04 5.4 items 2-4): the Cupid and Mischief groups fill the strip from ui/ability-strip.ts (the pills from
+// ABILITIES, locked ones dimmed with the tier badge, arming, the cooldown chip in row 2's #cdChip); arming is held there and armAbility /
+// armedAbility are re-exported here, with row 2 repainted on each change: for these groups row 2 holds the chip alone (the Undo and the
+// Park context are the Park group's), and with nothing armed the whole row is hidden. The group switch, a Park tool and the avatar mode
+// disarm. TODO(S7): mode through the `mode` event; TODO(S8): mute through audio.
 import { T } from '../core/clock.ts';
 import { enqueue } from '../core/commands.ts';
 import type { XY } from '../core/math.ts';
@@ -24,6 +28,10 @@ import { fitToggle, follow, turn } from '../render/camera.ts';
 import { $, setBodyClass, toast, layoutOverlays } from './dom.ts';
 import { t, onLang } from './i18n.ts';
 import { closeSheets, toggleSheet } from './sheets.ts';
+import { armedAbility, buildAbilityStrip, endAbilityStrip, setArmed, updateAbilityStrip } from './ability-strip.ts';
+import type { AbilityId } from '../core/commands.ts';
+
+export { armedAbility };
 
 export type Group = 'park' | 'cupid' | 'mischief';
 type Dial = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
@@ -123,10 +131,20 @@ export function armedGhost(): Ghost | null {
 
 /* ---------- row 1: the switch and the Park strip (GV 11048-11061) ---------- */
 
+/** Arm an ability (or disarm with null) and repaint row 2 (ui/ability-strip.ts holds the arming). */
+export function armAbility(id: AbilityId | null): void {
+  setArmed(id);
+}
+
 function buildStrip(): void {
   const wrap = $('tools');
   wrap.replaceChildren();
-  if (group !== 'park') return; // TODO(S6): the Cupid and Mischief strips
+  wrap.scrollLeft = 0;
+  if (group !== 'park') {
+    buildAbilityStrip(wrap, group, paintRow2);
+    return;
+  }
+  endAbilityStrip();
   for (const d of TOOLS) {
     const b = document.createElement('button');
     b.className = 'tool park';
@@ -143,9 +161,11 @@ function buildStrip(): void {
     b.addEventListener('click', () => setTool(d.id));
     wrap.appendChild(b);
   }
+  wrap.dispatchEvent(new Event('scroll')); // the edge masks
 }
 
 export function setGroup(g: Group): void {
+  if (g !== group) setArmed(null); // an armed ability belongs to its strip
   group = g;
   document.querySelectorAll<HTMLButtonElement>('#groups button').forEach((b) => {
     b.setAttribute('aria-pressed', b.dataset.group === g ? 'true' : 'false');
@@ -160,6 +180,7 @@ export function setGroup(g: Group): void {
 
 /** Arm a park tool (GV setTool 11063-11071): the pill pressed, a live ghost dropped, and the follow ended for every tool but the hand. */
 export function setTool(id: ToolId): void {
+  setArmed(null);
   tool = id;
   armed = null;
   document.querySelectorAll<HTMLButtonElement>('#tools .tool').forEach((b) => {
@@ -182,9 +203,11 @@ function paintRow2(): void {
   const live = armed !== null && (cls === 'stampBig' || cls === 'run');
   const refused = live && armed !== null && !armed.g.ok;
   const line = refused && armed?.g.reason ? t(armed.g.reason) : t(toolById(tool).labelKey);
-  const key = [group, tool, live, refused, line, depth() === 0].join('|');
+  const aimed = armedAbility();
+  const key = [group, tool, live, refused, line, depth() === 0, aimed].join('|');
   if (key === row2Key) return;
   row2Key = key;
+  $('row2').hidden = !park && aimed === null; // an ability group with nothing armed has no row 2 (04 5.4 item 8: one contextual bar)
   show(document.querySelector<HTMLElement>('#row2 .ctx'), park && tool !== 'hand');
   show($('sizewrap'), park && cls === 'brush');
   show($('bPlace'), park && live);
@@ -295,10 +318,12 @@ function paintLabels(): void {
   $('bMute').textContent = t(muted ? 'rail.sound_off' : 'rail.sound_on');
   const avatar = document.body.classList.contains('avatar');
   $('bMode').textContent = t(avatar ? 'rail.creator' : 'rail.be_someone');
-  document.querySelectorAll<HTMLElement>('#tools .tool').forEach((b) => {
-    const lb = b.querySelector('.lb');
-    if (lb && b.dataset.id) lb.textContent = t(toolById(b.dataset.id as ToolId).labelKey);
-  });
+  if (group === 'park') {
+    document.querySelectorAll<HTMLElement>('#tools .tool').forEach((b) => {
+      const lb = b.querySelector('.lb');
+      if (lb && b.dataset.id) lb.textContent = t(toolById(b.dataset.id as ToolId).labelKey);
+    });
+  } else updateAbilityStrip(); // the pills and the chip in the new language
   row2Key = '';
   paintRow2();
   showSpeed();
@@ -350,7 +375,7 @@ export function buildRail(h: RailHandlers): void {
     const on = !document.body.classList.contains('avatar');
     setBodyClass('avatar', on);
     bMode.setAttribute('aria-pressed', on ? 'true' : 'false');
-    if (on) setTool('hand'); // the Park strip, row 2 and Undo are hidden in avatar mode (02 8.2)
+    if (on) setTool('hand'); // the Park strip, row 2 and Undo are hidden in avatar mode (02 8.2); setTool also disarms an ability
     paintLabels();
     layoutOverlays();
   });
@@ -372,5 +397,5 @@ export function buildRail(h: RailHandlers): void {
 export function updateRail(_dtr: number): void {
   recheck();
   paintRow2();
-  // TODO(S6): cooldown chip and charges.
+  updateAbilityStrip(); // a tier reached rebuilds the pills; the cooldown chip (04 5.4 item 4)
 }

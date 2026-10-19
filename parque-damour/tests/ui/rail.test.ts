@@ -89,12 +89,23 @@ describe('08 2.9 rail.test.ts: the rail is data driven (03 10.4; GV buildTools 1
     expect(document.querySelector('#tools .tool[data-id="lamp"]')?.getAttribute('aria-pressed')).toBe('true');
     expect(document.querySelector('#tools .tool[data-id="hand"]')?.getAttribute('aria-pressed')).toBe('false');
     setGroup('cupid');
-    expect(document.querySelectorAll('#tools .tool')).toHaveLength(0); // TODO(S6) fills the Cupid strip
+    expect(document.querySelectorAll('#tools .tool')).toHaveLength(9); // S6: the Cupid strip (tests/ui/abilities-rail.test.ts)
+    expect(document.querySelectorAll('#tools .tool.park')).toHaveLength(0);
     expect(activeTool()).toBe('hand');
     setGroup('park');
     expect(document.querySelectorAll('#tools .tool')).toHaveLength(16);
   });
-  it.todo('Cupid 9 and Mischief 10 pills from RAIL; locked pills carry .locked and the tier word (S6)');
+  it('S6: the Cupid group holds 9 pills and the Mischief group 10; the locked ones carry .locked and the tier word', () => {
+    setGroup('cupid');
+    expect(document.querySelectorAll('#tools .tool')).toHaveLength(9);
+    expect(document.querySelectorAll('#tools .tool.locked')).toHaveLength(7); // T1 to T4 at 0 points: 2 + 2 + 2 + 1 more than T0's two
+    expect(document.querySelector('#tools .tool[data-id="c_umbrella"] .tier')?.textContent).toBe('T2');
+    setGroup('mischief');
+    expect(document.querySelectorAll('#tools .tool')).toHaveLength(10);
+    expect(document.querySelectorAll('#tools .tool.locked')).toHaveLength(8);
+    expect(document.querySelector('#tools .tool[data-id="m_fog"] .tier')?.textContent).toBe('T4');
+    setGroup('park');
+  });
 });
 
 describe('08 2.9 rail.test.ts: body.avatar hides the park strip (03 10.2; GV CSS 169)', () => {
