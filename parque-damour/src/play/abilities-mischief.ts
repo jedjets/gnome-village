@@ -8,8 +8,10 @@
 // who is in or walks into its 3 x 3 gets `soaked` once, children skipped; WET = 1 on the 9 tiles; it sinks at t 10. m_peel: a `peel` prop
 // (passable, 120 s) on a path tile; the first adult non-staff walker on it gets `trip`, and the peel goes. m_pomeranian: sendPomeranian
 // (pomeranian.ts) runs Pompon's snatch; the effect lasts until he is outside again.
-// TODO(S6-art): the sprinkler's spray (fx 'drop'), the peel and sprinkler props' drawing, the splat (fx 'poopDot') and the slip dust
-// (fx 'dust') are events and props only; the owner picks the drawings.
+// S6 art (register section 4 "S6 art and S5 poses", picked by Claude on the owner's delegation, 2026-10-20): the drawings read the sim's own
+// records and clocks, so this file emits no fx for them: the sprinkler's pop-up rotary and its spray come from the prop and its tick
+// (render/props-play.ts, fx-play.ts), the half-peeled banana from the peel prop, the paper dollop of the splat from the `wipe` reaction and the
+// dust poof of the slip from the `stumble` one (render/figure-moves.ts), the dive of the pigeon from its swoop (render/creatures.ts).
 import { emit } from '../core/events.ts';
 import { OK, fail } from '../core/commands.ts';
 import { markWetUnknown, weatherAt } from '../core/weather.ts';
@@ -33,10 +35,6 @@ export const POM_EFFECT_MAX = 150 * SEC;
 
 const STAFF = new Set(['gardener', 'vendor']);
 
-function fx(x: number, y: number, kind: string, n: number, ids: number[] = []): void {
-  emit({ kind: 'fx', tick: nowTick(), x, y, ids, params: { fx: kind, n } });
-}
-
 /* ---------- m_pigeon ---------- */
 
 function atPicnic(v: Visitor): boolean {
@@ -49,7 +47,6 @@ setSwoopHook((c, victim) => {
   if (!v) return;
   if (atPicnic(v)) emit({ kind: 'peck', tick: nowTick(), x: v.x, y: v.y, ids: [c.id, v.id], params: { picnic: 1 } });
   land('poop', v.id, 'mischief');
-  fx(v.x, v.y, 'poopDot', 3, [v.id]);
 });
 
 const PIGEON_H: Handler = {
@@ -96,7 +93,6 @@ const SPRINKLER_H: Handler = {
     moveOffBlocked([I(e.x, e.y)]); // whoever stood on the tile steps aside
     for (let y = e.y - e.r; y <= e.y + e.r; y++) for (let x = e.x - e.r; x <= e.x + e.r; x++) if (inB(x, y)) WET[I(x, y)] = 1;
     markWetUnknown();
-    fx(e.x, e.y, 'drop', 18);
   },
   step: (e, now) => {
     if (now >= e.until || !propById(e.propId)) return true;
@@ -133,7 +129,6 @@ const PEEL_H: Handler = {
       if (!v.path || v.archetype === 'child' || v.archetype === 'cameo' || STAFF.has(v.archetype)) continue;
       if (Math.round(v.x) !== e.x || Math.round(v.y) !== e.y) continue;
       if (!land('trip', v.id, 'mischief').ok) continue; // not them (three a day already): the peel waits for the next
-      fx(e.x, e.y, 'dust', 4, [v.id]);
       return true; // the peel vanishes
     }
     return false;

@@ -59,7 +59,7 @@ const holdsOverHead = (S: Skel): boolean => S.items.F === 'camera-up' || S.items
 function items(c: Ink, S: Skel, look: RigLook): { b0: Shape[]; b1: Shape[]; f0: Shape[]; f1: Shape[] } {
   const bi = itemShapes(c.pen, S, S.items.B, S.haB, S.elB, false, look.balloon);
   const fi = itemShapes(c.pen, S, S.items.F, S.haF, S.elF, true, look.balloon);
-  const bOver = S.items.B === 'palette' || S.items.B === 'crumbs';
+  const bOver = S.items.B === 'palette' || S.items.B === 'crumbs' || S.items.B === 'basket' || S.items.B === 'purse';
   return { b0: bOver ? [] : [...bi.back, ...bi.fore], b1: bOver ? [...bi.back, ...bi.fore] : [], f0: fi.back, f1: fi.fore };
 }
 

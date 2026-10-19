@@ -17,16 +17,24 @@
 // S6 (03 7.8 item 3): the armed area ability's square, marked by ui/ability-strip.ts at each tap (setAimMark) and drawn by phase 7 at alpha
 // 0.25 in the side's accent: the palette's rose for Cupid (the --berry of tokens.css) and lamp amber for Mischief (--ember), the fill with a
 // hairline of the same colour at 0.55; it stands 3 s of the frame clock (UI time, like the focus pin) and fades over the last 0.6 s.
-// TODO(S5-art): the featured pair's rose ring on both members (04 7.1 rule 9, 7.3 item 4) waits for the owner's pick of the romance art.
+// S6 art (register section 4 "S6 art and S5 poses": ring 3, the rose glow, picked by Claude on the owner's delegation, 2026-10-20; scratch/
+// s6-options-ring.ts; 04 7.1 rule 9, 7.3 item 4): the featured pair, or the pinned one, wears a soft rose pool under each member, bigger than
+// the figure, with three gold twinkles turning round it, so the eye finds them in a crowd, at Fit and at night; unlit like the selection ring
+// (a marker is not dimmed by the dark), a drawable just under its member in the painter order, and never on the member whose selection ring
+// is up: one or the other (featuredDrawables).
 import { DAYLEN, T } from '../core/clock.ts';
 import { now } from '../core/loop.ts';
 import { css, hx, mixc, type XY } from '../core/math.ts';
 import type { Ghost } from '../play/tools.ts';
 import { byId } from '../entities/visitor.ts';
-import { WHITE, style } from './ambient.ts';
+import { featured } from '../entities/romance.ts';
+import { WHITE, lampGlow, style } from './ambient.ts';
 import { cam } from './camera.ts';
 import { screenInto } from './project.ts';
 import { anchorOf, type Anchor } from './people.ts';
+import { depthOf, type Drawable } from './order.ts';
+import { view } from './camera.ts';
+import { star } from './romance-fx.ts';
 
 export type { Ghost };
 
@@ -186,4 +194,63 @@ export function drawSelection(c: CanvasRenderingContext2D, id: number): void {
   c.stroke();
   c.fillStyle = css(paper, 0.1);
   c.fill();
+}
+
+/* ---------- the featured pair's rose glow (04 7.1 rule 9; ring 3) ---------- */
+type RingD = Drawable & { gx: number; gy: number; h: number; k: number };
+const FR_POOL: RingD[] = [];
+const FR_OUT: Drawable[] = [];
+const FPEN = { ctx: null as unknown as CanvasRenderingContext2D, spec: style(), z: 1 };
+
+/** The glow's pool of radius R px at the feet: `rose` from 0.85 at the middle to 0, flattened to 0.42, and three `lamp` twinkles turning round it. */
+function drawRing(d: Drawable, c: CanvasRenderingContext2D): void {
+  const r = d as RingD, z = cam.z, P = style().palette, rose = hx(P.rose), R = Math.max(r.h * 0.95, 8);
+  c.save();
+  c.translate(r.gx, r.gy + z);
+  c.scale(1, 0.42);
+  const g = c.createRadialGradient(0, 0, 0, 0, 0, R);
+  g.addColorStop(0, css(rose, 0.85 * r.k));
+  g.addColorStop(0.55, css(rose, 0.5 * r.k));
+  g.addColorStop(1, css(rose, 0));
+  c.fillStyle = g;
+  c.beginPath();
+  c.arc(0, 0, R, 0, Math.PI * 2);
+  c.fill();
+  c.restore();
+  FPEN.ctx = c;
+  FPEN.spec = style();
+  FPEN.z = z;
+  const t = T.abs * DAYLEN * 0.9;
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2 + 0.6 + t;
+    star(FPEN, r.gx + Math.cos(a) * r.h * 0.5, r.gy + z + Math.sin(a) * r.h * 0.21, Math.max(1.1, 0.075 * r.h), P.lamp, 0.9 + 0.1 * r.k, a);
+  }
+}
+
+/**
+ * The two rose glows of the featured pair as painter drawables, a hair before each member's own (phase 6): none for the member whose
+ * selection ring `sel` is up, none off screen. `k` is 0.82 by day and 1 by night (lampGlow). Reused each frame.
+ */
+export function featuredDrawables(sel: number): Drawable[] {
+  FR_OUT.length = 0;
+  const p = featured();
+  if (!p) return FR_OUT;
+  const k = 0.82 + 0.18 * lampGlow();
+  for (const id of [p.a, p.b]) {
+    const v = id === sel ? undefined : byId(id);
+    if (!v) continue;
+    anchorOf(v, RING);
+    const m = RING.h + 12;
+    if (RING.gx < -m || RING.gx > view.cw + m || RING.gy < -m || RING.gy > view.chh + m) continue;
+    const d = FR_POOL[FR_OUT.length] ?? (FR_POOL[FR_OUT.length] = { depth: 0, kind: 'ring', id: 0, x: 0, y: 0, z: 0, draw: drawRing, gx: 0, gy: 0, h: 0, k: 0 });
+    d.depth = depthOf(v.x, v.y) - 0.02;
+    d.x = v.x;
+    d.y = v.y;
+    d.gx = RING.gx;
+    d.gy = RING.gy;
+    d.h = RING.h;
+    d.k = k;
+    FR_OUT.push(d);
+  }
+  return FR_OUT;
 }

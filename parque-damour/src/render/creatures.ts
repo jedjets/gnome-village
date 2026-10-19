@@ -9,9 +9,16 @@
 // both wings up and the tail out; the dog is 0.45 EH (11.7 z px) with an `awningRed` collar: a Jack Russell (white, tan head and saddle)
 // or a poodle in a continental clip (black, its clipped parts a shade lighter); creatures have no ink contour (04 3.2 row Line: figures
 // only). Dropped from the range: GV's foxes, hares, deer, fish and bees as animals (the wasp is an effects.ts particle).
+// S6 art (register section 4 "S6 art and S5 poses", picked by Claude on the owner's delegation, 2026-10-20; scratch/s6-options-pom.ts and
+// -pigeon.ts): Pompon on the run in a rolling cloud of dust (run 3, "dust-cloud dash": puffs behind and under him, two speed lines, the dog
+// over its top half) with what he has taken in his mouth (the hat, the purse, the baguette or the ice cream cone), and the m_pigeon swoop 1,
+// the dive: the pigeon drawn 1.45 times its size so it reads, with three speed lines up its dive and the dropping let go as a paper bead.
 import { EH } from './camera.ts';
 import { GC, fillEllipse, fillPoly, inkLine, mix, shade, strokeLine, type Pen, type Pt } from './ambient.ts';
 import { P2, ellPath, fillOf, inkOf, linePath, polyPath, softPath, type Ink } from './figure-rig.ts';
+import { TAU } from '../core/math.ts';
+import { h01 } from './romance-fx.ts';
+import { bead, speedLines } from './fx-play.ts';
 
 export type PigeonOpts = { face: 1 | -1; mode: 'walk' | 'fly'; phase: number };
 
@@ -403,4 +410,149 @@ export function drawPigeonOf(c: Ink, p: Pt, st: string, face: 1 | -1, id: number
 /** A walker's dog at ground point p, trotting while `running`; returns its collar point. `tSim` is sim seconds. */
 export function drawDogOf(c: Ink, p: Pt, face: 1 | -1, breed: Breed, running: boolean, id: number, tSim: number): Pt {
   return drawDog(c, p, face, breed, running, running ? tSim * DOG_TROT_HZ + id * 0.29 : 0);
+}
+
+
+/* ---------- S6 art: Pompon on the run and the swoop of the pigeon ---------- */
+
+export type PomItem = 'hat' | 'purse' | 'baguette' | 'iceCream';
+/** The pigeon of a swoop is drawn this much over its 0.18 EH so it reads at the default zoom (the page's SCALE). */
+export const SWOOP_SCALE = 1.45;
+
+/** What Pompon carries, drawn in his mouth at m (the dog's size s, facing f): a hat by its edge (`hatHex`), a purse by its strap, a baguette across, an ice cream cone. */
+function mouthItem(pen: Pen, it: PomItem, m: Pt, f: 1 | -1, s: number, hatHex: string): void {
+  const { ctx } = pen, P = pen.spec.palette;
+  ctx.save();
+  ctx.translate(m.x, m.y);
+  ctx.scale(f, 1);
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  const rim = GC(P.ink, 0.8), lw = Math.max(0.6, s * 0.05);
+  if (it === 'hat') {
+    // her beret, held by its edge, hanging down off the muzzle
+    ctx.fillStyle = shade(hatHex, 1);
+    ctx.strokeStyle = rim;
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.ellipse(s * 0.3, s * 0.12, s * 0.56, s * 0.3, 0.35, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(s * 0.3, 0);
+    ctx.lineTo(s * 0.32, -s * 0.14);
+    ctx.lineWidth = s * 0.09;
+    ctx.stroke();
+  } else if (it === 'purse') {
+    const hex = P.crowdTop[9] as string; // the cognac of figure-props.ts's purse: the one she was seen with
+    ctx.strokeStyle = shade(hex, 0.85);
+    ctx.lineWidth = Math.max(0.8, s * 0.06);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(s * 0.2, -s * 0.35, s * 0.55, s * 0.05);
+    ctx.stroke();
+    ctx.fillStyle = shade(hex, 1);
+    ctx.strokeStyle = rim;
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.rect(s * 0.28, s * 0.05, s * 0.58, s * 0.4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = shade(P.lamp, 1.05);
+    ctx.beginPath();
+    ctx.arc(s * 0.57, s * 0.13, s * 0.05, 0, TAU);
+    ctx.fill();
+  } else if (it === 'baguette') {
+    // a baguette across the mouth, longer than the dog is high: golden, four slashes
+    ctx.translate(s * 0.1, s * 0.05);
+    ctx.rotate(-0.42);
+    const Lb = s * 1.75, Wb = s * 0.27;
+    ctx.fillStyle = shade(P.baguette, 1);
+    ctx.strokeStyle = rim;
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.roundRect(-Lb * 0.45, -Wb / 2, Lb, Wb, Wb * 0.5);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = shade(P.baguette, 1.28);
+    ctx.lineWidth = Math.max(0.7, s * 0.05);
+    for (let i = 0; i < 4; i++) {
+      const x = -Lb * 0.3 + i * Lb * 0.22;
+      ctx.beginPath();
+      ctx.moveTo(x - Wb * 0.2, Wb * 0.2);
+      ctx.lineTo(x + Wb * 0.2, -Wb * 0.2);
+      ctx.stroke();
+    }
+  } else {
+    // an ice cream: the cone point in his teeth, a rose scoop up and forward with a paper shine
+    ctx.fillStyle = shade(P.baguette, 0.95);
+    ctx.strokeStyle = rim;
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(s * 0.05, s * 0.05);
+    ctx.lineTo(s * 0.62, -s * 0.28);
+    ctx.lineTo(s * 0.62, s * 0.18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = shade(P.rose, 1);
+    ctx.beginPath();
+    ctx.arc(s * 0.72, -s * 0.05, s * 0.3, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = GC(P.paper, 0.85);
+    ctx.beginPath();
+    ctx.arc(s * 0.64, -s * 0.15, s * 0.07, 0, TAU);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/**
+ * Pompon at ground point p (the pomeranian's 0.3 EH at this zoom, `s`): running (run, carry and home) in the page's run 3, the dust-cloud
+ * dash, with the item in his mouth when he carries one; `t` sim seconds. The dog is `drawPomeranian` of the style board.
+ */
+export function drawPompon(c: Ink, p: Pt, f: 1 | -1, running: boolean, t: number, item: PomItem | null, hatHex: string, s = 0.3 * EH * c.pen.z): void {
+  const { ctx } = c.pen, P = c.pen.spec.palette;
+  if (s < 2) return;
+  ctx.fillStyle = GC(P.ink, 0.16); // the shadow stays on the ground
+  ctx.beginPath();
+  ctx.ellipse(p.x, p.y, s * 0.75, s * 0.2, 0, 0, TAU);
+  ctx.fill();
+  if (running) {
+    // a dust cloud round the legs: puffs rolling off behind and under him, two speed lines; the dog is drawn over its top half
+    for (let i = 0; i < 6; i++) {
+      const k = (i / 6 + t * 2.4) % 1, px = p.x - f * (s * 0.2 + k * s * 1.9), py = p.y - s * (0.2 + 0.22 * Math.sin(k * 3 + 1) + 0.1 * h01(i, 3));
+      ctx.fillStyle = GC(P.dust, (0.85 - k * 0.35) * Math.min(1, k * 6, (1 - k) * 4));
+      ctx.beginPath();
+      ctx.arc(px, py, s * (0.5 - k * 0.12 + 0.08 * h01(i, 5)), 0, TAU);
+      ctx.fill();
+    }
+    ctx.strokeStyle = GC(P.paper, 0.9);
+    ctx.lineWidth = Math.max(1, 0.1 * s);
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 2; i++) {
+      ctx.beginPath();
+      ctx.moveTo(p.x - f * s * (1.0 + 0.3 * i), p.y - s * (0.55 + 0.18 * i));
+      ctx.lineTo(p.x - f * s * (2.0 + 0.3 * i), p.y - s * (0.55 + 0.18 * i));
+      ctx.stroke();
+    }
+  }
+  drawPomeranian(c.pen, p, { face: f, running, phase: t }, s);
+  if (item) {
+    const bounce = running ? Math.abs(Math.sin(t * TAU * 4)) * s * 0.12 : 0;
+    const stretch = running ? 1.15 : 1, yy = p.y - s * 0.46 - bounce, hx = p.x + f * s * 0.62 * stretch, hy = yy - s * 0.22;
+    mouthItem(c.pen, item, P2(hx + f * s * 0.36, hy + s * 0.2), f, s, hatHex);
+  }
+}
+
+/**
+ * The m_pigeon swoop 1, the dive (04 8 row poop splat; 02 9.3): the pigeon in flight drawn at `s`, three speed lines trailing up its dive
+ * toward `from` (a screen point behind it and above) and, within a few tiles of the victim, the dropping let go as a paper bead with a dotted
+ * fall line to the head `head`; `bead` null before that. Nothing gross: the bead is `paper` with an `ice` rim.
+ */
+export function drawSwoop(c: Ink, p: Pt, f: 1 | -1, phase: number, s: number, from: Pt, head: Pt | null): void {
+  const pen = c.pen, d = P2(from.x - p.x, from.y - p.y), l = Math.hypot(d.x, d.y) || 1;
+  speedLines(pen, p, from, P2(-d.y / l, d.x / l));
+  drawPigeonState(c, p, f, 'fly', phase, s);
+  if (head) bead(pen, P2(p.x, p.y + 0.18 * EH * pen.z), head);
 }

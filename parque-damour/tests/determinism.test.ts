@@ -54,12 +54,15 @@ const fixture = FIXTURES['det-s2']; // the state-hash tests below run on det-s2'
 type Hook = (step: number) => void;
 
 /**
- * det-s2's values since 2026-10-20 (everyone seeks the opposite sex, so the draws of every arrival after a single moved). Before that, since
+ * det-s2's values since S6's art (2026-10-20: the purse and the baguette are drawn on visitors at rest, so visitor.ts hands them out from
+ * lookSeed bits and the hashed items differ; the draw count did not move): rngN 27682, stateHash 2401087470. Before that, since the owner's
+ * rule of 2026-10-20 (everyone seeks the opposite sex, so the draws of every arrival after a single moved): rngN 27682, stateHash 3100070308;
+ * before that, since
  * S6's abilities and progression (the day's tally of points joined the state hash; the draw count did not move): rngN 28155, stateHash
  * 3346388746. Before that, since the starter picnic spots (owner 2026-10-19: two 2 x 2 blankets in the starter park): rngN 28155, stateHash
  * 4191156501; before them, since S5, the romance core: rngN 26992, stateHash 854600468.
  */
-const DET_S2 = { rngN: 27682, stateHash: 3100070308 };
+const DET_S2 = { rngN: 27682, stateHash: 2401087470 };
 
 /** The kind of the prop whose footprint covers (x, y). */
 function propKindAt(x: number, y: number): string | undefined {
@@ -114,8 +117,8 @@ describe('the fixtures (08 3.2 item 1)', () => {
     // act.ts seatedStep). S5 re-recorded them once, the sanctioned re-record of the romance core (pairs forming change the sim: the
     // couples' Pairs, the formation rolls, the stages, the charm conversion; see the fixture's note). S6 re-recorded all five once more for the
     // starter picnic spots (rngN 26992, stateHash 854600468 before them) and once for S6's tally in the hash (stateHash 4191156501 before it; see
-    // the fixture's note), and once on 2026-10-20 for the owner's rule that only a woman and a man pair (see the header). No later slice may
-    // move these.
+    // the fixture's note), once on 2026-10-20 for the owner's rule that only a woman and a man pair, and once more the same day for S6's
+    // art, which draws the purse and the baguette at rest (see the header; the draw count did not move). No later slice may move these.
     expect(fixture.expect).toEqual(DET_S2);
   });
 

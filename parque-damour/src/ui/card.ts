@@ -13,7 +13,7 @@
 // doing line, the critter card (selectCrit 10875: Parque has no creature card), the "Following" toast.
 // S5 (02 12.3 items 2-3; 04 5.5 items 1-2): a member of a Pair is shown on the pair card first: both names (each a button to that
 // person's single card) with the heart glyph between them in --berry, the stage chip "Bench · 3 of 7", the shared Heart bar full width
-// with a 1 px ink tick at the next stage's gate, both doing lines, and the Pin toggle (the featured pair, romance.ts setPin: UI state per
+// with a 1 px ink tick at the next stage's gate, both doing lines (once when they read the same), and the Pin toggle (the featured pair, romance.ts setPin: UI state per
 // client, 02 14.3). The single card of a paired member adds the Heart bar with the same tick and the relationship line "courting B ·
 // Stage" ("with B" for a couple, "married here" for an alumni couple), which switches back to the pair card when tapped.
 // TODO(S7): the avatar strip with " · you" and its doing lines (02 12.3 item 4).
@@ -215,9 +215,9 @@ function pairCard(p: Pair, a: Visitor, b: Visitor): void {
   for (const n of ['mood', 'rest', 'full'] as const) bar(n, 0, false, false);
   heartBar(p);
   $('cDo').textContent = t('doing.' + a.st);
-  const d2 = doing2();
-  d2.hidden = false;
-  d2.textContent = t('doing.' + b.st);
+  const d2 = doing2(), second = t('doing.' + b.st);
+  d2.hidden = second === $('cDo').textContent; // both in one state (sitting together): the line once (S6, the s5 pair-card shot showed it twice)
+  d2.textContent = second;
   const pin = $('cPin'), on = pinnedPair() === p.id;
   pin.hidden = false;
   pin.className = 'pin gb';

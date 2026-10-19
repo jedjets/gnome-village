@@ -22,7 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import puppeteer from 'puppeteer-core';
-import { S6_SCENES, s6Actions } from './shot-s6.mjs';
+import { S5_ART_SCENES, S6_SCENES, s6Actions } from './shot-s6.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
@@ -135,6 +135,7 @@ const SCENE_SETS = {
     { name: 'kiss', turn: 0, z: 3.0, at: [21.5, 26.0], abs: 0.76, act: 's5Kiss', fx: 30 },
     { name: 'proposal', turn: 0, z: 3.0, at: [21.5, 27.5], act: 's5Proposal', fx: 30 },
     { name: 'stroll', turn: 0, z: 3.0, at: [18, 26], act: 's5Stroll', fx: 30 },
+    ...S5_ART_SCENES, // Notice 2, Bench 2 and the featured pair's ring (S6 art; tools/shot-s6.mjs)
   ],
   // ui: the Options stage (register section 4 "Park pace and Options", owner 2026-10-14), driven by real taps: rail row 3 ending with
   // Options at the start view (rail); a real unpause and pause so Begin's profile pace applies (a new player: Lively), then Options
@@ -531,7 +532,7 @@ const ACTIONS = {
   },
 };
 
-Object.assign(ACTIONS, s6Actions({ tapTile, runBriefly, sleep }));
+Object.assign(ACTIONS, s6Actions({ tapTile, runBriefly, sleep, s5Pair, s5Until }));
 
 function parseArgs(argv) {
   const out = { slice: 's0', url: '', days: 0, smoke: false };

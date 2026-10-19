@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { SIM_DT, newPark, simulate } from '../../src/core/loop.ts';
 import { clearPending, log, pendingCount } from '../../src/core/commands.ts';
 import { drain, emit } from '../../src/core/events.ts';
+import { tryForm } from '../../src/entities/romance.ts';
 import { CAP_PEOPLE, people, removeVisitor, resetVisitors, spawnVisitor, visitors, type Visitor } from '../../src/entities/visitor.ts';
 import { cam, followed } from '../../src/render/camera.ts';
 import { $ } from '../../src/ui/dom.ts';
@@ -256,5 +257,24 @@ describe('02 12.5 items 1-2: the feed line and the 40 entries (GV logEv 10717, a
     setLang('es');
     expect($('feed').textContent).toBe('Amélie ha vuelto'); // rendered at display time (06 16.11)
     setLang('en');
+  });
+});
+
+describe('02 12.3 item 3 and 04 5.5 item 2 (S6): the pair card shows both doing lines, and once when they read the same', () => {
+  it('both sitting together: the line once; one sitting and one standing: two lines', () => {
+    const a = put('single', 20, 20, { sex: 'f' }), b = put('single', 21, 20, { sex: 'm' });
+    expect(tryForm(a, b, true)).toBeTruthy();
+    a.st = 'bench';
+    b.st = 'bench';
+    select({ kind: 'visitor', id: a.id, tile: null });
+    updateCard();
+    expect($('card').classList.contains('pair')).toBe(true);
+    expect($('cDo').textContent).toBe(en['doing.bench']);
+    expect(($('cDo2') as HTMLElement).hidden).toBe(true);
+    b.st = 'idle';
+    updateCard();
+    expect($('cDo').textContent).toBe(en['doing.bench']);
+    expect(($('cDo2') as HTMLElement).hidden).toBe(false);
+    expect($('cDo2').textContent).toBe(en['doing.idle']);
   });
 });

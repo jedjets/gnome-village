@@ -10,7 +10,9 @@
 // first tile of the path the waypoint, straight at 4.5 between; the gates are his own (gateIn/gateOut), so the walk goes through them.
 // Dogs on leads are not involved (the cast refuses when one is within 3: abilities-mischief.ts); the child chase of 02 11.4 and the
 // bark of 11.3 item 1 are not built.
-// TODO(S6-art): Pompon is not drawn yet (render/people.ts skips the pomeranian until the S6 art is picked).
+// S6 art (register section 4 "S6 art and S5 poses", picked by Claude on the owner's delegation, 2026-10-20): Pompon is drawn while he is in the
+// park, in a rolling dust cloud with what he took in his mouth (render/creatures.ts drawPompon, run 3), and the victim chases with both arms up
+// (render/figure-moves.ts, chase 1); the sim is unchanged.
 import { DAYLEN, T } from '../core/clock.ts';
 import { emit } from '../core/events.ts';
 import type { VisitorId } from '../core/ids.ts';

@@ -10,15 +10,21 @@
 // crouch frame, the sitting legs, the walk swing, the body line, the tunic stroke), 8331-8340 (arm angles and the back arm first),
 // 8395-8414 (fringe, eyes, nose, cheeks). ADAPT: hip -0.38, shoulder -0.66, head -0.82, head r 0.10, two-segment arms, FH 22; the hat is
 // a beret, a flat cap or a sunhat, never GV's pointed hat; the park's states and items instead of GV's jobs and tools. The selection ring
-// is ghost.ts drawSelection; the featured pair's rose ring is S5's.
-// TODO(S5): the baguette, umbrella and hat-in-hand items of 03 7.6 item 4 (no state draws them yet; an options step first, AGENTS 12c).
+// is ghost.ts drawSelection; the featured pair's rose ring is ghost.ts drawFeaturedRing.
+// S6 art (register section 4 "S6 art and S5 poses", picked by Claude on the owner's delegation, 2026-10-20): the purse, the baguette and the
+// flower seller's basket are items (figure-props.ts), the hat in hand is the `wipe`'s (figure-moves.ts), which also gives the Notice 2 and
+// Bench 2 leans, the huff 1 and laugh 1 reactions, the soaked 3 shake, the trip 3 plop and the snatched 1 chase to the single figures.
+// TODO(S10): the umbrella of c_umbrella (03 7.6 item 4).
 import { GC, ellipsePts, fillEllipse, fillPoly, inkLine, mix, shade, strokeLine, style, type Palette, type Pen, type Pt } from './ambient.ts';
-import { FH, opts, solveH, type Expr as RigExpr, type Ink, type Item, type Opts, type RigLook, type Skel, type State } from './figure-rig.ts';
+import { FH, LOD, opts, solveH, type Expr as RigExpr, type Ink, type Item, type Opts, type RigLook, type Skel, type State } from './figure-rig.ts';
 import { drawRigPerson } from './figure-garments.ts';
 import { lookOf, newLook } from './figure-look.ts';
+import { skel } from './figure-pose.ts';
+import { drawMoveExtras, moveOf, wetLook } from './figure-moves.ts';
 import type { Visitor } from '../entities/visitor.ts';
 import { pairById } from '../entities/romance.ts';
 import { speedOf } from '../entities/move.ts';
+import type { Move } from './figure-moves.ts';
 
 export { FH } from './figure-rig.ts';
 
@@ -398,7 +404,7 @@ export function poseOf(v: Visitor, face: 1 | -1, tSim: number, out: Opts): Opts 
   out.ph = tSim * speedOf(v) * WALK_K + v.id * 1.7;
   out.expr = exprOf(v);
   out.neutral = false;
-  romancePose(v, out);
+  out.move = romancePose(v, face, tSim, out.ph);
   const still = st === 'idle' || st === 'sit' || st === 'read' || st === 'feed';
   out.breath = still ? BREATH_RAD * Math.sin(Math.PI * 2 * BREATH_HZ * tSim + v.id) : 0;
   const seed = v.lookSeed >>> 0;
@@ -409,18 +415,35 @@ export function poseOf(v: Visitor, face: 1 | -1, tSim: number, out: Opts): Opts 
 }
 
 /**
- * The single-figure romance and reaction poses (04 9.2 Notice and Bench leans, 9.3 reactions). The owner's picks of 2026-10-18 (register
- * section 4 row "Romance art") cover the pair poses, which romance-art.ts draws (kiss 1, proposal 1 with the embrace, Stroll arm in arm);
- * TODO(S5-art): the leans of Notice and Bench and the reaction poses of 04 9.3 were not among the picked variants and keep the rig's own
- * poses (stateOf) and faces (exprOf) until an options round shows them; this hook changes nothing.
+ * The single-figure romance and reaction poses (04 9.2 Notice 2 and Bench 2, 9.3 huff 1, laugh 1, wipe 1, shake 3, trip 3, chase 1; register
+ * section 4 row "S6 art and S5 poses"): the figure's own body pose for its state and clock, or null for the rig's state (figure-moves.ts). The
+ * pair poses of the owner's picks (kiss, proposal, embrace, stroll) are romance-art.ts's and come first (people.ts).
  */
-export function romancePose(_v: Visitor, out: Opts): Opts {
-  return out;
+export function romancePose(v: Visitor, face: 1 | -1, tSim: number, ph: number): Move | null {
+  return moveOf(v, face, tSim, ph);
 }
 
-/** A visitor at ground point p with its look and options (figure-look.ts lookOf, poseOf), in the Tailored rig. */
+const WET: RigLook = newLook(), BARE: RigLook = newLook();
+/**
+ * A visitor at ground point p with its look and options (figure-look.ts lookOf, poseOf), in the Tailored rig; with a `move` (figure-moves.ts)
+ * the body is that pose, seated on its seat when the state is a sit, in wet clothes for the shake and bareheaded while the wipe's hat is in
+ * her hand, and what rides on the body is drawn after it.
+ */
 export function drawVisitor(c: Ink, p: Pt, look: RigLook, o: Opts): Skel | null {
-  return drawRigPerson(c, p, look, o);
+  const mv = o.move;
+  if (!mv) return drawRigPerson(c, p, look, o);
+  const h = FH * c.pen.z * look.scale;
+  if (h < LOD.body) return null;
+  const S = skel(h, o.state === 'sit' ? { ...mv.pose, sit: { seatPx: o.seatPx, slope: o.slope } } : mv.pose);
+  let L = mv.wet ? wetLook(look, c.pen.spec.palette, WET) : look;
+  if (mv.hatOff) {
+    Object.assign(BARE, L);
+    BARE.hat = 'none';
+    L = BARE;
+  }
+  drawRigPerson(c, p, L, { ...o, expr: S.expr }, S);
+  drawMoveExtras(c, p, o.face, S, look, mv);
+  return S;
 }
 
 /** The screen point of a visitor's front (`front`) or back hand at drawn point p, without drawing (a walker's lead, 04 7.2). */

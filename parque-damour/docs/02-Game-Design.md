@@ -678,7 +678,7 @@ Chips, card and overlay layout refresh every 0.35 s (GV `updateHUD` 10845); the 
 ### 12.3 Card (`src/ui/card.ts`)
 1. Tap a person with `hand` (34 px, people before props: GV `tapSelect` 11231) to select and follow (zoom ≥ 1.8, GV `selectGnome` 10867); tap empty ground clears.
 2. Single card: name · archetype and `ageWord` · relationship line ("single, looking", "courting B · Chat", "with B" for couples, "with the children") · bars **Mood** (comfort), **Rested** (energy), **Full** (1 − hunger), plus **Heart** (affinity) when paired · doing line from a `DOING[st]` table through `t()`.
-3. Pair card variant (shown when the selected person is in a `Pair`): both names, the shared affinity bar with the next gate marked, the stage name, both doing lines, a **Pin** toggle (featured). Tapping a name on the pair card switches to that person's single card; tapping the pair line on a single card switches back.
+3. Pair card variant (shown when the selected person is in a `Pair`): both names, the shared affinity bar with the next gate marked, the stage name, both doing lines (once when they read the same), a **Pin** toggle (featured). Tapping a name on the pair card switches to that person's single card; tapping the pair line on a single card switches back.
 4. Avatar mode: the card is the compact strip (GV CSS 173–178) with " · you" after the name and the doing line "waiting for your tap" / the last cascade string (GV 10830).
 5. The card hides while a sheet is open (`body.sheet`).
 

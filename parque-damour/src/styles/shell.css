@@ -264,6 +264,8 @@ body.sheet #card{opacity:0!important;pointer-events:none!important}
 #feed .ev{background:var(--glass);border:1px solid var(--glass-line);border-radius:999px;padding:3px 9px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:var(--shadow);transition:opacity 1s;pointer-events:auto;cursor:pointer}
 #feed:not(.on) .ev{pointer-events:none}
+/* under 340 px the line moves below the chip stack: at 320 x 568 in Spanish it ran under the Romance and Points chips (S6, owner 2026-10-20) */
+@media (max-width:339px){#feed{top:calc(env(safe-area-inset-top,0px) + 140px);max-width:calc(100vw - 20px)}}
 #perf{position:fixed;left:12px;top:calc(env(safe-area-inset-top,0px) + 58px);z-index:6;pointer-events:none;
   font:600 11px/1.35 ui-monospace,Menlo,Consolas,monospace;color:var(--ink);background:var(--well-2);
   border:1px solid var(--glass-line);border-radius:10px;padding:5px 8px;white-space:pre;letter-spacing:.01em}

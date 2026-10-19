@@ -12,8 +12,11 @@
 // leaves; the effect lasts as long as the busker does. c_sunbeam: a weather override of r 3 for 60 s (02 3.5; needs.ts adds the comfort,
 // charm.ts the +1), removed with the effect; while snow is falling (above 0.3) the WET of its 7 x 7 dries twice as fast (02 9.2 interaction:
 // the normal fall of weather.ts stepWet plus one more of the same size each step).
-// TODO(S6-art): the petal burst (fx 'petal' x 24), the bouquet in hand, the warm light pool of the sunbeam are events and data only; the
-// owner picks the drawings.
+// S6 art (register section 4 "S6 art and S5 poses", picked by Claude on the owner's delegation, 2026-10-20): the petal burst (fx 'petal' x 24)
+// is the sparkle flurry of render/fx-play.ts, the flower seller (Violette) carries her basket and the bouquet (render/figure-look.ts, figure-props.ts),
+// the busker stands with his cap and coins (render/people.ts). TODO(S9): the sunbeam's pick is recorded only, "2 dappled shaft": the soft pool
+// with leaf shadows dappling it, three pale shafts slanting down into it and a few drifting motes (scratch/s6-options-light.ts buildSunbeam,
+// SunV 2); its drawing is S9's light pass, so here it stays data (the override, the comfort, the charm) and 12 `spark` dots.
 import { DAYLEN, T } from '../core/clock.ts';
 import { clamp01 } from '../core/math.ts';
 import { emit } from '../core/events.ts';

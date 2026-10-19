@@ -23,7 +23,7 @@ import { drawWater } from './water.ts';
 import { drawLampPool, lampOn, propDrawables } from './props.ts';
 import { gamePen } from './flora.ts';
 import { drawWeatherOverlay, particleDrawables } from './effects.ts';
-import { drawAimMark, drawFocusMark, drawGhost, drawSelection, type Ghost } from './ghost.ts';
+import { drawAimMark, drawFocusMark, drawGhost, drawSelection, featuredDrawables, type Ghost } from './ghost.ts';
 import { peopleDrawables } from './people.ts';
 import { sortByDepth, type Drawable } from './order.ts';
 
@@ -155,6 +155,7 @@ export function draw(ghost: Ghost | null = null, sel = 0): void {
   for (const d of propDrawables()) ITEMS.push(d);
   for (const d of peopleDrawables()) ITEMS.push(d);
   for (const d of particleDrawables()) ITEMS.push(d);
+  for (const d of featuredDrawables(sel)) ITEMS.push(d); // the featured pair's rose glow, under its members (not under the selected one)
   sortByDepth(ITEMS);
   for (const d of ITEMS) d.draw(d, c);
   // 7 the ghost panes (S3), the armed area ability's square (S6), the selection ring (S4), the focus pin (S5)

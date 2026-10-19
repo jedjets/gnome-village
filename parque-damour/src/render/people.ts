@@ -22,6 +22,10 @@
 // 0.18 (1 - d / 3) for the nearest lit lamp, park or street, within 3 tiles); a dog is its walker's terrier or poodle (figure-look.ts
 // breedOf) on a lead from the walker's hand on the dog's side, taut while it trots and slack while it stands; a pigeon on a bench perches
 // on the bench's back rail. Static figures (idle, seated) at any zoom and every figure under 12 px come from sprites (perf, 03 7.9).
+// S6 art (register section 4 "S6 art and S5 poses"): a figure in one of the body poses of figure-moves.ts above 12 px is drawn straight (its
+// pose has no sprite), the busker's cap with its coins and his notes ride on him while he plays, Pompon is drawn while he is in the park
+// (running in his dust cloud with what he took in his mouth, drawPompon), and a swooping pigeon dives from 2.7 EH down to head height,
+// drawn 1.45 times its size with its speed lines and the dropping let go (drawSwoop).
 // Dropped from the range: GV's crews, riders, boats and balloons, the inside skip, the wary and blink timers.
 import { DAYLEN, T } from '../core/clock.ts';
 import { TAU } from '../core/math.ts';
@@ -38,9 +42,10 @@ import { gamePen } from './flora.ts';
 import { streetLamps } from '../world/park.ts';
 import { lampOn } from './props.ts';
 import { BREATH_RAD, FH, drawVisitor, figureScale, handOf, poseOf } from './figures.ts';
-import { opts, type Ink, type Opts, type RigLook } from './figure-rig.ts';
+import { P2, opts, type Ink, type Opts, type RigLook } from './figure-rig.ts';
 import { breedOf, lookOf, newLook } from './figure-look.ts';
-import { DOG_EH, DOG_TROT_HZ, PIGEON_FLAP_HZ, PIGEON_WALK_HZ, drawDog, drawDogOf, drawLead, drawPigeonOf, drawPigeonState, pigeonStateOf } from './creatures.ts';
+import { DOG_EH, DOG_TROT_HZ, PIGEON_FLAP_HZ, PIGEON_WALK_HZ, SWOOP_SCALE, drawDog, drawDogOf, drawLead, drawPigeonOf, drawPigeonState, drawPompon, drawSwoop, pigeonStateOf } from './creatures.ts';
+import { drawCap, drawNotes } from './fx-play.ts';
 import { blit, spriteFor, spriteFrame, type Sprite, type SpriteLight } from './figure-sprites.ts';
 import { SEATS, seatPos } from '../entities/staff.ts';
 import { pairById } from '../entities/romance.ts';
@@ -211,18 +216,27 @@ function drawPerson(d: Drawable, c: CanvasRenderingContext2D): void {
   if (drawPairArt(INK, v, pd.face) !== 'none') return;
   prepare(pd, v);
   // from sprites, except while the zoom moves (figures from 12 px) and for a walker in a lamp's warmth (it changes at every step)
-  const sprite = (pd.h < SPRITE_H || !zooming) && !(POSE.state === 'walk' && POSE.warm > 0);
+  // a body pose of figure-moves.ts has no sprite: above 12 px it is drawn straight (a few figures at a time)
+  const sprite = (pd.h < SPRITE_H || !zooming) && !(POSE.state === 'walk' && POSE.warm > 0) && !(POSE.move && pd.h >= SPRITE_H);
   if (sprite && typeof document !== 'undefined') {
     blit(c, figureSprite(v, pd.h), pd.sx, pd.sy, cam.z, view.dpr);
-    chatBubble(pd, v, c);
-    return;
+  } else {
+    INK.pen = gamePen(c);
+    INK.warm = pd.warm;
+    P0.x = pd.sx;
+    P0.y = pd.sy;
+    drawVisitor(INK, P0, LOOK, POSE);
   }
-  INK.pen = gamePen(c);
-  INK.warm = pd.warm;
-  P0.x = pd.sx;
-  P0.y = pd.sy;
-  drawVisitor(INK, P0, LOOK, POSE);
   chatBubble(pd, v, c);
+  busk(pd, v, c);
+}
+
+/** The busker's cap on the path in front of him with its coins, and his ink notes rising from the bellows, while he plays (busker 1, standing). */
+function busk(pd: PersonDrawable, v: Visitor, c: CanvasRenderingContext2D): void {
+  if (v.archetype !== 'busker' || v.st !== 'play' || pd.h < 8) return;
+  const pen = gamePen(c), h = pd.h;
+  drawCap(pen, P2(pd.sx + pd.face * 0.2 * h, pd.sy + 0.22 * h));
+  drawNotes(pen, P2(pd.sx - pd.face * 0.09 * h, pd.sy - 0.94 * h), pd.face, tSim());
 }
 
 /** The Chat stage's talk bubbles (02 6.2 stage 2; 04 7.5 item 4): above one speaker at a time, alternating every 3 s of sim time. */
@@ -266,11 +280,14 @@ function figureSprite(v: Visitor, h: number): Sprite {
   const zq = zqOf(h), far = h < SPRITE_H;
   const walking = POSE.state === 'walk', nf = far ? WALK_FRAMES_FAR : WALK_FRAMES;
   const frame = walking ? frameOf(POSE.ph / TAU, nf) : 0;
-  if (far) POSE.lookAt = 0;
+  if (far) {
+    POSE.lookAt = 0;
+    POSE.move = null; // under 12 px no pose shows: the state's own sprite
+  }
   // a glance holds the arms at the breath's middle, so a still figure keeps four sprites: three breaths and the glance
   const br = far || POSE.lookAt !== 0 ? 0 : Math.round((POSE.breath / BREATH_RAD) * BREATH_STEPS);
   const warm = Math.round(POSE.warm * 100);
-  const key = v.lookSeed + '|' + v.archetype + '|' + LOOK.hat + LOOK.carry + LOOK.top + LOOK.pairScarf + '|' + POSE.state + POSE.expr + '|' +
+  const key = v.lookSeed + '|' + v.archetype + '|' + LOOK.hat + LOOK.carry + LOOK.bag + LOOK.top + LOOK.pairScarf + '|' + POSE.state + POSE.expr + '|' +
     POSE.face + POSE.lookAt + '|' + nf + ':' + frame + '|' + br + '|' + Math.round(POSE.seatPx * 8) + '|' + Math.round(POSE.slope * 16) + '|' +
     warm + '|' + zq + LK;
   const hq = (h * zq) / cam.z;
@@ -292,6 +309,21 @@ function drawCreature(d: Drawable, c: CanvasRenderingContext2D): void {
   P0.x = pd.sx;
   P0.y = pd.sy;
   const z = cam.z, zq = cam.z, dpr = view.dpr, still = !zooming && typeof document !== 'undefined';
+  if (cr.kind === 'pomeranian') {
+    // Pompon, in the park only while he runs (render/creatures.ts drawPompon): what he has taken in his mouth, in the victim's hat colour
+    const o = byId(cr.targetId);
+    if (o) lookOf(o, style().palette, figureScale(o), LOOK);
+    drawPompon(INK, P0, pd.face, cr.st !== 'idle', tSim(), cr.carry, o ? LOOK.hatHex : style().palette.crowdHat[2] as string, pd.h);
+    return;
+  }
+  if (cr.kind === 'pigeon' && cr.st === 'swoop' && cr.t <= 0) {
+    // the dive (m_pigeon swoop 1): speed lines up the way it came, the dropping let go over the last tiles
+    const o = byId(cr.ownerId), back = swoopBack(cr);
+    screenInto(cr.x - back.x * 1.1, cr.y - back.y * 1.1, cr.z + swoopRise(cr) + 0.6, P1);
+    const head = o && Math.hypot(o.x - cr.x, o.y - cr.y) < SWOOP_BEAD ? screenInto(o.x, o.y, 0.95, C1) : null;
+    drawSwoop(INK, P0, pd.face, tSim() * PIGEON_FLAP_HZ + cr.id * 0.37, pd.h, P1, head);
+    return;
+  }
   if (cr.kind === 'pigeon') {
     // a pigeon from a sprite: its bob (3 Hz) or flap (5 Hz) in 8 frames; peck and perch hold still
     const st = cr.st, fl = st === 'fly' || st === 'scatter', walk = st === 'walk';
@@ -404,9 +436,29 @@ function onScreen(x: number, y: number, h: number): boolean {
   return x > -m && x < view.cw + m && y > -8 && y < view.chh + m * 2;
 }
 
+/** The pomeranian is 0.3 EH (04 7.4). */
+const POM_EH = 0.3;
+/** A swooping pigeon cruises at 2.7 EH and dives over the last 3.2 tiles to head height (m_pigeon swoop 1); the dropping is let go inside 2 tiles. */
+const SWOOP_CRUISE = 1.6, SWOOP_DIVE = 3.2, SWOOP_BEAD = 2;
+const SB: XY = { x: 0, y: 0 };
+/** How far above the sim's flight height (head height) a diving pigeon is drawn: 1.6 EH while far, easing to 0 over the last 3.2 tiles. */
+function swoopRise(c: Creature): number {
+  const o = byId(c.ownerId);
+  if (!o) return 0;
+  const k = Math.max(0, Math.min(1, (Math.hypot(o.x - c.x, o.y - c.y) - 0.45) / SWOOP_DIVE));
+  return SWOOP_CRUISE * Math.pow(k, 1.5);
+}
+/** The unit heading of a swooping pigeon, from where it was to the victim: the speed lines trail the other way (zero when it is on them). */
+function swoopBack(c: Creature): XY {
+  const o = byId(c.ownerId), d = o ? Math.hypot(o.x - c.x, o.y - c.y) : 0;
+  SB.x = d > 1e-6 && o ? (c.x - o.x) / d : 0;
+  SB.y = d > 1e-6 && o ? (c.y - o.y) / d : 0;
+  return SB;
+}
+
 /**
  * Phase 6's people and creatures (03 7.9): every visitor, every pigeon and every walker's dog in the park (the pomeranian waiting outside
- * is neither drawn nor picked: S6 brings it in), culled to the screen, with their depth (03 7.2), facing and drawn point. The returned
+ * is neither drawn nor picked), culled to the screen, with their depth (03 7.2), facing and drawn point. The returned
  * list and its items are reused next frame; draw.ts copies them into its own list.
  */
 export function peopleDrawables(): Drawable[] {
@@ -446,18 +498,18 @@ export function peopleDrawables(): Drawable[] {
     d.warm = warmthAt(v.x, v.y);
   }
   for (const c of creatures) {
-    if (c.outside || c.kind === 'pomeranian') continue; // S6 brings the pomeranian into the park
-    const pigeon = c.kind === 'pigeon';
+    if (c.outside) continue; // Pompon waiting outside is neither drawn nor picked
+    const pigeon = c.kind === 'pigeon', diving = pigeon && c.st === 'swoop' && c.t <= 0;
     const perch = pigeon && c.perchPropId !== 0 && c.st === 'perch' ? propById(c.perchPropId) : undefined;
     if (perch?.kind === 'bench') {
       // on the bench's back rail (props-park.ts drawBench: the back at local v -0.215, drawn with rot (r + 2) % 4), spread along it
       const q = (Math.PI / 2) * ((perch.rot + 2) % 4), u = ((c.id * 0.37) % 1) * 0.6 - 0.3, bv = -0.215;
       screenInto(perch.x + u * Math.cos(q) - bv * Math.sin(q), perch.y + u * Math.sin(q) + bv * Math.cos(q), c.z, P0);
-    } else screenInto(c.x, c.y, pigeon ? c.z : 0, P0);
-    const s = (pigeon ? 0.18 : DOG_EH) * EH * cam.z;
+    } else screenInto(c.x, c.y, pigeon ? c.z + (diving ? swoopRise(c) : 0) : 0, P0);
+    const s = (pigeon ? 0.18 * (diving ? SWOOP_SCALE : 1) : c.kind === 'pomeranian' ? POM_EH : DOG_EH) * EH * cam.z;
     if (!onScreen(P0.x, P0.y, s) || s < 1.6) continue;
     const d = take();
-    const moving = c.st === 'walk' || c.st === 'fly' || c.st === 'scatter';
+    const moving = c.st === 'walk' || c.st === 'fly' || c.st === 'scatter' || diving || (c.kind === 'pomeranian' && c.st !== 'idle');
     d.kind = c.kind;
     d.id = c.id;
     d.x = c.x;
@@ -473,7 +525,7 @@ export function peopleDrawables(): Drawable[] {
     d.sy = P0.y;
     d.h = s;
     d.e = 0;
-    d.warm = pigeon ? 0 : warmthAt(c.x, c.y); // the dogs warm by the lamps as the crowd page draws them; the pigeons do not
+    d.warm = pigeon || c.kind === 'pomeranian' ? 0 : warmthAt(c.x, c.y); // the walkers' dogs warm by the lamps as the crowd page draws them; the pigeons and Pompon do not
   }
   sweep();
   return OUT;

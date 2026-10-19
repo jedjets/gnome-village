@@ -9,6 +9,9 @@
 // Verdict: ADAPT. Changes: the park's items (book, crumbs, ice cream, camera, brush, palette, rake, trowel, balloon, bouquet, tote,
 // accordion, cane) instead of GV's tools; no swing curve (nothing here strikes). Dropped from the range: SWING_P, swingCurve, hatPath
 // (GV's pointed hat), every gnome tool; the page's manners 1 and 3.
+// S6 art (register section 4 "S6 art and S5 poses", picked by Claude on the owner's delegation, 2026-10-20): the purse on her arm, the
+// baguette in the back hand or sticking out of a parent's tote (visitor.ts items: what Pompon takes is what was seen), and the flower
+// seller's basket of blooms (florist 1, the basket seller; scratch/s6-options-cameos.ts basket()); all in palette A through P.
 import { scaleHex, type Pen, type Pt } from './ambient.ts';
 import { FH, LOD, P2, drawShapes, ellPath, lerpP, linePath, polyPath, softPath, type Item, type Shape, type Skel } from './figure-rig.ts';
 
@@ -18,6 +21,23 @@ const addP = (a: Pt, b: Pt): Pt => P2(a.x + b.x, a.y + b.y);
 /** A rounded rectangle centred at c, w x h, turned by a. */
 function box(c: Pt, w: number, h: number, a = 0): Path2D {
   return softPath([P2(-w / 2, -h / 2), P2(w / 2, -h / 2), P2(w / 2, h / 2), P2(-w / 2, h / 2)].map((q) => addP(c, rot(q, a))));
+}
+
+/** A baguette of length len and width w from `at` along angle a (from the facing axis, - up), starting `from` behind `at`: a rounded loaf. */
+function loaf(at: Pt, len: number, w: number, a: number, from: number): Path2D {
+  const ux = Math.cos(a), uy = Math.sin(a), nx = -uy, ny = ux, s0 = -from, s1 = len - from;
+  const q = (s: number, k: number): Pt => P2(at.x + ux * s + nx * k, at.y + uy * s + ny * k);
+  return softPath([q(s0, -w / 2), q(s0 + w * 0.35, -w * 0.62), q(s1 - w * 0.5, -w * 0.62), q(s1, -w * 0.1), q(s1, w * 0.1), q(s1 - w * 0.5, w * 0.62), q(s0 + w * 0.35, w * 0.62), q(s0, w / 2)]);
+}
+/** Four diagonal slashes across a loaf (a close-up detail). */
+function slashes(at: Pt, len: number, w: number, a: number, from: number): Path2D {
+  const ux = Math.cos(a), uy = Math.sin(a), nx = -uy, ny = ux, p = new Path2D();
+  for (let i = 0; i < 4; i++) {
+    const s = -from + len * (0.2 + i * 0.19);
+    p.moveTo(at.x + ux * (s - w * 0.2) + nx * -w * 0.22, at.y + uy * (s - w * 0.2) + ny * -w * 0.22);
+    p.lineTo(at.x + ux * (s + w * 0.2) + nx * w * 0.22, at.y + uy * (s + w * 0.2) + ny * w * 0.22);
+  }
+  return p;
 }
 
 /** The item in one hand, as shapes behind (under the hand) and in front; `balloon` is the balloon's hex (04 7.2: rose or sky). */
@@ -171,9 +191,11 @@ export function itemShapes(pen: Pen, S: Skel, item: Item, hand: Pt, elbow: Pt, f
       put({ path: polyPath([P2(hand.x - 0.005 * h, hand.y + 0.05 * h), P2(c.x + 0.055 * h, c.y - 0.04 * h), P2(c.x - 0.04 * h, c.y - 0.055 * h)]), hex: P.paper, light: 0.98, rim: rimK * 0.7 });
       break;
     }
-    case 'tote': {
-      // a tote bag (`bedEarth`) hanging from the hand by its straps
+    case 'tote':
+    case 'tote-bread': {
+      // a tote bag (`bedEarth`) hanging from the hand by its straps; a baguette sticks out of its top slanting forward (S6 art)
       const c = P2(hand.x + 0.005 * h, hand.y + 0.075 * h);
+      if (item === 'tote-bread') put({ path: loaf(P2(c.x + 0.01 * h, c.y - 0.05 * h), 0.36 * h, 0.05 * h, -1.2, 0.15 * h), hex: P.baguette, rim: rimK * 0.7 }, true);
       const bw = 0.085 * h, bh = 0.09 * h;
       const strap = new Path2D();
       strap.moveTo(c.x - bw * 0.3, c.y - bh * 0.45);
@@ -181,6 +203,55 @@ export function itemShapes(pen: Pen, S: Skel, item: Item, hand: Pt, elbow: Pt, f
       put({ path: strap, hex: P.bedEarth, stroke: Math.max(0.6, lw * 0.4), light: 0.8 }, true);
       put({ path: softPath([P2(c.x - bw * 0.45, c.y - bh / 2), P2(c.x + bw * 0.45, c.y - bh / 2), P2(c.x + bw * 0.55, c.y + bh / 2), P2(c.x - bw * 0.55, c.y + bh / 2)]), hex: P.bedEarth, rim: rimK * 0.8 }, true);
       if (h >= LOD.close) put({ path: linePath([P2(c.x - bw * 0.45, c.y - bh * 0.18), P2(c.x + bw * 0.45, c.y - bh * 0.18)]), hex: P.bedEarth, stroke: Math.max(0.5, lw * 0.3), light: 0.78 }, true);
+      break;
+    }
+    case 'purse': {
+      // a little handbag on a strap from the back hand (S6 art): `crowdTop[9]` cognac with a `lamp` clasp, hanging at her hip
+      const c = P2(hand.x + 0.005 * h, hand.y + 0.06 * h), hex = P.crowdTop[9] as string;
+      const bw = 0.1 * h, bh = 0.068 * h;
+      const strap = new Path2D();
+      strap.moveTo(c.x - bw * 0.3, c.y - bh * 0.5);
+      strap.quadraticCurveTo(hand.x, hand.y - 0.025 * h, c.x + bw * 0.3, c.y - bh * 0.5);
+      put({ path: strap, hex, stroke: Math.max(0.5, lw * 0.34), light: 0.82 });
+      put({ path: softPath([P2(c.x - bw / 2, c.y - bh / 2), P2(c.x + bw / 2, c.y - bh / 2), P2(c.x + bw * 0.55, c.y + bh / 2), P2(c.x - bw * 0.55, c.y + bh / 2)]), hex, rim: rimK * 0.8 });
+      if (h >= LOD.eyes) put({ path: ellPath(c.x, c.y - bh * 0.18, Math.max(0.5, bw * 0.07), Math.max(0.5, bw * 0.07)), hex: P.lamp, light: 1.05 });
+      break;
+    }
+    case 'baguette': {
+      // a baguette carried in the back hand, slanting up and forward across her: `baguette`, a rim, four slashes close up
+      put({ path: loaf(hand, 0.37 * h, 0.05 * h, -0.95, 0.1 * h), hex: P.baguette, rim: rimK * 0.7 });
+      if (h >= LOD.expression) put({ path: slashes(hand, 0.37 * h, 0.05 * h, -0.95, 0.1 * h), hex: P.baguette, stroke: Math.max(0.4, lw * 0.22), light: 1.3 });
+      break;
+    }
+    case 'basket': {
+      // the flower seller's wicker basket on her arm, its blooms up over the rim, the handle over the top (florist 1, the basket seller)
+      const w = 0.26 * h, c = P2(hand.x - 0.02 * h, hand.y);
+      const stems = new Path2D(), dots: Array<[number, number, string]> = [];
+      const blooms = [P.rose, P.bedMarigold, P.bedLavender];
+      for (let i = 0; i < 5; i++) {
+        const x = c.x + (i / 4 - 0.5) * w * 0.9, y = c.y - w * 0.34 - 0.18 * w * 0.9 * Math.sin(i * 1.7 + 1);
+        stems.moveTo(c.x + (x - c.x) * 0.4, c.y);
+        stems.lineTo(x, y);
+        dots.push([x, y, blooms[i % 3] as string]);
+      }
+      put({ path: stems, hex: scaleHex(P.foliageSummer, [0.75, 0.75, 0.75]), stroke: Math.max(0.5, w * 0.04) });
+      for (const [x, y, hex] of dots) {
+        put({ path: ellPath(x, y, Math.max(1.1, w * 0.13), Math.max(1.1, w * 0.13)), hex, light: 1.02, rim: rimK * 0.4 });
+        if (h >= LOD.eyes) put({ path: ellPath(x, y, Math.max(0.4, w * 0.04), Math.max(0.4, w * 0.04)), hex: P.lamp });
+      }
+      put({ path: polyPath([P2(c.x - w * 0.5, c.y), P2(c.x - w * 0.36, c.y + w * 0.42), P2(c.x + w * 0.36, c.y + w * 0.42), P2(c.x + w * 0.5, c.y)]), hex: P.wicker, light: 0.92, rim: rimK * 0.8 });
+      if (h >= LOD.expression) {
+        const weave = new Path2D();
+        for (let i = -2; i <= 2; i++) {
+          weave.moveTo(c.x + i * w * 0.2, c.y + w * 0.04);
+          weave.lineTo(c.x + i * w * 0.15, c.y + w * 0.4);
+        }
+        put({ path: weave, hex: P.wicker, stroke: Math.max(0.4, w * 0.03), light: 0.7 });
+      }
+      put({ path: ellPath(c.x, c.y, w * 0.5, w * 0.13), hex: P.wicker, light: 1.12, rim: rimK * 0.8 });
+      const handle = new Path2D();
+      handle.arc(c.x, c.y, w * 0.45, Math.PI * 1.1, Math.PI * 1.9);
+      put({ path: handle, hex: P.wicker, stroke: Math.max(0.5, w * 0.05), light: 0.85, rim: rimK * 0.5 });
       break;
     }
     case 'accordion': {
@@ -256,7 +327,7 @@ export function drawEasel(pen: Pen, s: Pt): void {
 /** The aprons: the gardener's green (`foliageSummer` x 0.8) and the vendor's white (`paper`), a bib from the chest to the knee. */
 export function apronHex(pen: Pen, arche: string): string | null {
   const P = pen.spec.palette;
-  if (arche === 'gardener') return scaleHex(P.foliageSummer, [0.8, 0.8, 0.8]);
+  if (arche === 'gardener' || arche === 'florist') return scaleHex(P.foliageSummer, [0.8, 0.8, 0.8]);
   return arche === 'vendor' ? P.paper : null;
 }
 /** The stranger's long coat: `ink` x 1.3 (04 7.2). */

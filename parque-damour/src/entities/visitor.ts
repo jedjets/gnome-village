@@ -24,8 +24,10 @@
 //     energy, social (3), leaveAt (1, unless fixed: a tourist's, staff's, a couple's (its one draw comes before the two members), a
 //     child's (the parent's)), decideT (1). seeks is never drawn: everyone seeks the opposite sex (owner 2026-10-20, register section 4
 //     "Who can pair"). So an elder makes 8 draws, a generated single 9 (10 with the re-roll), a returning regular 6.
-// lookSeed: the low 3 bits are the signature colour index (04 7.3; signatureOf); bit 3 a hat and bit 4 a purse for those whose
-// archetype does not fix them; the renderer reads the rest (lookSeed >>> 5) for hair, coat and skin.
+// lookSeed: the low 3 bits are the signature colour index (04 7.3; signatureOf); bit 3 a hat for those whose archetype does not fix it, bit 4
+// a purse for half of the women of BAG_FREE and bits 5 and 6 (both clear: one in four) a baguette for the rest of BAG_FREE and the parents
+// (S6 art, 2026-10-20: both are drawn at rest, so a theft takes what the player saw; no draw); the renderer hashes the whole seed for hair,
+// coat and skin (figure-look.ts pick).
 // S4 part B: loop.ts runs stepArrivals (phase 7) and stepVisitors (phase 8); brain.ts hands in decide, act and BUSY (setBrain), romance.ts
 // its pair hooks (setPairHooks, S5), so this file imports neither; it registers `visitor.call` (03 5.1); store.ts saves the list and the
 // timer. A new park empties the list without a draw. Beyond 03 3.3: `plan` (a routine's progress across an interruption) and the Job
@@ -119,6 +121,8 @@ export const ARCHETYPE_WEIGHTS: ReadonlyArray<readonly [Archetype, number]> = [
 const AGE_ROLLED: ReadonlySet<Archetype> = new Set<Archetype>(['single', 'tourist', 'jogger', 'artist', 'busker', 'dogwalker']);
 const HAT_ALWAYS: ReadonlySet<Archetype> = new Set<Archetype>(['elder', 'tourist', 'artist', 'vendor']); // 04 7.2: cap, sunhat, floppy hat
 const STAFF: ReadonlySet<Archetype> = new Set<Archetype>(['gardener', 'vendor']);
+/** Who may arrive with a purse (a woman) or a baguette: the archetypes whose back hand is free in the rig (04 7.2); a parent's tote holds a baguette. */
+const BAG_FREE: ReadonlySet<Archetype> = new Set<Archetype>(['single', 'couple', 'elder', 'tourist', 'dogwalker']);
 
 /* ---------- state ---------- */
 export const visitors: Visitor[] = [];
@@ -260,10 +264,11 @@ export function spawnVisitor(arch: Archetype, gate: GateId, opts: SpawnOpts = {}
     opts.leaveAt ?? (STAFF.has(arch) ? NEVER : arch === 'tourist' ? arrivedAt + VISIT_TOURIST : arrivedAt + rnd(VISIT_MIN, VISIT_MAX));
   const decideT = still ? 0 : rnd(0, 0.6); // GV 1391: the first decisions are staggered
   const plain = arch !== 'child' && !STAFF.has(arch);
+  const purse = sex === 'f' && BAG_FREE.has(arch) && ((lookSeed >>> 4) & 1) === 1; // drawn on her arm (figure-props.ts), so a theft takes what was seen
   const items: Items = {
     hat: HAT_ALWAYS.has(arch) || (plain && ((lookSeed >>> 3) & 1) === 1),
-    purse: plain && ((lookSeed >>> 4) & 1) === 1,
-    baguette: false,
+    purse,
+    baguette: !purse && (BAG_FREE.has(arch) || arch === 'family') && ((lookSeed >>> 5) & 3) === 0,
     iceCream: false,
   };
   const at = opts.at ?? g.outside;

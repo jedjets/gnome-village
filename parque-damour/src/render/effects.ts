@@ -12,10 +12,11 @@
 // rings 0.5 a second) and spawns nothing while paused (08 4.5 item 2); the wasp's flutter runs on sim time, not the wall clock.
 // Dropped from the range: chips, zzz, logs, smoke, fireflies, valley mist, lightning and rumble, rain rings and splashes (S9 reshapes
 // the weather overlay and its rain), the text glyphs of zzz and notes (04 section 8 asks for a drawn note).
-// TODO(S9): drawWeatherOverlay (GV 10062-10105 on sim time), petals, leaves, notes, flash, fireworks, lamp halos (04 section 8, 10.2);
+// TODO(S9): drawWeatherOverlay (GV 10062-10105 on sim time), leaves, notes, flash, lamp halos (04 section 8, 10.2);
 // S5: the romance particles as the owner picked them (register section 4 row "Romance art", 2026-10-18): hearts 3 two-tone from stage
 // 3, heartbreak 1, Happily fireworks 2 (romance-fx.ts draws them, a particle carrying `rom`); the Chat bubbles are people.ts's.
-// TODO(S6): poopDot, hat, the wasp circling a table.
+// S6 (register section 4 row "S6 art and S5 poses"; fx-play.ts draws them): the c_petals sparkle flurry as 24 petal particles and the 3 x 3
+// outline (`pet`), the m_sprinkler spray as pooled drawables (sprayDrawables). TODO(S10): the hat of m_flock, the wasp circling a table.
 import { mulberry32, vrng, vrnd } from '../core/rng.ts';
 import { TAU, clamp01, type XY } from '../core/math.ts';
 import { DAYLEN, T } from '../core/clock.ts';
@@ -27,6 +28,7 @@ import { EH, TH, TW, cam, view } from './camera.ts';
 import { screenInto } from './project.ts';
 import { depthOf, type Drawable } from './order.ts';
 import { burstHeart, heartSplit, shell, tinyHeart } from './romance-fx.ts';
+import { PETAL_CUE_T, PETAL_LIFE, PETAL_N, PETAL_R, areaCue, drawPetal, petalAt, sprayDrawables, type Petal } from './fx-play.ts';
 import { byId, signatureOf } from '../entities/visitor.ts';
 import { GC, fillPoly, inkLine, shade, style, type Pen, type Pt, type StyleSpec } from './ambient.ts';
 
@@ -193,6 +195,7 @@ export type Part = {
   k: FxKind; x: number; y: number; z: number; vx: number; vy: number; vz: number; l: number; m: number; ph: number;
   r0?: number; r1?: number; gap?: number; db?: number; n: number;
   rom?: 1 | 2 | 3; hl?: string; hr?: string; wait?: number; // S5: a romance heart, heartbreak or firework (romance-fx.ts), its colours, its delay
+  pet?: Petal; // S6: a c_petals petal (fx-play.ts petalAt moves it from its age) or the 3 x 3 outline (`cue`)
 };
 export const PARTS_CAP = 220; // register 3.3, 03 3.11
 export const GRAVITY = 2.6; // EH per sim second squared (GV 2405)
@@ -235,6 +238,7 @@ const RECIPES: Partial<Record<FxKind, Recipe>> = {
  * flash, firework, poopDot, bubble, hat: their slices show the owner options first, 04 12 item 3) spawns nothing.
  */
 export function spawn(kind: FxKind, x: number, y: number, n = 1): void {
+  if (kind === 'petal') return spawnPetals(x, y, n);
   const r = RECIPES[kind];
   if (!r) return;
   for (let i = 0; i < n; i++) {
@@ -242,6 +246,24 @@ export function spawn(kind: FxKind, x: number, y: number, n = 1): void {
     addPart({ k: kind, x, y, z: r.z, vx, vy, vz, l, m: l, ph: vrnd(0, TAU) });
   }
 }
+
+/**
+ * c_petals (02 9.2; the sparkle flurry): n petals burst over the 3 x 3 round (x, y), each falling 0.9 to 1.9 s from 1.6 EH up to a spot of
+ * the 3 x 3 and lying there until the 20 s are out, and one outline particle that marks the area for 2.6 s. The visual stream picks every spot.
+ */
+function spawnPetals(x: number, y: number, n: number): void {
+  const w = PETAL_R + 0.35; // the 3 x 3 is x +- 1.5; a petal lands a little inside its edge
+  for (let i = 0; i < n; i++) {
+    const pet: Petal = {
+      sx: x + vrnd(-0.35, 0.35), sy: y + vrnd(-0.35, 0.35), lx: x + vrnd(-w, w), ly: y + vrnd(-w, w),
+      T: vrnd(0.9, 1.9), rot: vrnd(0, TAU), tone: Math.floor(vrnd(0, 3)), sz: vrnd(0.85, 1.2), i,
+    };
+    addPart({ k: 'petal', x: pet.sx, y: pet.sy, z: 1.6, vx: 0, vy: 0, vz: 0, l: PETAL_LIFE, m: PETAL_LIFE, ph: vrnd(0, TAU), pet });
+  }
+  if (n >= PETAL_N)
+    addPart({ k: 'petal', x, y, z: 0, vx: 0, vy: 0, vz: 0, l: PETAL_CUE_T, m: PETAL_CUE_T, ph: 0, db: -3.1, pet: { sx: x, sy: y, lx: x, ly: y, T: 1, rot: 0, tone: 0, sz: 1, i: -1, cue: 1 } });
+}
+const PT = { x: 0, y: 0, z: 0, flip: 0, landed: false };
 
 /** Age and move the particles by dt sim seconds (GV updateParts 2396-2407); the frame passes min(0.05, dtr) x T.speed (03 4.1 item 7). */
 export function stepParticles(dt: number): void {
@@ -252,6 +274,15 @@ export function stepParticles(dt: number): void {
     p.l -= dt;
     if (p.l <= 0) {
       parts.splice(i, 1);
+      continue;
+    }
+    if (p.pet) {
+      if (!p.pet.cue) {
+        petalAt(p.pet, p.ph, p.m - p.l, PT); // a petal's place is its age's (fx-play.ts)
+        p.x = PT.x;
+        p.y = PT.y;
+        p.z = PT.z;
+      }
       continue;
     }
     p.x += p.vx * dt;
@@ -404,7 +435,7 @@ type FxDrawable = Drawable & { p: Part | null };
 const FX_POOL: FxDrawable[] = [];
 const FX_OUT: Drawable[] = [];
 const FPEN: Pen = { ctx: null as unknown as CanvasRenderingContext2D, spec: style(), z: 1 };
-const PP: XY = { x: 0, y: 0 };
+const PP: XY = { x: 0, y: 0 }, PG: XY = { x: 0, y: 0 };
 
 /** One drawable per particle near the screen, depth = its ground point's depth plus its bias, ties by spawn order. Reused each frame. */
 export function particleDrawables(): Drawable[] {
@@ -426,6 +457,7 @@ export function particleDrawables(): Drawable[] {
     d.p = p;
     FX_OUT.push(d);
   }
+  sprayDrawables(FX_OUT);
   return FX_OUT;
 }
 function drawPartItem(d: Drawable, ctx: CanvasRenderingContext2D): void {
@@ -475,6 +507,15 @@ export function drawPart(p: Part, ctx: CanvasRenderingContext2D): void {
     drawRomance(pen, p, q, a);
     return;
   }
+  if (p.pet) {
+    const age = p.m - p.l;
+    if (p.pet.cue) areaCue(pen, p.x, p.y, PETAL_R, Math.min(1, (PETAL_CUE_T - age) / 0.6));
+    else {
+      petalAt(p.pet, p.ph, age, PT); // the frame between two steps: the same place, and the ground point below it for the shadow
+      drawPetal(pen, p.pet, p.ph, age, q, screenInto(p.pet.cue ? p.x : PT.x, p.pet.cue ? p.y : PT.y, 0, PG), Math.min(1, p.l / 4), PT.landed, PT.flip);
+    }
+    return;
+  }
   switch (p.k) {
     case 'drop':
       drawSprayDot(pen, q.x, q.y, s, 0.7 * (0.55 + 0.45 * a));
@@ -505,7 +546,7 @@ export function drawPart(p: Part, ctx: CanvasRenderingContext2D): void {
       break;
     }
     default:
-      break; // petal, leaf, note, flash, firework, poopDot, bubble, hat: never spawned until their slice draws them
+      break; // leaf, note, flash, firework, poopDot, bubble, hat: never spawned until their slice draws them
   }
 }
 

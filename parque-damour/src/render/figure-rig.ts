@@ -12,6 +12,7 @@
 // of GV's jobs; colours only from style().palette. Dropped from the range: GV's swim, boat, ride, carry and tool-swing poses, the pointed
 // hat, the beard; the page's variants 1 (stick) and 3 (gouache).
 import { AT, GC, mix, shade, toHex, type Pen, type Pt } from './ambient.ts';
+import type { Move } from './figure-moves.ts';
 
 /** A grown visitor's height in px at zoom 1 (0.85 EH; 04 7.1 rule 1). */
 export const FH = 22;
@@ -24,7 +25,7 @@ export function tierOf(h: number): 0 | 1 | 2 | 3 | 4 | 5 {
 
 export type Arche =
   | 'single' | 'couple' | 'parent' | 'child' | 'elder' | 'tourist' | 'jogger' | 'artist' | 'busker' | 'walker' | 'gardener' | 'vendor'
-  | 'stranger' | 'plain';
+  | 'stranger' | 'plain' | 'florist';
 /** The body-language states (07 S4.6 step 12; 02 4.3). */
 export type State =
   | 'walk' | 'idle' | 'sit' | 'read' | 'feed' | 'eat' | 'photo' | 'paint' | 'play' | 'pave' | 'tidy' | 'serve' | 'shelter' | 'chase';
@@ -41,7 +42,8 @@ export type Expr =
 /** A held thing (03 7.6 item 4 itemFor; 04 7.2 signifiers). */
 export type Item =
   | 'none' | 'book' | 'crumbs' | 'icecream' | 'camera-up' | 'brush' | 'rake-down' | 'trowel' | 'cone-serve' | 'balloon' | 'lead'
-  | 'cane' | 'bouquet' | 'tote' | 'palette' | 'accordion' | 'rake-shoulder' | 'camera-chest';
+  | 'cane' | 'bouquet' | 'tote' | 'palette' | 'accordion' | 'rake-shoulder' | 'camera-chest'
+  | 'purse' | 'baguette' | 'tote-bread' | 'basket'; // S6 art: a purse on her arm, a baguette in the hand or sticking out of the tote, the flower seller's basket
 
 /** A visitor's look in the rig: who it is (archetype, sex, skin, hair, hat) and what it wears (the crowd palette, figure-look.ts). */
 export type RigLook = {
@@ -59,7 +61,8 @@ export type RigLook = {
   low: string; // the lower garment's hex (crowdLow)
   stripe: string; // a Breton's stripe hex, '' for a plain top
   pairScarf: string; // a couple's shared scarf hue (crowdPair), '' for none
-  carry: Item; // a child's balloon or ice cream (04 7.2; register: Figure rig)
+  carry: Item; // a child's balloon or ice cream (04 7.2; register: Figure rig); the flower seller's bouquet until she hands it over
+  bag: 'none' | 'purse' | 'baguette'; // what the free back hand carries at rest (visitor.ts items; S6 art)
   balloon: string; // the balloon's hex: rose or sky (04 7.2)
   long: boolean; // the charming stranger's long coat (04 7.2)
   scale: number; // 1 grown, 0.65 child, 0.95 elder (04 7.1 rule 1)
@@ -76,9 +79,10 @@ export type Opts = {
   breath: number; // the idle breathing on the arms, rad (04 7.1 item 4)
   neutral: boolean; // the plain standing skeleton: no weight shift, no hold (the measurement)
   expr: Expr;
+  move: Move | null; // a romance or reaction body pose drawn instead of the state's own (figure-moves.ts; S5 and S6 art)
 };
 export const opts = (o: Partial<Opts> = {}): Opts => ({
-  face: 1, state: 'idle', ph: Math.PI / 2, seatPx: 0, slope: 0.5, warm: 0, lookAt: 0, breath: 0, neutral: false, expr: 'idle', ...o,
+  face: 1, state: 'idle', ph: Math.PI / 2, seatPx: 0, slope: 0.5, warm: 0, lookAt: 0, breath: 0, neutral: false, expr: 'idle', move: null, ...o,
 });
 
 /* ---------- small vector helpers ---------- */
@@ -197,6 +201,7 @@ export function solveH(look: RigLook, o: Opts, h: number): Skel {
       if (st === 'sit') {
         armF = reach(0.13 * h, 0.235 * h, -0.3, 1);
         armB = reach(0.08 * h, 0.25 * h, -0.5, 1);
+        if (look.bag !== 'none') itemB = look.bag; // a purse or a baguette in the lap hand
       } else if (st === 'read') {
         armF = reach(0.14 * h, 0.15 * h, -0.2, 1);
         armB = reach(0.11 * h, 0.17 * h, -0.5, 1);
@@ -332,11 +337,24 @@ export function solveH(look: RigLook, o: Opts, h: number): Skel {
       armF = reach(0.13 * h, 0.17 * h, -0.4, 1);
       itemF = 'bouquet';
     } else if (a === 'parent') {
-      itemB = 'tote';
+      itemB = look.bag === 'baguette' ? 'tote-bread' : 'tote';
       if (!walking) armB = { mode: 'angle', a: -0.05, bend: 0.06 };
     } else if (a === 'child' && look.carry !== 'none') {
       itemF = look.carry;
       armF = look.carry === 'icecream' ? reach(0.13 * h, -0.07 * h, 0.1, 1) : reach(0.07 * h, -0.02 * h, -0.2, 1);
+    } else if (a === 'florist') {
+      // the flower seller (04 7.4 a_florist; 06 6.3): her basket on the back arm, the bouquet held out ahead until it is handed over
+      itemB = 'basket';
+      armB = reach(0.04 * h, 0.17 * h, -0.4, 1);
+      if (look.carry === 'bouquet') {
+        itemF = 'bouquet';
+        armF = reach(0.3 * h, -0.02 * h, 0, 1);
+      }
+    }
+    if (itemB === 'none' && look.bag !== 'none') {
+      // the free back hand: a purse hangs from it, a baguette is held across the body (S6 art; visitor.ts items)
+      itemB = look.bag;
+      if (!walking && look.bag === 'baguette') armB = reach(0.1 * h, 0.14 * h, -0.5, 1);
     }
   }
   // the walker's dog is on its lead in every pose (people.ts draws the lead to the hand on the dog's side), so a walker whose front hand

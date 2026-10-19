@@ -12,6 +12,7 @@
 import { CROWD_BRETON, type Palette } from './ambient.ts';
 import type { Arche, HairStyle, Hat, Item, Lower, RigLook } from './figure-rig.ts';
 import { byId, signatureOf, type Archetype, type Visitor } from '../entities/visitor.ts';
+import { watch } from '../core/events.ts';
 
 /** The crowd page's hash (scratch/s4-crowd-options.ts): a 32-bit mix of a lookSeed and a slot number k. */
 export function hash(n: number, k: number): number {
@@ -138,6 +139,27 @@ export function carryOf(v: Visitor): Item {
   return v.archetype === 'child' ? 'balloon' : 'none';
 }
 
+/**
+ * The flower seller's look (04 7.4 a_florist, 06 6.3 Violette; the `c_bouquet` cameo; register section 4, "S6 art and S5 poses": florist 1,
+ * the basket seller): a straw sunhat, her bun, a skirt and the green apron, the bouquet in her hand until she hands it over. Her hair, skin,
+ * top and skirt colours stay what her lookSeed gave her.
+ */
+function florist(v: Visitor, P: Palette, out: RigLook): void {
+  out.arche = 'florist';
+  out.hat = 'sunhat';
+  out.hatHex = P.straw;
+  out.hairStyle = 'bun';
+  out.lower = 'skirt';
+  out.carry = HANDED.get(v.id) === v.lookSeed ? 'none' : 'bouquet';
+}
+/** The cameos whose bouquet has been handed over (the sim's `bouquet` event), by id and lookSeed: render state only, swept of ids that left. */
+const HANDED = new Map<number, number>();
+watch('bouquet', (ev) => {
+  if (HANDED.size > 32) for (const id of HANDED.keys()) if (!byId(id)) HANDED.delete(id);
+  const c = byId(ev.ids?.[0] ?? 0);
+  if (c) HANDED.set(c.id, c.lookSeed);
+});
+
 /** The look of a visitor, written into `out` (no allocation), with its scale (figures.ts figureScale) handed in. */
 export function lookOf(v: Visitor, P: Palette, scale: number, out: RigLook): RigLook {
   const seed = v.lookSeed, sex = v.sex, a = v.archetype;
@@ -160,6 +182,8 @@ export function lookOf(v: Visitor, P: Palette, scale: number, out: RigLook): Rig
   out.low = P.crowdLow[pick(seed, 7, P.crowdLow.length)] as string;
   out.pairScarf = hue;
   out.carry = carryOf(v);
+  out.bag = v.items.purse ? 'purse' : v.items.baguette ? 'baguette' : 'none';
+  if (a === 'cameo' && sex === 'f') florist(v, P, out);
   out.balloon = pick(seed, 11, 2) === 0 ? P.rose : P.sky;
   out.long = false;
   out.scale = scale;
@@ -169,5 +193,5 @@ export function lookOf(v: Visitor, P: Palette, scale: number, out: RigLook): Rig
 /** A fresh RigLook to write into. */
 export const newLook = (): RigLook => ({
   seed: 0, sex: 'f', arche: 'plain', skin: 0, hair: 0, hairStyle: 'short', sig: -1, hat: 'none', hatHex: '', lower: 'trousers', top: '',
-  low: '', stripe: '', pairScarf: '', carry: 'none', balloon: '', long: false, scale: 1,
+  low: '', stripe: '', pairScarf: '', carry: 'none', bag: 'none', balloon: '', long: false, scale: 1,
 });
