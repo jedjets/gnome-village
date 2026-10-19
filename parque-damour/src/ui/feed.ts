@@ -116,6 +116,8 @@ function absOf(ev: GameEvent): number {
 }
 
 /** The params a line keeps: the names, the stage and the item (nested `@` keys stay keys, 03 12 item 6); the sim's meta goes. */
+/** The middle of the park, (N - 1) / 2: the place of a line whose event has none (the unlock, the day's tally). */
+const PARK_CENTRE = 23.5;
 const META: ReadonlySet<string> = new Set(['feed', 'couple', 'ending', 'kind', 'source', 'landed', 'score', 'surface', 'regularId', 'toast', 'tally']);
 function lineParams(p: Params | undefined): Params {
   const out: Params = {};
@@ -132,14 +134,15 @@ function fromParams(ev: GameEvent): void {
   const key = ev.params?.feed;
   if (typeof key !== 'string' || !key.startsWith('feed.')) return;
   const ids = ev.kind === 'cast' ? (ev.ids ?? []).slice(1).filter((id) => id !== 0) : (ev.ids ?? []);
-  pushFeed({ key, params: lineParams(ev.params), abs: absOf(ev), x: ev.x ?? 0, y: ev.y ?? 0, ids });
+  // an event with no place (the unlock) points at the park's centre, as the day's tally does, not at the corner tile (0, 0)
+  pushFeed({ key, params: lineParams(ev.params), abs: absOf(ev), x: ev.x ?? PARK_CENTRE, y: ev.y ?? PARK_CENTRE, ids });
 }
 
 /** The finished day's per-park points at each new day (02 7.3; progression.ts stepProgression): "Today: Cupid n · Mischief m". */
 function fromTally(ev: GameEvent): void {
   const key = ev.params?.tally;
   if (typeof key !== 'string' || !key.startsWith('feed.')) return;
-  pushFeed({ key, params: { cp: Number(ev.params?.cp ?? 0), mp: Number(ev.params?.mp ?? 0) }, abs: absOf(ev), x: 23.5, y: 23.5, ids: [] });
+  pushFeed({ key, params: { cp: Number(ev.params?.cp ?? 0), mp: Number(ev.params?.mp ?? 0) }, abs: absOf(ev), x: PARK_CENTRE, y: PARK_CENTRE, ids: [] });
 }
 
 /** A regular came in through a gate: "{name} is back" (06 16.11 feed.regular_return). */

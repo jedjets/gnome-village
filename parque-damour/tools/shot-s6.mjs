@@ -16,6 +16,8 @@
 //   progress-table   the same sheet scrolled to the unlock table
 //   rail-320, progress-320   a 320 x 568 phone: the Mischief group with m_pigeon armed (the tallest rail), then the Progress sheet capped between
 //                    the chips and the rail
+//   rail-320-es, progress-320-es   the same two in Spanish (ES tapped in the Options sheet): "En pausa" is wider than "Paused", and the rail
+//                    must still be two lines in row 3 and under 40 % of the screen (the layout check of shot.mjs fails the run otherwise)
 export const S6_SCENES = [
   { name: 'cupid-strip', turn: 0, z: 1.3, act: 's6Cupid' },
   { name: 'cupid-strip-mid', keep: true, act: 's6StripMid' },
@@ -27,6 +29,8 @@ export const S6_SCENES = [
   { name: 'progress-table', keep: true, act: 's6ProgressTable' },
   { name: 'rail-320', vp: [320, 568], turn: 0, z: 1.3, act: 's6Small' },
   { name: 'progress-320', keep: true, act: 's6SmallProgress' },
+  { name: 'rail-320-es', keep: true, act: 's6SmallEs' },
+  { name: 'progress-320-es', keep: true, act: 's6SmallProgress' },
 ];
 
 /** `h`: the helpers shot.mjs owns (tapTile, runBriefly, sleep). Returns the scene actions of the set. */
@@ -157,6 +161,20 @@ export function s6Actions(h) {
       await group(page, 'mischief');
       await page.click('.tool[data-id="m_pigeon"]');
       await page.waitForFunction(() => !document.getElementById('cdChip').hidden, { timeout: 5_000 });
+    },
+    /** Spanish by a real tap in the Options sheet, then the same Mischief group with m_pigeon armed. */
+    async s6SmallEs(page) {
+      await closeSheet(page, 'progress');
+      await hideHint(page);
+      await page.click('#bOptions');
+      await page.waitForFunction(() => document.getElementById('options').classList.contains('on'), { timeout: 5_000 });
+      await page.click('#optionsList [data-k="lang:es"]');
+      await page.waitForFunction(() => document.documentElement.lang === 'es' && document.getElementById('bOptions').textContent === 'Opciones', { timeout: 5_000 });
+      await closeSheet(page, 'options');
+      await group(page, 'mischief');
+      // the pigeon is still armed from rail-320 (a second tap would disarm it): tap it only when it is not
+      if (await page.$eval('.tool[data-id="m_pigeon"]', (b) => b.getAttribute('aria-pressed') !== 'true')) await page.click('.tool[data-id="m_pigeon"]');
+      await page.waitForFunction(() => !document.getElementById('cdChip').hidden && document.querySelector('#cdChip .nm').textContent === 'Paloma', { timeout: 5_000 });
     },
     async s6SmallProgress(page) {
       await page.click('#hudPoints');

@@ -486,6 +486,8 @@ export const es: Record<string, string> = {
   'sheet.progress.cupid': 'Puntos de Cupido',
   'sheet.progress.mischief': 'Puntos de Travesura',
   'sheet.progress.points': '{n} puntos · T{tier}',
+  'sheet.progress.points.one': '{n} punto · T{tier}',
+  'sheet.progress.points.other': '{n} puntos · T{tier}',
   'sheet.progress.next': 'Siguiente: {item} a los {n}',
   'sheet.progress.done': 'Todo desbloqueado',
   'feed.unlock': 'Desbloqueado: {item} ({side} T{tier})',

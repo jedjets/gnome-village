@@ -132,9 +132,11 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
 #cdChip .cd{min-width:2.3em;font-variant-numeric:tabular-nums}
 #cdChip .ch{color:var(--ink-soft);font-variant-numeric:tabular-nums}
 /* a phone narrower than 340 px (owner 2026-10-17): the speed dial and the actions' padding tighten so row 3 is two lines, the speed and
-   the camera, then the actions, and the rail stays under 40 % of a 320 x 568 screen */
+   the camera, then the actions, and the rail stays under 40 % of a 320 x 568 screen; the label's right padding goes too, so the longer
+   Spanish "En pausa" (9 px wider than "Paused") still leaves the speed and the camera on one line (305 > 304 px without it) */
 @media (max-width:340px){
   #spdR{width:64px}
+  #spdLbl{padding-right:0}
   #row3 .grp > .gb{padding-left:6px;padding-right:6px}
   #row3{gap:6px 4px}
 }
@@ -275,6 +277,7 @@ body.photo #photoX{display:block}
 
 /* ---------- avatar mode (GV 169, 183; 03 10.2) ---------- */
 body.avatar #tools,body.avatar #row2 .ctx,body.avatar #sizewrap,body.avatar #bPlace,body.avatar #bCancel,body.avatar #bUndo,body.avatar #cdChip{display:none!important}
+body.avatar #row2{min-height:0} /* its children are all hidden: the row keeps no height (the 44 px floor is for the ability groups' chip) */
 
 /* ---------- intro (GV 140-156) ---------- */
 #intro{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;

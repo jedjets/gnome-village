@@ -486,6 +486,8 @@ export const en: Record<string, string> = {
   'sheet.progress.cupid': 'Cupid Points',
   'sheet.progress.mischief': 'Mischief Points',
   'sheet.progress.points': '{n} points · T{tier}',
+  'sheet.progress.points.one': '{n} point · T{tier}',
+  'sheet.progress.points.other': '{n} points · T{tier}',
   'sheet.progress.next': 'Next: {item} at {n}',
   'sheet.progress.done': 'Everything unlocked',
   'feed.unlock': 'Unlocked: {item} ({side} T{tier})',

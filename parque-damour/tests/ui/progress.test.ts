@@ -18,7 +18,7 @@ import { lang, setLang, t } from '../../src/ui/i18n.ts';
 import { FLASH_MS, initHud, updateHud } from '../../src/ui/hud.ts';
 import { clearFeed, feedEntries, initFeed } from '../../src/ui/feed.ts';
 import { closeSheets, initSheets, openSheet, sheetOpen, updateSheets } from '../../src/ui/sheets.ts';
-import { armAbility, buildRail, setGroup, setTool } from '../../src/ui/rail.ts';
+import { armAbility, armedAbility, buildRail, setGroup, setTool } from '../../src/ui/rail.ts';
 import { tapAbility } from '../../src/ui/ability-strip.ts';
 import { en } from '../../src/ui/strings/en.ts';
 import { es } from '../../src/ui/strings/es.ts';
@@ -125,6 +125,13 @@ describe('02 7.4, 07 S6.6 step 8: the unlock toast and the feed lines', () => {
     const lines = feedEntries().filter((e) => e.key === 'feed.unlock').map((e) => t(e.key, e.params));
     expect([...lines].reverse()).toEqual(['Unlocked: Musician (Cupid T1)', 'Unlocked: Sunbeam (Cupid T1)', 'Unlocked: Flower seller (Cupid T1)']);
   });
+  it('an unlock line has no place of its own, so tapping it in the Events sheet goes to the middle of the park, not the corner tile (0, 0)', () => {
+    award('cupid', 8);
+    drain(0);
+    const lines = feedEntries().filter((e) => e.key === 'feed.unlock');
+    expect(lines).toHaveLength(3);
+    for (const e of lines) expect(e).toMatchObject({ x: 23.5, y: 23.5, ids: [] });
+  });
   it('Spanish: the toast and the lines are Spanish, and the T0 row is never announced', () => {
     award('cupid', 3);
     drain(0);
@@ -195,6 +202,23 @@ describe('03 5.4, 02 9.1 item 3: a refusal that needs a number is toasted with i
   });
 });
 
+describe('03 5.4, 02 9.1 item 3: a refusal that arrives after the ability was disarmed still names its seconds', () => {
+  it('two taps queue while the park is paused, the pill is tapped off, and the step then refuses the second: "not yet (45 s)", never the raw {s}', () => {
+    setGroup('mischief');
+    armAbility('m_sprinkler');
+    const hit = { kind: 'tile' as const, id: 0, tile: { x: 4, y: 4 } };
+    tapAbility(hit, { x: 4, y: 4 });
+    tapAbility(hit, { x: 4, y: 4 });
+    armAbility(null); // the pill tapped off
+    expect(armedAbility()).toBeNull();
+    simulate(SIM_DT, 0);
+    drain(0);
+    expect(feedEntries().filter((e) => e.key === 'feed.cast.m_sprinkler')).toHaveLength(1);
+    expect(hint()).toBe('not yet (45 s)');
+    expect(hint()).not.toContain('{');
+  });
+});
+
 describe('02 12.4, 04 5.6: the Progress sheet', () => {
   it('two ladders, each with its name, "n points · Tk", a bar on the scale to 70, ticks at 8, 20, 40 and 70 and the next unlock', () => {
     setProgress({ cp: 12, mp: 0 });
@@ -260,10 +284,16 @@ describe('02 12.4, 04 5.6: the Progress sheet', () => {
     expect($('progressList').firstElementChild).toBe(first); // nothing changed: the DOM is not rewritten
     award('cupid', 1);
     updateSheets(0.1);
-    expect(ladders()[0]?.querySelector('.lh span')?.textContent).toBe('1 points · T0');
+    expect(ladders()[0]?.querySelector('.lh span')?.textContent).toBe('1 point · T0'); // plural(): one point, not "1 points"
+    award('cupid', 1);
+    updateSheets(0.1);
+    expect(ladders()[0]?.querySelector('.lh span')?.textContent).toBe('2 points · T0');
+    setProgress({ cp: 1, mp: 0 });
+    updateSheets(0.1);
     setLang('es');
     updateSheets(0.1);
     expect(lang()).toBe('es');
+    expect(ladders()[0]?.querySelector('.lh span')?.textContent).toBe('1 punto · T0');
     expect(ladders()[0]?.querySelector('.lh b')?.textContent).toBe(es['sheet.progress.cupid']);
     expect(document.querySelector('#progressList .ut')?.textContent).toBe(es['sheet.progress.unlocks']);
     expect(document.querySelector('#progressList .urow .its span')?.textContent).toBe(es['ability.c_petals.name']);

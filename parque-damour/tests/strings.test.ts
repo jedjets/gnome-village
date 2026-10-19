@@ -227,8 +227,8 @@ describe('the abilities, the unlocks and the Progress sheet (06 16.2, 16.6, 16.1
   it('the UI stage\'s strings (07 S6.6 steps 6-9): the strips, the locked toast, the chip, the Progress sheet, in both tables with the same {params}', () => {
     const ui = [
       'rail.locked_at', 'rail.tier', 'rail.cooldown', 'rail.charges', 'rail.ready', 'rail.soon', 'rail.pick', 'rail.cupid', 'rail.mischief', 'hud.cupid', 'hud.mischief',
-      'sheet.progress.title', 'sheet.progress.cupid', 'sheet.progress.mischief', 'sheet.progress.points', 'sheet.progress.next', 'sheet.progress.done',
-      'sheet.progress.unlocks', 'sheet.progress.avatar', 'feed.tally', 'feed.unlock', 'toast.unlocked', 'reason.cooldown', 'reason.locked', 'aria.points',
+      'sheet.progress.title', 'sheet.progress.cupid', 'sheet.progress.mischief', 'sheet.progress.points', 'sheet.progress.points.one',
+      'sheet.progress.points.other', 'sheet.progress.next', 'sheet.progress.done', 'sheet.progress.unlocks', 'sheet.progress.avatar', 'feed.tally', 'feed.unlock', 'toast.unlocked', 'reason.cooldown', 'reason.locked', 'aria.points',
       'aria.sheet_progress', 'aria.group_cupid', 'aria.group_mischief',
     ];
     for (const k of ui) {
@@ -241,7 +241,11 @@ describe('the abilities, the unlocks and the Progress sheet (06 16.2, 16.6, 16.1
     expect(t('sheet.progress.next', { item: '@ability.c_umbrella.name', n: 20 })).toBe('Next: Umbrella at 20');
     expect(t('sheet.progress.avatar', { name: '@avatar.a_pigeon.name' })).toBe('Avatar: Pigeon');
     expect(t('reason.cooldown', { s: 12 })).toBe('not yet (12 s)');
+    expect(plural('sheet.progress.points', 1, { tier: 0 })).toBe('1 point · T0');
+    expect(plural('sheet.progress.points', 12, { tier: 1 })).toBe('12 points · T1');
     setLang('es');
+    expect(plural('sheet.progress.points', 1, { tier: 0 })).toBe('1 punto · T0');
+    expect(plural('sheet.progress.points', 0, { tier: 0 })).toBe('0 puntos · T0');
     expect(t('rail.locked_at', { side: '@rail.mischief', tier: 3 })).toBe('Se abre en Travesura T3');
     expect(t('sheet.progress.next', { item: '@ability.c_umbrella.name', n: 20 })).toBe(`Siguiente: ${es['ability.c_umbrella.name']} a los 20`);
     expect(t('feed.tally', { cp: 3, mp: 1 })).toBe('Hoy: Cupido 3 · Travesura 1');

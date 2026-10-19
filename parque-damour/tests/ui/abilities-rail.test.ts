@@ -241,6 +241,18 @@ describe('02 9.1 item 1, 04 5.4 item 1: arming', () => {
     const shell = readFileSync(join(ROOT, 'src', 'styles', 'shell.css'), 'utf8');
     expect(shell).toContain('pointer-events:none;min-height:44px}'); // row 2 is as tall as Undo, in every group
   });
+  it('the avatar mode hides everything in row 2, and the row then keeps no height (the 44 px floor is for the Park and ability groups only)', () => {
+    setGroup('cupid');
+    expect(getComputedStyle($('row2')).minHeight).toBe('44px');
+    document.body.classList.add('avatar');
+    try {
+      expect(getComputedStyle($('row2')).minHeight).toMatch(/^0(px)?$/);
+      expect(getComputedStyle($('cdChip')).display).toBe('none');
+      expect(getComputedStyle($('bUndo')).display).toBe('none');
+    } finally {
+      document.body.classList.remove('avatar');
+    }
+  });
 });
 
 describe('03 8.2 item 2: the tap on the world resolves the target by the ability\'s type, enqueues `ability` and keeps it armed', () => {
@@ -301,6 +313,20 @@ describe('03 8.2 item 2: the tap on the world resolves the target by the ability
     expect(aimMark()).toMatchObject({ x: 20, y: 30, r: 3, side: 'cupid' });
     pill('c_sunbeam').click();
     expect(aimMark()).toBeNull();
+  });
+  it('a tap the sim would refuse draws no square (02 9.1 item 3: nothing happened): c_petals inside its cooldown still sends the command, and the sim answers it', () => {
+    setGroup('cupid');
+    pill('c_petals').click();
+    tapAbility(tileHit(10, 12), { x: 10, y: 12 });
+    expect(aimMark()).toMatchObject({ x: 10, y: 12 });
+    simulate(SIM_DT, 0); // the cast: the cooldown is running
+    clearAimMark();
+    expect(tapAbility(tileHit(14, 12), { x: 14, y: 12 })).toBe(true);
+    expect(aimMark()).toBeNull();
+    expect(pendingCount()).toBe(1);
+    simulate(SIM_DT, 0);
+    expect(cmds()).toHaveLength(1); // refused, so it is not in the log of applied commands
+    expect(PETALS[I(14, 12)]).toBe(0);
   });
 });
 
@@ -380,7 +406,7 @@ describe('04 5.4 item 4: row 2\'s cooldown chip: the ring, the seconds left, the
     expect(refusalParams('reason.locked')).toEqual({ side: '@rail.mischief', tier: 0 });
     expect(refusalParams('reason.not_here')).toBeUndefined();
     setArmed(null);
-    expect(refusalParams('reason.cooldown')).toBeUndefined();
+    expect(refusalParams('reason.cooldown')).toEqual({ s: 45 }); // the ability last sent, though it is no longer armed (the park may be paused)
   });
 });
 

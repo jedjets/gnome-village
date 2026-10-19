@@ -20,7 +20,7 @@
 // pills do not jump when one is armed (the Park group's row 2 always holds Undo); it is hidden only while the Park strip shows.
 import { enqueue, type AbilityId, type Target } from '../core/commands.ts';
 import type { XY } from '../core/math.ts';
-import { ABILITIES, abilityById, chargesLeft, cooldownLeft, type AbilityDef, type AbilitySide } from '../play/abilities.ts';
+import { ABILITIES, abilityById, canCast, chargesLeft, cooldownLeft, type AbilityDef, type AbilitySide } from '../play/abilities.ts';
 import { isUnlocked, tier } from '../play/progression.ts';
 import { byId } from '../entities/visitor.ts';
 import type { Hit } from '../render/project.ts';
@@ -35,6 +35,8 @@ const RING_C = 2 * Math.PI * 9;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 let armed: AbilityId | null = null;
+/** The ability of the last command this shell queued: a refusal (`rejected` carries no ability id) is about it, armed or not. */
+let lastSent: AbilityId | null = null;
 /** The strip on screen: null while the Park strip shows. */
 let shown: AbilitySide | null = null;
 let builtKey = '';
@@ -113,6 +115,7 @@ function onPill(d: AbilityDef): void {
   }
   if (d.target === 'park') {
     setArmed(null); // no target to wait for: it fires now (02 9.1 item 2)
+    lastSent = d.id;
     enqueue({ side: d.side, kind: 'ability', payload: { id: d.id, target: { kind: 'park' } } });
     return;
   }
@@ -163,17 +166,24 @@ export function tapAbility(hit: Hit, tile: XY | null): boolean {
     toast(d.hintKey);
     return true;
   }
-  if (d.target === 'area') {
+  // the square marks a cast that can happen: a tap the sim would refuse (cooling down, a child, no room) draws none (02 9.1 item 3)
+  if (d.target === 'area' && canCast(d.side, d.id, target).ok) {
     const c = centreOf(target);
     if (c) setAimMark(c.x, c.y, d.area, d.side);
   }
+  lastSent = d.id;
   enqueue({ side: d.side, kind: 'ability', payload: { id: d.id, target } });
   return true;
 }
 
-/** The parameters of a refusal toast the `rejected` event does not carry: the seconds left of the armed ability, or its tier (hud.ts). */
+/**
+ * The parameters of a refusal toast the `rejected` event does not carry: the seconds left of the ability last sent (else the armed one),
+ * or its tier (hud.ts). The last one sent stays known after a disarm or a Park-target cast, so a refusal that arrives later (a command
+ * waits while the park is paused) still names its seconds.
+ */
 export function refusalParams(reason: string): Params | undefined {
-  const d = armed ? abilityById(armed) : undefined;
+  const id = lastSent ?? armed;
+  const d = id ? abilityById(id) : undefined;
   if (!d) return undefined;
   if (reason === 'reason.cooldown') return { s: Math.max(1, Math.ceil(cooldownLeft(d.side, d.id) - 1e-9)) };
   if (reason === 'reason.locked') return { side: '@rail.' + d.side, tier: d.tier };

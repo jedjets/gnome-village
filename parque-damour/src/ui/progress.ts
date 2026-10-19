@@ -1,7 +1,7 @@
 // src/ui/progress.ts
 // The Progress sheet: the two ladders with their tier ticks, the points and the next unlock of each, and the unlock table (register 3.10;
 // 02 7.3-7.4, 12.4; 04 5.6; 07 S6.6 step 9). NEW (GV has no progression).
-// Each ladder is "Cupid Points" (or Mischief) with "n points · Tk" at the right, a horizontal bar on the scale 0 to TIERS[4] = 70 in
+// Each ladder is "Cupid Points" (or Mischief) with "n points · Tk" at the right (plural(): "1 point"), a horizontal bar on the scale 0 to TIERS[4] = 70 in
 // --berry (Cupid) or --ember (Mischief) with a hairline tick at each of 8, 20, 40 and 70 and the number under it, and under it "Next:
 // Umbrella at 20" (the first ability of the next row, 06 16.10) or "Everything unlocked" at T4. Below, the table of 02 7.4 as one row
 // per tier and ladder: the tier, the abilities of the row (an avatar after them as "Avatar: Pigeon"), the points that open it; a row
@@ -9,7 +9,7 @@
 // Every word is a key through t(); the bars and ticks are layout, so they carry aria-hidden and the text says the same. sheets.ts opens
 // the sheet and repaints it when progressKey() changes (a point gained, the language), checked from hud.ts's frame call.
 import { TIERS, UNLOCKS, dayTally, nextUnlock, points, tier, type Ladder } from '../play/progression.ts';
-import { lang, t } from './i18n.ts';
+import { lang, plural, t } from './i18n.ts';
 
 const LADDERS: readonly Ladder[] = ['cupid', 'mischief'];
 /** The scale's end: the T4 threshold (02 7.3). */
@@ -38,7 +38,7 @@ const pct = (n: number): string => Math.round((Math.min(n, TOP) / TOP) * 1000) /
 function ladder(side: Ladder, n: number): HTMLElement {
   const box = el('div', '', 'ladder ' + side);
   const head = el('div', '', 'lh');
-  head.append(el('b', t('sheet.progress.' + side)), el('span', t('sheet.progress.points', { n, tier: tier(side) })));
+  head.append(el('b', t('sheet.progress.' + side)), el('span', plural('sheet.progress.points', n, { tier: tier(side) })));
   const bar = el('div', '', 'lbar');
   bar.setAttribute('aria-hidden', 'true');
   const track = el('i', ''), fill = el('u', '');
