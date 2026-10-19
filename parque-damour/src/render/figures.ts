@@ -435,6 +435,9 @@ export function drawVisitor(c: Ink, p: Pt, look: RigLook, o: Opts): Skel | null 
   const h = FH * c.pen.z * look.scale;
   if (h < LOD.body) return null;
   const S = skel(h, o.state === 'sit' ? { ...mv.pose, sit: { seatPx: o.seatPx, slope: o.slope } } : mv.pose);
+  // what hangs from the back hand at rest (the purse, the baguette, a tote, the basket; 04 7.2) stays on the body through the move: the
+  // poses set no item, so it comes from the rig's own solve of this state (no item once Pompon has it: the look has no bag then)
+  if (S.items.B === 'none') S.items.B = solveH(look, o, h).items.B;
   let L = mv.wet ? wetLook(look, c.pen.spec.palette, WET) : look;
   if (mv.hatOff) {
     Object.assign(BARE, L);

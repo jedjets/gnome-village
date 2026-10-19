@@ -20,8 +20,8 @@
 // S6 art (register section 4 "S6 art and S5 poses": ring 3, the rose glow, picked by Claude on the owner's delegation, 2026-10-20; scratch/
 // s6-options-ring.ts; 04 7.1 rule 9, 7.3 item 4): the featured pair, or the pinned one, wears a soft rose pool under each member, bigger than
 // the figure, with three gold twinkles turning round it, so the eye finds them in a crowd, at Fit and at night; unlit like the selection ring
-// (a marker is not dimmed by the dark), a drawable just under its member in the painter order, and never on the member whose selection ring
-// is up: one or the other (featuredDrawables).
+// (a marker is not dimmed by the dark), a drawable just under its member in the painter order, and never while the selection ring is up on
+// either member of the pair: one or the other (featuredDrawables). Floors on its size keep it findable at Fit (RING_MIN).
 import { DAYLEN, T } from '../core/clock.ts';
 import { now } from '../core/loop.ts';
 import { css, hx, mixc, type XY } from '../core/math.ts';
@@ -202,9 +202,15 @@ const FR_POOL: RingD[] = [];
 const FR_OUT: Drawable[] = [];
 const FPEN = { ctx: null as unknown as CanvasRenderingContext2D, spec: style(), z: 1 };
 
-/** The glow's pool of radius R px at the feet: `rose` from 0.85 at the middle to 0, flattened to 0.42, and three `lamp` twinkles turning round it. */
+/** Floors of the glow's pool radius, the twinkles' orbit and the twinkles' size, in px: they act only at far zoom (below about 1.1), see drawRing. */
+export const RING_MIN = 14, RING_ORBIT_MIN = 6.5, RING_STAR_MIN = 1.8;
+/**
+ * The glow's pool of radius R px at the feet: `rose` from 0.85 at the middle to 0, flattened to 0.42, and three `lamp` twinkles turning round
+ * it. R is 0.95 h, the orbit 0.5 h and a twinkle 0.075 h, each with a floor, so that at Fit, where a figure is 8 px tall, the pair is still a
+ * pink pool with gold sparks that the eye finds; at 1.3 and closer the floors do nothing and the drawing is what it was.
+ */
 function drawRing(d: Drawable, c: CanvasRenderingContext2D): void {
-  const r = d as RingD, z = cam.z, P = style().palette, rose = hx(P.rose), R = Math.max(r.h * 0.95, 8);
+  const r = d as RingD, z = cam.z, P = style().palette, rose = hx(P.rose), R = Math.max(r.h * 0.95, RING_MIN);
   c.save();
   c.translate(r.gx, r.gy + z);
   c.scale(1, 0.42);
@@ -220,24 +226,25 @@ function drawRing(d: Drawable, c: CanvasRenderingContext2D): void {
   FPEN.ctx = c;
   FPEN.spec = style();
   FPEN.z = z;
-  const t = T.abs * DAYLEN * 0.9;
+  const t = T.abs * DAYLEN * 0.9, orbit = Math.max(r.h * 0.5, RING_ORBIT_MIN);
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * Math.PI * 2 + 0.6 + t;
-    star(FPEN, r.gx + Math.cos(a) * r.h * 0.5, r.gy + z + Math.sin(a) * r.h * 0.21, Math.max(1.1, 0.075 * r.h), P.lamp, 0.9 + 0.1 * r.k, a);
+    star(FPEN, r.gx + Math.cos(a) * orbit, r.gy + z + Math.sin(a) * orbit * 0.42, Math.max(RING_STAR_MIN, 0.075 * r.h), P.lamp, 0.9 + 0.1 * r.k, a);
   }
 }
 
 /**
- * The two rose glows of the featured pair as painter drawables, a hair before each member's own (phase 6): none for the member whose
- * selection ring `sel` is up, none off screen. `k` is 0.82 by day and 1 by night (lampGlow). Reused each frame.
+ * The two rose glows of the featured pair as painter drawables, a hair before each member's own (phase 6): none at all while the selection
+ * ring `sel` is up on either member (the pair shares its spot, seated or strolling, so a ring on one and a glow on the other would double up:
+ * one or the other), none off screen. `k` is 0.82 by day and 1 by night (lampGlow). Reused each frame.
  */
 export function featuredDrawables(sel: number): Drawable[] {
   FR_OUT.length = 0;
   const p = featured();
-  if (!p) return FR_OUT;
+  if (!p || (sel !== 0 && (sel === p.a || sel === p.b))) return FR_OUT;
   const k = 0.82 + 0.18 * lampGlow();
   for (const id of [p.a, p.b]) {
-    const v = id === sel ? undefined : byId(id);
+    const v = byId(id);
     if (!v) continue;
     anchorOf(v, RING);
     const m = RING.h + 12;

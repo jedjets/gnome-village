@@ -14,7 +14,7 @@ import { PETAL_CUE_T, PETAL_LIFE, PETAL_N, PETAL_R, SPRINKLER_LIFE, SPRINKLER_PO
 import { clearParticles, drawPart, particles, spawn, stepParticles } from '../src/render/effects.ts';
 import { drawPeel, drawSprinkler } from '../src/render/props-play.ts';
 import { drawPigeonState, drawPompon, drawSwoop, SWOOP_SCALE, type PomItem } from '../src/render/creatures.ts';
-import { featuredDrawables } from '../src/render/ghost.ts';
+import { RING_MIN, RING_ORBIT_MIN, RING_STAR_MIN, featuredDrawables } from '../src/render/ghost.ts';
 import { peopleDrawables } from '../src/render/people.ts';
 import { setPin } from '../src/entities/romance.ts';
 import { spawnPigeonAt } from '../src/entities/creatures.ts';
@@ -268,12 +268,13 @@ describe('03 7.9 phase 6 and 04 7.6 (S6): the featured pair\'s rose glow, a hair
     cam.angT = 0;
     centreOn(20, 20);
   });
-  it('none with no pair; two for the pair; one when a member\'s own ring is up; none when both are off screen; each a hair before its member', () => {
+  it('none with no pair; two for the pair; none while the ring is up on either member (one or the other); none when both are off screen; each a hair before its member', () => {
     expect(featuredDrawables(0).length).toBe(0);
     const { p, a, b } = pairAt(20, 20, 1);
     expect(featuredDrawables(0).map((d) => d.kind)).toEqual(['ring', 'ring']);
-    expect(featuredDrawables(a.id).length).toBe(1);
-    expect(featuredDrawables(b.id).length).toBe(1);
+    expect(featuredDrawables(a.id).length).toBe(0); // the pair shares its spot: a ring on one and a glow on the other would double up
+    expect(featuredDrawables(b.id).length).toBe(0);
+    expect(featuredDrawables(a.id + b.id + 100).length).toBe(2); // someone else's ring does not hide it
     setPin(p.id);
     expect(featuredDrawables(0).length).toBe(2);
     const people = peopleDrawables().filter((d) => d.kind === 'visitor');
@@ -296,6 +297,29 @@ describe('03 7.9 phase 6 and 04 7.6 (S6): the featured pair\'s rose glow, a hair
     const rec = recorder();
     (rings[0] as Drawable).draw(rings[0] as Drawable, rec.ctx);
     expect(rec.total()).toBeGreaterThan(8);
+  });
+  it('at Fit the pool keeps a floor radius (RING_MIN, 14 px) so the pair is found; at 1.3 it is the figure\'s 0.95 h, bigger than the floor', () => {
+    pairAt(20, 20, 1);
+    const radius = (z: number): number => {
+      cam.z = z;
+      centreOn(20, 20);
+      const rings = featuredDrawables(0);
+      const R: number[] = [];
+      const ctx = new Proxy({} as Record<string, unknown>, {
+        get: (_t, k) => (...a: unknown[]): unknown => {
+          if (k === 'createRadialGradient') R.push(a[5] as number);
+          return new Proxy(function () {}, { get: () => (): void => {}, apply: () => undefined });
+        },
+        set: () => true,
+      }) as unknown as CanvasRenderingContext2D;
+      (rings[0] as Drawable).draw(rings[0] as Drawable, ctx);
+      return R[0] as number;
+    };
+    expect(RING_MIN).toBeGreaterThanOrEqual(14);
+    expect(RING_STAR_MIN).toBeGreaterThanOrEqual(1.8);
+    expect(RING_ORBIT_MIN).toBeGreaterThan(5);
+    expect(radius(0.3)).toBe(RING_MIN);
+    expect(radius(1.3)).toBeGreaterThan(RING_MIN * 1.5);
   });
   it('Pompon is drawn once he is in the park, and not while he waits outside; a pigeon on its dive is drawn 1.45 times its size', () => {
     const v = adult(20, 20);

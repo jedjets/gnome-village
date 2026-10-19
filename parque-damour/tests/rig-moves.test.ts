@@ -210,6 +210,33 @@ describe('04 7.1 and 9.3: a figure with a move draws through drawVisitor (the ri
     }
     expect(draw(vis({ st: 'idle' })).move).toBeNull();
   });
+  it('04 7.2: a purse or a baguette stays on the body through every move (it adds paint as it does at rest); a snatched one is gone', () => {
+    const drawn = (v: Visitor, extra: Partial<RigLook>): { n: number; B: string } => {
+      const rec = recorder();
+      const o = poseOf(v, 1, 5, opts());
+      const S = drawVisitor({ pen: penOf(rec, 2.4), warm: 0 }, { x: 100, y: 200 }, { ...look(), ...extra }, o);
+      return { n: rec.total(), B: S ? S.items.B : 'null' };
+    };
+    const cases: Array<[string, Partial<Visitor>]> = [
+      ['idle', {}], ['notice', {}], ['bench', { sitPropId: 4 }], ['huff', { job: { kind: 'parted' } }], ['laugh', {}], ['wipe', { t: 1.5 }], ['shake', { t: 1.5 }],
+      ['stumble', { t: 1.9 }], ['chase', { t: 3 }],
+    ];
+    for (const [st, o] of cases) {
+      const v = vis({ st, ...o });
+      const none = drawn(v, { bag: 'none' });
+      for (const bag of ['purse', 'baguette'] as const) {
+        const w = drawn(v, { bag });
+        // the chase is the snatched one's own state (the thing is in Pompon's mouth), and the rig holds nothing in it either
+        expect(w.B, bag + ' ' + st).toBe(st === 'chase' ? 'none' : bag);
+        if (st !== 'chase') expect(w.n, bag + ' ' + st).toBeGreaterThan(none.n);
+      }
+      expect(none.B, 'nothing ' + st).toBe('none');
+    }
+    // a parent's tote (and the loaf in it) hangs through a move as it does at rest
+    const parent = vis({ st: 'laugh', archetype: 'family' });
+    expect(drawn(parent, { arche: 'parent', bag: 'none' }).B).toBe('tote');
+    expect(drawn(parent, { arche: 'parent', bag: 'baguette' }).B).toBe('tote-bread');
+  });
   it('the hat off paints more than the hat on (the hat in the hand), the shake and the poof paint extras, a speck of a figure paints nothing', () => {
     const on = draw(vis({ st: 'wipe', t: WIPE_T - 1 })).rec.total(), off = draw(vis({ st: 'wipe', t: WIPE_T - 2 })).rec.total();
     expect(off).toBeGreaterThan(on - 1); // the hat is drawn in the hand in place of on the head, plus the dollop on it
