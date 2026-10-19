@@ -170,16 +170,16 @@ An override is `{ kind, x, y, r, until }` kept in a list. `weatherAt` returns th
 ## 4. Visitors
 
 ### 4.1 The record (`src/entities/visitor.ts`)
-One `Visitor` type for every person. Fields used by the rules: `id, name, sex ('f' | 'm'), archetype, ageWord ('young' | 'grown' | 'elder'), seeks ('f' | 'm' | 'any'), x, y, st, t, path, hunger, energy, comfort, social, arrivedAt, leaveAt, gateIn, gateOut, pairId (0 if none), coupleOf (id, couple archetype only: the partner they arrived with; their romance is an ordinary `Pair`, 6.1), parentOf / childOf (families), items { hat, purse, baguette, iceCream }, embToday, embDay, regularId (0 if passer-by), decideT`.
+One `Visitor` type for every person. Fields used by the rules: `id, name, sex ('f' | 'm'), archetype, ageWord ('young' | 'grown' | 'elder'), seeks ('f' | 'm': always the opposite of `sex`, owner 2026-10-20; an old save's `any` or same-sex value is read as the opposite), x, y, st, t, path, hunger, energy, comfort, social, arrivedAt, leaveAt, gateIn, gateOut, pairId (0 if none), coupleOf (id, couple archetype only: the partner they arrived with; their romance is an ordinary `Pair`, 6.1), parentOf / childOf (families), items { hat, purse, baguette, iceCream }, embToday, embDay, regularId (0 if passer-by), decideT`.
 
 ### 4.2 Arrivals (`src/entities/visitor.ts`, factory)
 1. Target population by phase: night 3, dawn 6, morning 16, midday 20, afternoon 24, golden hour 20, dusk 14, evening 9. Multiply by the weather and season arrival factors (sections 3.3, 3.4) and round.
-2. While `people < target` and `people < 30`, the next arrival comes after a gap set by the park's **pace** (register section 4, Park pace and Options; owner 2026-10-14): `rnd(6, 14)` s after the last in a **Calm** park, `rnd(3, 6)` s in a **Lively** one (`LIVELY_GAP_MIN`, `LIVELY_GAP_MAX`, tuned so that seed 101 at 8× from f 0.30 has 16 ± 3 people by f 0.45 and 24 ± 3 by f 0.70, 07 S4.7 item 2; it gives 16 and 25, where Calm gives 9 and 17). One draw either way; the targets, factors, weights, caps and the re-roll of items 1, 3, 4 and 7 are the same for both. Otherwise nobody arrives (the "+" chip is the exception, section 12.2). The pace is park state, saved with the park (a park saved before it existed is Calm); a new park takes the player's preferred pace from the profile (Lively for a new player) through the logged `park.pace` command (03 §5.1), and a change in Options applies to the park in play the same way from its next step.
+2. While `people < target` and `people < 30`, the next arrival comes after a gap set by the park's **pace** (register section 4, Park pace and Options; owner 2026-10-14): `rnd(6, 14)` s after the last in a **Calm** park, `rnd(3, 6)` s in a **Lively** one (`LIVELY_GAP_MIN`, `LIVELY_GAP_MAX`, tuned so that seed 101 at 8× from f 0.30 has 16 ± 3 people by f 0.45 and 24 ± 3 by f 0.70, 07 S4.7 item 2; it gave 16 and 25, where Calm gave 9 and 17. Since the owner's rule of 2026-10-20 (register section 4 "Who can pair") a single draws no `seeks`, the weather of every seed moved and seed 101 is in rain at f 0.70; the test day is seed 102, which gives 16 and 24 on Lively and 9 and 18 on Calm). One draw either way; the targets, factors, weights, caps and the re-roll of items 1, 3, 4 and 7 are the same for both. Otherwise nobody arrives (the "+" chip is the exception, section 12.2). The pace is park state, saved with the park (a park saved before it existed is Calm); a new park takes the player's preferred pace from the profile (Lively for a new player) through the logged `park.pace` command (03 §5.1), and a change in Options applies to the park in play the same way from its next step.
 3. Gate by the weights in section 2.4. The visitor appears on `outside`, steps to the gate tile, then runs its routine.
 4. Archetype weights per arrival: single 30, couple 12, family 12, elder 10, tourist 12, jogger 8, artist 4, dog walker 8, busker 4. At most 1 artist, 1 AI busker and 2 dog walkers in the park at once; a roll that hits a full archetype becomes `single`.
 5. Starting needs: hunger `rnd(0.2, 0.5)`, energy `rnd(0.5, 0.9)`, comfort 0.7, social `rnd(0.2, 0.6)`.
 6. `leaveAt = arrivedAt + rnd(0.25, 0.5)` days. Each romance stage the visitor completes adds 0.1 day to `leaveAt`, capped at `arrivedAt + 1.2`.
-7. `sex` 50/50; `seeks` for singles by weights f 45, m 45, any 10, with the rule that a single who seeks `f` or `m` and the arrival roll would make the park contain no compatible single at all re-rolls once (the GV complementary-sex rule, `addVillager` 4488–4504).
+7. `sex` 50/50; `seeks` is always the opposite sex (owner 2026-10-20, register section 4 "Who can pair": only a woman and a man can pair; the weights f 45, m 45, any 10 are gone, and `seeks` costs no draw). The complementary rule keeps its meaning: a single whose arrival would leave the park with unpaired singles but none of the other sex re-rolls its `sex` once (the GV complementary-sex rule, `addVillager` 4488–4504).
 8. Staff: 1 gardener enters at `g_west` 10 s after a new park and never leaves. 1 vendor per kiosk appears on the kiosk's serving tile when the kiosk is placed and vanishes when it is removed.
 
 ### 4.3 Archetypes and routines (`src/entities/brain.ts` rung 7)
@@ -254,7 +254,7 @@ Comfort target = 0.7 + 0.15 (lit lamp within 3 tiles at night) − 0.35 × rain 
 
 ### 4.5 Visit length, regulars, names (`src/entities/names.ts`)
 1. A passer-by leaves at `leaveAt` (section 4.2.6) by `gateOut`, which is the nearest gate at the moment the leave rung fires, unless section 6.5 assigns one.
-2. Eight **regulars** exist from the start, all archetype `single`, with memory. Names and `seeks`: Amélie (f, m), Juliette (f, m), Colette (f, any), Margot (f, m), Théo (m, f), Lucien (m, f), Baptiste (m, any), Rémi (m, f).
+2. Eight **regulars** exist from the start, all archetype `single`, with memory. Names and `seeks`: Amélie (f, m), Juliette (f, m), Colette (f, m), Margot (f, m), Théo (m, f), Lucien (m, f), Baptiste (m, f), Rémi (m, f). Each seeks the opposite sex; Colette and Baptiste were `any` until the owner's rule of 2026-10-20.
 3. A regular who leaves sets `nextVisitDay = day + rint(1, 2)` and arrives on that day at a random `f` in [0.30, 0.65], replacing the next generated single. At most 3 regulars arrive per day.
 4. Memory: `regular.memory = { partnerId, affinity, stage, lastDay }`. Affinity decays −0.1 per day while apart (section 6.3). When both members of a remembered pair are in the park, the `Pair` is recreated at the remembered stage and affinity the moment they are within 4 tiles with line of sight (no roll).
 5. Passers-by get generated names from a list of 40 French first names per sex in `names.ts`. A name in use is not reused while its holder is in the park.
@@ -318,12 +318,12 @@ A `Pair { id, a, b, stage, affinity, retryT, togetherT, embToday, embDay, formed
 1. Both are `single` archetype, neither has a `pairId`, neither is a child.
 2. Within 4 tiles (2 in mist) with line of sight (no `OCC` non-passable prop and no water on the Bresenham line between tile centres).
 3. Both in `CAN_INTERRUPT` states ("idle or strolling").
-4. Compatible: `a.seeks` matches `b.sex` or is `any`, and the same the other way.
+4. Compatible: the two sexes differ (one woman and one man, owner 2026-10-20) and `a.seeks` is `b.sex` and `b.seeks` is `a.sex`. The sex test is the rule; the `seeks` test is the belt to its braces, so a `seeks` forced to match never lets two women or two men form a `Pair`.
 5. First encounter this visit (the pair of ids has not rolled today) and a 50 % roll on the sim RNG passes. A failed roll is not repeated for that pair of ids that day.
 6. Starting affinity `rnd(0.2, 0.4)`. Stage 1 begins at once. Feed line "A and B noticed each other".
-Regulars with memory skip the roll (section 4.5.4). `a_matchmaker` introduce skips the roll (section 10.7).
+Regulars with memory skip the roll (section 4.5.4). `a_matchmaker` introduce skips the roll (section 10.9) but not item 4: it introduces a woman and a man only.
 
-A couple archetype arrives already paired (register 3.4): the arrival factory creates the `Pair` with the two as `a` and `b`, `stage = 3` (Bench counts as completed, so the next attempt is 4 Stroll, whose gate 0.55 the affinity already meets), affinity `rnd(0.55, 0.70)` on the sim RNG, `formedDay` = the arrival day, no 50 % roll and no `feed.pair.formed` line; both keep `archetype = 'couple'` and `coupleOf`. From there the pair follows 6.2 to 6.6 like any other and counts for the HUD, the featured pair and points. Alumni (6.5) return as the couple archetype at stage 3 with affinity 0.70 and may reach Happily again; the feed then says they renewed their vows (`feed.romance.renewed`).
+A couple archetype arrives already paired (register 3.4) as one woman and one man (the factory makes one `f` and one `m`): the arrival factory creates the `Pair` with the two as `a` and `b`, `stage = 3` (Bench counts as completed, so the next attempt is 4 Stroll, whose gate 0.55 the affinity already meets), affinity `rnd(0.55, 0.70)` on the sim RNG, `formedDay` = the arrival day, no 50 % roll and no `feed.pair.formed` line; both keep `archetype = 'couple'` and `coupleOf`. From there the pair follows 6.2 to 6.6 like any other and counts for the HUD, the featured pair and points. Alumni (6.5) return as the couple archetype, again one woman and one man (an old save's alumni couple of two women or two men is forgotten), at stage 3 with affinity 0.70 and may reach Happily again; the feed then says they renewed their vows (`feed.romance.renewed`).
 
 ### 6.2 The seven stages
 | Stage | Name | Prerequisites ("Needs") | Duration (s) | Affinity gate | On screen | Interrupted by |
@@ -398,7 +398,7 @@ Rules:
 
 Other dissolutions (not endings, no points): both members leave at `leaveAt` (a pair at stage ≥ 2 leaves by the same gate together, feed "strolled off together"); one member leaves alone (passer-by): the pair dissolves, the other keeps `social = 0.5`. Regulars keep memory in every case. A couple shares one `leaveAt` (they arrived together), so a couple still paired at `leaveAt` leaves together by one gate with the same "strolled off together" line; a Parted couple has already left by different gates.
 
-Returning couples: on each new day there is a 20 % chance (sim RNG) that one `alumni` pair arrives as the `couple` archetype with their names and looks: a `Pair` at stage 3 with affinity 0.70 (fixed, not rolled), feed `feed.alumni_return`. They may reach Happily again; the feed then says they renewed their vows (`feed.romance.renewed`) in place of `feed.happily`, with the same CP +5.
+Returning couples: on each new day there is a 20 % chance (sim RNG) that one `alumni` pair arrives as the `couple` archetype with their names and looks (always one woman and one man, each seeking the other, owner 2026-10-20; a Happily pair is always such a pair, and an alumni entry of two women or two men in an old save is forgotten on restore): a `Pair` at stage 3 with affinity 0.70 (fixed, not rolled), feed `feed.alumni_return`. They may reach Happily again; the feed then says they renewed their vows (`feed.romance.renewed`) in place of `feed.happily`, with the same CP +5.
 
 ### 6.6 Featured pair, multiple pairs
 1. Several pairs run at once; there is no cap beyond the people cap.
@@ -621,7 +621,7 @@ No cooldown; moving costs `pack` 2 s and `setUp` 3 s. Charm applies only while `
 ### 10.9 `a_matchmaker`
 | Step | Candidate | Radius | Action | Returns | Scores |
 |---|---|---|---|---|---|
-| 3a | unpaired single | 34 px | `lead`: walk to them, then lead them (they follow at 1 tile) to the nearest compatible single within 12 tiles; on arrival within 2 tiles the pair forms without the 50 % roll (6.1); no compatible single → "nobody for them just now"; 45 s cooldown | 'an introduction' | Cupid action on the new pair |
+| 3a | unpaired single | 34 px | `lead`: walk to them, then lead them (they follow at 1 tile) to the nearest compatible single within 12 tiles, which is the nearest single of the other sex who seeks them back (6.1 item 4: a woman is led to a man and a man to a woman, never to their own sex); on arrival within 2 tiles the pair forms without the 50 % roll (6.1); no such single → "nobody for them just now"; 45 s cooldown | 'an introduction' | Cupid action on the new pair |
 | 3b | paired person | 34 px | `encourage` 3 s: sets `pair.retryT = 0` and the stage starts on the next decide if the gate and prerequisites hold; 30 s cooldown | 'a word of encouragement' | Cupid action |
 | 3c | kiosk | 0.75 | `buy` 4 s: baguette shares = 3 | 'a fresh baguette' | — |
 | 3d | pair at Picnic (within 2 tiles of the spot) | 34 px | share bread: both hunger → 0.1 (shares −1) | 'sharing bread' | Cupid action |
@@ -760,5 +760,6 @@ Values this document defines that the register does not (the owner can object to
 Open points for the owner:
 1. Should the park close at night (no arrivals in [0.00, 0.20))? This document keeps a target of 3.
 2. Does `remove` on a tree need a confirm toast? This document says no (one tap removes).
-3. Should the matchmaker's introduce ignore `seeks` (a "surprising match")? This document says no.
+3. Should the matchmaker's introduce ignore `seeks` (a "surprising match")? Settled: no, and by the owner's rule of 2026-10-20 (register section 4 "Who can pair") it also never introduces two women or two men.
 4. Whether `c_rowboat` should be refused during `m_fog` (visibility) is left to the content tables; this document allows it.
+5. The charming stranger (`m_rival`, S10) and the members it flirts with are not changed by the rule "Who can pair" (register section 4, 2026-10-20), which concerns only who forms a `Pair`: the stranger never forms one. Should the stranger always be of the sex the targeted member seeks (the opposite one, as 06 6.4 says), or may it ever be of the member's own sex? Left as written until the owner says.

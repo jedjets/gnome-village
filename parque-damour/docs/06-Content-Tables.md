@@ -336,7 +336,7 @@ Needs rates are the same for every person (section 7); staff and cameos have no 
 | `child` | 2.6 | follows the parent on rungs 0-3, then the family list | with the parent | 0.65 scale |
 | `cameo` | 3.0 (stranger), 3.0 (flower seller), 3.0 (mime) | scripted by the ability's timeline (section 11) | the ability's duration | stranger: long coat and bouquet; flower seller: straw hat, basket; mime: white face, beret, stripes |
 
-Starting needs at arrival: hunger `rnd(0.2, 0.5)`, energy `rnd(0.5, 0.9)`, comfort 0.7, social `rnd(0.2, 0.6)` (design §4.2.5). `seeks` for singles: f 45, m 45, any 10, with the one re-roll when no compatible single would exist (GV `addVillager` 4488-4504 complementary rule).
+Starting needs at arrival: hunger `rnd(0.2, 0.5)`, energy `rnd(0.5, 0.9)`, comfort 0.7, social `rnd(0.2, 0.6)` (design §4.2.5). `seeks` for everyone: the opposite of `sex`, no draw (owner 2026-10-20, register section 4 "Who can pair"; the weights f 45, m 45, any 10 are gone), with the one re-roll of the single's `sex` when unpaired singles are in the park and none is of the other sex (GV `addVillager` 4488-4504 complementary rule). A single makes 9 sim draws, 10 with the re-roll.
 
 ---
 
@@ -351,16 +351,16 @@ Starting needs at arrival: hunger `rnd(0.2, 0.5)`, energy `rnd(0.5, 0.9)`, comfo
 Rules: names are never translated (the same in EN and ES); the eight regulars' names and the fixed actor names of 6.3 are not in these lists, so a regular can never clash with a passer-by; when both lists for a sex are exhausted (more than 40 of one sex present, impossible under the 30 cap) reuse from the start.
 
 ### 6.2 The eight regulars (all `single`, with memory; design §4.5.2)
-Personality lines are flavour for writers and for the art portraits; they have no gameplay effect in v1.
+Personality lines are flavour for writers and for the art portraits; they have no gameplay effect in v1. Every regular seeks the opposite sex (owner 2026-10-20; Colette and Baptiste were `any` before).
 | `regularId` | Name | `sex` | `seeks` | `ageWord` | Personality (one line) |
 |---|---|---|---|---|---|
 | 1 | Amélie | f | m | young | arrives with a book she never opens; feeds the pigeons by the fountain |
 | 2 | Juliette | f | m | young | a dancer who strolls the loops on her toes; hates rain |
-| 3 | Colette | f | any | grown | reads the paper on the same bench every day; laughs loudest at backfires |
+| 3 | Colette | f | m | grown | reads the paper on the same bench every day; laughs loudest at backfires |
 | 4 | Margot | f | m | young | sketches the skyline; forgets the time and misses the kiss window |
 | 5 | Théo | m | f | young | a poet with a baguette under his arm; the pomeranian's favourite victim |
 | 6 | Lucien | m | f | grown | a waiter on his break; tidy, punctual, flustered by pigeons |
-| 7 | Baptiste | m | any | young | a student with an umbrella in every season |
+| 7 | Baptiste | m | f | young | a student with an umbrella in every season |
 | 8 | Rémi | m | f | grown | a cyclist who sits by the pond and talks to the ducks that are not there |
 
 The lovers' example pair used in every string and test example: **Amélie & Théo** (03 §12 uses them; the Romance chip reads "Amélie & Théo · Chat").
@@ -510,7 +510,7 @@ Common rules (design §9.1): arm by tapping the chip, the next world tap targets
 | `a_mime` | mischief | T3 | Pierrot | 3.0 | no | enters by the nearest gate | `wall, mimicStart` | paired person or couple: `mimic` 30 s (`mime` once) · bench: `statue` until the next tap · gravel or flagstone tile: `wall` 20 s · tile: walk | 120 s `resting` between landed `mime` | MP as `m_mime` |
 | `a_florist` | cupid | T1 | Violette, basket of 3 | 3.0 | no | enters by `g_south_w` | `hand, pick, scatter` | paired person: `hand` a bouquet (basket -1, affinity +0.05) · bed tile: `pick` 4 s (basket = 3) · bench: sit · lawn tile: `scatter` 2 s (petals 3 x 3 as `c_petals`) · tile: walk | bouquet 60 s; petals 30 s | Cupid action as `c_bouquet`, `c_petals` |
 | `a_busker` | cupid | T2 | the AI busker if present, else new | 3.0 | no | enters by the nearest gate | `setUp, pack` | paired person: `serenade` 30 s following (charm +3 within 8) · bandstand: `setUp` 3 s then `play` · any walkable tile: `setUp` 3 s then `play` until the next tap | none; `pack` 2 s + `setUp` 3 s to move | Cupid action as `c_musician` |
-| `a_matchmaker` | cupid | T3 | Marguerite | 3.0 | no | enters by `g_north` | `lead, encourage, buy` | unpaired single: `lead` to the nearest compatible single within 12 (<= 20 s); pair forms without the roll · paired person: `encourage` 3 s (`retryT = 0`) · kiosk: `buy` 4 s (shares = 3) · pair at Picnic: share bread (hunger 0.1, shares -1) · bench: sit · tile: walk | introduce 45 s; encourage 30 s | Cupid action on the pair |
+| `a_matchmaker` | cupid | T3 | Marguerite | 3.0 | no | enters by `g_north` | `lead, encourage, buy` | unpaired single: `lead` to the nearest compatible single within 12, that is the nearest single of the other sex who seeks them back (<= 20 s); pair forms without the roll · paired person: `encourage` 3 s (`retryT = 0`) · kiosk: `buy` 4 s (shares = 3) · pair at Picnic: share bread (hunger 0.1, shares -1) · bench: sit · tile: walk | introduce 45 s; encourage 30 s | Cupid action on the pair |
 
 Refusal keys used by cascades: `reason.not_children`, `reason.enough_today`, `reason.startled` (pigeon with a dog within 2, 2 s), `reason.big_dog` (pomeranian with a walker's dog within 3), `reason.basket_empty`, `reason.not_courting`, `reason.nobody_for_them`, `reason.had_to_go`, `reason.busy`. Entering: `setMode('avatar', id)` zooms to 1.5 if below 1.3, toasts `avatar.<id>.hint1` for 6 s (GV 11257-11259); leaving returns the actor to AI and toasts `avatar.goes_on`. An avatar is never a `Pair` member and can be a victim (design §10.10).
 

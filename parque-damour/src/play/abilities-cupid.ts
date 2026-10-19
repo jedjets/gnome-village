@@ -150,7 +150,7 @@ const BOUQUET_H: Handler = {
     e.targetId = member.id;
     e.until = e.startTick + BOUQUET_MAX_T;
     const at = openRing(r.x, r.y, BOUQUET_GAP) ?? { x: Math.round(member.x), y: Math.round(member.y) };
-    const v = spawnVisitor('cameo', nearestGate(at.x, at.y).id, { at, name: CAMEO_NAME, sex: 'f', ageWord: 'grown', seeks: 'any' });
+    const v = spawnVisitor('cameo', nearestGate(at.x, at.y).id, { at, name: CAMEO_NAME, sex: 'f', ageWord: 'grown' });
     if (!v) return; // cameos are never refused (03 3.11): a null would be a bug, and the effect ends at its first step
     e.actorId = v.id;
     startWalk(v, 'wander', { kind: 'bouquet' }, member.x, member.y);

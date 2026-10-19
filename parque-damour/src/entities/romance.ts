@@ -11,6 +11,9 @@
 // stage and affinity, its formedDay the remembered lastDay (02 4.5 item 4, 6.7); a regular married here (memory stage 7) does not pair
 // again (assumption S5-A4). A couple archetype arrives as a Pair at stage 3, affinity rnd(0.55, 0.70), no roll and no feed line
 // (register 3.4; visitor.ts calls coupleArrived through its hook); an alumni couple (6.5) returns at stage 3 with affinity 0.70.
+// Who may pair (owner 2026-10-20, register section 4 "Who can pair"): every Pair is one woman and one man. newPair, the one place a Pair
+// is made (tryForm, formStep, coupleArrived, alumniRoll all end there), refuses two of the same sex; a restore drops a saved same-sex
+// Pair or alumni couple (setRomanceState).
 // Each step (03 4.2 phase 10, stepRomance): retryT counts down; a pair is together while its members are within 4 tiles and neither is in
 // a reaction state; together, every 10 s, affinity += 0.004 x charmAt(midpoint, pair).total; the endings of 02 6.5 (Parted: affinity
 // below 0.20 at stage >= 2, or three embarrassments in a day at stage >= 3). At the day reset (newDay) a pair apart loses 0.1 (02 6.3
@@ -152,7 +155,9 @@ export function canForm(a: Visitor, b: Visitor): boolean {
   return lineOfSight(a.x, a.y, b.x, b.y);
 }
 
-function newPair(a: Visitor, b: Visitor, stage: Pair['stage'], affinity: number): Pair {
+/** The one place a Pair is made: null for two of the same sex (owner 2026-10-20: only a woman and a man), whatever the caller thinks. */
+function newPair(a: Visitor, b: Visitor, stage: Pair['stage'], affinity: number): Pair | null {
+  if (a.sex === b.sex) return null;
   const [x, y] = a.id < b.id ? [a, b] : [b, a];
   const p: Pair = {
     id: nextPairId(), a: x.id, b: y.id, stage, affinity, retryT: 0, togetherT: 0, charmT: 0, embToday: 0, embDay: T.day,
@@ -178,6 +183,7 @@ export function tryForm(a: Visitor, b: Visitor, skipRoll = false): Pair | null {
     if (!chance(PAIR_ROLL)) return null;
   }
   const p = newPair(a, b, 1, rnd(AFF_START_MIN, AFF_START_MAX));
+  if (!p) return null;
   emitPair('formed', p, { feed: 'feed.pair.formed' });
   startStage(p, 1, false);
   return p;
@@ -205,6 +211,7 @@ export function formStep(v: Visitor): boolean {
     const m = memoryOf(v, o);
     if (m && m.stage > 0) {
       const p = newPair(v, o, Math.min(6, Math.max(1, m.stage)) as Pair['stage'], m.affinity);
+      if (!p) continue;
       p.formedDay = m.lastDay; // a later visit (02 6.7)
       emitPair('formed', p, { feed: 'feed.pair.formed' });
       return true;
@@ -217,7 +224,7 @@ export function formStep(v: Visitor): boolean {
 /** visitor.ts's couple arrival (register 3.4): the two as a Pair at stage 3 with affinity rnd(0.55, 0.70), no roll, no feed line. */
 function coupleArrived(f: Visitor, m: Visitor): void {
   const p = newPair(f, m, COUPLE_STAGE, rnd(COUPLE_AFF_MIN, COUPLE_AFF_MAX));
-  emitPair('formed', p, { couple: 1 });
+  if (p) emitPair('formed', p, { couple: 1 });
 }
 
 /* ---------- endings and dissolutions (02 6.5) ---------- */
@@ -356,14 +363,14 @@ export function newDay(): void {
 export function alumniRoll(): void {
   if (alumniDay === T.day || T.f < ALUMNI_F) return;
   alumniDay = T.day;
-  const out = alumni.filter((al) => al.inPark.length === 0);
+  const out = alumni.filter((al) => al.inPark.length === 0 && al.a.sex !== al.b.sex); // one woman and one man
   if (out.length === 0 || CAP_PEOPLE - people() < 2) return;
   if (!chance(ALUMNI_RETURN)) return;
   const al = out[rint(0, out.length - 1)] as Alumni;
   const gate = gateForRoll(rng() * 100);
   const leaveAt = T.abs + rnd(0.25, 0.5);
   const spawn = (m: AlumMember): Visitor | null => {
-    const v = spawnVisitor('couple', gate, { sex: m.sex, name: m.name, leaveAt, ageWord: m.ageWord, seeks: 'any' });
+    const v = spawnVisitor('couple', gate, { sex: m.sex, name: m.name, leaveAt, ageWord: m.ageWord }); // seeks the opposite sex
     if (v) v.lookSeed = m.lookSeed;
     return v;
   };
@@ -371,8 +378,9 @@ export function alumniRoll(): void {
   if (!a || !b) return;
   a.coupleOf = b.id;
   b.coupleOf = a.id;
-  al.inPark = [a.id, b.id];
   const p = newPair(a, b, COUPLE_STAGE, ALUMNI_AFF);
+  if (!p) return;
+  al.inPark = [a.id, b.id];
   p.alumniId = al.id;
   emitPair('formed', p, { feed: 'feed.alumni_return', couple: 1 });
 }
@@ -416,11 +424,24 @@ export function alumniState(): Alumni[] {
 export function romanceSched(): RomanceSched {
   return { rolled: rolled.slice(), alumniDay };
 }
-/** A restore: the pairs (with their umbrella charm), the alumni, the day's rolls, the pin. */
+/**
+ * A restore: the pairs (with their umbrella charm), the alumni, the day's rolls, the pin. A saved pair of two of the same sex, or an alumni
+ * couple of them, is forgotten (owner 2026-10-20: a Pair is one woman and one man): the two walk on as singles, nobody throws.
+ */
 export function setRomanceState(list: readonly Pair[], al: readonly Alumni[], s: Partial<RomanceSched> | undefined, pin: PairId): void {
   pairs.length = 0;
   clearCharmSources();
   for (const r of list) {
+    const a = byId(r.a), b = byId(r.b);
+    if (a && b && a.sex === b.sex) {
+      for (const v of [a, b]) {
+        release(v);
+        finish(v, 0);
+        v.pairId = 0;
+      }
+      if (pin === r.id) pin = 0;
+      continue;
+    }
     const p = { ...(JSON.parse(JSON.stringify(r)) as Pair) };
     p.doing ??= 0;
     p.alumniId ??= 0;
@@ -428,7 +449,7 @@ export function setRomanceState(list: readonly Pair[], al: readonly Alumni[], s:
     if (p.umbrellaUntil > 0) setPairCharm(p.id, 'umbrella', p.umbrellaUntil);
     if (p.boatUntil > 0) setPairCharm(p.id, 'boat', p.boatUntil);
   }
-  alumni = JSON.parse(JSON.stringify(al)) as Alumni[];
+  alumni = (JSON.parse(JSON.stringify(al)) as Alumni[]).filter((x) => x.a.sex !== x.b.sex);
   rolled = (s?.rolled ?? []).slice();
   alumniDay = s?.alumniDay ?? 0;
   pinned = pin;

@@ -5,8 +5,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { newPark } from '../src/core/loop.ts';
 import { rngN, seedSim } from '../src/core/rng.ts';
 import {
-  CAP_REGULARS_DAY, FIRST_VISIT, GARDENER_NAME, NAMES_F, NAMES_M, REGULARS, namesHeld, regularArrived, regularDue, regularLeft,
-  regularsState, rememberPair, releaseName, resetNames, stepRegularReturns, takeName,
+  CAP_REGULARS_DAY, FIRST_VISIT, GARDENER_NAME, NAMES_F, NAMES_M, REGULARS, namesHeld, namesState, opposite, regularArrived, regularDue,
+  regularLeft, regularsState, rememberPair, releaseName, resetNames, setNamesState, stepRegularReturns, takeName,
 } from '../src/entities/names.ts';
 import { people, removeVisitor, spawnVisitor, visitors } from '../src/entities/visitor.ts';
 
@@ -16,18 +16,20 @@ beforeEach(() => {
 });
 
 describe('the eight regulars (02 4.5 item 2, 06 6.2)', () => {
-  it('names, sex and seeks are exact and in order', () => {
+  // Owner 2026-10-20 ("only men and woman can date"): Colette and Baptiste were 'any' and now seek the opposite sex; nothing else moved.
+  it('names, sex and seeks are exact and in order, each seeking the opposite sex', () => {
     expect(REGULARS.map((r) => [r.regularId, r.name, r.sex, r.seeks])).toEqual([
       [1, 'Amélie', 'f', 'm'],
       [2, 'Juliette', 'f', 'm'],
-      [3, 'Colette', 'f', 'any'],
+      [3, 'Colette', 'f', 'm'],
       [4, 'Margot', 'f', 'm'],
       [5, 'Théo', 'm', 'f'],
       [6, 'Lucien', 'm', 'f'],
-      [7, 'Baptiste', 'm', 'any'],
+      [7, 'Baptiste', 'm', 'f'],
       [8, 'Rémi', 'm', 'f'],
     ]);
     expect(REGULARS.map((r) => r.ageWord)).toEqual(['young', 'young', 'grown', 'young', 'young', 'grown', 'young', 'grown']);
+    for (const r of REGULARS) expect(r.seeks, r.name).toBe(opposite(r.sex)); // no 'any', no same-sex value
   });
   it('a regular arrives with their own name, sex, seeks and ageWord, as a single', () => {
     const theo = REGULARS[4];
@@ -140,5 +142,22 @@ describe('regular memory (02 4.5 item 4, 6.3: -0.1 affinity a day apart)', () =>
     for (let d = 0; d < 8; d++) stepRegularReturns();
     expect(regularsState()[0]?.memory.affinity).toBe(0);
     expect(regularsState()[1]?.memory.affinity).toBe(0); // no partner, untouched
+  });
+});
+
+const mem = (partnerId: number) => ({ partnerId, affinity: 0.6, stage: 4, lastDay: 2 });
+
+describe('a restore forgets a same-sex memory (owner 2026-10-20, register section 4 "Who can pair")', () => {
+  it('an old save that remembers Amélie with Juliette (f and f) restores without it; a woman with a man stays', () => {
+    const s = namesState();
+    s.regulars[0] = { ...(s.regulars[0] as (typeof s.regulars)[0]), memory: mem(2) }; // Amélie (f) remembers Juliette (f)
+    s.regulars[1] = { ...(s.regulars[1] as (typeof s.regulars)[0]), memory: mem(1) };
+    s.regulars[2] = { ...(s.regulars[2] as (typeof s.regulars)[0]), memory: mem(7) }; // Colette (f) remembers Baptiste (m)
+    s.regulars[5] = { ...(s.regulars[5] as (typeof s.regulars)[0]), memory: mem(8) }; // Lucien (m) remembers Rémi (m)
+    setNamesState(s);
+    const got = regularsState();
+    expect([got[0]?.memory.partnerId, got[0]?.memory.stage, got[1]?.memory.partnerId]).toEqual([0, 0, 0]);
+    expect(got[2]?.memory).toEqual(mem(7));
+    expect([got[5]?.memory.partnerId, got[5]?.memory.affinity]).toEqual([0, 0]);
   });
 });

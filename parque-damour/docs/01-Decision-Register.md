@@ -92,12 +92,13 @@ Everything the player does is a **Command** `{tick, side, kind, payload}` applie
 
 ### 3.3 Entities
 - One `Visitor` record type for every person (as GV uses one gnome record); an `archetype` field drives routines. One `Creature` type for pigeons and dogs. One `Prop` type for placed things. One `Pair` type for a romance. All referenced by numeric ids (never object references in saved fields).
+- A `Visitor` has a `sex` (f or m) and a `seeks`, which is always the opposite sex (owner 2026-10-20, section 4 "Who can pair"). The field stays on the record for compatibility with saves; a saved `any` or same-sex value restores as the opposite of the person's sex.
 - Caps: 30 people, 12 pigeons, 4 dogs, 220 particles.
 
 ### 3.4 Visitors
 | Archetype | Arrives as | Routine | Notes |
 |---|---|---|---|
-| single | alone | stroll, bench, café, feed pigeons, read | romance candidate; has `seeks` f/m/any (weights 45/45/10) |
+| single | alone | stroll, bench, café, feed pigeons, read | romance candidate; has `seeks` the opposite sex (owner 2026-10-20: only a woman and a man can pair) |
 | couple | pair, already together | stroll, bench, picnic | arrives already paired: a `Pair` at stage 3 (Bench) with affinity rnd(0.55, 0.70); continues the ladder from Stroll and can reach Happily or be Parted like any pair; counts for the HUD, the featured pair and points (owner: as many romances as possible, 2026-10-11) |
 | family | parent + child | play on lawn, kiosk, pond edge | child never a mischief target; child chases pigeons and the pomeranian |
 | elder | alone | bench, feed pigeons, chess at a table | slow; crumbs attract pigeons |
@@ -115,7 +116,7 @@ Everything the player does is a **Command** `{tick, side, kind, payload}` applie
 - Movement: adult 3.0 tiles/s, child 2.6, elder 2.0, jogger 5.0; pair strolling 2.4 as one unit. A* over tiles: lawn 1.0, gravel 0.75, flagstone 0.7, bed blocked, water blocked (bridge 0.8), occupied blocked, railings blocked except gates.
 
 ### 3.5 Romance
-- A `Pair` forms when two singles are within 4 tiles with line of sight, both idle or strolling, mutually compatible by `seeks`, and a 50 % roll passes on their first encounter. Starting affinity `rnd(0.2, 0.4)`. A couple archetype arrives already paired (3.4). Alumni (a Happily pair that returns, 3.5 Happily) return as the couple archetype at stage 3 with affinity 0.70 and may reach Happily again; the feed says they renewed their vows.
+- A `Pair` is always one woman and one man (owner 2026-10-20). It forms when two singles, one woman and one man, are within 4 tiles with line of sight, both idle or strolling, mutually compatible by `seeks`, and a 50 % roll passes on their first encounter. Starting affinity `rnd(0.2, 0.4)`. A couple archetype arrives already paired (3.4). Alumni (a Happily pair that returns, 3.5 Happily) return as the couple archetype at stage 3 with affinity 0.70 and may reach Happily again; the feed says they renewed their vows.
 - Stages, prerequisites, durations (sim seconds) and the affinity gate to attempt them:
 
 | Stage | Name | Needs | Duration | Gate |
@@ -220,6 +221,7 @@ No multiplayer transport, no monetisation, no store build, no terrain heights, n
 | **Park pace and Options** (Slice 4, 2026-10-14) | The arrivals ran below the plan (9 by f 0.45, 17 by f 0.70 on seed 101). The owner: "Instead of A or B, add it as a setting in the menu", then "1 Y 2 Y": an Options button at the end of the bottom row opens the Options sheet; **Park pace** Calm (a visitor every 6-14 s) or Lively (every 3-6 s, the plan's 16 and 24); remembered in the profile and applied to new parks; a change mid-game is a logged command. Default for new players: **Lively**. | Done |
 | **Romance art** (Slice 5, register row 26) | scratch/s5-options.html: kiss, proposal, hearts, heartbreak and fireworks variants on the Tailored rig and palette A. **Picked on 2026-10-18** (owner: "1:1 2:1 3:3 4:1 5:2 6:Y"): kiss **1** gentle lean-in with closed eyes; proposal **1** one knee with an open ring box, her hands to her mouth; hearts **3** tiny paper-rimmed hearts with gold sparkles; heartbreak **1** a cracked heart splitting into two drifting halves; Happily fireworks **2** soft heart-shaped bursts with glitter; Stroll drawn **arm in arm** (replaces the hand-holding line of 04 9.2). | Built in Slice 5 |
 | **Starter picnic spots** (Slice 6, 2026-10-19) | Happily was rare (1 of 200 Calm seeds in 3 days) because only the kiosk area had a picnic spot within 10 tiles. The owner said "Continue" to the recommendation: two more picnic spots in the starter park, at (14,21) and (34,24). | Done |
+| **Who can pair** (2026-10-20) | The owner: "Make sure only men and woman can date no woman woman or man man." Every Pair is one woman and one man: singles seek the opposite sex only (the 45/45/10 any-weights are gone), Colette and Baptiste now seek the opposite sex, the matchmaker introduces only opposite-sex singles, couples and alumni arrive as one woman and one man; compatibility also requires the two sexes to differ. | Done |
 | Repository | Closed: the owner keeps building in gnome-village (2026-10-11) | Nothing. Pages deployment for this app is deferred and `.github/workflows/pages.yml` stays inert; section 7 keeps the optional recipe |
 
 ---

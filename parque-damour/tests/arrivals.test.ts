@@ -9,7 +9,9 @@
 // register 3.4's 0.25-0.5 day visit gives 07 S4.7 item 2's seed 101 only 9 people by f 0.45 and 17 by f 0.70 (54 s bring about 6
 // arrivals of 1.29 people each: couple and family 12 % each bring two, a tourist pair 12 % x 40 %); its rows pin what the rules give,
 // 10 +- 3 and 17 +- 3. A Lively park draws LIVELY_GAP_MIN-MAX (3-6 s), tuned so that seed 101 meets the plan's numbers, 16 +- 3 and 24 +- 3
-// (it gives 16 and 25); everything else (targets, factors, weights, caps, the re-roll, one draw per gap) is the same.
+// (it gave 16 and 25); everything else (targets, factors, weights, caps, the re-roll, one draw per gap) is the same.
+// 2026-10-20 (owner: only a woman and a man can pair): a single no longer draws its seeks (9 draws, 10 with the re-roll), which moved the
+// weather of every seed; the seeded day is now seed 102's (Calm 9 and 18, Lively 16 and 24), the assertions unchanged.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SIM_DT, newPark, setSpeed, setTick, simulate, tick } from '../src/core/loop.ts';
 import { applyNow, enqueue, log, type Pace } from '../src/core/commands.ts';
@@ -224,14 +226,14 @@ describe('the visitor record at arrival (02 4.2 items 3, 5-6; 4.5 item 6; 03 3.3
     const g = spawnVisitor('gardener', 'g_west') as Visitor;
     expect([g.name, g.sex, g.ageWord, g.leaveAt]).toEqual(['Gustave', 'm', 'grown', NEVER]);
   });
-  it('the draws per person follow the documented order: an elder 8, a single 10 (12 with the re-roll), a returning regular 6', () => {
+  it('the draws per person follow the documented order: an elder 8, a single 9 (10 with the re-roll), a returning regular 6', () => {
     seedSim(3);
     let n0 = rngN();
     spawnVisitor('elder', 'g_west');
     expect(rngN() - n0).toBe(8); // lookSeed, sex, name, hunger, energy, social, leaveAt, decideT
     n0 = rngN();
     spawnVisitor('single', 'g_west'); // the park holds no single yet: no re-roll
-    expect(rngN() - n0).toBe(10); // + seeks, ageWord
+    expect(rngN() - n0).toBe(9); // + ageWord; seeks is never drawn: everyone seeks the opposite sex (owner 2026-10-20), it was 10 with a seeks draw
     n0 = rngN();
     const r = spawnVisitor('single', 'g_west', { regular: REGULARS[0] }) as Visitor; // sex, seeks, ageWord and name from 06 6.2
     expect(rngN() - n0).toBe(6); // lookSeed, hunger, energy, social, leaveAt, decideT
@@ -264,33 +266,36 @@ describe('the visitor record at arrival (02 4.2 items 3, 5-6; 4.5 item 6; 03 3.3
 });
 
 describe('the complementary-sex re-roll (02 4.2 item 7; GV addVillager 4488-4503)', () => {
-  it('needsReroll: only for a single seeking f or m when unpaired singles are present and none is compatible', () => {
+  // Owner 2026-10-20 ("only men and woman can date"): everyone seeks the opposite sex, so the rule asks one thing, whether an unpaired
+  // single of the other sex is in the park. It re-rolls the sex alone (no seeks to draw): 9 draws for a single, 10 with the re-roll.
+  it('needsReroll: when unpaired singles are present and none is of the other sex', () => {
     expect(compatible({ sex: 'f', seeks: 'm' }, { sex: 'm', seeks: 'f' })).toBe(true);
     expect(compatible({ sex: 'f', seeks: 'm' }, { sex: 'm', seeks: 'm' })).toBe(false);
-    expect(compatible({ sex: 'f', seeks: 'any' }, { sex: 'f', seeks: 'any' })).toBe(true);
+    expect(compatible({ sex: 'f', seeks: 'f' }, { sex: 'f', seeks: 'f' })).toBe(false); // same sex, seeks forced to match
+    expect(compatible({ sex: 'f', seeks: 'any' }, { sex: 'f', seeks: 'any' })).toBe(false);
+    expect(compatible({ sex: 'f', seeks: 'any' }, { sex: 'm', seeks: 'any' })).toBe(false); // 'any' is gone: only an exact seeks matches
     expect(needsReroll('f', 'm')).toBe(false); // an empty park: no roll could help
     const theo = spawnVisitor('single', 'g_west', { regular: REGULARS[4] }) as Visitor; // m seeks f
-    expect(needsReroll('f', 'm')).toBe(false);
-    expect(needsReroll('f', 'f')).toBe(true);
-    expect(needsReroll('m', 'f')).toBe(true);
-    expect(needsReroll('m', 'any')).toBe(false);
+    expect(needsReroll('f', 'm')).toBe(false); // a woman suits Théo
+    expect(needsReroll('m', 'f')).toBe(true); // a man does not
     theo.pairId = 7; // a paired single is no candidate
     expect(needsReroll('m', 'f')).toBe(false);
   });
-  it('with one waiting single (m seeking f) about 46 % of new singles suit him, not the 27.5 % of a plain roll', () => {
+  it('with one waiting single (m seeking f) 75 % of new singles are women, not 50 %: 0.5 + 0.5 x 0.5', () => {
     spawnVisitor('single', 'g_west', { regular: REGULARS[4] });
     let suit = 0, rerolls = 0;
     for (let k = 0; k < 600; k++) {
       const n0 = rngN();
       const v = spawnVisitor('single', 'g_south_w') as Visitor;
-      if (rngN() - n0 === 12) rerolls++;
-      if (v.sex === 'f' && v.seeks !== 'f') suit++;
+      if (rngN() - n0 === 10) rerolls++;
+      if (v.sex === 'f') suit++;
+      expect(v.seeks).toBe(v.sex === 'f' ? 'm' : 'f');
       removeVisitor(v.id);
     }
-    expect(suit / 600).toBeGreaterThan(0.4); // 0.275 + 0.675 x 0.275 = 0.46
-    expect(suit / 600).toBeLessThan(0.53);
-    expect(rerolls / 600).toBeGreaterThan(0.6); // 0.675
-    expect(rerolls / 600).toBeLessThan(0.75);
+    expect(suit / 600).toBeGreaterThan(0.69); // 0.75
+    expect(suit / 600).toBeLessThan(0.81);
+    expect(rerolls / 600).toBeGreaterThan(0.43); // 0.5: the arrivals who rolled a man
+    expect(rerolls / 600).toBeLessThan(0.57);
   });
 });
 
@@ -359,10 +364,15 @@ describe('the decide cadence and its one MODE branch (03 4.4; GV 5696)', () => {
 const kiosks = (): typeof props => props.filter((p) => p.kind === 'kiosk');
 const vendors = (): Visitor[] => visitors.filter((v) => v.archetype === 'vendor');
 
-/** Seed 101's first day at 8x from f 0.30, the pace sent as the shell sends it (a park.pace command applied at step 1, `null`: none). */
+/**
+ * Seed 102's first day at 8x from f 0.30, the pace sent as the shell sends it (a park.pace command applied at step 1, `null`: none). It was
+ * seed 101's until 2026-10-20: when everyone began to seek the opposite sex a single stopped drawing its seeks, so the weather (a sim-stream
+ * draw too) fell another way, and seed 101 is in rain at f 0.70 (target 12, 12 people: Lively met its target, but the plan's 24 is for fine weather).
+ * Seed 102 is the first with clear skies at both times (Calm 9 and 18, Lively 16 and 24); the assertions are unchanged.
+ */
 function seededDay(pace: Pace | null): { at45: number; at70: number; most: number } {
   clearListeners();
-  newPark(101);
+  newPark(102);
   setSpeed(8);
   if (pace) enqueue({ side: 'park', kind: 'park.pace', payload: { pace } });
   let at45 = -1, at70 = -1, most = 0;
@@ -376,7 +386,7 @@ function seededDay(pace: Pace | null): { at45: number; at70: number; most: numbe
 }
 
 describe('the seeded day through the loop (07 S4.7 item 2; 02 4.2 items 1-2, 8; 08 2.3 arrivals rows)', () => {
-  it('Calm, at 8x from f 0.30 on seed 101: 10 +- 3 people by f 0.45, 17 +- 3 by f 0.70, never above 30 all day', () => {
+  it('Calm, at 8x from f 0.30 on seed 102: 10 +- 3 people by f 0.45, 17 +- 3 by f 0.70, never above 30 all day', () => {
     const calm = seededDay(null); // no command: a new park is calm
     expect(seededDay('calm')).toEqual(calm); // the same as a Calm command: calm adds no draw
     const { at45, at70, most } = calm;
@@ -387,7 +397,7 @@ describe('the seeded day through the loop (07 S4.7 item 2; 02 4.2 items 1-2, 8; 
     expect(most).toBeLessThanOrEqual(30);
   }, 60_000);
 
-  it('Lively, at 8x from f 0.30 on seed 101: 16 +- 3 people by f 0.45, 24 +- 3 by f 0.70 (07 S4.7 item 2), never above 30 all day', () => {
+  it('Lively, at 8x from f 0.30 on seed 102: 16 +- 3 people by f 0.45, 24 +- 3 by f 0.70 (07 S4.7 item 2), never above 30 all day', () => {
     const { at45, at70, most } = seededDay('lively');
     expect(at45).toBeGreaterThanOrEqual(16 - 3);
     expect(at45).toBeLessThanOrEqual(16 + 3);

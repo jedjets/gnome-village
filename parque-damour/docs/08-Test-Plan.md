@@ -105,7 +105,8 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `gen.test.ts` | the seed varies only pond outline, trees and bed colours | seeds 1 and 2 differ in `KIND` only on pond tiles inside x 30-36, y 11-13, in tree positions and in `BEDC`; nothing else |
 | `gen.test.ts` | the pond is 14 to 20 tiles in x 30-36, y 11-13 | seeds 1 to 40: one 4-connected body of 14 to 20 tiles; (33..35, 11..12) always water, (34,13) always lawn (design §2.5) |
 | `gen.test.ts` | S6: two picnic blankets (owner 2026-10-19) | picnic props at (14,21) and (34,24), 2×2, passable, `placedBy` `gen`, on lawn with one clear tile around them; with the kiosk tables they put a spot within 10 tiles of > 80 % of the inner loop and > 45 % of the outer loop |
-| `picnic.test.ts` | Happily is no longer rare (S6) | the recorded scan of seeds 1 to 200 on both paces over 3 days: Picnic stage seen in 176 (Calm) and 183 (Lively) seeds, Happily in 17 and 26 (before: 136 and 151, 1 and 1); seeds 1 to 8 on Lively re-run row for row |
+| `picnic.test.ts` | Happily is no longer rare (S6) | the recorded scan of seeds 1 to 200 on both paces over 3 days: Picnic stage seen in 182 (Calm) and 187 (Lively) seeds, Happily in 16 and 29 (before the blankets: 136 and 151, 1 and 1; with the old seeks: 176 and 183, 17 and 26); seeds 1 to 8 on Lively and 1 to 3 on Calm re-run row for row |
+| `picnic.test.ts` | only a woman and a man ever pair (2026-10-20) | the seventh column of all 400 scan rows is 0: of the 4,145 Pairs formed (singles, couples and alumni) none is two women or two men |
 | `gen.test.ts` | twelve trees of three species on lawn | 12 tree props, 4 per species, each on lawn before placement, ≥ 3 tiles from paths and props, ≥ 4 tiles apart |
 | `gen.test.ts` | the bridge spans the pond neck | a passable bridge prop covers (34,11) and (34,12) with `span === 2` |
 | `park.test.ts` | the five gates have the design's tiles | `GATES` ids and tiles equal design §2.4 exactly; `isGateTile(12, 47) === 'g_south_w'`; `isGateTile(12, 46) === null` |
@@ -155,8 +156,8 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `move.test.ts` | speeds by archetype | over 10 s on open lawn: adult 30 ± 0.5 tiles, child 26, elder 20, jogger 50, a strolling pair 24 |
 | `move.test.ts` | arrival and waypoint radii, replan cooldown | the walker stops within 0.7 of the target; a blocked step replans no sooner than 0.6 s; gives up after 6 blocked steps and remembers the target 60 s (max 8) |
 | `move.test.ts` | spaceOut reads no camera | `spaceOut` moves two overlapping idle visitors apart using `TW/2` and `TH/2` only; `NO_SPACE` states are untouched |
-| `arrivals.test.ts` | targets by phase at seed 101, Lively | at 8× from f 0.30 with `park.pace` lively at step 1 (a new player's park): people 16 ± 3 at f 0.45 and 24 ± 3 at f 0.70; never above 30 (07 S4.7; register section 4, Park pace and Options) |
-| `arrivals.test.ts` | targets by phase at seed 101, Calm | at 8× from f 0.30 with no pace command (a calm park, as every park saved before the pace): people 10 ± 3 at f 0.45 and 17 ± 3 at f 0.70 (seed 101 gives 9 and 17); never above 30; the same numbers with `park.pace` calm |
+| `arrivals.test.ts` | targets by phase at seed 102, Lively | at 8× from f 0.30 with `park.pace` lively at step 1 (a new player's park): people 16 ± 3 at f 0.45 and 24 ± 3 at f 0.70; never above 30 (07 S4.7; register section 4, Park pace and Options) |
+| `arrivals.test.ts` | targets by phase at seed 102, Calm | at 8× from f 0.30 with no pace command (a calm park, as every park saved before the pace): people 10 ± 3 at f 0.45 and 17 ± 3 at f 0.70 (seed 102 gives 9 and 18); never above 30; the same numbers with `park.pace` calm |
 | `arrivals.test.ts` | the gap is 6 to 14 s in a Calm park | consecutive arrival ticks differ by 360 to 840 steps while below target |
 | `arrivals.test.ts` | the gap is 3 to 6 s in a Lively park | consecutive arrival ticks differ by 180 to 360 steps while below target, which is the Calm target; the same seed and roll bring the same arrival with the same number of draws (one for either gap) |
 | `arrivals.test.ts` | per-archetype caps | over 3 days never more than 1 artist, 1 AI busker, 2 dog walkers at once; an over-cap roll becomes `single` |
@@ -164,7 +165,7 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `arrivals.test.ts` | callVisitor refuses at 30 | 30 people: `callVisitor()` returns `reason.park_full` (GV 4489) |
 | `archetypes.test.ts` | each routine state is reached | one seeded day: every archetype's states of design §4.3 appear at least once in `v.st` sampled each second |
 | `archetypes.test.ts` | the jogger never sits and the child stays near | over a day: no jogger in `sit`; every child within 8 tiles of its parent at every sample |
-| `names.test.ts` | the eight regulars are exact | names and `seeks` equal design §4.5 item 2 in order (Amélie f m, Juliette f m, Colette f any, Margot f m, Théo m f, Lucien m f, Baptiste m any, Rémi m f) |
+| `names.test.ts` | the eight regulars are exact | names and `seeks` equal design §4.5 item 2 in order (Amélie f m, Juliette f m, Colette f m, Margot f m, Théo m f, Lucien m f, Baptiste m f, Rémi m f), each the opposite of its `sex`; a restore forgets a remembered same-sex partner |
 | `names.test.ts` | 40 names per sex, no duplicate active name | `takeName('f')` 40 times gives 40 distinct names; the 41st reuses only after a `releaseName` |
 | `names.test.ts` | a regular returns in 1 to 2 days at f 0.30-0.65 | after leaving on day 1, `nextVisitDay` is 2 or 3; the arrival `f` is in [0.30, 0.65]; at most 3 regulars arrive per day |
 | `caps.test.ts` | 30 people, 12 pigeons, 4 dogs, 220 particles | force-spawn past each cap: the count never exceeds it; cameos do not count toward 30 |
@@ -173,11 +174,11 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `creatures.test.ts` | crumbs attract at most 5 and vanish at stock 0 or 60 s | 8 pigeons within 10: 5 at the crumbs; stock 1 pecked once: the prop is gone; untouched crumbs are gone at 60 s |
 | `creatures.test.ts` | fog perches every pigeon | during `m_fog` all pigeons are in `perch` |
 
-### 2.4 Romance and tone (files `romance.test.ts`, `tone.test.ts`)
+### 2.4 Romance and tone (files `romance.test.ts`, `pairing.test.ts`, `tone.test.ts`)
 
 | File | Test | Assertion |
 |---|---|---|
-| `romance.test.ts` | a pair forms only under the six conditions | two singles 4 tiles apart with LOS, both idle, compatible: `tryForm` returns a pair on a passing roll; at 5 tiles, or without LOS, or one at `sit`, or `seeks` mismatched, or one a child: null |
+| `romance.test.ts` | a pair forms only under the six conditions | two singles 4 tiles apart with LOS, both idle, compatible (one `f` and one `m`): `tryForm` returns a pair on a passing roll; at 5 tiles, or without LOS, or one at `sit`, or `seeks` mismatched, or one a child, or two of the same sex even when both `seeks` are forced to match: null |
 | `romance.test.ts` | the 50 % roll is once per pair per day | a failed roll: a second `tryForm` the same day returns null without a draw (`rngN` unchanged); next day it rolls again |
 | `romance.test.ts` | starting affinity is rnd(0.2, 0.4) and stage 1 | 200 formed pairs: all affinities in [0.2, 0.4); `stage === 1`; `a < b` |
 | `romance.test.ts` | mist shrinks formation range to 2 | mist 0.78: 3 tiles apart → null; 2 tiles → pair |
@@ -199,7 +200,13 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `romance.test.ts` | one visitor is in at most one pair | a paired single is skipped by `tryForm` for a third single |
 | `romance.test.ts` | featured is highest stage then earliest formedDay then lowest id | three pairs at stages 3, 5, 5: the stage-5 pair with the earlier `formedDay`; a pin overrides until the pinned pair dissolves |
 | `romance.test.ts` | seed S_HAPPILY reaches Happily and S_PARTED reaches Parted | the two seeds recorded in the file (found by scanning seeds 1 to 200) produce the named ending within 3 days (07 S5.7 item 2) |
-| `romance.test.ts` | pillar P3 | on seeds 101 to 110 at 1× on the unmodified starter park a pair exists within 2 sim minutes |
+| `romance.test.ts` | pillar P3 | on ten consecutive seeds from `P3_FROM` (102 to 111 since 2026-10-20) at 1× on the starter park a new player gets a pair exists within 2 sim minutes |
+| `pairing.test.ts` | compatible needs the sexes to differ (register section 4 "Who can pair", 2026-10-20) | of the 36 combinations of two sexes and two `seeks` only f seeking m with m seeking f is compatible; `tryForm` refuses two women and two men even when both `seeks` are forced to match, with the roll skipped or not, and draws nothing |
+| `pairing.test.ts` | no generated or regular person seeks `any` or their own sex | every archetype from the factory over four seeds, 300 arriving singles and the eight regulars: `seeks` is `opposite(sex)` |
+| `pairing.test.ts` | couples and alumni arrive as one woman and one man | 300 arriving couples are `f` + `m` with a mixed `Pair`; a returning alumni couple is mixed; an alumni couple of two women or two men from an old save never returns in 300 tries |
+| `pairing.test.ts` | the matchmaker's introduce skips the roll, not the sexes | of the four sex combinations only the two mixed ones pair with `skipRoll`; a crowd of 4 men and 8 women led to the nearest compatible single pairs 4 mixed pairs and the 4 women left over pair with nobody |
+| `pairing.test.ts` | a restore normalises an old save | `seeks` `any` or same-sex restores as `opposite(sex)` and the park hashes as before; a saved Pair or alumni couple of two women is forgotten (both unpaired and idle, the pin cleared), never a throw |
+| `pairing.test.ts` | a whole park pairs women with men only | seeds 1 to 8 on Calm and Lively for one sim day: every `formed` event, couples included, joins one `f` and one `m`; the 200-seed, 3-day sweep is the recorded scan of `picnic.test.ts` |
 | `tone.test.ts` | the ten kinds in order | `EMB_KINDS` equals `['poop','soaked','trip','snatched','wasp','drenched','rival','mime','fog','flock']` |
 | `tone.test.ts` | a child is never a target | `land(kind, childId, side)` returns `reason.not_children` for every kind; `canTarget(child)` false; a child inside `m_sprinkler`, `m_raincloud`, `m_flock` keeps `embToday === 0` |
 | `tone.test.ts` | the cost table | base × factor: `poop` at stage 2 costs 0.08, stage 4 costs 0.10, stage 6 costs 0.12; `rival` at stage 7 costs 0.15 (cap) |

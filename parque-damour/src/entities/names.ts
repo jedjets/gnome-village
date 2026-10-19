@@ -1,17 +1,25 @@
 // src/entities/names.ts
-// French first names (40 per sex), the eight regulars with seeks, name reservation, regular memory and return scheduling (02 4.5, 06 6).
+// French first names (40 per sex), the eight regulars with seeks, name reservation, regular memory and return scheduling (02 4.5, 06 6),
+// and the one rule of who may pair (owner 2026-10-20, register section 4 "Who can pair"): a Pair is one woman and one man, so a person
+// seeks the opposite sex only (`opposite`).
 // NEW. GV 1360-1365 (NAMES, freshName) as the idea only: a name nobody in the park holds while one is free, chosen with exactly one draw
 // of the sim stream (GV 1365, "determinism"); GV fell back to a duplicate past 40 names (09 4 row 23): here a name is reserved while its
 // holder is in the park and released when they leave, and an exhausted list (impossible under the 30 cap) reuses from the start (06 6.1).
-// Regulars (02 4.5 items 2-4): all `single`, names and seeks exactly as 06 6.2; a regular who leaves comes back on day + rint(1, 2) at an
-// f in [0.30, 0.65] (two draws: the day, then the f), replacing the next generated single, at most 3 a day; their memory
-// { partnerId, affinity, stage, lastDay } loses 0.1 affinity a day while the two are apart. S5 writes the memory and recreates the Pair.
+// Regulars (02 4.5 items 2-4): all `single`, names and seeks exactly as 06 6.2 (each seeks the opposite of their sex); a regular who
+// leaves comes back on day + rint(1, 2) at an f in [0.30, 0.65] (two draws: the day, then the f), replacing the next generated single, at
+// most 3 a day; their memory { partnerId, affinity, stage, lastDay } loses 0.1 affinity a day while the two are apart. S5 writes the
+// memory and recreates the Pair.
 // The first visits are a fixed table (no draw, so a new park moves no stream): see FIRST_VISIT.
 import { rint, rnd, rng } from '../core/rng.ts';
 import type { VisitorId } from '../core/ids.ts';
 
 export type Sex = 'f' | 'm';
-export type Seeks = 'f' | 'm' | 'any';
+export type Seeks = 'f' | 'm' | 'any'; // 'any' stays a legal value of an old save only: restores turn it into `opposite(sex)`
+
+/** The other sex: whom a person of `sex` may pair with, and so what they seek (owner 2026-10-20: only a woman and a man). */
+export function opposite(sex: Sex): Sex {
+  return sex === 'f' ? 'm' : 'f';
+}
 
 /** 06 6.1, f: never translated, never a regular's or a fixed actor's name. */
 export const NAMES_F: readonly string[] = [
@@ -36,11 +44,11 @@ export type RegularDef = { regularId: number; name: string; sex: Sex; seeks: See
 export const REGULARS: readonly RegularDef[] = [
   { regularId: 1, name: 'Amélie', sex: 'f', seeks: 'm', ageWord: 'young' },
   { regularId: 2, name: 'Juliette', sex: 'f', seeks: 'm', ageWord: 'young' },
-  { regularId: 3, name: 'Colette', sex: 'f', seeks: 'any', ageWord: 'grown' },
+  { regularId: 3, name: 'Colette', sex: 'f', seeks: 'm', ageWord: 'grown' },
   { regularId: 4, name: 'Margot', sex: 'f', seeks: 'm', ageWord: 'young' },
   { regularId: 5, name: 'Théo', sex: 'm', seeks: 'f', ageWord: 'young' },
   { regularId: 6, name: 'Lucien', sex: 'm', seeks: 'f', ageWord: 'grown' },
-  { regularId: 7, name: 'Baptiste', sex: 'm', seeks: 'any', ageWord: 'young' },
+  { regularId: 7, name: 'Baptiste', sex: 'm', seeks: 'f', ageWord: 'young' },
   { regularId: 8, name: 'Rémi', sex: 'm', seeks: 'f', ageWord: 'grown' },
 ];
 
@@ -194,6 +202,11 @@ export function namesState(): NamesState {
 export function setNamesState(s: NamesState): void {
   held = s.held.slice();
   regs = JSON.parse(JSON.stringify(s.regulars)) as RegularState[];
+  // an old save may remember a same-sex partner: that romance is forgotten (owner 2026-10-20), as a Parted does
+  for (const r of regs) {
+    const mine = regularDef(r.regularId), theirs = regularDef(r.memory.partnerId);
+    if (r.memory.partnerId !== 0 && (!mine || !theirs || mine.sex === theirs.sex)) r.memory = { partnerId: 0, affinity: 0, stage: 0, lastDay: r.memory.lastDay };
+  }
   arrivedDay = s.arrivedDay;
   arrivedToday = s.arrivedToday;
 }

@@ -6,8 +6,8 @@
 // Verdict: ADAPT. Changes: the record of 03 3.3 with ids for every link (03 P5); starting needs of 02 4.2 item 5 (hunger 0.2-0.5, energy
 // 0.5-0.9, comfort 0.7, social 0.2-0.6); visit 0.25-0.5 day (tourist 0.25; staff never); the cap is 30 people, cameos excluded (GV
 // POP_CAP 44), enforced in spawnVisitor and callVisitor; visitors appear on a gate's outside tile and step onto its first tile (02 4.2
-// item 3) instead of a sea shore; the complementary rule re-rolls a single's sex and seeks once when the single seeks f or m and no
-// unpaired single in the park is compatible (02 4.2 item 7; GV chose the sex directly); the arrivals scheduler of 02 4.2 is new (GV's
+// item 3) instead of a sea shore; the complementary rule re-rolls a single's sex once when no unpaired single in the park is compatible,
+// that is of the other sex (02 4.2 item 7; GV chose the sex directly); the arrivals scheduler of 02 4.2 is new (GV's
 // strangers came a day after someone became single); the cadence calls the injected avatarDecide for the possessed actor (03 4.4).
 // Dropped from the range: 1388-1398's age, stage, height, carry, swim, climb, float, rescue, indoors, home, mate, craft and animation
 // fields; 4489's toast (callVisitor returns reason.park_full, the shell toasts it); 4493-4494 and 4498 (village position, shore, splash);
@@ -18,11 +18,12 @@
 //   stepArrivals, when an arrival is due: the gate (1), the archetype (1); then the group: a tourist rolls alone or pair (1); a couple
 //     draws its shared leaveAt (1); then each member's own draws below; last, the gap to the next arrival (1).
 //   callVisitor: the gate (1, unless given), single 60 % (1), the archetype when not single (1); then the group as above (no gap).
-//   spawnVisitor, per person: lookSeed (1), sex (1, unless fixed: a regular's, a couple member's, a given one, the gardener's m), seeks
-//     (1, singles only and not a regular; a re-roll draws sex and seeks again), ageWord (1, for single, tourist, jogger, artist, busker,
-//     dog walker; not a regular), the name (1, names.ts takeName; none for a regular, a given name or the gardener), hunger, energy,
-//     social (3), leaveAt (1, unless fixed: a tourist's, staff's, a couple's (its one draw comes before the two members), a child's (the
-//     parent's)), decideT (1). So an elder makes 8 draws, a generated single 10 (12 with the re-roll), a returning regular 6.
+//   spawnVisitor, per person: lookSeed (1), sex (1, unless fixed: a regular's, a couple member's, a given one, the gardener's m; a single
+//     whose arrival would leave the park with no possible partner draws it again, once), ageWord (1, for single, tourist, jogger, artist,
+//     busker, dog walker; not a regular), the name (1, names.ts takeName; none for a regular, a given name or the gardener), hunger,
+//     energy, social (3), leaveAt (1, unless fixed: a tourist's, staff's, a couple's (its one draw comes before the two members), a
+//     child's (the parent's)), decideT (1). seeks is never drawn: everyone seeks the opposite sex (owner 2026-10-20, register section 4
+//     "Who can pair"). So an elder makes 8 draws, a generated single 9 (10 with the re-roll), a returning regular 6.
 // lookSeed: the low 3 bits are the signature colour index (04 7.3; signatureOf); bit 3 a hat and bit 4 a purse for those whose
 // archetype does not fix them; the renderer reads the rest (lookSeed >>> 5) for hair, coat and skin.
 // S4 part B: loop.ts runs stepArrivals (phase 7) and stepVisitors (phase 8); brain.ts hands in decide, act and BUSY (setBrain), romance.ts
@@ -41,7 +42,9 @@ import { W, type WeatherKind } from '../core/weather.ts';
 import { I, inB, propById, props } from '../world/grid.ts';
 import { GATES, gateById } from '../world/park.ts';
 import { getMode, getPlayer } from '../play/mode.ts';
-import { GARDENER_NAME, regularArrived, regularDue, regularLeft, releaseName, resetNames, takeName, type RegularDef, type Seeks, type Sex } from './names.ts';
+import {
+  GARDENER_NAME, opposite, regularArrived, regularDue, regularLeft, releaseName, resetNames, takeName, type RegularDef, type Seeks, type Sex,
+} from './names.ts';
 import { NO_TARGET, R_OPEN_NEAR, goTo, moveStep, openNear, spaceOut } from './move.ts';
 import { stepNeeds } from './needs.ts';
 
@@ -113,9 +116,6 @@ export const SEASON_ARRIVALS: readonly number[] = [1.0, 1.1, 1.0, 0.7];
 export const ARCHETYPE_WEIGHTS: ReadonlyArray<readonly [Archetype, number]> = [
   ['single', 30], ['couple', 12], ['family', 12], ['elder', 10], ['tourist', 12], ['jogger', 8], ['artist', 4], ['dogwalker', 8], ['busker', 4],
 ];
-/** seeks for a single (02 4.2 item 7): f 45, m 45, any 10. */
-export const SEEKS_WEIGHTS: ReadonlyArray<readonly [Seeks, number]> = [['f', 45], ['m', 45], ['any', 10]];
-
 const AGE_ROLLED: ReadonlySet<Archetype> = new Set<Archetype>(['single', 'tourist', 'jogger', 'artist', 'busker', 'dogwalker']);
 const HAT_ALWAYS: ReadonlySet<Archetype> = new Set<Archetype>(['elder', 'tourist', 'artist', 'vendor']); // 04 7.2: cap, sunhat, floppy hat
 const STAFF: ReadonlySet<Archetype> = new Set<Archetype>(['gardener', 'vendor']);
@@ -193,17 +193,19 @@ export function currentTarget(): number {
   return targetPeople(T.phase, W.kind, T.season);
 }
 
-/** Mutually compatible by seeks (register 3.5): each seeks the other's sex or anyone. */
+/**
+ * Compatible (register 3.5; owner 2026-10-20, "only men and woman can date"): the two sexes differ, one woman and one man, and each
+ * seeks the other's sex. The sex test is the rule; the seeks test is the belt to its braces (a forced seeks never lets a same-sex pair by).
+ */
 export function compatible(a: { sex: Sex; seeks: Seeks }, b: { sex: Sex; seeks: Seeks }): boolean {
-  return (a.seeks === 'any' || a.seeks === b.sex) && (b.seeks === 'any' || b.seeks === a.sex);
+  return a.sex !== b.sex && a.seeks === b.sex && b.seeks === a.sex;
 }
 
 /**
- * The complementary rule (02 4.2 item 7, GV addVillager 4490-4492): a single who seeks f or m re-rolls once when unpaired singles are in
- * the park and none of them is compatible. An empty park, or one with only paired singles, re-rolls nothing (no roll could help).
+ * The complementary rule (02 4.2 item 7, GV addVillager 4490-4492): a single re-rolls once when unpaired singles are in the park and none
+ * of them is compatible, that is none is of the other sex. An empty park, or one with only paired singles, re-rolls nothing.
  */
 export function needsReroll(sex: Sex, seeks: Seeks): boolean {
-  if (seeks === 'any') return false;
   let any = false;
   for (const o of visitors) {
     if (o.archetype !== 'single' || o.pairId !== 0) continue;
@@ -217,7 +219,7 @@ export function needsReroll(sex: Sex, seeks: Seeks): boolean {
 
 export type SpawnOpts = {
   sex?: Sex; // fixed sex (a couple's members, a cameo)
-  seeks?: Seeks;
+  seeks?: Seeks; // fixed seeks (a test's); otherwise the opposite of the sex
   ageWord?: AgeWord;
   name?: string; // a fixed name (a cameo's): no draw
   regular?: RegularDef; // a returning regular: name, sex, seeks and ageWord from 06 6.2
@@ -230,9 +232,6 @@ export type SpawnOpts = {
 
 function rollSex(): Sex {
   return rng() < 0.5 ? 'f' : 'm';
-}
-function rollSeeks(): Seeks {
-  return byWeight(rng() * 100, SEEKS_WEIGHTS);
 }
 
 /**
@@ -248,16 +247,8 @@ export function spawnVisitor(arch: Archetype, gate: GateId, opts: SpawnOpts = {}
   if (opts.signature !== undefined) lookSeed = lookSeed - (lookSeed % SIGNATURES) + (opts.signature % SIGNATURES);
   const reg = opts.regular;
   let sex: Sex = reg?.sex ?? opts.sex ?? (arch === 'gardener' ? 'm' : rollSex());
-  let seeks: Seeks = reg?.seeks ?? opts.seeks ?? 'any';
-  if (!reg && opts.seeks === undefined) {
-    if (arch === 'single') {
-      seeks = rollSeeks();
-      if (opts.sex === undefined && needsReroll(sex, seeks)) {
-        sex = rollSex();
-        seeks = rollSeeks();
-      }
-    } else if (arch === 'couple') seeks = sex === 'f' ? 'm' : 'f';
-  }
+  if (arch === 'single' && !reg && opts.sex === undefined && opts.seeks === undefined && needsReroll(sex, opposite(sex))) sex = rollSex();
+  const seeks: Seeks = reg?.seeks ?? opts.seeks ?? opposite(sex); // everyone seeks the opposite sex, no draw (owner 2026-10-20)
   const ageWord: AgeWord =
     reg?.ageWord ?? opts.ageWord ?? (AGE_ROLLED.has(arch) ? (chance(0.5) ? 'young' : 'grown') : arch === 'elder' ? 'elder' : arch === 'child' ? 'young' : 'grown');
   const name = reg?.name ?? opts.name ?? (arch === 'gardener' ? GARDENER_NAME : takeName(sex));
@@ -555,6 +546,7 @@ registerHandler('park.pace', (c) => (isPace(c.payload.pace) ? ((pace = c.payload
 export function putVisitor(rec: Visitor): boolean {
   if (index.has(rec.id)) return false;
   const v = JSON.parse(JSON.stringify(rec)) as Visitor;
+  v.seeks = opposite(v.sex);
   let k = visitors.length;
   while (k > 0 && (visitors[k - 1] as Visitor).id > v.id) k--;
   visitors.splice(k, 0, v);
@@ -574,6 +566,7 @@ export function setVisitorsState(list: readonly Visitor[]): void {
   for (const r of list) {
     const v = JSON.parse(JSON.stringify(r)) as Visitor;
     if (typeof v.plan !== 'number') v.plan = 0; // a record saved before the field existed
+    v.seeks = opposite(v.sex); // a save from before 2026-10-20 may hold 'any' or a same-sex value: everyone seeks the opposite sex now
     visitors.push(v);
     index.set(v.id, v);
   }

@@ -20,6 +20,10 @@
 // ability that applies in S6 (the other eleven return reason.not_here), with the profile at 8 Cupid and 8 Mischief points (tier 1 on both ladders).
 // The runs set those points first (the points are profile data, not hashed; abilities check the tier), and bind the progression listeners that
 // clearListeners() wipes, as the game does at load.
+// 2026-10-20 (owner: only a woman and a man can pair, register section 4 "Who can pair"): everyone seeks the opposite sex, so a generated
+// single no longer draws its seeks and every arrival after it, the weather and the pairs moved; all six fixtures were re-recorded once more
+// (each fixture's note holds the old and the new values), det-s6's m_pomeranian cast got a new target and tick (its note says why), and run 1
+// now counts the Pairs that are not one woman and one man (none, in any of the six).
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -33,7 +37,7 @@ import { I, KIND, Kind, WEAR, props } from '../src/world/grid.ts';
 import { idsState, nextEffectId } from '../src/core/ids.ts';
 import { W } from '../src/core/weather.ts';
 import '../src/play/tools.ts'; // registers the `tool` and `undo` handlers (S3)
-import { CAP_PEOPLE, arrivalsState, people } from '../src/entities/visitor.ts';
+import { CAP_PEOPLE, arrivalsState, byId, people } from '../src/entities/visitor.ts';
 
 /** The 64,800-step runs take seconds each; vitest's default is 5 s. */
 const LONG = 120_000;
@@ -50,11 +54,12 @@ const fixture = FIXTURES['det-s2']; // the state-hash tests below run on det-s2'
 type Hook = (step: number) => void;
 
 /**
- * det-s2's values since S6's abilities and progression (the day's tally of points joined the state hash; the draw count did not move). Before
- * that, since the starter picnic spots (owner 2026-10-19: two 2 x 2 blankets in the starter park), rngN 28155, stateHash 4191156501; before
- * them, since S5, the romance core: rngN 26992, stateHash 854600468.
+ * det-s2's values since 2026-10-20 (everyone seeks the opposite sex, so the draws of every arrival after a single moved). Before that, since
+ * S6's abilities and progression (the day's tally of points joined the state hash; the draw count did not move): rngN 28155, stateHash
+ * 3346388746. Before that, since the starter picnic spots (owner 2026-10-19: two 2 x 2 blankets in the starter park): rngN 28155, stateHash
+ * 4191156501; before them, since S5, the romance core: rngN 26992, stateHash 854600468.
  */
-const DET_S2 = { rngN: 28155, stateHash: 3346388746 };
+const DET_S2 = { rngN: 27682, stateHash: 3100070308 };
 
 /** The kind of the prop whose footprint covers (x, y). */
 function propKindAt(x: number, y: number): string | undefined {
@@ -109,7 +114,8 @@ describe('the fixtures (08 3.2 item 1)', () => {
     // act.ts seatedStep). S5 re-recorded them once, the sanctioned re-record of the romance core (pairs forming change the sim: the
     // couples' Pairs, the formation rolls, the stages, the charm conversion; see the fixture's note). S6 re-recorded all five once more for the
     // starter picnic spots (rngN 26992, stateHash 854600468 before them) and once for S6's tally in the hash (stateHash 4191156501 before it; see
-    // the fixture's note). No later slice may move these.
+    // the fixture's note), and once on 2026-10-20 for the owner's rule that only a woman and a man pair (see the header). No later slice may
+    // move these.
     expect(fixture.expect).toEqual(DET_S2);
   });
 
@@ -205,8 +211,13 @@ for (const name of ['det-s2', 'det-s3', 'det-s4', 'det-s4l', 'det-s5', 'det-s6']
       const rejected: string[] = [];
       on('rejected', (e) => rejected.push(String(e.params?.reason)));
       // S5: every fixture now has pairs forming (07 S5.7 item 1): couples arrive as Pairs and singles pair up and climb the stages
-      let formed = 0, stages = 0;
-      on('formed', () => formed++);
+      let formed = 0, stages = 0, sameSex = 0;
+      on('formed', (e) => {
+        formed++;
+        // 2026-10-20 (register section 4 "Who can pair"): every Pair formed, the couples' and the alumni's included, is one woman and one man
+        const a = byId(e.ids?.[0] ?? 0), b = byId(e.ids?.[1] ?? 0);
+        if (!a || !b || a.sex === b.sex) sameSex++;
+      });
       on('stage', () => stages++);
       // S6: det-s6 casts its eight abilities and every one lands (the events 'cast'; a refused one would be a 'rejected' with its own reason)
       let casts = 0;
@@ -219,6 +230,7 @@ for (const name of ['det-s2', 'det-s3', 'det-s4', 'det-s4l', 'det-s5', 'det-s6']
         },
       });
       expect(formed).toBeGreaterThan(0);
+      expect(sameSex).toBe(0);
       expect(stages).toBeGreaterThan(0);
       if (name === 'det-s4' || name === 'det-s4l' || name === 'det-s5' || name === 'det-s6') {
         expect([atMidday, most]).toEqual([CAP_PEOPLE, CAP_PEOPLE]);
@@ -237,9 +249,11 @@ for (const name of ['det-s2', 'det-s3', 'det-s4', 'det-s4l', 'det-s5', 'det-s6']
       const b = run(fx);
       expect(b).toEqual(a);
       newPark(fx.seed);
-      // S6: 'mist', not 'rain': on the new park det-s5's own weather is already rain at tick 30,000, so a forced rain there changed nothing
-      // that outlived the snow the fixture forces at 33,000; mist is not the weather at that tick in any fixture
-      const c = run(fx, { extra: [{ tick: 30000, side: 'park', kind: 'debug.weather', payload: { kind: 'mist' } }] });
+      // S6: 'mist', not 'rain': on the new park det-s5's own weather was already rain at tick 30,000, so a forced rain there changed nothing
+      // that outlived the snow the fixture forces at 33,000. 2026-10-20: the weather moved with the draws and it is mist at tick 30,000 in
+      // det-s2 and det-s3 (a forced mist changes nothing there: same hash), and shower, clear, cloudy and cloudy in the others; 'rain' is the
+      // weather at that tick in none of the six and changes every hash, so 'rain' it is. The assertion is unchanged.
+      const c = run(fx, { extra: [{ tick: 30000, side: 'park', kind: 'debug.weather', payload: { kind: 'rain' } }] });
       expect(c.hash).not.toBe(a.hash);
     }, LONG);
 

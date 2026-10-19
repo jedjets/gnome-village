@@ -24,21 +24,27 @@ import { land } from '../src/entities/embarrass.ts';
  * S5 found one of the 200 (seed 56). The starter picnic spots (S6, owner 2026-10-19, register section 4) moved the park and every seed, and
  * the scan was run again on it: 17 of the 200 reach Happily on a Calm park (1 4 17 19 23 43 53 65 66 69 79 80 127 140 149 152 153); the
  * first is kept.
+ * 2026-10-20 (owner: only a woman and a man can pair, register section 4 "Who can pair"): everyone seeks the opposite sex, the arrival draws
+ * changed and every seed moved; the scan (tests/fixtures/picnic-scan.json, Calm) has 16 of the 200 reach Happily (18 20 21 38 56 58 80 120
+ * 126 127 147 149 150 157 186 187); the first, 18, is kept (it was 1).
  */
-const S_HAPPILY = 1;
+const S_HAPPILY = 18;
 /**
  * Found by the same scan: at the first pair at stage 3 with no stage running, three `land` calls on its initiator land without a backfire
  * and the two leave by different gates. S5 found 101 and 135 of the 200 (101 kept); on the S6 park, scanned again, 128 and 164 do (none in
  * 1 to 100); the first is kept.
+ * 2026-10-20: scanned again on the opposite-sex-only park, 96, 122, 132 and 138 do (the scan stopped at four); the first, 96, is kept (it was 128).
  */
-const S_PARTED = 128;
+const S_PARTED = 96;
 /**
  * Pillar P3's ten seeds. S5 used 101 to 110. The starter picnic spots moved the sim and seed 110 no longer pairs inside 2 sim minutes
  * (118, 120, 130, 137 and others do not either: 9 of the seeds 101 to 200 miss on the S6 park, 6 on the S5 one, a rate of the 50 % roll and
  * the walkers' meetings, not of the picnic blankets); the first ten consecutive seeds from 101 that all pair in time are used, the
  * assertion unchanged.
+ * 2026-10-20: scanned again on the opposite-sex-only park, 5 of the seeds 101 to 200 miss (101 138 165 185 186, against 9 before: a rate of the
+ * 50 % roll and the walkers' meetings as before); the first ten consecutive seeds from 101 that all pair in time are 102 to 111.
  */
-const P3_FROM = 138;
+const P3_FROM = 102;
 
 const LONG = 300_000;
 
