@@ -15,10 +15,11 @@
 // Park pace (owner 2026-10-14): the Park group gains setPace, which enqueues the logged `park.pace` command as setWeather does.
 // S5: the State group gains pairs, featured and alumni (read only); the Park group land (07 S5.6 step 5: no ability triggers an
 // embarrassment yet, so the harness lands one directly, as an ability will) and setPin (the Romances sheet's pin, UI state).
+// S6: the State group gains effects (the live list), the Park group ability (enqueues the logged `ability` command, as the rail will) and setProgress (the points a fixture starts from).
 import { T } from '../core/clock.ts';
 import { seedVisual, rngN } from '../core/rng.ts';
 import { SIM_DT, SP, setSpeed, simulate, tick } from '../core/loop.ts';
-import { applyNow, enqueue, log, replay, type Pace } from '../core/commands.ts';
+import { applyNow, enqueue, log, replay, type AbilityId, type Pace, type Target } from '../core/commands.ts';
 import { drain } from '../core/events.ts';
 import { W, type WeatherKind } from '../core/weather.ts';
 import { BEDC, ICE, KIND, OCC, PAVEDAY, PETALS, WATER, WEAR, WET, props } from '../world/grid.ts';
@@ -32,6 +33,8 @@ import '../play/tools.ts';
 import { visitors } from '../entities/visitor.ts';
 import { creatures } from '../entities/creatures.ts';
 import { alumniState, featured, pairs, setPin } from '../entities/romance.ts';
+import { effects } from '../play/abilities.ts';
+import { progressState, setProgress } from '../play/progression.ts';
 import { land } from '../entities/embarrass.ts';
 import { FT, qualityLevel } from './perf.ts';
 
@@ -47,6 +50,7 @@ export function buildHarness(api: HarnessApi) {
     pairs,
     featured,
     alumni: alumniState,
+    effects,
     props,
     cam,
   };
@@ -96,6 +100,12 @@ export function buildHarness(api: HarnessApi) {
     },
     /** Land an embarrassment of `kind` on visitor `id` now, as the mischief side (embarrass.ts land; not a command until S6). */
     land: (kind: Parameters<typeof land>[0], id: number) => land(kind, id, 'mischief'),
+    /** Enqueues the logged `ability` command for `id` (its own side) at `target`; it applies on the next step and is validated there. */
+    ability: (id: AbilityId, target: Target): void => {
+      enqueue({ side: id.startsWith('c_') ? 'cupid' : 'mischief', kind: 'ability', payload: { id, target } });
+    },
+    /** The profile's points, as a fixture sets them before a run (det-s6: tier 1 on both ladders); the announced ids stay. */
+    setProgress: (cp: number, mp: number): void => setProgress({ cp, mp, unlocked: progressState().unlocked }),
     setPin,
   };
   const render = {

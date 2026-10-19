@@ -213,7 +213,7 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `tone.test.ts` | no reaction longer than 8 s except distracted and lost | every reaction length in `act.ts` ≤ 8 except `distracted` 30 and `lost` 60 (design §13 Do-not) |
 | `tone.test.ts` | no forbidden word in any string | no value in `en` or `es` contains hurt, injured, hospital, blood, dead, died (case insensitive); ES list in section 9 |
 
-### 2.5 `src/play/` (files `progression.test.ts`, `abilities.test.ts`, `tools.test.ts`, `undo.test.ts`, `avatar.test.ts`, `mode.test.ts`)
+### 2.5 `src/play/` (files `progression.test.ts`, `abilities.test.ts`, `abilities-timelines.test.ts`, `tools.test.ts`, `undo.test.ts`, `avatar.test.ts`, `mode.test.ts`)
 
 | File | Test | Assertion |
 |---|---|---|
@@ -232,6 +232,14 @@ Columns: the test name (the `it` string) and the assertion in one line. File nam
 | `abilities.test.ts` | validation happens again inside apply | a target that became invalid between `enqueue` and `applyPending` (the visitor left) is rejected and spends nothing |
 | `abilities.test.ts` | effects cap at 64 and clean up at until | the 65th cast returns `reason.too_many_effects`; a `c_petals` effect removes its charm source at t 20 and `PETALS` fades at 1/40 per s |
 | `abilities.test.ts` | cupid casts stamp lastCupidAt within 6 tiles | a pair 5 tiles from a `c_petals` centre has `lastCupidAt === T.abs`; at 7 tiles unchanged |
+| `abilities-timelines.test.ts` | c_petals | PETALS 1 on the 3x3 and charm +2 on each at once; the charm lasts the 1,200 ticks of 20 s and not one more (the layer eases to 0.19 over the 20th second, under `PETALS_MIN`, then fades at 1/40 per s); a pond centre is `reason.on_water` |
+| `abilities-timelines.test.ts` | c_sunbeam | an override of r 3 for 3,600 ticks (rain 0, cloud 0.1, light +0.15); the effect removes it |
+| `abilities-timelines.test.ts` | c_bouquet | Violette (a `cameo`, never counted by `people()`) appears 3 tiles off, hands the bouquet at 3 s (affinity +0.05, `bouquet` event), stays 3 s, walks off and vanishes; a member in a reaction → `reason.busy`; a pair more than 4 tiles apart → `reason.apart` |
+| `abilities-timelines.test.ts` | c_musician | a summoned busker plays 90 s at the tile with +3 player charm within 8, then leaves; a blocked tile → `reason.not_here`, an AI busker within 8 → `reason.busker_near`, a full park → `reason.park_full`; rain over 0.6 sends him to shelter within 6 |
+| `abilities-timelines.test.ts` | m_pigeon | the nearest pigeon flies at the target at 6.0, the poop lands and flies off (2 s later in mist ≥ 0.6); a landed poop on a paired victim is one MP through `embarrassed` |
+| `abilities-timelines.test.ts` | m_sprinkler, m_peel | sprinkler: WET 1 on the 3x3 for 10 s, every adult in or walking into it soaked once, a child skipped, a path tile `reason.lawn_only`; peel: passable for 120 s, the first adult non-staff walker trips and the peel goes, a child, cameo or gardener does not, snow or ice → `reason.slippery`, a second peel → `reason.peel_here` |
+| `abilities-timelines.test.ts` | m_pomeranian | the whole run: snatched, the item back at the gate within 10 s, the victim's chase 8 s at 4.0 then the 3 s huff, Pompon 60 s outside (`reason.busy`); no item → `reason.no_item`; a walker's dog within 3 → `reason.dog_saw_it` |
+| `abilities-timelines.test.ts` | a snapshot in the middle | petals, a sunbeam, a sprinkler, a pigeon on the wing and Pompon on his run: save, restore, keep going, same hash; the cooldowns and charges are in the snapshot and the hash |
 | `tools.test.ts` | the 16 ids exist and each places | `TOOLS` ids equal register §3.7 in order; for each id except `hand` one valid command changes `stateHash()` |
 | `tools.test.ts` | ranked reasons in order | one case per key of 03 §5.4's tools block: outside, gateway, on_water, taken, on_flowers, near_railings, lawn_only or not_here, has_bandstand, enough_kiosks; a tile failing two checks reports the earlier one (GV 5972-5975 idiom) |
 | `tools.test.ts` | bridge reasons | land tile → `reason.not_on_water`; a visitor on the span → `reason.someone_on_it`; 5 wide → `reason.too_wide`; 1 to 4 wide places with `span` equal to the width |
@@ -361,7 +369,7 @@ Browser check (not Vitest; 07 S8.7 item 3; 05 §7.2 item 3): `npm run audio-smok
 
 `window.__PD` is installed only in a dev build (03 §13; GV `window.__GV` 12223-12241). The tests in this section use: `simulate(n)`, `tick()`, `rngN()`, `hash()`, `setSpeed(v)`, `enqueue(cmd)`, `log()`, `replay(cmds)`, `snapshot()`, `restore(s)`, `newPark(seed)`, `setWeather(kind)`, `callVisitor()`, `draw()`, `pix(x, y, w, h)`, `FT`, `SP`, `audio.dryRun(on)`. The screenshot members `seedVisual(seed)` and `fxStep(dt, n)` of 03 §13 (Screenshots group) touch the visual stream and particles only.
 
-`hash()` is `store.stateHash()`: FNV-1a over `tick`, the sim RNG state and draw count, the weather block including the ice timers, the id counters and free lists (`IdsState`), the paving tally, the nine saved layers and the canonical JSON of props, visitors, pairs, creatures, effects, sides, regulars, alumni, tally, mode and the profile's `cp`/`mp`, arrays sorted by id. Excluded: seed, feed, log, pinned pair, visual RNG, speed (03 §11). A test that needs the excluded parts asserts on them by name.
+`hash()` is `store.stateHash()`: FNV-1a over `tick`, the sim RNG state and draw count, the weather block including the ice timers, the id counters and free lists (`IdsState`), the paving tally, the nine saved layers and the canonical JSON of props, visitors, pairs, creatures, effects, sides, regulars, alumni, tally and mode, arrays sorted by id. Excluded: seed, feed, log, pinned pair, visual RNG, speed, and the profile's `cp`/`mp` (S6; 03 §11). A fixture may carry a `progress { cp, mp }` the runs start from (det-s6). A test that needs the excluded parts asserts on them by name.
 
 ### 3.2 `tests/determinism.test.ts` (Vitest, no browser)
 

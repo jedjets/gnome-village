@@ -15,12 +15,18 @@
 // each fixture's note holds the old and the new values), and det-s5 is det-s4l plus a picnic blanket, a bed and a lamp by the fountain
 // (charm and a picnic spot) at ticks 4,000 to 4,200: a full Lively park where couples arrive as Pairs and singles pair up over 3 days.
 // Run 1 now also checks that every fixture forms pairs and completes stages.
+// S6 (abilities and progression): the abilities are new commands, so no earlier fixture moved for them, but the day's tally of points joined the
+// state hash, so the five were re-recorded a second time (their rngN did not move); det-s6 is det-s5 plus eight `ability` commands, one for each
+// ability that applies in S6 (the other eleven return reason.not_here), with the profile at 8 Cupid and 8 Mischief points (tier 1 on both ladders).
+// The runs set those points first (the points are profile data, not hashed; abilities check the tier), and bind the progression listeners that
+// clearListeners() wipes, as the game does at load.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SIM_DT, newPark, setSpeed, simulate, tick } from '../src/core/loop.ts';
 import { applyNow, enqueue, log, replay, type Command, type CommandInput } from '../src/core/commands.ts';
 import { clearListeners, drain, on, watch } from '../src/core/events.ts';
+import { bindProgression, setProgress } from '../src/play/progression.ts';
 import { rngN, seedVisual, vrng } from '../src/core/rng.ts';
 import { restore, snapshot, stateHash, worldHash } from '../src/save/store.ts';
 import { I, KIND, Kind, WEAR, props } from '../src/world/grid.ts';
@@ -33,20 +39,22 @@ import { CAP_PEOPLE, arrivalsState, people } from '../src/entities/visitor.ts';
 const LONG = 120_000;
 
 type FixtureCommand = { tick: number } & CommandInput;
-type Fixture = { seed: number; steps: number; commands: FixtureCommand[]; expect: { rngN: number; stateHash: number } };
+type Fixture = { seed: number; steps: number; progress?: { cp: number; mp: number }; commands: FixtureCommand[]; expect: { rngN: number; stateHash: number } };
 const load = (name: string): Fixture => JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures', name + '.json'), 'utf8')) as Fixture;
 const FIXTURES = {
   'det-s2': load('det-s2'), 'det-s3': load('det-s3'), 'det-s4': load('det-s4'), 'det-s4l': load('det-s4l'), 'det-s5': load('det-s5'),
+  'det-s6': load('det-s6'),
 } as const;
 const fixture = FIXTURES['det-s2']; // the state-hash tests below run on det-s2's park
 
 type Hook = (step: number) => void;
 
 /**
- * det-s2's values since the starter picnic spots (S6, owner 2026-10-19: two 2 x 2 blankets in the starter park, re-recorded once; see the
- * test that reads it). Before them, since S5, the romance core: rngN 26992, stateHash 854600468.
+ * det-s2's values since S6's abilities and progression (the day's tally of points joined the state hash; the draw count did not move). Before
+ * that, since the starter picnic spots (owner 2026-10-19: two 2 x 2 blankets in the starter park), rngN 28155, stateHash 4191156501; before
+ * them, since S5, the romance core: rngN 26992, stateHash 854600468.
  */
-const DET_S2_PICNIC = { rngN: 28155, stateHash: 4191156501 };
+const DET_S2 = { rngN: 28155, stateHash: 3346388746 };
 
 /** The kind of the prop whose footprint covers (x, y). */
 function propKindAt(x: number, y: number): string | undefined {
@@ -64,6 +72,7 @@ function run(
   const lite = opts.lite ?? 1;
   const steps = opts.steps ?? fx.steps;
   const cmds = [...fx.commands, ...(opts.extra ?? [])];
+  if (!opts.from) setProgress({ cp: fx.progress?.cp ?? 0, mp: fx.progress?.mp ?? 0 }); // the profile's points at the start of a run (not hashed)
   const byTick = new Map<number, FixtureCommand[]>();
   for (const c of cmds) byTick.set(c.tick, [...(byTick.get(c.tick) ?? []), c]);
   let sinceDrain = 0;
@@ -81,6 +90,7 @@ function run(
 
 beforeEach(() => {
   clearListeners();
+  bindProgression();
   newPark(fixture.seed);
   setSpeed(1);
 });
@@ -98,8 +108,9 @@ describe('the fixtures (08 3.2 item 1)', () => {
     // 3065084456, then rngN 27599, stateHash 3808997934 after the stage's review fixes (a couple's second waits seated for the first,
     // act.ts seatedStep). S5 re-recorded them once, the sanctioned re-record of the romance core (pairs forming change the sim: the
     // couples' Pairs, the formation rolls, the stages, the charm conversion; see the fixture's note). S6 re-recorded all five once more for the
-    // starter picnic spots (rngN 26992, stateHash 854600468 before them; see the fixture's note). No later slice may move these.
-    expect(fixture.expect).toEqual(DET_S2_PICNIC);
+    // starter picnic spots (rngN 26992, stateHash 854600468 before them) and once for S6's tally in the hash (stateHash 4191156501 before it; see
+    // the fixture's note). No later slice may move these.
+    expect(fixture.expect).toEqual(DET_S2);
   });
 
   it('det-s3 is det-s2 plus 7 park commands: a bench, a 3-centre stroke and an undo inside run 5\'s window, a tree and a bandstand before 40,000', () => {
@@ -156,6 +167,22 @@ describe('the fixtures (08 3.2 item 1)', () => {
     expect(s5.commands.filter((c) => !extra.includes(c))).toEqual(s4l.commands);
   });
 
+  it('det-s6 is det-s5 plus eight ability commands, one per ability that applies, on a profile at 8 and 8 points (S6: abilities)', () => {
+    const s5 = FIXTURES['det-s5'], s6 = FIXTURES['det-s6'];
+    expect([s6.seed, s6.steps]).toEqual([s5.seed, s5.steps]);
+    expect(s6.progress).toEqual({ cp: 8, mp: 8 }); // tier 1 on both ladders: c_musician, c_sunbeam, m_peel and m_pomeranian are tier 1
+    expect(s6.commands.filter((c) => c.kind !== 'ability')).toEqual(s5.commands);
+    const abil = s6.commands.filter((c) => c.kind === 'ability');
+    expect(abil.map((c) => (c.payload as { id: string }).id)).toEqual([
+      'c_bouquet', 'm_sprinkler', 'm_peel', 'c_petals', 'm_pigeon', 'c_musician', 'c_sunbeam', 'm_pomeranian',
+    ]);
+    expect(abil.every((c) => c.side === ((c.payload as { id: string }).id.startsWith('c_') ? 'cupid' : 'mischief'))).toBe(true);
+    expect(abil.filter((c) => c.tick > 20000 && c.tick <= 21000)).toHaveLength(2); // c_petals and m_pigeon fall inside run 5's replay window
+    expect(abil.filter((c) => c.tick >= 38000 && c.tick <= 40000).map((c) => (c.payload as { id: string }).id)).toEqual(['c_musician', 'c_sunbeam', 'm_pomeranian']);
+    // the musician, the sunbeam and the Pomeranian are still at work when run 6 saves and restores at 40,000
+    expect(s6.commands.map((c) => c.tick)).toEqual(s6.commands.map((c) => c.tick).sort((a, b) => a - b));
+  });
+
 });
 
 /** Run 1's numbers per fixture, kept for runs 4 and 6 (the same steps from the same seed and log give the same numbers: runs 1 and 2). */
@@ -169,7 +196,7 @@ function run1(name: keyof typeof FIXTURES): { hash: number; rngN: number; tick: 
   return a;
 }
 
-for (const name of ['det-s2', 'det-s3', 'det-s4', 'det-s4l', 'det-s5'] as const) {
+for (const name of ['det-s2', 'det-s3', 'det-s4', 'det-s4l', 'det-s5', 'det-s6'] as const) {
   const fx = FIXTURES[name];
   describe(`determinism over 3 sim days, ${name} (brief 9 row 5; 08 3.2)`, () => {
     it('runs 1 and 2: the same seed and commands give the same hash, draw count and tick; run 3: one extra setWeather differs', () => {
@@ -181,6 +208,9 @@ for (const name of ['det-s2', 'det-s3', 'det-s4', 'det-s4l', 'det-s5'] as const)
       let formed = 0, stages = 0;
       on('formed', () => formed++);
       on('stage', () => stages++);
+      // S6: det-s6 casts its eight abilities and every one lands (the events 'cast'; a refused one would be a 'rejected' with its own reason)
+      let casts = 0;
+      on('cast', () => casts++);
       let most = 0, atMidday = 0;
       const a = run(fx, {
         hook: (step) => {
@@ -190,12 +220,13 @@ for (const name of ['det-s2', 'det-s3', 'det-s4', 'det-s4l', 'det-s5'] as const)
       });
       expect(formed).toBeGreaterThan(0);
       expect(stages).toBeGreaterThan(0);
-      if (name === 'det-s4' || name === 'det-s4l' || name === 'det-s5') {
+      if (name === 'det-s4' || name === 'det-s4l' || name === 'det-s5' || name === 'det-s6') {
         expect([atMidday, most]).toEqual([CAP_PEOPLE, CAP_PEOPLE]);
         expect(rejected.length).toBeGreaterThan(0);
         expect(new Set(rejected)).toEqual(new Set(['reason.park_full']));
       } else expect(most).toBeLessThanOrEqual(CAP_PEOPLE);
-      expect(arrivalsState().pace).toBe(name === 'det-s4l' || name === 'det-s5' ? 'lively' : 'calm'); // det-s4l and det-s5 send a pace
+      expect(arrivalsState().pace).toBe(name === 'det-s4l' || name === 'det-s5' || name === 'det-s6' ? 'lively' : 'calm'); // these send a pace
+      expect(casts).toBe(name === 'det-s6' ? 8 : 0);
       console.log(name + ': seed ' + fx.seed + ' steps ' + a.tick + ' rngN ' + a.rngN + ' stateHash ' + a.hash + ' (0x' + a.hash.toString(16) + ') formed ' + formed + ' stages ' + stages);
       expect(a.tick).toBe(64800);
       expect(a.rngN).toBeGreaterThan(0);
@@ -231,6 +262,8 @@ for (const name of ['det-s2', 'det-s3', 'det-s4', 'det-s4l', 'det-s5'] as const)
       const after: Command[] = log().filter((c) => c.tick > 20000).map((c) => ({ ...c }));
       expect(after.length).toBeGreaterThan(0);
       if (name !== 'det-s2') expect(after.filter((c) => c.kind === 'tool' || c.kind === 'undo').map((c) => c.kind)).toEqual(['tool', 'tool', 'tool', 'tool', 'undo']);
+      // S6: det-s6's c_petals and m_pigeon are replayed from the snapshot too (the petals' layer, the swoop and the cooldowns restore with it)
+      expect(after.filter((c) => c.kind === 'ability')).toHaveLength(name === 'det-s6' ? 2 : 0);
       const rejected: string[] = [];
       on('rejected', (e) => rejected.push(String(e.params?.reason)));
       restore(snap);

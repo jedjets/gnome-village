@@ -3,6 +3,10 @@
 // S5.7 item 3 done-whens (08 2.4 tone.test.ts rows): the ten kinds, children refused, the cap of 3 a day, the 15 % backfire, the costs.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SIM_DT, newPark, simulate } from '../src/core/loop.ts';
+import { ABILITIES, canCast, cast, commandTick } from '../src/play/abilities.ts';
+import { bindProgression, resetProgress, setProgress } from '../src/play/progression.ts';
+import { setArrivalsState } from '../src/entities/visitor.ts';
+import { pompon } from '../src/entities/pomeranian.ts';
 import { STEPS_PER_DAY, T } from '../src/core/clock.ts';
 import { clearListeners, on, type GameEvent } from '../src/core/events.ts';
 import { arriveGroup, spawnVisitor, type Visitor } from '../src/entities/visitor.ts';
@@ -173,5 +177,71 @@ describe('reaction lengths and words (02 13 Do-not, T1)', () => {
   it('no value in en or es contains hurt, injured, hospital, blood, dead or died (nor their ES words)', () => {
     const bad = /hurt|injur|hospital|blood|\bdead\b|\bdied\b|herid|sangre|muert|lesion/i;
     for (const [k, v] of [...Object.entries(en), ...Object.entries(es)]) expect(bad.test(v), k + ': ' + v).toBe(false);
+  });
+});
+
+describe('the abilities keep the tone rules (S6; 02 13 T3, T4; 07 S6.8)', () => {
+  const child = (x: number, y: number): Visitor => {
+    const c = spawnVisitor('child', 'g_west', {}) as Visitor;
+    Object.assign(c, { x, y, path: null, st: 'idle', t: 0, leaveAt: T.abs + 0.9 });
+    return c;
+  };
+  beforeEach(() => {
+    bindProgression();
+    resetProgress();
+    setProgress({ cp: 70, mp: 70 });
+    setArrivalsState({ arrivalT: 1e9, pace: 'calm' });
+  });
+  it('no ability can target a child: all 19 answer reason.not_children to a child under the tap, and spend nothing', () => {
+    const c = child(20, 20);
+    for (const a of ABILITIES) {
+      if (a.target === 'park') continue; // nobody is tapped
+      const r = canCast(a.side, a.id, { kind: 'visitor', id: c.id });
+      expect(r, a.id).toEqual({ ok: false, reason: 'reason.not_children' });
+      expect(cast(a.side, a.id, { kind: 'visitor', id: c.id }), a.id).toEqual(r);
+    }
+    expect(c.embToday).toBe(0);
+  });
+  it('m_sprinkler skips children inside: an adult beside is soaked once, the child keeps embToday 0', () => {
+    const adult = single(5, 30, 'f');
+    const kid = child(6, 30);
+    const seen: GameEvent[] = [];
+    on('embarrassed', (e) => seen.push(e));
+    expect(cast('mischief', 'm_sprinkler', { kind: 'tile', x: 5, y: 30 }, commandTick()).ok).toBe(true);
+    for (let s = 0; s < 600; s++) simulate(SIM_DT, 1);
+    expect(seen.map((e) => e.ids?.[0])).toEqual([adult.id]);
+    expect([kid.embToday, kid.pendingEmb]).toEqual([0, null]); // not soaked: no landing, nothing waiting to play
+    expect(kid.st).not.toBe('shake');
+  });
+  it('a peel never trips a child walking over it', () => {
+    const kid = child(17, 24);
+    kid.path = [{ x: 18, y: 24 }];
+    cast('mischief', 'm_peel', { kind: 'tile', x: 17, y: 24 }, commandTick());
+    simulate(SIM_DT, 1);
+    expect(kid.embToday).toBe(0);
+  });
+  it('a snatched item comes back: the victim has what they had within 10 s of Pompon\'s snatch (T4)', () => {
+    const v = single(30, 20, 'f');
+    Object.assign(v.items, { hat: true, purse: true });
+    const before = { ...v.items };
+    const seen: GameEvent[] = [];
+    on('snatch', (e) => seen.push(e));
+    cast('mischief', 'm_pomeranian', { kind: 'visitor', id: v.id }, commandTick());
+    let took = -1, gave = -1;
+    for (let s = 1; s <= 60 * 60 && gave < 0; s++) {
+      simulate(SIM_DT, 1);
+      if (took < 0 && !v.items.hat) took = s;
+      if (took >= 0 && v.items.hat) gave = s;
+    }
+    expect(took).toBeGreaterThan(0);
+    expect(gave - took).toBeLessThan(10 * 60);
+    expect(v.items).toEqual(before);
+    expect(seen.map((e) => e.params?.drop ?? 0)).toEqual([0, 1]);
+    expect(pompon()?.outside).toBe(true);
+  });
+  it('the 4th landing of the day is refused before any effect, by the abilities too (T5): m_pigeon on a person with embToday 3', () => {
+    const v = single(20, 20, 'f');
+    v.embToday = 3;
+    expect(canCast('mischief', 'm_pigeon', { kind: 'visitor', id: v.id })).toEqual({ ok: false, reason: 'reason.enough_today' });
   });
 });

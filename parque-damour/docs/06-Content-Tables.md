@@ -618,11 +618,11 @@ Conventions (03 §12): keys are lowercase, dot-separated, `area.item[.detail]`. 
 | `rail.photo` | Photo | TODO |
 | `rail.new` | New | TODO |
 | `rail.options` | Options | TODO |
-| `rail.locked_at` | Unlocks at {side} T{tier} | TODO |
+| `rail.locked_at` | Unlocks at {side} T{tier} | Se abre en {side} T{tier} |
 | `rail.tier` | T{tier} | T{tier} |
 | `rail.cooldown` | {s} s | {s} s |
 | `rail.charges` | {left}/{max} | {left}/{max} |
-| `rail.ready` | Ready | TODO |
+| `rail.ready` | Ready | Listo |
 
 ### 16.3 HUD chips
 | Key | EN | ES |
@@ -733,69 +733,69 @@ The clock chip's day is `t('hud.day', { n, season: '@hud.season.<season>' })`: t
 ### 16.6 Abilities (name on the pill and cooldown chip; hint toasted on arming)
 | Key | EN | ES |
 |---|---|---|
-| `ability.c_petals.name` | Petals | TODO |
-| `ability.c_petals.hint` | Tap the ground: a petal shower for 20 seconds. | TODO |
-| `ability.c_bouquet.name` | Bouquet | TODO |
-| `ability.c_bouquet.hint` | Tap a courting visitor: a flower seller brings a bouquet. | TODO |
-| `ability.c_musician.name` | Musician | TODO |
-| `ability.c_musician.hint` | Tap a spot: a busker plays there for 90 seconds. | TODO |
-| `ability.c_sunbeam.name` | Sunbeam | TODO |
-| `ability.c_sunbeam.hint` | Tap the ground: clear sky over a 7 by 7 patch for a minute. | TODO |
-| `ability.c_umbrella.name` | Umbrella | TODO |
-| `ability.c_umbrella.hint` | Tap a courting visitor in the rain: they share one umbrella. | TODO |
-| `ability.c_lamplight.name` | Lamplight | TODO |
-| `ability.c_lamplight.hint` | Tap near lamps: they light early and brighter for a minute. | TODO |
-| `ability.c_picnic.name` | Picnic basket | TODO |
-| `ability.c_picnic.hint` | Tap the lawn: a basket appears and the nearest couple is fed. | TODO |
-| `ability.c_rowboat.name` | Rowboat | TODO |
-| `ability.c_rowboat.hint` | Tap a big pond: the nearest couple takes a boat ride. | TODO |
-| `ability.c_fireworks.name` | Fireworks | TODO |
-| `ability.c_fireworks.hint` | Evening only. Fireworks for everyone. Once a day. | TODO |
-| `ability.m_pigeon.name` | Pigeon | TODO |
-| `ability.m_pigeon.hint` | Tap a visitor: a pigeon pays them a visit. | TODO |
-| `ability.m_sprinkler.name` | Sprinkler | TODO |
-| `ability.m_sprinkler.hint` | Tap the lawn: a sprinkler pops up for 10 seconds. | TODO |
-| `ability.m_peel.name` | Banana peel | TODO |
-| `ability.m_peel.hint` | Tap a path: the next walker slips. | TODO |
-| `ability.m_pomeranian.name` | Pomeranian | TODO |
-| `ability.m_pomeranian.hint` | Tap a visitor with a hat or a bag: Pompon snatches it. | TODO |
-| `ability.m_wasp.name` | Wasp | TODO |
-| `ability.m_wasp.hint` | Tap a picnic: a wasp spoils it. | TODO |
-| `ability.m_raincloud.name` | Rain cloud | TODO |
-| `ability.m_raincloud.hint` | Tap the ground: a small cloud rains on a 5 by 5 patch. | TODO |
-| `ability.m_rival.name` | Rival | TODO |
-| `ability.m_rival.hint` | Tap a courting visitor: a charming stranger flirts with them. | TODO |
-| `ability.m_mime.name` | Mime | TODO |
-| `ability.m_mime.hint` | Tap a path or a couple: Pierrot blocks the way or mimics them. | TODO |
-| `ability.m_fog.name` | Fog | TODO |
-| `ability.m_fog.hint` | Fog over the whole park for a minute. Strolling couples lose each other. | TODO |
-| `ability.m_flock.name` | Pigeon storm | TODO |
-| `ability.m_flock.hint` | Tap the ground: a storm of pigeons over a 7 by 7 patch. Once a day. | TODO |
+| `ability.c_petals.name` | Petals | Pétalos |
+| `ability.c_petals.hint` | Tap the ground: a petal shower for 20 seconds. | Pulsa el suelo: una lluvia de pétalos durante 20 segundos. |
+| `ability.c_bouquet.name` | Bouquet | Ramo |
+| `ability.c_bouquet.hint` | Tap a courting visitor: a flower seller brings a bouquet. | Pulsa a alguien que corteja: una florista le trae un ramo. |
+| `ability.c_musician.name` | Musician | Músico |
+| `ability.c_musician.hint` | Tap a spot: a busker plays there for 90 seconds. | Pulsa un sitio: un músico toca allí durante 90 segundos. |
+| `ability.c_sunbeam.name` | Sunbeam | Rayo de sol |
+| `ability.c_sunbeam.hint` | Tap the ground: clear sky over a 7 by 7 patch for a minute. | Pulsa el suelo: cielo despejado sobre un parche de 7 por 7 durante un minuto. |
+| `ability.c_umbrella.name` | Umbrella | Paraguas |
+| `ability.c_umbrella.hint` | Tap a courting visitor in the rain: they share one umbrella. | Pulsa a alguien que corteja bajo la lluvia: comparten un paraguas. |
+| `ability.c_lamplight.name` | Lamplight | Luz de farolas |
+| `ability.c_lamplight.hint` | Tap near lamps: they light early and brighter for a minute. | Pulsa cerca de las farolas: se encienden antes y más fuertes durante un minuto. |
+| `ability.c_picnic.name` | Picnic basket | Cesta de pícnic |
+| `ability.c_picnic.hint` | Tap the lawn: a basket appears and the nearest couple is fed. | Pulsa el césped: aparece una cesta y se alimenta a la pareja más cercana. |
+| `ability.c_rowboat.name` | Rowboat | Barca |
+| `ability.c_rowboat.hint` | Tap a big pond: the nearest couple takes a boat ride. | Pulsa un estanque grande: la pareja más cercana da un paseo en barca. |
+| `ability.c_fireworks.name` | Fireworks | Fuegos artificiales |
+| `ability.c_fireworks.hint` | Evening only. Fireworks for everyone. Once a day. | Solo al anochecer. Fuegos artificiales para todos. Una vez al día. |
+| `ability.m_pigeon.name` | Pigeon | Paloma |
+| `ability.m_pigeon.hint` | Tap a visitor: a pigeon pays them a visit. | Pulsa a un visitante: una paloma le hace una visita. |
+| `ability.m_sprinkler.name` | Sprinkler | Aspersor |
+| `ability.m_sprinkler.hint` | Tap the lawn: a sprinkler pops up for 10 seconds. | Pulsa el césped: sale un aspersor durante 10 segundos. |
+| `ability.m_peel.name` | Banana peel | Cáscara de plátano |
+| `ability.m_peel.hint` | Tap a path: the next walker slips. | Pulsa un sendero: el próximo que pase resbala. |
+| `ability.m_pomeranian.name` | Pomeranian | Pomerania |
+| `ability.m_pomeranian.hint` | Tap a visitor with a hat or a bag: Pompon snatches it. | Pulsa a un visitante con sombrero o bolso: Pompon se lo quita. |
+| `ability.m_wasp.name` | Wasp | Avispa |
+| `ability.m_wasp.hint` | Tap a picnic: a wasp spoils it. | Pulsa un pícnic: una avispa lo estropea. |
+| `ability.m_raincloud.name` | Rain cloud | Nube de lluvia |
+| `ability.m_raincloud.hint` | Tap the ground: a small cloud rains on a 5 by 5 patch. | Pulsa el suelo: una nubecita llueve sobre un parche de 5 por 5. |
+| `ability.m_rival.name` | Rival | Rival |
+| `ability.m_rival.hint` | Tap a courting visitor: a charming stranger flirts with them. | Pulsa a alguien que corteja: un desconocido encantador coquetea con esa persona. |
+| `ability.m_mime.name` | Mime | Mimo |
+| `ability.m_mime.hint` | Tap a path or a couple: Pierrot blocks the way or mimics them. | Pulsa un sendero o una pareja: Pierrot corta el paso o los imita. |
+| `ability.m_fog.name` | Fog | Niebla |
+| `ability.m_fog.hint` | Fog over the whole park for a minute. Strolling couples lose each other. | Niebla sobre todo el parque durante un minuto. Las parejas que pasean se pierden. |
+| `ability.m_flock.name` | Pigeon storm | Tormenta de palomas |
+| `ability.m_flock.hint` | Tap the ground: a storm of pigeons over a 7 by 7 patch. Once a day. | Pulsa el suelo: una tormenta de palomas sobre un parche de 7 por 7. Una vez al día. |
 
 ### 16.7 Avatars (picker name, three hints on row 1, cascade status words, mode toasts)
 | Key | EN | ES |
 |---|---|---|
-| `avatar.a_pigeon.name` | Pigeon | TODO |
+| `avatar.a_pigeon.name` | Pigeon | Paloma |
 | `avatar.a_pigeon.hint1` | Tap someone: swoop | TODO |
 | `avatar.a_pigeon.hint2` | Tap crumbs: peck | TODO |
 | `avatar.a_pigeon.hint3` | Tap a lamp or bench: perch | TODO |
-| `avatar.a_pomeranian.name` | Pomeranian | TODO |
+| `avatar.a_pomeranian.name` | Pomeranian | Pomerania |
 | `avatar.a_pomeranian.hint1` | Tap someone with a hat or bag: snatch | TODO |
 | `avatar.a_pomeranian.hint2` | Tap pigeons: chase | TODO |
 | `avatar.a_pomeranian.hint3` | Tap the lawn: dig | TODO |
-| `avatar.a_mime.name` | Mime | TODO |
+| `avatar.a_mime.name` | Mime | Mimo |
 | `avatar.a_mime.hint1` | Tap a path: invisible wall | TODO |
 | `avatar.a_mime.hint2` | Tap a couple: mimic | TODO |
 | `avatar.a_mime.hint3` | Tap a bench: statue | TODO |
-| `avatar.a_florist.name` | Flower seller | TODO |
+| `avatar.a_florist.name` | Flower seller | Florista |
 | `avatar.a_florist.hint1` | Tap a courting visitor: bouquet | TODO |
 | `avatar.a_florist.hint2` | Tap the lawn: petals | TODO |
 | `avatar.a_florist.hint3` | Tap a flowerbed: refill | TODO |
-| `avatar.a_busker.name` | Busker | TODO |
+| `avatar.a_busker.name` | Busker | Músico callejero |
 | `avatar.a_busker.hint1` | Tap a spot: play there | TODO |
 | `avatar.a_busker.hint2` | Tap a couple: serenade | TODO |
 | `avatar.a_busker.hint3` | Tap the bandstand: play there | TODO |
-| `avatar.a_matchmaker.name` | Matchmaker | TODO |
+| `avatar.a_matchmaker.name` | Matchmaker | Casamentera |
 | `avatar.a_matchmaker.hint1` | Tap a single: introduce | TODO |
 | `avatar.a_matchmaker.hint2` | Tap a couple: encourage | TODO |
 | `avatar.a_matchmaker.hint3` | Tap the kiosk: baguette | TODO |
@@ -941,11 +941,11 @@ The clock chip's day is `t('hud.day', { n, season: '@hud.season.<season>' })`: t
 | `sheet.romances.empty` | No one is courting yet. Give them a bench. | TODO |
 | `sheet.romances.today` | Today: Happily {h} · Parted {p} | TODO |
 | `sheet.progress.title` | Progress | TODO |
-| `sheet.progress.cupid` | Cupid Points | TODO |
-| `sheet.progress.mischief` | Mischief Points | TODO |
-| `sheet.progress.points` | {n} points · T{tier} | TODO |
-| `sheet.progress.next` | Next: {item} at {n} | TODO |
-| `sheet.progress.done` | Everything unlocked | TODO |
+| `sheet.progress.cupid` | Cupid Points | Puntos de Cupido |
+| `sheet.progress.mischief` | Mischief Points | Puntos de Travesura |
+| `sheet.progress.points` | {n} points · T{tier} | {n} puntos · T{tier} |
+| `sheet.progress.next` | Next: {item} at {n} | Siguiente: {item} a los {n} |
+| `sheet.progress.done` | Everything unlocked | Todo desbloqueado |
 | `sheet.events.title` | Events | TODO |
 | `sheet.events.empty` | Nothing has happened yet. | TODO |
 | `sheet.events.when` | Day {n} · {phase} | Day {n} · {phase} |
@@ -1009,26 +1009,26 @@ The five `sheet.options.pace*` rows are the Options sheet's **Park pace** settin
 | `feed.emb.backfire.mime` | {a} and {b} applauded the mime | TODO |
 | `feed.emb.backfire.fog` | {a} and {b} bumped into each other in the fog | TODO |
 | `feed.emb.backfire.flock` | {a} and {b} ducked together, laughing | TODO |
-| `feed.cast.c_petals` | Petals fell by the {spot} | TODO |
-| `feed.cast.c_bouquet` | Violette brought {name} a bouquet | TODO |
-| `feed.cast.c_musician` | A busker started to play | TODO |
-| `feed.cast.c_sunbeam` | The sun came out over a corner of the park | TODO |
-| `feed.cast.c_umbrella` | {a} and {b} share an umbrella | TODO |
-| `feed.cast.c_lamplight` | The lamps came on early | TODO |
-| `feed.cast.c_picnic` | A picnic basket appeared | TODO |
-| `feed.cast.c_rowboat` | {a} and {b} took a boat out | TODO |
-| `feed.cast.c_fireworks` | Fireworks over the park | TODO |
-| `feed.cast.m_pigeon` | A pigeon took an interest in {name} | TODO |
-| `feed.cast.m_sprinkler` | A sprinkler popped up on the lawn | TODO |
-| `feed.cast.m_peel` | Someone dropped a banana peel | TODO |
-| `feed.cast.m_pomeranian` | Pompon is loose | TODO |
-| `feed.cast.m_wasp` | A wasp found the picnic | TODO |
-| `feed.cast.m_raincloud` | A small cloud drifted in | TODO |
-| `feed.cast.m_rival` | A charming stranger came through the gate | TODO |
-| `feed.cast.m_mime` | Pierrot the mime is about | TODO |
-| `feed.cast.m_fog` | Fog rolled in from the river | TODO |
-| `feed.cast.m_flock` | A storm of pigeons | TODO |
-| `feed.unlock` | Unlocked: {item} ({side} T{tier}) | TODO |
+| `feed.cast.c_petals` | Petals fell by the {spot} | Cayeron pétalos por {spot} |
+| `feed.cast.c_bouquet` | Violette brought {name} a bouquet | Violette le trajo un ramo a {name} |
+| `feed.cast.c_musician` | A busker started to play | Un músico empezó a tocar |
+| `feed.cast.c_sunbeam` | The sun came out over a corner of the park | Salió el sol en un rincón del parque |
+| `feed.cast.c_umbrella` | {a} and {b} share an umbrella | {a} y {b} comparten un paraguas |
+| `feed.cast.c_lamplight` | The lamps came on early | Las farolas se encendieron pronto |
+| `feed.cast.c_picnic` | A picnic basket appeared | Apareció una cesta de pícnic |
+| `feed.cast.c_rowboat` | {a} and {b} took a boat out | {a} y {b} salieron en barca |
+| `feed.cast.c_fireworks` | Fireworks over the park | Fuegos artificiales sobre el parque |
+| `feed.cast.m_pigeon` | A pigeon took an interest in {name} | Una paloma se interesó por {name} |
+| `feed.cast.m_sprinkler` | A sprinkler popped up on the lawn | Un aspersor salió en el césped |
+| `feed.cast.m_peel` | Someone dropped a banana peel | Alguien dejó una cáscara de plátano |
+| `feed.cast.m_pomeranian` | Pompon is loose | Pompon anda suelto |
+| `feed.cast.m_wasp` | A wasp found the picnic | Una avispa encontró el pícnic |
+| `feed.cast.m_raincloud` | A small cloud drifted in | Una nubecita pasó por aquí |
+| `feed.cast.m_rival` | A charming stranger came through the gate | Un desconocido encantador entró por la puerta |
+| `feed.cast.m_mime` | Pierrot the mime is about | Pierrot el mimo anda por ahí |
+| `feed.cast.m_fog` | Fog rolled in from the river | La niebla llegó desde el río |
+| `feed.cast.m_flock` | A storm of pigeons | Una tormenta de palomas |
+| `feed.unlock` | Unlocked: {item} ({side} T{tier}) | Desbloqueado: {item} ({side} T{tier}) |
 | `feed.gardener` | The gardener is gravelling a worn track | TODO |
 | `feed.pigeons` | A gathering of pigeons | TODO |
 | `feed.regular_return` | {name} is back | TODO |
@@ -1045,12 +1045,12 @@ The five `sheet.options.pace*` rows are the Options sheet's **Park pace** settin
 | `item.purse` | bag | TODO |
 | `item.baguette` | baguette | TODO |
 | `item.iceCream` | ice cream | TODO |
-| `spot.fountain` | fountain | TODO |
-| `spot.pond` | pond | TODO |
-| `spot.bandstand` | bandstand | TODO |
-| `spot.bridge` | bridge | TODO |
-| `spot.lawn` | lawn | TODO |
-| `spot.path` | path | TODO |
+| `spot.fountain` | fountain | la fuente |
+| `spot.pond` | pond | el estanque |
+| `spot.bandstand` | bandstand | el templete |
+| `spot.bridge` | bridge | el puente |
+| `spot.lawn` | lawn | el césped |
+| `spot.path` | path | el sendero |
 
 ### 16.12 Toasts and confirm
 | Key | EN | ES |
@@ -1059,7 +1059,7 @@ The five `sheet.options.pace*` rows are the Options sheet's **Park pace** settin
 | `toast.fit` | Whole park | TODO |
 | `toast.sound_on` | Sound on | TODO |
 | `toast.sound_off` | Sound off | TODO |
-| `toast.unlocked` | Unlocked: {item} ({side} T{tier}) | TODO |
+| `toast.unlocked` | Unlocked: {item} ({side} T{tier}) | Desbloqueado: {item} ({side} T{tier}) |
 | `toast.photo` | Tap to leave photo mode | TODO |
 | `toast.new_park` | A new park | TODO |
 | `toast.saved` | Saved | TODO |
@@ -1092,32 +1092,33 @@ The five `sheet.options.pace*` rows are the Options sheet's **Park pace** settin
 | `reason.nothing_to_undo` | nothing to undo | TODO |
 | `reason.park_full` | The park is full | TODO |
 | `reason.park_full_props` | the park cannot hold any more | TODO |
-| `reason.locked` | Unlocks at {side} T{tier} | TODO |
-| `reason.cooldown` | not yet ({s} s) | TODO |
-| `reason.no_charges` | once a day | TODO |
+| `reason.locked` | Unlocks at {side} T{tier} | Se abre en {side} T{tier} |
+| `reason.cooldown` | not yet ({s} s) | aún no ({s} s) |
+| `reason.no_charges` | once a day | una vez al día |
 | `reason.not_children` | not the children | TODO |
 | `reason.enough_today` | {name} has had enough for one day | TODO |
 | `reason.not_courting` | they are not courting | TODO |
-| `reason.apart` | they are not together just now | TODO |
-| `reason.on_the_water` | they are on the water | TODO |
-| `reason.no_lamp` | no lamp near here | TODO |
-| `reason.not_raining` | it is not raining on them | TODO |
-| `reason.raining` | wait for the rain to stop | TODO |
-| `reason.not_evening` | wait for the evening | TODO |
-| `reason.pond_small` | the pond is too small for a boat | TODO |
-| `reason.iced` | the pond is frozen | TODO |
-| `reason.slippery` | the ground is slippery enough | TODO |
-| `reason.busker_near` | a busker is already playing here | TODO |
-| `reason.dog_saw_it` | the dog saw it off | TODO |
-| `reason.no_wasps_rain` | wasps hate the rain | TODO |
-| `reason.in_sunbeam` | not in the sunshine | TODO |
-| `reason.already_misty` | it is misty enough | TODO |
-| `reason.nobody_inside` | nobody there | TODO |
-| `reason.not_at_picnic` | nobody is eating there | TODO |
-| `reason.no_item` | nothing to snatch | TODO |
-| `reason.peel_here` | there is a peel here already | TODO |
+| `reason.apart` | they are not together just now | no están juntos ahora |
+| `reason.on_the_water` | they are on the water | están en el agua |
+| `reason.no_lamp` | no lamp near here | no hay farolas cerca |
+| `reason.not_raining` | it is not raining on them | no llueve sobre ellos |
+| `reason.raining` | wait for the rain to stop | espera a que pare la lluvia |
+| `reason.not_evening` | wait for the evening | espera al anochecer |
+| `reason.pond_small` | the pond is too small for a boat | el estanque es pequeño para una barca |
+| `reason.iced` | the pond is frozen | el estanque está helado |
+| `reason.slippery` | the ground is slippery enough | el suelo ya resbala bastante |
+| `reason.busker_near` | a busker is already playing here | ya toca un músico por aquí |
+| `reason.dog_saw_it` | the dog saw it off | el perro lo espantó |
+| `reason.no_wasps_rain` | wasps hate the rain | las avispas odian la lluvia |
+| `reason.in_sunbeam` | not in the sunshine | no bajo el sol |
+| `reason.already_misty` | it is misty enough | ya hay bastante niebla |
+| `reason.nobody_inside` | nobody there | no hay nadie |
+| `reason.not_at_picnic` | nobody is eating there | nadie está comiendo ahí |
+| `reason.no_item` | nothing to snatch | no hay nada que quitar |
+| `reason.peel_here` | there is a peel here already | ya hay una cáscara aquí |
+| `reason.too_many_effects` | too much is going on at once | hay demasiado en marcha a la vez |
 | `reason.not_in_avatar` | not while being someone | TODO |
-| `reason.busy` | busy | TODO |
+| `reason.busy` | busy | ocupado |
 | `reason.wrong_side` | not for this side | TODO |
 | `reason.wrong_mode` | not in this mode | TODO |
 | `reason.startled` | startled by a dog | TODO |

@@ -3,6 +3,9 @@
 // NEW (GV has no save, review section 11).
 // S2 fills ParkSaveV1 for everything the engine owns. The record lists that later slices own (visitors S4, pairs S5, creatures S4, effects S6,
 // regulars and alumni S4, feed S3) are typed as SaveRec until their slice replaces the type; the engine saves them as empty lists.
+// S6: `effects` holds play/abilities.ts Effect records (typed SaveRec here), `sides` the cooldowns (the tick each ability is ready) and the
+// charges left today, `tally` the day's points in this park (play/progression.ts); the profile's cp, mp, tierC, tierM and unlocked are the
+// points progression.ts keeps, copied in when the profile is written.
 // S3 part B: ProfileV1 gains the fields of 03 3.9 (points, tiers, unlocks, parks played, the write serial); ParkSaveV1 gains `treeTurn`,
 // the park tools' tree cycle (02 8.3; without it a reload or a replay from a snapshot could plant the next tree as another species).
 // It is saved, not hashed: 03 3.10 lists it and 03 11 what the hash covers (docs synced with the owner's answers of 2026-10-13).

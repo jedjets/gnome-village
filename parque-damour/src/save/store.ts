@@ -19,15 +19,15 @@
 // held, the regulars arrived today, the gatherings announced) are in the snapshot and the hash; a restore puts them back after setLog, whose
 // hooks clear the undo stack. The ids state was already both.
 // Park pace (owner 2026-10-14, register section 4 "Park pace and Options"): the park's pace (visitor.ts) is saved as `pace` and restored
-// (calm when a save has none); the state hash covers it only when it is not calm, so every calm park, and every park from before, keeps
-// its hash (the det fixtures). The profile's settings.pace is the pace a new park gets: profilePace (Lively when the profile has none,
-// the owner's default for new players), setProfilePace, and enqueueProfilePace, the shell's one call that sends it as a logged
-// `park.pace` command after every new park the shell starts: a Begin's newPark, the fresh park that replaces a Continue whose restore
-// threw (main.ts begin's catch), and a New's park.new (core/commands.ts enqueueAfterNew). A Continue that restores sends none: the
-// restored park keeps its own pace.
+// (calm when a save has none); the state hash covers it only when it is not calm, so every calm park keeps its hash. The profile's
+// settings.pace is the pace a new park gets (profilePace: Lively when absent); enqueueProfilePace is the shell's one call that sends it as a
+// logged `park.pace` command after every new park it starts (Begin, a failed Continue's fresh park, New via commands.ts enqueueAfterNew).
 // S5: the pairs, the alumni and the day's romance counters (sched.rolled, sched.alumniDay) are saved and hashed; the pinned pair is saved
 // and not hashed (UI state per client, 02 14.3); the feed joins the snapshot through the hook main.ts hands in (setFeedIO; not hashed).
-// TODO(S6): the profile's cp and mp join the state hash (03 11) in the slice that first awards points, which re-records the det fixtures.
+// S6: the park's effects, sides (cooldown ticks, charges left) and day tally are in the snapshot and the hash; the profile's points, tiers and
+// announced ids are kept by play/progression.ts and copied into the profile when it is read or written (withProgress), so they survive a new
+// park and a reload. The hash covers the park's tally, not the profile's cumulative cp/mp of 03 11: a replay from a snapshot re-earns its
+// window's points, so the cumulative sum could not match it (a deviation, in the S6 hand-back).
 import { FNV_SEED, fnvStep } from '../core/math.ts';
 import { rngN, setSimState, setVisState, simState, visState } from '../core/rng.ts';
 import { idsState, setIdsState } from '../core/ids.ts';
@@ -38,6 +38,8 @@ import { enqueueAfterNew, log, setLog, type Pace } from '../core/commands.ts';
 import { SIM_DT, setTick, tick } from '../core/loop.ts';
 import { getAvatar, getMode, getPlayer, setMode } from '../play/mode.ts';
 import { nextSpecies, setNextSpecies } from '../play/tools.ts';
+import { effectsState, setAbilitiesState, sidesState } from '../play/abilities.ts';
+import { progressState, setProgress, setTallyState, tallyState, tierFor } from '../play/progression.ts';
 import {
   BEDC, ICE, KIND, NC, OCC, PAVEDAY, PETALS, WATER, WEAR, WET, props, propsState, rebuildBlock, setLayersState, setPropsState,
   type LayersState, type Prop,
@@ -131,6 +133,8 @@ function readProfile(): Op | null {
     if (!p) failed = 'parse';
   }
   prof = p ?? defaultProfile();
+  setProgress(prof); // the points and the announced ids live in play/progression.ts while the game runs
+  agreed = { cp: prof.cp, mp: prof.mp };
   held = failed !== null;
   return failed;
 }
@@ -144,7 +148,27 @@ export function loadProfile(): ProfileV1 {
 
 /** The in-memory profile the game edits, loaded once on first use (03 2.10 `profile()`). */
 export function getProfile(): ProfileV1 {
-  return prof ?? loadProfile();
+  return withProgress(prof ?? loadProfile());
+}
+
+/** The points the profile and play/progression.ts last agreed on: whichever side moved since is the one that is right. */
+let agreed = { cp: 0, mp: 0 };
+
+/**
+ * The profile with the points, tiers and announced ids as they stand now. progression.ts keeps them while the game runs and the profile is
+ * their record: normally the profile takes progression's numbers; a profile whose cp or mp was edited directly since (the dev console, a
+ * test) is put into progression instead, so neither side overwrites the other.
+ */
+function withProgress(p: ProfileV1): ProfileV1 {
+  if (p.cp !== agreed.cp || p.mp !== agreed.mp) setProgress(p);
+  const g = progressState();
+  p.cp = g.cp;
+  p.mp = g.mp;
+  p.tierC = tierFor(g.cp);
+  p.tierM = tierFor(g.mp);
+  p.unlocked = g.unlocked;
+  agreed = { cp: g.cp, mp: g.mp };
+  return p;
 }
 
 /**
@@ -153,7 +177,7 @@ export function getProfile(): ProfileV1 {
  */
 function profileToWrite(): { p: ProfileV1; failed: Op | null } {
   const failed = prof ? null : readProfile();
-  return { p: prof as ProfileV1, failed };
+  return { p: withProgress(prof as ProfileV1), failed };
 }
 
 /** How a profile write ended: it landed, a failed read held it back (nothing written, no new warn), or the storage refused it. */
@@ -315,6 +339,8 @@ export function clearPark(): boolean {
 export function clearAll(): boolean {
   autoSteps = 0;
   prof = defaultProfile();
+  setProgress(prof); // no points either
+  agreed = { cp: 0, mp: 0 };
   const okPark = remove(PARK_KEY);
   const okProfile = remove(PROFILE_KEY);
   if (okProfile) held = false;
@@ -407,17 +433,16 @@ export function setFeedIO(io: FeedIO): void {
   feedIO = io;
 }
 
-/** What the engine owns beyond the layers; the lists the later slices fill (pairs, effects, alumni, feed) are empty until then. */
+/** What the engine owns beyond the layers: the visitors, pairs, creatures, effects, sides, regulars, alumni, paving, schedulers, mode, tally and feed. */
 function lists(): Pick<
   ParkSaveV1,
   'visitors' | 'pairs' | 'creatures' | 'effects' | 'sides' | 'regulars' | 'alumni' | 'pinnedPair' | 'paving' | 'sched' | 'mode' | 'tally' | 'feed'
 > {
   return {
-    visitors: visitorsState(), pairs: pairsState(), creatures: creaturesState(), effects: [],
-    sides: { cooldowns: { park: {}, cupid: {}, mischief: {} }, charges: { park: {}, cupid: {}, mischief: {} } },
+    visitors: visitorsState(), pairs: pairsState(), creatures: creaturesState(), effects: effectsState(), sides: sidesState(),
     regulars: regularsState(), alumni: alumniState(), pinnedPair: pinnedPair(), paving: pavingState(), sched: schedState(),
     mode: { mode: getMode(), player: getPlayer(), avatar: getAvatar() },
-    tally: { day: 1, cp: 0, mp: 0 },
+    tally: tallyState(),
     feed: feedIO.get(),
   };
 }
@@ -499,6 +524,8 @@ function restoreLife(s: ParkSaveV1): void {
   resetStaff();
   setPavingState(s.paving);
   setRomanceState(s.pairs ?? [], s.alumni ?? [], sc, s.pinnedPair ?? 0); // a save from before S5 has none
+  setAbilitiesState(s.effects as never, s.sides); // S6: the effects, cooldowns and charges
+  setTallyState(s.tally);
   feedIO.set(Array.isArray(s.feed) ? s.feed : []);
 }
 

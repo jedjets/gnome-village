@@ -8,7 +8,7 @@
 // backfire rolled on the sim stream only when the victim is in a Pair and the partner is within 4 tiles (then both laugh for the kind's
 // scene, affinity +0.04, no comfort lost, no embToday, no score); a 4th landing in a day, a child and rival on a single are refused before
 // anything is spent. Staff can be targets and score 0 (02 6.4 rule 3; their reaction is capped at 4 s, 04 9.3, in brain.ts rung 1).
-// No ability triggers it yet (S6, S7): the harness exposes land (07 S5.6 step 5). Points are S6's: the events carry `score`.
+// S6: the abilities (play/abilities-mischief.ts, entities/pomeranian.ts) land through it; progression.ts reads the `score` the events carry.
 import { DAYLEN, T } from '../core/clock.ts';
 import { chance } from '../core/rng.ts';
 import { emit, type Params } from '../core/events.ts';
@@ -17,7 +17,7 @@ import type { ReasonKey } from '../core/commands.ts';
 import type { Side, VisitorId } from '../core/ids.ts';
 import { setPairCharm } from '../world/charm.ts';
 import { release } from './act.ts';
-import { byId, nowTick, visitors, type EmbKind, type Visitor } from './visitor.ts';
+import { byId, nowTick, visitors, type EmbKind, type Items, type Visitor } from './visitor.ts';
 import { pairOf, pairs, partnerOf } from './romance.ts';
 import { interruptStage } from './romance-stages.ts';
 
@@ -57,9 +57,13 @@ export function canTarget(v: Visitor): LandResult {
   return { ok: true, backfire: false };
 }
 
-function itemOf(v: Visitor): string {
+/** The first item `v` carries, in the order hat, purse, baguette, iceCream (02 9.3 m_pomeranian), or null when it has none. */
+export function firstItem(v: Visitor): keyof Items | null {
   const it = v.items;
-  return it.hat ? 'hat' : it.purse ? 'purse' : it.baguette ? 'baguette' : it.iceCream ? 'iceCream' : 'hat';
+  return it.hat ? 'hat' : it.purse ? 'purse' : it.baguette ? 'baguette' : it.iceCream ? 'iceCream' : null;
+}
+function itemOf(v: Visitor): string {
+  return firstItem(v) ?? 'hat';
 }
 
 /**

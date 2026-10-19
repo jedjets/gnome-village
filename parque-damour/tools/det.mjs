@@ -52,7 +52,7 @@ function commandsFor(fixture, steps) {
   return cmds;
 }
 
-async function openPage(browser, url, seed, errors, label) {
+async function openPage(browser, url, seed, errors, label, progress) {
   const ctx = await browser.createBrowserContext(); // its own localStorage: no saved park, so Begin starts the game at once
   const page = await ctx.newPage();
   page.on('console', (m) => {
@@ -65,12 +65,13 @@ async function openPage(browser, url, seed, errors, label) {
   await page.waitForSelector('#begin', { visible: true, timeout: 20_000 });
   await page.click('#begin');
   await page.waitForFunction(() => typeof window.__PD !== 'undefined', { timeout: 10_000 });
-  await page.evaluate((s) => {
+  await page.evaluate((s, pr) => {
     const pd = window.__PD;
     pd.newPark(s);
     pd.setSpeed(0);
+    pd.setProgress(pr ? pr.cp : 0, pr ? pr.mp : 0); // S6: the points the fixture starts from (abilities check the tiers; the points are not hashed)
     if (pd.audio && pd.audio.dryRun) pd.audio.dryRun(true);
-  }, seed);
+  }, seed, progress);
   return page;
 }
 
@@ -140,10 +141,10 @@ async function main() {
   const browser = await puppeteer.launch({ executablePath: CHROMIUM, headless: true, args: CHROMIUM_ARGS, protocolTimeout: 600_000 });
   try {
     const t0 = Date.now();
-    const p1 = await openPage(browser, url, fixture.seed, errors, 'run 1');
+    const p1 = await openPage(browser, url, fixture.seed, errors, 'run 1', fixture.progress);
     const r1 = await directRun(p1, cmds, steps, WINDOW);
     await p1.browserContext().close();
-    const p2 = await openPage(browser, url, fixture.seed, errors, 'run 2');
+    const p2 = await openPage(browser, url, fixture.seed, errors, 'run 2', fixture.progress);
     const r2 = await directRun(p2, cmds, steps, WINDOW);
     await p2.browserContext().close();
     console.log(`run 1: seed ${fixture.seed} steps ${r1.tick} rngN ${r1.rngN} hash ${r1.hash} (0x${r1.hash.toString(16)})`);
@@ -155,7 +156,7 @@ async function main() {
     if (r1.audioLog >= 0 && r1.audioLog !== 200) problems.push(`__PD.audio.log.length is ${r1.audioLog}, not 200 (05 8.3)`);
     if (r1.audioLog < 0) console.log('audio: no __PD.audio yet (before S8); the audio.log check is skipped');
     if (real) {
-      const p3 = await openPage(browser, url, fixture.seed, errors, 'run 3 (real loop, 8x)');
+      const p3 = await openPage(browser, url, fixture.seed, errors, 'run 3 (real loop, 8x)', fixture.progress);
       const t3 = Date.now();
       const r3 = await realRun(p3, cmds, steps);
       await p3.browserContext().close();

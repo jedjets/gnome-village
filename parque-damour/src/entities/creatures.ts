@@ -15,6 +15,9 @@
 // fountain rim 0.9, a tree 2.2) and timers are saved and hashed. "A gathering" (3 pigeons at one crumbs prop) is announced once per
 // crumbs prop with params.feed on the `peck` that makes it (events.ts has no feed kind). A pigeon's crumbs are the ones its targetId
 // names at the spot it was sent to (targetCrumbs): a PropId is recycled, so crumbs dropped elsewhere can carry the id of crumbs it lost.
+// S6: the pigeon's `swoop` (m_pigeon, 02 9.3, 11.2 item 2): startSwoop sends a pigeon at 6.0 to follow a visitor (its `ownerId`, which a
+// pigeon has no other use for; `targetId` is the crumbs' slot), 2 s late in fog; on arrival the swoop hook the ability registered lands the
+// `poop` and the pigeon flies off to an open spot. The pomeranian's run is pomeranian.ts (this file is at its size).
 // Dropped from the range: rabbits, deer, foxes, folds, hutches, riders, taming, raids, the fox's barking at night, swimming, sweeps.
 import type { XY } from '../core/math.ts';
 import { T } from '../core/clock.ts';
@@ -255,6 +258,75 @@ export function perchAll(until: number): void {
   }
 }
 
+/* ---------- the swoop (m_pigeon, 02 9.3) ---------- */
+
+export const SWOOP_REACH = 0.45; // tiles from the visitor's head at which the pigeon lands the poop
+export const SWOOP_FOG_DELAY = 2; // s: in fog the pigeon takes longer (it was perched, 02 9.3)
+const SWOOP_Z = 1.1; // EH: head height in flight
+
+/** abilities-mischief.ts hands in what happens on arrival (the poop lands); entities cannot import play/ (03 2.1). */
+export type SwoopHook = (pigeon: Creature, victim: VisitorId) => void;
+let swoopHook: SwoopHook = () => {};
+export function setSwoopHook(fn: SwoopHook): void {
+  swoopHook = fn;
+}
+
+/** The pigeon not already swooping nearest to (x, y), or null: the one m_pigeon sends (02 9.3 "the nearest pigeon"). */
+export function nearestFreePigeon(x: number, y: number): Creature | null {
+  let best: Creature | null = null, bd = Infinity;
+  for (const c of creatures) {
+    if (c.kind !== 'pigeon' || c.st === 'swoop') continue;
+    const d = Math.hypot(c.x - x, c.y - y);
+    if (d < bd) {
+      bd = d;
+      best = c;
+    }
+  }
+  return best;
+}
+
+/** Send `c` at `victim` after `delay` s; it follows the visitor wherever they go. */
+export function startSwoop(c: Creature, victim: VisitorId, delay = 0): void {
+  c.st = 'swoop';
+  c.ownerId = victim;
+  c.targetId = 0;
+  c.perchPropId = 0;
+  c.cdUntil = 0;
+  c.t = delay;
+  c.tx = c.x;
+  c.ty = c.y;
+}
+
+function swoopStep(c: Creature, dt: number): void {
+  if (c.t > 0) {
+    c.t -= dt; // perched a little longer in fog
+    return;
+  }
+  const v = byId(c.ownerId);
+  if (!v) {
+    c.ownerId = 0;
+    c.st = 'fly'; // the visitor left before the pigeon came
+    const to = openAround(c.x, c.y, 8);
+    c.tx = to ? to.x : c.x;
+    c.ty = to ? to.y : c.y;
+    return;
+  }
+  c.tx = v.x;
+  c.ty = v.y;
+  c.z += (SWOOP_Z - c.z) * Math.min(1, dt * 5);
+  if (Math.hypot(v.x - c.x, v.y - c.y) > SWOOP_REACH) {
+    moveTo(c, SPD_PIGEON_FLY, dt, true);
+    return;
+  }
+  swoopHook(c, v.id);
+  c.ownerId = 0;
+  const to = openAround(c.x, c.y, 8);
+  c.st = 'fly';
+  c.tx = to ? to.x : c.x;
+  c.ty = to ? to.y : c.y;
+  emit({ kind: 'fly', tick: nowTick(), x: c.x, y: c.y, ids: [c.id] });
+}
+
 /* ---------- the pigeon (GV updateCritters 2299 shape) ---------- */
 
 /** Move toward (tx, ty) at `speed` tiles/s; true on arrival. A walker stops at a blocked tile (a flyer does not). */
@@ -385,6 +457,9 @@ function stepPigeon(c: Creature, dt: number): void {
     case 'fly':
       c.z += ((c.perchPropId ? 1.8 : 1.2) - c.z) * Math.min(1, dt * 4);
       if (moveTo(c, SPD_PIGEON_FLY, dt, true)) land(c);
+      return;
+    case 'swoop':
+      swoopStep(c, dt);
       return;
     case 'scatter':
       c.t -= dt;

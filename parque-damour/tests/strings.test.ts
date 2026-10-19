@@ -9,6 +9,8 @@ import { es } from '../src/ui/strings/es.ts';
 import { gender, t, plural, setLang } from '../src/ui/i18n.ts';
 import { TOOLS } from '../src/play/tools.ts';
 import { DOING } from '../src/entities/act.ts';
+import { ABILITIES } from '../src/play/abilities.ts';
+import { AVATAR_SIDE } from '../src/core/commands.ts';
 
 const ROOT = join(import.meta.dirname, '..');
 
@@ -179,5 +181,47 @@ describe('the Options sheet and rail row 3\'s Options (register 3.10 and section
     expect(t('sheet.options.seed', { seed: '101' })).toBe('Semilla del parque 101');
     setLang('en');
     expect(t('sheet.options.seed', { seed: '101' })).toBe('Park seed 101');
+  });
+});
+
+describe('the abilities, the unlocks and the Progress sheet (06 16.2, 16.6, 16.10-16.13; 07 S6.6 step 11; S6)', () => {
+  // the reason keys of 03 5.4's ability block, as 06 16.13 words them
+  const REASONS = [
+    'locked', 'cooldown', 'no_charges', 'apart', 'on_the_water', 'no_lamp', 'not_raining', 'raining', 'not_evening', 'pond_small', 'iced', 'slippery',
+    'busker_near', 'dog_saw_it', 'no_wasps_rain', 'in_sunbeam', 'already_misty', 'nobody_inside', 'not_at_picnic', 'no_item', 'peel_here', 'busy',
+    'too_many_effects', 'not_children', 'enough_today', 'not_courting',
+  ].map((k) => 'reason.' + k);
+  const KEYS = [
+    ...ABILITIES.flatMap((a) => [a.nameKey, a.hintKey, 'feed.cast.' + a.id]), ...Object.keys(AVATAR_SIDE).map((id) => 'avatar.' + id + '.name'),
+    ...['fountain', 'pond', 'bandstand', 'bridge', 'lawn', 'path'].map((k) => 'spot.' + k), ...REASONS,
+    'rail.locked_at', 'rail.tier', 'rail.cooldown', 'rail.charges', 'rail.ready', 'sheet.progress.title', 'sheet.progress.cupid', 'sheet.progress.mischief',
+    'sheet.progress.points', 'sheet.progress.next', 'sheet.progress.done', 'feed.unlock', 'toast.unlocked',
+  ];
+  const params = (v: string): string[] => [...v.matchAll(/\{(\w+)\}/g)].map((m) => m[1] as string).sort();
+  it('every ability has its name, hint and cast line, every avatar its name, every refusal its words, in both tables with the same {params}', () => {
+    expect(KEYS.length).toBe(19 * 3 + 6 + 6 + REASONS.length + 13);
+    for (const k of KEYS) {
+      expect(en[k], k).toBeTruthy();
+      expect(es[k], k).toBeTruthy();
+      expect(params(es[k] as string), k).toEqual(params(en[k] as string));
+    }
+  });
+  it('the English wording is 06\'s, copied exactly, and so is the Spanish the stage wrote into 06', () => {
+    const doc = table06(), docEs = table06es();
+    for (const k of KEYS) {
+      if (doc.has(k)) expect(en[k], k).toBe(doc.get(k));
+      if (docEs.has(k)) expect(es[k], k).toBe(docEs.get(k));
+    }
+    for (const k of KEYS.filter((x) => x.startsWith('ability.') || x.startsWith('feed.cast.'))) expect(docEs.get(k), k).toBeTruthy();
+  });
+  it('the unlock toast and the feed line fill in the item, the side and the tier, the item and the side being keys of their own (03 12 item 6)', () => {
+    setLang('en');
+    expect(t('toast.unlocked', { item: '@ability.c_musician.name', side: '@hud.cupid', tier: 1 })).toBe('Unlocked: Musician (Cupid T1)');
+    expect(t('feed.unlock', { item: '@avatar.a_florist.name', side: '@hud.cupid', tier: 1 })).toBe('Unlocked: Flower seller (Cupid T1)');
+    expect(t('reason.locked', { side: '@hud.mischief', tier: 1 })).toBe('Unlocks at Mischief T1');
+    setLang('es');
+    expect(t('toast.unlocked', { item: '@ability.m_peel.name', side: '@hud.mischief', tier: 1 })).toBe('Desbloqueado: Cáscara de plátano (Travesura T1)');
+    expect(t('feed.cast.c_petals', { spot: '@spot.fountain' })).toBe('Cayeron pétalos por la fuente');
+    setLang('en');
   });
 });

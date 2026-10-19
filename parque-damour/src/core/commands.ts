@@ -2,7 +2,8 @@
 // The Command union {tick, side, kind, payload}, enqueue, applyPending, applyCommand with rejection reasons, the log, replay (03 section 5).
 // NEW (GV applies from the UI directly, review section 4). Every player action is a Command; this file is the only place one is applied.
 // S2 applies `speed`, `park.new` and `debug.weather` (registered by core/loop.ts); every other kind is rejected `reason.not_here` until the
-// slice that owns it registers a handler with registerHandler (ability S6, avatar.* S7). S4: entities/visitor.ts registers `visitor.call`
+// slice that owns it registers a handler with registerHandler (avatar.* S7). S6: play/abilities.ts registers `ability` (cast: the unlock,
+// the cooldown, the charges, the target and the ability's own rules are checked there, in the sim, and nothing is spent before they pass). S4: entities/visitor.ts registers `visitor.call`
 // (callVisitor: the gate given or one by weight; reason.park_full at 30 people, 02 12.2), park side only, allowed in avatar mode (03 5.3). S3: play/tools.ts registers `tool`
 // (applyTool) and play/undo.ts registers `undo` (an empty stack is `reason.nothing_to_undo`); both pass the side and mode rules below first
 // (park side only, `reason.not_in_avatar` in avatar mode, 03 5.3). A new park clears the undo stack through onResetCommands (03 5.6 item 5),
@@ -164,6 +165,7 @@ function validate(c: Command): ReasonKey | null {
       if (side !== 'park') return 'reason.wrong_side';
       return getMode() === 'avatar' ? 'reason.not_in_avatar' : null;
     case 'ability': {
+      if (typeof c.payload.id !== 'string') return 'reason.not_here';
       const own = c.payload.id.startsWith('c_') ? 'cupid' : 'mischief';
       if (side !== own) return 'reason.wrong_side';
       return getMode() === 'avatar' ? 'reason.not_in_avatar' : null;
