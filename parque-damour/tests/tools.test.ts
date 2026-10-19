@@ -279,7 +279,7 @@ describe('repeat taps (02 8.3 bed, bench and tree rows)', () => {
     expect(reasonOf(tool({ tool: 'tree', at: at(5, 5) }))).toBe('ok');
     expect(propAt(5, 5)).toBeUndefined();
     expect(OCC[I(5, 5)]).toBe(0);
-    expect(reasonOf(tool({ tool: 'tree', at: at(9, 2) }))).toBe('ok'); // a starter tree goes too
+    expect(reasonOf(tool({ tool: 'tree', at: at(15, 2) }))).toBe('ok'); // a starter tree goes too
     expect(propAt(9, 2)).toBeUndefined();
   });
 

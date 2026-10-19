@@ -1,8 +1,10 @@
 // tests/gen.test.ts
 // Locks 02 2.5 / 08 2.2 / 07 S2.6 item 11: the starter park's fixed skeleton, what the seed varies (pond outline, bed colours, trees), the
-// twelve trees and their spacing, the bridge over the neck, and the prop list in world/grid.ts (ids, OCC, BLOCK).
+// twelve trees and their spacing, the bridge over the neck, and the prop list in world/grid.ts (ids, OCC, BLOCK). S6 (owner 2026-10-19,
+// register section 4 "Starter picnic spots"): the two 2 x 2 picnic blankets and how much of the loops they bring within the Picnic
+// stage's 10 tiles (02 6.2 stage 5).
 import { describe, it, expect } from 'vitest';
-import { genPark, parkSeed, POND_MIN } from '../src/world/gen.ts';
+import { genPark, parkSeed, PICNICS, POND_MIN } from '../src/world/gen.ts';
 import {
   BEDC, BLOCK, I, KIND, Kind, N, NC, OCC, WATER, addProp, props, propById, propsState, rebuildBlock, removeProp, setPropsState, clearLayers, markBlockDirty,
   type Prop,
@@ -38,6 +40,53 @@ describe('world/gen fixed skeleton (02 2.5)', () => {
         for (let y = by; y < by + 2; y++) for (let x = bx; x < bx + 2; x++) expect(KIND[I(x, y)]).toBe(Kind.bed);
       expect(KIND.reduce((n, k) => n + (k === Kind.bed ? 1 : 0), 0)).toBe(8);
     }
+  });
+
+  it('S6: two 2 x 2 picnic blankets on lawn at (14,21) and (34,24), passable, clear of every path, prop, bed and the pond (register section 4)', () => {
+    expect(PICNICS).toEqual([[14, 21], [34, 24]]);
+    for (const seed of [1, 2, 101, 4000000000]) {
+      genPark(seed);
+      const pk = kindsOf('picnic');
+      expect(pk.map((p) => [p.x, p.y])).toEqual([[14, 21], [34, 24]]);
+      for (const p of pk) {
+        expect(p).toMatchObject({ w: 2, h: 2, placedBy: 'gen', passable: true });
+        for (let y = p.y - 1; y <= p.y + 2; y++)
+          for (let x = p.x - 1; x <= p.x + 2; x++) {
+            const inside = x >= p.x && x < p.x + 2 && y >= p.y && y < p.y + 2;
+            expect(KIND[I(x, y)], `tile ${x},${y} beside the blanket at ${p.x},${p.y}`).toBe(Kind.lawn);
+            expect(WATER[I(x, y)]).toBe(0);
+            if (inside) expect(OCC[I(x, y)]).toBe(0); // a blanket is walked over
+            else expect(OCC[I(x, y)], `a prop touches the blanket at ${p.x},${p.y}`).toBe(0);
+          }
+      }
+      for (const o of props) // one clear tile between a blanket and any other footprint (the trees keep their own 3-tile rule)
+        if (o.kind !== 'picnic')
+          for (const p of pk) {
+            const gapX = Math.max(o.x - (p.x + 1), p.x - (o.x + o.w - 1), 0), gapY = Math.max(o.y - (p.y + 1), p.y - (o.y + o.h - 1), 0);
+            expect(Math.max(gapX, gapY), `${o.kind} at ${o.x},${o.y} against the blanket at ${p.x},${p.y}`).toBeGreaterThanOrEqual(2);
+          }
+    }
+  });
+
+  it('S6: with the kiosk tables the blankets put a spot within 10 tiles (picnicFor) of 82 % of the inner loop and 47 % of the outer loop (kiosk alone: 0 % and 14 %)', () => {
+    genPark(1);
+    const spots = props.filter((p) => p.kind === 'picnic' || p.kind === 'table');
+    const kiosk = spots.filter((p) => p.kind === 'table');
+    const share = (rings: number[], list: Prop[]): number => {
+      let all = 0, near = 0;
+      for (let y = 0; y < N; y++)
+        for (let x = 0; x < N; x++)
+          if (rings.includes(ring(x, y))) {
+            all++;
+            if (list.some((p) => Math.hypot(p.x - x, p.y - y) <= 10)) near++;
+          }
+      return near / all;
+    };
+    expect(share([5, 6], kiosk)).toBe(0);
+    expect(share([13, 14], kiosk)).toBeGreaterThan(0.13);
+    expect(share([13, 14], kiosk)).toBeLessThan(0.15);
+    expect(share([5, 6], spots)).toBeGreaterThan(0.8);
+    expect(share([13, 14], spots)).toBeGreaterThan(0.45);
   });
 
   it('five spokes of gravel from the gates to the nearest loop, gates on gravel, lawn elsewhere', () => {
@@ -194,7 +243,7 @@ describe('world/grid props (03 3.6, 2.3)', () => {
   it('genPark numbers its props from 1 with no gaps and no repeats, and resets the allocator each time', () => {
     genPark(5);
     expect(props.map((p) => p.id)).toEqual(Array.from({ length: props.length }, (_, i) => i + 1));
-    expect(props).toHaveLength(1 + 6 + 1 + 2 + 4 + 1 + 12);
+    expect(props).toHaveLength(1 + 6 + 1 + 2 + 4 + 2 + 1 + 12); // fountain, benches, kiosk, tables, lamps, picnic blankets (S6), bridge, trees
     genPark(5);
     expect(props.map((p) => p.id)[0]).toBe(1);
   });

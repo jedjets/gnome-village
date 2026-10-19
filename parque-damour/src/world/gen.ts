@@ -1,7 +1,7 @@
 // src/world/gen.ts
 // The seeded starter park (02 2.5): tile data, then props. Fixed skeleton: fountain, flagstone rings, two gravel loops, five gate spokes,
-// the pond's neck and bridge, six benches, two beds, the kiosk with two tables, four lamps. The seed varies only the pond outline, the
-// bed colour order and the tree positions.
+// the pond's neck and bridge, six benches, two beds, the kiosk with two tables, four lamps and (S6, owner 2026-10-19) two picnic
+// blankets. The seed varies only the pond outline, the bed colour order and the tree positions.
 // Ported from GV 885-911 (seed and reseed shape: both streams are reseeded first, 887) and the site-scoring loop shape of 1022-1035 (the
 // shuffled candidate list with spacing tests for the trees). ADAPT: a fixed skeleton instead of GV's silhouettes, rivers, soil and
 // flowers (889-910, 913-1020 are dropped).
@@ -130,6 +130,15 @@ function facing(x: number, y: number, cx: number, cy: number): Rot {
 const BENCHES: ReadonlyArray<readonly [number, number]> = [[31, 24], [28, 31], [19, 31], [16, 24], [19, 16], [28, 16]];
 // Two lamps per loop at its north and south points, on the lawn side.
 const LAMPS: ReadonlyArray<readonly [number, number]> = [[24, 16], [23, 31], [24, 11], [23, 36]];
+// The two starter picnic blankets (2 x 2, north-west tile; owner 2026-10-19, "Continue" to the recommendation; register section 4,
+// Starter picnic spots). Happily was rare (1 of 200 Calm seeds in 3 days) because the Picnic stage (a spot within 10 tiles of the pair,
+// 02 6.2 stage 5) only found the kiosk's tables: 59 % of the seconds a pair spent waiting for it at stage 4 had no spot. Chosen by
+// measuring, as the S5 harness drives the sim (scratch/s6 heat and scan): over seeds 1-80 the pairs waiting at stage 4 sit mostly between
+// the loops, so each blanket takes lawn one tile clear of every path, prop and bed: the first on the inner loop's west side (x 14-15, y
+// 21-22, two tiles from the gravel at x 17), the second on the outer loop's east side (x 34-35, y 24-25, two tiles from the gravel at x
+// 37). With the kiosk tables 83 % of the pair-seconds at stage 4 have a spot within 10 (kiosk alone 37 %), the inner loop is 82 % and
+// the outer loop 47 % covered (kiosk alone 0 % and 14 %).
+export const PICNICS: ReadonlyArray<readonly [number, number]> = [[14, 21], [34, 24]];
 
 function placeProps(): Prop[] {
   const out: Prop[] = [];
@@ -143,6 +152,7 @@ function placeProps(): Prop[] {
   kiosk.data.tableIds = [t1.id, t2.id];
   out.push(t1, t2);
   for (const [x, y] of LAMPS) out.push(addProp({ kind: 'lamp', x, y, w: 1, h: 1, rot: 0, placedBy: gen }));
+  for (const [x, y] of PICNICS) out.push(addProp({ kind: 'picnic', x, y, w: 2, h: 2, rot: 0, placedBy: gen }));
   out.push(addProp({ kind: 'bridge', x: 34, y: 11, w: 1, h: 2, rot: 0, placedBy: gen, data: { span: 2, dir: 0 } }));
   return out;
 }

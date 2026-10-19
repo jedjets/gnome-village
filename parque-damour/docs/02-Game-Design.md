@@ -96,8 +96,9 @@ Fixed skeleton (never varies with the seed):
 | Benches | 6, on lawn tiles adjacent to the inner loop at angles 0°, 60°, 120°, 180°, 240°, 300° from the fountain | each faces the fountain |
 | Beds | 2 clusters of 2×2 bed tiles at (19,19)–(20,20) and (27,27)–(28,28) | colours rose and lavender |
 | Kiosk | 2×2 at (14,44)–(15,45) | spawns one vendor; two café tables on its east side |
+| Picnic blankets | 2×2 at (14,21)–(15,22) and (34,24)–(35,25) | S6, owner 2026-10-19: lawn, one tile clear of every path, prop and bed; picnic spots for stage 5 (a pair has a spot within 10 tiles of 82 % of the inner loop and 47 % of the outer one, the kiosk's tables alone 0 % and 14 %); passable, `placedBy` `gen` |
 | Lamps | 4: two per loop, at the north and south points of each loop, on the lawn side | |
-| Trees | 12: 4 plane, 4 chestnut, 4 lime | positions seeded, on lawn, ≥ 3 tiles from any path or prop, ≥ 4 tiles from each other |
+| Trees | 12: 4 plane, 4 chestnut, 4 lime | positions seeded, on lawn, ≥ 3 tiles from any path or prop (the picnic blankets included), ≥ 4 tiles from each other |
 
 Seed also varies: bed colour order, pond outline, tree positions. Nothing else.
 

@@ -44,7 +44,7 @@ const CASES: Array<{ name: string; setup?: ToolPayload; cmd: ToolPayload }> = [
   { name: 'bed colour', setup: { tool: 'bed', at: at(5, 5) }, cmd: { tool: 'bed', at: at(5, 5) } },
   { name: 'hedge', cmd: { tool: 'hedge', tiles: [at(1, 5), at(14, 5)] } },
   { name: 'tree', cmd: { tool: 'tree', at: at(5, 5) } },
-  { name: 'tree removed', cmd: { tool: 'tree', at: at(9, 2) } },
+  { name: 'tree removed', cmd: { tool: 'tree', at: at(15, 2) } },
   { name: 'pond', cmd: { tool: 'pond', at: at(5, 5), size: 3, stroke: 4 } },
   { name: 'canal', cmd: { tool: 'canal', tiles: [at(5, 5), at(5, 12)] } },
   { name: 'bridge', cmd: { tool: 'bridge', at: at(31, 12) } },
@@ -130,14 +130,14 @@ describe('ten deep (register 3.7; 06 1.4 UNDO_DEPTH; GV beginStroke 11091)', () 
   });
 
   it('an id reserved by a removal is held while its entry is on the stack, then freed when it falls off', () => {
-    tool({ tool: 'tree', at: at(9, 2) }); // removes starter tree id 17
-    expect(idsState().propReserved).toEqual([17]);
+    tool({ tool: 'tree', at: at(15, 2) }); // removes starter tree id 22
+    expect(idsState().propReserved).toEqual([22]);
     for (let k = 0; k < 9; k++) tool({ tool: 'lamp', at: at(2 + k, 6) });
-    expect(props.some((p) => p.id === 17)).toBe(false); // never handed out while reserved
-    expect(idsState().propReserved).toEqual([17]);
+    expect(props.some((p) => p.id === 22)).toBe(false); // never handed out while reserved
+    expect(idsState().propReserved).toEqual([22]);
     tool({ tool: 'lamp', at: at(2, 8) }); // the 11th entry: the removal leaves the stack
     expect(idsState().propReserved).toEqual([]);
-    expect(idsState().propFree).toEqual([17]);
+    expect(idsState().propFree).toEqual([22]);
   });
 });
 
@@ -293,11 +293,11 @@ describe('undo is logged and cleared (03 5.6 items 4 and 5; 02 8.5 item 4; regis
   });
 
   it('clearUndo empties the stack and frees the ids its entries reserved', () => {
-    tool({ tool: 'tree', at: at(9, 2) });
+    tool({ tool: 'tree', at: at(15, 2) });
     clearUndo();
     expect(canUndo()).toBe(false);
     expect(idsState().propReserved).toEqual([]);
-    expect(idsState().propFree).toEqual([17]);
+    expect(idsState().propFree).toEqual([22]);
   });
 
   it('in avatar mode undo is reason.not_in_avatar (03 5.3)', () => {
@@ -328,11 +328,11 @@ describe('a restore empties the undo stack (register 3.11 "undo-irrelevant"; 03 
   });
 
   it('the ids the snapshot holds reserved stay reserved, so the round trip keeps the state hash (08 2.6 row 1)', () => {
-    tool({ tool: 'tree', at: at(9, 2) }); // fells starter tree 17: its id is reserved
+    tool({ tool: 'tree', at: at(15, 2) }); // fells starter tree 22: its id is reserved
     const h = stateHash();
     restore(snap());
     expect(depth()).toBe(0);
-    expect(idsState().propReserved).toEqual([17]);
+    expect(idsState().propReserved).toEqual([22]);
     expect(stateHash()).toBe(h);
   });
 

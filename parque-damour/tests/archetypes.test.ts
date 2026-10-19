@@ -4,13 +4,16 @@
 // / 08 2.3 archetypes.test.ts rows / 07 S4.6 step 6. The cast arrives at the start (two of each archetype the caps allow, one artist and
 // one busker, four elders so two are free for chess at once), a worn lawn line gives the gardener a run to pave (02 11.1) and a rainy spell sends him under the kiosk's awning (02 4.3
 // gardener item 4); then the park lives one day by itself, arrivals and all.
-// The day is seed 114's. Whether the rarer states (an elder's chess, a couple's picnic, a single's read) all fall inside one day depends on
+// The day is seed 103's. Whether the rarer states (an elder's chess, a couple's picnic, a single's read) all fall inside one day depends on
 // the sim stream: with S4 part B's review fixes, 3 of seeds 101-112 show every state (102, 107, 111), and seed 101, which the first build
 // used, no longer shows an elder at chess (the stream moved when a couple's second stopped standing up before the first sat down, act.ts
 // seatedStep). The assertions are unchanged; a later change to the sim can need another seed (an open question in the S4 hand-back).
 // S5 moved it as foreseen: a couple is now a Pair whose Stroll and Bench run as romance stages (`stroll`, `bench`) and a single may pair
 // up, so seed 102 no longer shows a single on a bench or a couple on its own loop. Seeds 101-160 rescanned on the S5 sim with the
 // assertions unchanged: 114, 118 and 138 show every state; the day is now seed 114's (was 102).
+// S6 moved it again: the two starter picnic blankets (owner 2026-10-19, register section 4) change where the trees go and so the whole
+// stream. Seeds 101-160 rescanned, assertions unchanged: 103, 108, 125, 127, 131, 135, 146, 148 and 152 show every state; the day is now
+// seed 103's (was 114).
 import { describe, it, expect, beforeAll } from 'vitest';
 import { SIM_DT, newPark, simulate } from '../src/core/loop.ts';
 import { enqueue } from '../src/core/commands.ts';
@@ -39,7 +42,7 @@ let joggerSat = 0, farthestChild = 0, painted = 0, easelOk = true;
 
 beforeAll(() => {
   clearListeners();
-  newPark(114);
+  newPark(103);
   for (let x = 2; x <= 7; x++) WEAR[I(x, 1)] = 4; // a desire path for the gardener: the busiest wear, the first in row order (02 11.1 item 4)
   for (let x = 2; x <= 7; x++) expect(KIND[I(x, 1)]).toBe(Kind.lawn);
   const cast: Archetype[] = [

@@ -64,9 +64,9 @@ function playSome(): void {
   steps(120);
   expect(tool({ tool: 'bench', at: at(5, 5) }).ok).toBe(true);
   expect(tool({ tool: 'path', at: at(4, 9), size: 2, stroke: 1 }).ok).toBe(true);
-  expect(tool({ tool: 'tree', at: at(9, 2) }).ok).toBe(true); // fells starter tree 17: its id is reserved while the entry stands
-  expect(tool({ tool: 'tree', at: at(7, 40) }).ok).toBe(true); // a plane (prop 29): the cycle moves on to chestnut
-  expect(tool({ tool: 'remove', at: at(7, 40) }).ok).toBe(true); // the tree goes (29 reserved); the cycle stays at chestnut (02 8.3)
+  expect(tool({ tool: 'tree', at: at(15, 2) }).ok).toBe(true); // fells starter tree 22: its id is reserved while the entry stands
+  expect(tool({ tool: 'tree', at: at(7, 40) }).ok).toBe(true); // a plane (prop 31): the cycle moves on to chestnut
+  expect(tool({ tool: 'remove', at: at(7, 40) }).ok).toBe(true); // the tree goes (31 reserved); the cycle stays at chestnut (02 8.3)
   enqueue({ side: 'park', kind: 'debug.weather', payload: { kind: 'rain' } });
   steps(600);
 }
@@ -75,7 +75,7 @@ describe('the save round trip (08 2.6 rows 1 and 7; register 3.11; 03 11)', () =
   // 08 2.6: h = stateHash(); restore(JSON.parse(JSON.stringify(snapshot()))); stateHash() === h after 1000 more ticks on both paths
   it('the round trip keeps the hash', () => {
     playSome();
-    expect(idsState().propReserved).toEqual([17, 29]); // the felled starter tree and the planted one removed: both held for the undo
+    expect(idsState().propReserved).toEqual([22, 31]); // the felled starter tree and the planted one removed: both held for the undo
     expect(nextSpecies()).toBe(1); // what a count of the player's trees standing (0) would not give
     const h = stateHash();
     const s = clone(snapshot());
@@ -451,14 +451,14 @@ const probe = (): Probe => ({ hash: stateHash(), world: worldHash(), ids: idsSta
 type PathRun = { at9: Probe; at11: Probe; ok: boolean[]; depth9: number };
 
 /**
- * A removal (the tree tool fells starter tree 17: its id is reserved while the entry stands), a round trip through JSON, then the same
+ * A removal (the tree tool fells starter tree 22: its id is reserved while the entry stands), a round trip through JSON, then the same
  * 11 tool entries on the live path and on the restored one: 10 benches and a lamp, with ticks between. Probes after 9 entries (the
- * felling's entry still on the live stack) and after 11 (it fell off the live stack at the tenth, which released id 17 there).
+ * felling's entry still on the live stack) and after 11 (it fell off the live stack at the tenth, which released id 22 there).
  */
 function twoPaths(): { live: PathRun; restored: PathRun; h: number; hRestored: number } {
   steps(60);
-  expect(tool({ tool: 'tree', at: at(9, 2) }).ok).toBe(true);
-  expect([idsState().propReserved, depth()]).toEqual([[17], 1]);
+  expect(tool({ tool: 'tree', at: at(15, 2) }).ok).toBe(true);
+  expect([idsState().propReserved, depth()]).toEqual([[22], 1]);
   const h = stateHash();
   const s = clone(snapshot());
   const spots: Array<{ x: number; y: number }> = [];
@@ -484,7 +484,7 @@ describe('a restore leaves every derived cache consistent (07 S3 step 9; 03 3.1,
   it('BLOCK, the water bodies, the props by id, the ids, the undo stack and the tree cycle', () => {
     expect(tool({ tool: 'pond', at: at(6, 30), size: 3, stroke: 1 }).ok).toBe(true);
     expect(tool({ tool: 'bench', at: at(12, 30) }).ok).toBe(true);
-    expect(tool({ tool: 'tree', at: at(9, 2) }).ok).toBe(true); // a fell: id 17 reserved
+    expect(tool({ tool: 'tree', at: at(15, 2) }).ok).toBe(true); // a fell: id 22 reserved
     expect(tool({ tool: 'tree', at: at(14, 30) }).ok).toBe(true);
     expect(tool({ tool: 'remove', at: at(14, 30) }).ok).toBe(true);
     const s = clone(snapshot());
@@ -513,7 +513,7 @@ describe('a restore leaves every derived cache consistent (07 S3 step 9; 03 3.1,
     expect(r.live.ok).toEqual(Array(11).fill(true));
     expect(r.restored.ok).toEqual(r.live.ok);
     expect(r.restored.at9).toEqual(r.live.at9);
-    expect(r.live.at9.ids.propReserved).toEqual([17]);
+    expect(r.live.at9.ids.propReserved).toEqual([22]);
     // the felling's entry and nine more fill the live stack, so the tenth pushes it off there; the restored stack holds only the nine
     expect([r.live.depth9, r.restored.depth9]).toEqual([UNDO_DEPTH, UNDO_DEPTH - 1]);
   });

@@ -2,7 +2,7 @@
   "slice": "S5",
   "seed": 101,
   "steps": 64800,
-  "note": "det-s4l's seed, steps and 42 commands (park.pace lively at tick 1, the rain at 1,800, the 22 visitor.call commands that fill the park to 30 people by midday of day 1, the tools and the undo in run 5's window, the weather), plus three park tools by the fountain (S5, the romance core; 07 S5.7 item 1: determinism over 3 days with pairs forming): a picnic blanket at (26, 20) at tick 4,000 (a picnic spot for Stage 5), a bed at (21, 27) at 4,100 (player charm, 02 6.3) and a lamp at (20, 26) at 4,200 (a lit lamp for the evening Kiss and a lamp-lit bench). Over the 3 days couples arrive as Pairs and singles pair up and climb the stages (run 1 counts 14 pairs formed and 19 stages completed). Run 5's replay and run 6's round trip carry the pairs, the alumni and the day's rolls in the snapshot (pairs, alumni, sched.rolled, sched.alumniDay) and the state hash; the pinned pair and the feed are saved and not hashed. Each command's tick is the step it is applied in. expect.rngN and expect.stateHash are the Vitest values after the run (03 11); tools/det.mjs det-s5 checks them in Chromium. First recorded in S5: rngN 30775, stateHash 11004916.",
+  "note": "det-s4l's seed, steps and 42 commands (park.pace lively at tick 1, the rain at 1,800, the 22 visitor.call commands that fill the park to 30 people by midday of day 1, the tools and the undo in run 5's window, the weather), plus three park tools by the fountain (S5, the romance core; 07 S5.7 item 1: determinism over 3 days with pairs forming): a picnic blanket at (26, 20) at tick 4,000 (a picnic spot for Stage 5), a bed at (21, 27) at 4,100 (player charm, 02 6.3) and a lamp at (20, 26) at 4,200 (a lit lamp for the evening Kiss and a lamp-lit bench). Over the 3 days couples arrive as Pairs and singles pair up and climb the stages (run 1 counts 14 pairs formed and 19 stages completed). Run 5's replay and run 6's round trip carry the pairs, the alumni and the day's rolls in the snapshot (pairs, alumni, sched.rolled, sched.alumniDay) and the state hash; the pinned pair and the feed are saved and not hashed. Each command's tick is the step it is applied in. expect.rngN and expect.stateHash are the Vitest values after the run (03 11); tools/det.mjs det-s5 checks them in Chromium. First recorded in S5: rngN 30775, stateHash 11004916. Re-recorded once for the starter picnic spots (S6, owner 2026-10-19, register section 4 'Starter picnic spots'): Happily was rare (1 of 200 Calm seeds in 3 days) because only the kiosk's tables were a picnic spot within 10 tiles of a pair at the Picnic stage, so gen.ts now places two 2 x 2 blankets, at (14, 21) and (34, 24), before the trees: the prop ids after them shift by two, the trees keep 3 tiles from the blankets and land elsewhere (the shuffle draws a different number of candidates), the sim stream differs from the first tree draw on, and pairs find a spot more often. The commands are unchanged except two more visitor.call, at 3,220 and 3,230: on the new park the 22 calls of the grid fill the Calm park to exactly 30 and none is refused, which the test's rejected check needs (the two extra are refused, the park being full; a refused command is not logged, so det-s4l and det-s5 kept their values with them). The picnic blanket this fixture adds at (26, 20) at tick 4,000 stands beside the two starter blankets. Values before the picnic spots rngN 30775, stateHash 11004916; after them rngN 31812, stateHash 76893223.",
   "commands": [
     { "tick": 1, "side": "park", "kind": "park.pace", "payload": { "pace": "lively" } },
     { "tick": 100, "side": "park", "kind": "speed", "payload": { "speed": 8 } },
@@ -28,6 +28,8 @@
     { "tick": 3120, "side": "park", "kind": "visitor.call", "payload": { "gate": null } },
     { "tick": 3160, "side": "park", "kind": "visitor.call", "payload": { "gate": null } },
     { "tick": 3200, "side": "park", "kind": "visitor.call", "payload": { "gate": null } },
+    { "tick": 3220, "side": "park", "kind": "visitor.call", "payload": { "gate": null } },
+    { "tick": 3230, "side": "park", "kind": "visitor.call", "payload": { "gate": null } },
     { "tick": 3240, "side": "park", "kind": "visitor.call", "payload": { "gate": null } },
     { "tick": 4000, "side": "park", "kind": "tool", "payload": { "tool": "picnic", "at": { "x": 26, "y": 20 } } },
     { "tick": 4100, "side": "park", "kind": "tool", "payload": { "tool": "bed", "at": { "x": 21, "y": 27 } } },
@@ -50,5 +52,5 @@
     { "tick": 55000, "side": "park", "kind": "debug.weather", "payload": { "kind": "clear" } },
     { "tick": 64800, "side": "park", "kind": "speed", "payload": { "speed": 0 } }
   ],
-  "expect": { "rngN": 30775, "stateHash": 11004916 }
+  "expect": { "rngN": 31812, "stateHash": 76893223 }
 }

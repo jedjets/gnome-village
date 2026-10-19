@@ -42,8 +42,11 @@ const fixture = FIXTURES['det-s2']; // the state-hash tests below run on det-s2'
 
 type Hook = (step: number) => void;
 
-/** det-s2's values since S5, the romance core (see the test that reads it). */
-const DET_S2_S5 = { rngN: 26992, stateHash: 854600468 };
+/**
+ * det-s2's values since the starter picnic spots (S6, owner 2026-10-19: two 2 x 2 blankets in the starter park, re-recorded once; see the
+ * test that reads it). Before them, since S5, the romance core: rngN 26992, stateHash 854600468.
+ */
+const DET_S2_PICNIC = { rngN: 28155, stateHash: 4191156501 };
 
 /** The kind of the prop whose footprint covers (x, y). */
 function propKindAt(x: number, y: number): string | undefined {
@@ -94,8 +97,9 @@ describe('the fixtures (08 3.2 item 1)', () => {
     // S2 recorded rngN 912, stateHash 2925709919; S4 part B re-recorded them, the arrivals on (07 S4.7 item 1): rngN 27245, stateHash
     // 3065084456, then rngN 27599, stateHash 3808997934 after the stage's review fixes (a couple's second waits seated for the first,
     // act.ts seatedStep). S5 re-recorded them once, the sanctioned re-record of the romance core (pairs forming change the sim: the
-    // couples' Pairs, the formation rolls, the stages, the charm conversion; see the fixture's note). No later slice may move these.
-    expect(fixture.expect).toEqual(DET_S2_S5);
+    // couples' Pairs, the formation rolls, the stages, the charm conversion; see the fixture's note). S6 re-recorded all five once more for the
+    // starter picnic spots (rngN 26992, stateHash 854600468 before them; see the fixture's note). No later slice may move these.
+    expect(fixture.expect).toEqual(DET_S2_PICNIC);
   });
 
   it('det-s3 is det-s2 plus 7 park commands: a bench, a 3-centre stroke and an undo inside run 5\'s window, a tree and a bandstand before 40,000', () => {
@@ -122,12 +126,16 @@ describe('the fixtures (08 3.2 item 1)', () => {
     expect(log().filter((c) => c.kind === 'tool' || c.kind === 'undo')).toHaveLength(7);
   }, LONG);
 
-  it('det-s4 is det-s3 plus 22 visitor.call commands between ticks 2,400 and 3,240 (07 S4.7 item 1)', () => {
+  it('det-s4 is det-s3 plus 24 visitor.call commands between ticks 2,400 and 3,240 (07 S4.7 item 1; S6: 22 on the 40-tick grid and 2 at 3,220 and 3,230)', () => {
     const s3 = FIXTURES['det-s3'], s4 = FIXTURES['det-s4'];
     expect([s4.seed, s4.steps]).toEqual([s3.seed, s3.steps]);
     expect(s4.commands.filter((c) => c.kind !== 'visitor.call')).toEqual(s3.commands);
     const calls = s4.commands.filter((c) => c.kind === 'visitor.call');
-    expect(calls).toHaveLength(22);
+    // S6 (the starter picnic spots moved the sim): on the new park the 22 calls of the grid filled the Calm park to exactly 30 and none was
+    // refused, which run 1's `rejected` check needs; two more at 3,220 and 3,230, with the park full, are refused (reason.park_full)
+    expect(calls).toHaveLength(24);
+    expect(calls.filter((c) => c.tick % 40 === 0)).toHaveLength(22);
+    expect(calls.filter((c) => c.tick === 3220 || c.tick === 3230)).toHaveLength(2);
     expect(calls.every((c) => c.tick >= 2400 && c.tick <= 3240 && c.side === 'park')).toBe(true);
     expect(s4.commands.at(-1)).toEqual({ tick: 64800, side: 'park', kind: 'speed', payload: { speed: 0 } });
   });
@@ -198,7 +206,9 @@ for (const name of ['det-s2', 'det-s3', 'det-s4', 'det-s4l', 'det-s5'] as const)
       const b = run(fx);
       expect(b).toEqual(a);
       newPark(fx.seed);
-      const c = run(fx, { extra: [{ tick: 30000, side: 'park', kind: 'debug.weather', payload: { kind: 'rain' } }] });
+      // S6: 'mist', not 'rain': on the new park det-s5's own weather is already rain at tick 30,000, so a forced rain there changed nothing
+      // that outlived the snow the fixture forces at 33,000; mist is not the weather at that tick in any fixture
+      const c = run(fx, { extra: [{ tick: 30000, side: 'park', kind: 'debug.weather', payload: { kind: 'mist' } }] });
       expect(c.hash).not.toBe(a.hash);
     }, LONG);
 
