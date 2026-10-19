@@ -19,6 +19,10 @@
 //  5c. Options: Calm then reload keeps Calm for the park and the preference (register section 4, Park pace and Options, owner
 //      2026-10-14): the park New started is Lively (a new player's profile pace); Options shows it pressed; Calm tapped turns the park
 //      calm at the next step and writes the profile; after a reload and Continue the park and the profile are still calm, Calm pressed.
+//  5d. Abilities (07 S6.6 steps 6 and 7, 03 8.2 item 2): on the running park, the Cupid group's locked Musician pill toasts "Unlocks at Cupid
+//      T1" and arms nothing; the Mischief group's Sprinkler pill arms, a tap on a lawn tile logs one `ability` command and the running sim
+//      applies it (the sprinkler prop appears, row 2's chip counts the cooldown down, the pill stays armed); a second tap inside the cooldown
+//      toasts "not yet (n s)" and puts no second sprinkler down.
 //   6. A Spanish browser (navigator.language es-ES), a fresh profile: the intro is in Spanish; after Begin and a reload it still is;
 //      EN tapped on the intro survives a reload (register 3.12).
 // Every action is a real tap or click (puppeteer's mouse at __PD.screenOf of a tile, or the DOM control). Exits 1 on any failed check,
@@ -201,6 +205,9 @@ async function run(base) {
 
     // 5c. Options: Calm then reload keeps Calm for the park and the preference
     await paceCheck(page);
+
+    // 5d. Abilities
+    await abilityCheck(page);
   } finally {
     await browser.close();
   }
@@ -390,6 +397,53 @@ async function paceCheck(page) {
   const s2 = await state();
   check(s2.park === 'calm' && s2.stored === 'calm' && s2.calm && !s2.lively,
     `Options: Calm then reload keeps Calm for the park and the preference (park ${s2.park}, profile ${s2.stored}, Calm pressed ${s2.calm})`);
+}
+
+/**
+ * 5d. The locked pill, then arming, a tap, the applied command, the chip and the refusal inside the cooldown (see the header). The tile is
+ * a lawn tile of the park on screen with nothing on it (read from the layers; the tap itself is a real click at its screen point).
+ */
+async function abilityCheck(page) {
+  if (await page.$eval('#options', (el) => el.classList.contains('on'))) await page.click('#options .x');
+  await page.click('#groups [data-group="cupid"]');
+  await page.click('.tool[data-id="c_musician"]');
+  const lock = await page.evaluate(() => ({
+    text: document.getElementById('hint').textContent,
+    on: document.getElementById('hint').classList.contains('on'),
+    armed: document.querySelector('#tools .tool[aria-pressed="true"]') !== null,
+  }));
+  check(lock.text === 'Unlocks at Cupid T1' && lock.on && !lock.armed, `abilities: a locked pill toasts "${lock.text}" and arms nothing`);
+  await page.click('#groups [data-group="mischief"]');
+  await page.click('.tool[data-id="m_sprinkler"]');
+  const tile = await page.evaluate(() => {
+    const pd = window.__PD, K = pd.layers.KIND, O = pd.layers.OCC;
+    for (let y = 8; y < 40; y++) {
+      for (let x = 8; x < 40; x++) {
+        if (K[y * 48 + x] !== 0 || O[y * 48 + x] !== 0) continue; // lawn, nothing on it
+        const s = pd.screenOf(x, y);
+        if (s.x > 40 && s.x < 350 && s.y > 200 && s.y < 560) return { x, y };
+      }
+    }
+    return null;
+  });
+  check(tile !== null, 'abilities: a free lawn tile on screen');
+  if (!tile) return;
+  const seq0 = await page.evaluate(() => window.__PD.log().reduce((m, c) => Math.max(m, c.seq), 0));
+  const p = await screenOfTile(page, tile.x, tile.y);
+  await page.mouse.click(p.x, p.y);
+  await page.waitForFunction(() => window.__PD.props.some((q) => q.kind === 'sprinkler'), { timeout: 5_000 }).catch(() => {});
+  const cmds = await page.evaluate((s) => window.__PD.log().filter((c) => c.seq > s && c.kind === 'ability').map((c) => c.payload.id + ':' + c.payload.target.kind), seq0);
+  const st = await page.evaluate(() => ({
+    sprinklers: window.__PD.props.filter((q) => q.kind === 'sprinkler').length,
+    chip: document.querySelector('#cdChip .nm')?.textContent + ' ' + document.querySelector('#cdChip .cd')?.textContent,
+    armed: document.querySelector('#tools .tool[aria-pressed="true"]')?.dataset.id,
+  }));
+  check(cmds.length === 1 && cmds[0] === 'm_sprinkler:tile' && st.sprinklers === 1, `abilities: the tap logged ${JSON.stringify(cmds)} and the sim put ${st.sprinklers} sprinkler down`);
+  check(/^Sprinkler \d+ s$/.test(st.chip) && st.armed === 'm_sprinkler', `abilities: the chip counts the cooldown ("${st.chip}") and the pill stays armed (${st.armed})`);
+  await page.mouse.click(p.x, p.y);
+  await page.waitForFunction(() => /^not yet \(\d+ s\)$/.test(document.getElementById('hint').textContent ?? ''), { timeout: 5_000 }).catch(() => {});
+  const again = await page.evaluate(() => ({ text: document.getElementById('hint').textContent, sprinklers: window.__PD.props.filter((q) => q.kind === 'sprinkler').length }));
+  check(/^not yet \(\d+ s\)$/.test(again.text) && again.sprinklers <= 1, `abilities: a second tap inside the cooldown toasts "${again.text}" (${again.sprinklers} sprinkler)`);
 }
 
 /**

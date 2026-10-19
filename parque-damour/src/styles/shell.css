@@ -63,7 +63,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
 .tool .sw svg .f-rose{fill:var(--rose)} .tool .sw svg .f-lawn{fill:var(--lawn)} .tool .sw svg .f-gravel{fill:var(--gravel)}
 .tool .sw svg .f-water{fill:var(--water)} .tool .sw svg .f-awning{fill:var(--awning)}
 .tool .lb{white-space:nowrap}
-.tool .tier{font-size:11px;font-weight:700;color:var(--stone);min-height:17px;display:flex;align-items:center}
+.tool .tier{font-size:11px;font-weight:700;color:var(--ink-soft);min-height:17px;display:flex;align-items:center}
 .tool.locked{opacity:.45}
 /* the ability pills (04 5.4 item 2): the swatch is a plain colour chip in the side's accent, its border the same; pressed, the border goes pale */
 .tool.cupid .sw{background:var(--berry);border-color:var(--berry)}
@@ -75,7 +75,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
 .tool[aria-pressed="true"]{background:var(--ink);color:var(--on-ink);border-color:var(--ink);transform:translateY(-2px)}
 .tool[aria-pressed="true"] .sw{border-color:var(--on-ink-line)}
 .tool:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-#row2{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;pointer-events:none}
+#row2{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;pointer-events:none;min-height:44px}
 #row2 > *{pointer-events:auto}
 #row2 .ctx{display:flex;align-items:center;gap:6px;min-height:44px;max-width:100%;min-width:0;background:var(--glass);
   border:1px solid var(--glass-line);border-radius:999px;padding:3px 3px 3px 14px;box-shadow:var(--shadow);
@@ -126,6 +126,9 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
 #cdChip.cupid .arc{stroke:var(--berry)}
 #cdChip.mischief .arc{stroke:var(--ember)}
 #cdChip .nm{font-weight:600}
+#cdChip.idle svg{display:none}
+#cdChip.idle .nm{font-weight:500;color:var(--ink-soft)}
+#cdChip.idle{padding-left:12px}
 #cdChip .cd{min-width:2.3em;font-variant-numeric:tabular-nums}
 #cdChip .ch{color:var(--ink-soft);font-variant-numeric:tabular-nums}
 /* a phone narrower than 340 px (owner 2026-10-17): the speed dial and the actions' padding tighten so row 3 is two lines, the speed and

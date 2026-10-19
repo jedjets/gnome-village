@@ -214,19 +214,32 @@ describe('02 9.1 item 1, 04 5.4 item 1: arming', () => {
     expect(getComputedStyle($('tools')).display).toBe('none');
     $('bMode').click();
   });
-  it('row 2: a Park hand shows Undo; an ability group with nothing armed has no row 2; an armed ability shows the chip alone (one contextual bar)', () => {
+  it('row 2: a Park hand shows Undo; an ability group shows the chip alone, "Pick an ability" with nothing armed, so the row never changes height (one contextual bar)', () => {
     expect(hidden('row2')).toBe(false);
     expect(hidden('bUndo')).toBe(false);
+    expect(hidden('cdChip')).toBe(true);
     setGroup('cupid');
-    expect(hidden('row2')).toBe(true);
-    pill('c_petals').click();
     expect(hidden('row2')).toBe(false);
     expect(hidden('cdChip')).toBe(false);
+    expect($('cdChip').classList.contains('idle')).toBe(true);
+    expect($('cdChip').querySelector('.nm')?.textContent).toBe('Pick an ability');
+    expect(getComputedStyle($('cdChip').querySelector('svg') as Element).display).toBe('none');
     expect(hidden('bUndo')).toBe(true);
     expect(($('row2').querySelector('.ctx') as HTMLElement).hidden).toBe(true);
     pill('c_petals').click();
-    expect(hidden('row2')).toBe(true);
+    expect(hidden('cdChip')).toBe(false);
+    expect($('cdChip').classList.contains('idle')).toBe(false);
+    expect($('cdChip').querySelector('.nm')?.textContent).toBe('Petals');
+    expect(getComputedStyle($('cdChip').querySelector('svg') as Element).display).not.toBe('none');
+    pill('c_petals').click();
+    expect($('cdChip').classList.contains('idle')).toBe(true);
+    setGroup('mischief');
+    expect($('cdChip').classList.contains('mischief')).toBe(true);
+    setGroup('park');
     expect(hidden('cdChip')).toBe(true);
+    expect(hidden('bUndo')).toBe(false);
+    const shell = readFileSync(join(ROOT, 'src', 'styles', 'shell.css'), 'utf8');
+    expect(shell).toContain('pointer-events:none;min-height:44px}'); // row 2 is as tall as Undo, in every group
   });
 });
 
@@ -343,10 +356,14 @@ describe('04 5.4 item 4: row 2\'s cooldown chip: the ring, the seconds left, the
     expect(chip().ch?.textContent).toBe('1/1');
     expect(chip().nm).toBe('Fireworks');
     setArmed(null);
-    expect(hidden('cdChip')).toBe(true);
+    expect($('cdChip').classList.contains('idle')).toBe(true);
   });
-  it('Spanish: the chip reads in Spanish after a language change', () => {
+  it('Spanish: the chip reads in Spanish after a language change, idle or armed', () => {
     setGroup('mischief');
+    setLang('es');
+    updateRail(0);
+    expect($('cdChip').querySelector('.nm')?.textContent).toBe(es['rail.pick']);
+    setLang('en');
     pill('m_sprinkler').click();
     setLang('es');
     updateRail(0);

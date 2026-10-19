@@ -491,6 +491,7 @@ export const es: Record<string, string> = {
   'feed.unlock': 'Desbloqueado: {item} ({side} T{tier})',
   'toast.unlocked': 'Desbloqueado: {item} ({side} T{tier})',
   'rail.soon': 'Muy pronto',
+  'rail.pick': 'Elige una habilidad',
   'sheet.progress.unlocks': 'Desbloqueos',
   'sheet.progress.avatar': 'Avatar: {name}',
 };

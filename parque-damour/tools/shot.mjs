@@ -22,6 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import puppeteer from 'puppeteer-core';
+import { S6_SCENES, s6Actions } from './shot-s6.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
@@ -155,6 +156,8 @@ const SCENE_SETS = {
     { name: 'options-360', keep: true, act: 'smallOptions' },
     { name: 'census-360', keep: true, act: 'smallCensus' },
   ],
+  // s6: the UI stage of S6 (07 S6.7 item 5): the Cupid strip, the cooldown chip, the petals cast and the Progress sheet, by real taps (tools/shot-s6.mjs)
+  s6: S6_SCENES,
   s3: [
     { name: 'rail', turn: 0, z: 1.3 },
     { name: 'ghost-ok', turn: 0, z: 1.3, at: [24, 29], act: 'ghostOk' },
@@ -527,6 +530,8 @@ const ACTIONS = {
     await page.waitForFunction(() => !document.getElementById('confirm').hidden, { timeout: 5_000 });
   },
 };
+
+Object.assign(ACTIONS, s6Actions({ tapTile, runBriefly, sleep }));
 
 function parseArgs(argv) {
   const out = { slice: 's0', url: '', days: 0, smoke: false };

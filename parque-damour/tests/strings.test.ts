@@ -226,7 +226,7 @@ describe('the abilities, the unlocks and the Progress sheet (06 16.2, 16.6, 16.1
   });
   it('the UI stage\'s strings (07 S6.6 steps 6-9): the strips, the locked toast, the chip, the Progress sheet, in both tables with the same {params}', () => {
     const ui = [
-      'rail.locked_at', 'rail.tier', 'rail.cooldown', 'rail.charges', 'rail.ready', 'rail.soon', 'rail.cupid', 'rail.mischief', 'hud.cupid', 'hud.mischief',
+      'rail.locked_at', 'rail.tier', 'rail.cooldown', 'rail.charges', 'rail.ready', 'rail.soon', 'rail.pick', 'rail.cupid', 'rail.mischief', 'hud.cupid', 'hud.mischief',
       'sheet.progress.title', 'sheet.progress.cupid', 'sheet.progress.mischief', 'sheet.progress.points', 'sheet.progress.next', 'sheet.progress.done',
       'sheet.progress.unlocks', 'sheet.progress.avatar', 'feed.tally', 'feed.unlock', 'toast.unlocked', 'reason.cooldown', 'reason.locked', 'aria.points',
       'aria.sheet_progress', 'aria.group_cupid', 'aria.group_mischief',

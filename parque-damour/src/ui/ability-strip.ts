@@ -16,7 +16,8 @@
 // Row 2 (04 5.4 item 4): #cdChip, a glass chip with the armed ability's name, an SVG ring that empties over the cooldown (stroke
 // --berry or --ember by CSS), the seconds left in tabular numerals (or "Ready"), and "left/max" for an ability with charges; the cooldown
 // is read from play/abilities.ts in sim seconds, so it holds still while the park is paused and runs at the dial's speed. Written only
-// when what it shows changes.
+// when what it shows changes. With nothing armed the chip stays, as "Pick an ability" with no ring, so row 2 keeps its height and the
+// pills do not jump when one is armed (the Park group's row 2 always holds Undo); it is hidden only while the Park strip shows.
 import { enqueue, type AbilityId, type Target } from '../core/commands.ts';
 import type { XY } from '../core/math.ts';
 import { ABILITIES, abilityById, chargesLeft, cooldownLeft, type AbilityDef, type AbilitySide } from '../play/abilities.ts';
@@ -36,7 +37,6 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 let armed: AbilityId | null = null;
 /** The strip on screen: null while the Park strip shows. */
 let shown: AbilitySide | null = null;
-let onArmed: () => void = () => {};
 let builtKey = '';
 let chipKey = '';
 
@@ -73,24 +73,25 @@ function stripKey(): string {
   return [tier('cupid'), tier('mischief'), lang()].join('|');
 }
 
-/** Fill `wrap` with the strip of `side`; `cb` is called whenever the arming changes (rail.ts repaints row 2). */
-export function buildAbilityStrip(wrap: HTMLElement, side: AbilitySide, cb: () => void, keepScroll = false): void {
+/** Fill `wrap` with the strip of `side` (the scroll kept when the strip is rebuilt in place). */
+export function buildAbilityStrip(wrap: HTMLElement, side: AbilitySide, keepScroll = false): void {
   shown = side;
-  onArmed = cb;
   const x = keepScroll ? wrap.scrollLeft : 0;
   wrap.replaceChildren(...ABILITIES.filter((d) => d.side === side).map(pill));
   wrap.scrollLeft = x;
   builtKey = stripKey();
   wrap.dispatchEvent(new Event('scroll')); // the edge masks
+  paintChip();
 }
 
-/** The Park strip is back (or the avatar mode starts): no ability strip, nothing armed. */
+/** The Park strip is back (or the avatar mode starts): no ability strip, nothing armed, no chip. */
 export function endAbilityStrip(): void {
   shown = null;
   setArmed(null);
+  paintChip();
 }
 
-/** Arm `id` (or disarm with null): the pill pressed, the aim mark and the chip follow, and the rail repaints row 2. */
+/** Arm `id` (or disarm with null): the pill pressed, the aim mark and the chip follow. */
 export function setArmed(id: AbilityId | null): void {
   if (armed === id) return;
   armed = id;
@@ -99,7 +100,6 @@ export function setArmed(id: AbilityId | null): void {
   });
   if (id === null) clearAimMark();
   paintChip();
-  onArmed();
 }
 
 function onPill(d: AbilityDef): void {
@@ -183,6 +183,7 @@ export function refusalParams(reason: string): Params | undefined {
 /* ---------- row 2: the cooldown chip (04 5.4 item 4) ---------- */
 
 type ChipParts = { arc: SVGCircleElement; nm: HTMLElement; cd: HTMLElement; ch: HTMLElement };
+const IDLE_KEY = 'idle';
 let parts: ChipParts | null = null;
 
 function ensureChip(el: HTMLElement): ChipParts {
@@ -215,16 +216,31 @@ function ensureChip(el: HTMLElement): ChipParts {
   return parts;
 }
 
-/** Row 2's chip for the armed ability; hidden with nothing armed. Writes the DOM only on a change of what it shows. */
+/** Row 2's chip for the armed ability, "Pick an ability" with nothing armed, hidden with the Park strip. Writes only on a change. */
 export function paintChip(): void {
   const el = $('cdChip');
   const d = armed ? abilityById(armed) : undefined;
   if (!d) {
-    if (!el.hidden) {
-      el.hidden = true;
+    if (shown === null) {
+      if (!el.hidden) {
+        el.hidden = true;
+        layoutOverlays();
+      }
+      chipKey = '';
+      return;
+    }
+    const key = [IDLE_KEY, shown, lang()].join('|');
+    if (key === chipKey && !el.hidden) return;
+    chipKey = key;
+    const p = ensureChip(el);
+    el.className = 'chip idle ' + shown;
+    p.nm.textContent = t('rail.pick');
+    p.cd.textContent = '';
+    p.ch.hidden = true;
+    if (el.hidden) {
+      el.hidden = false;
       layoutOverlays();
     }
-    chipKey = '';
     return;
   }
   const left = cooldownLeft(d.side, d.id);
@@ -249,6 +265,6 @@ export function paintChip(): void {
 
 /** Every frame (rail.ts updateRail): a tier reached or a language change rebuilds the strip in place, then the chip repaints. */
 export function updateAbilityStrip(): void {
-  if (shown !== null && stripKey() !== builtKey) buildAbilityStrip($('tools'), shown, onArmed, true);
+  if (shown !== null && stripKey() !== builtKey) buildAbilityStrip($('tools'), shown, true);
   paintChip();
 }
