@@ -5,10 +5,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SIM_DT } from '../src/core/loop.ts';
 import { T } from '../src/core/clock.ts';
-import { W, overrides, weatherAt } from '../src/core/weather.ts';
+import { W, forceWeather, markWetUnknown, overrides, weatherAt } from '../src/core/weather.ts';
+import { applyNow, type ToolPayload } from '../src/core/commands.ts';
 import { on, type GameEvent } from '../src/core/events.ts';
 import { rngN } from '../src/core/rng.ts';
-import { I, OCC, PETALS, WET, addProp, props, rebuildBlock, markBlockDirty } from '../src/world/grid.ts';
+import { I, OCC, PETALS, WET, addProp, propById, props, rebuildBlock, markBlockDirty } from '../src/world/grid.ts';
 import { charmAt } from '../src/world/charm.ts';
 import { canCast, cast, commandTick, cooldownLeft, effects, stepAbilities } from '../src/play/abilities.ts';
 import { nowTick, people, removeVisitor, spawnVisitor, visitors, type Visitor } from '../src/entities/visitor.ts';
@@ -70,6 +71,30 @@ describe('c_sunbeam (02 9.2, 3.5): an override of r 3 for 60 s: rain 0, cloud 0.
     run(1);
     expect(overrides()).toHaveLength(0);
     expect(effects).toHaveLength(0);
+  });
+});
+
+describe('c_sunbeam interaction (02 9.2, 06 11.2): under snow the tiles\' WET dries twice as fast', () => {
+  const dried = (snow: boolean): { inside: number; outside: number } => {
+    world();
+    unlockAll();
+    if (snow) {
+      forceWeather('snow');
+      W.snow = 0.8; // the target of the kind (06 14.1): it holds for the run
+    }
+    for (const x of [24, 28]) WET[I(x, 8)] = 0.8; // (24,8) is the centre of the 7x7, (28,8) is one tile outside
+    markWetUnknown();
+    expect(cast('cupid', 'c_sunbeam', tileT(24, 8), nowTick() + 1).ok).toBe(true);
+    run(10 * SEC);
+    return { inside: WET[I(24, 8)] as number, outside: WET[I(28, 8)] as number };
+  };
+  it('snow falling: 0.02 a second inside the square (0.8 -> 0.6 in 10 s), 0.01 a second outside; no snow: 0.01 both', () => {
+    const snowy = dried(true);
+    expect(snowy.inside).toBeCloseTo(0.6, 3);
+    expect(snowy.outside).toBeCloseTo(0.7, 3);
+    const fair = dried(false);
+    expect(fair.inside).toBeCloseTo(0.7, 3);
+    expect(fair.outside).toBeCloseTo(0.7, 3);
   });
 });
 
@@ -294,6 +319,43 @@ describe('m_peel (02 9.3): a passable prop for 120 s; the first adult non-staff 
     W.snow = 0;
     expect(canCast('mischief', 'm_peel', tileT(17, 24)).ok).toBe(true);
   });
+});
+
+describe('an ability prop ends with its effect: a sprinkler or peel that the remove tool took and an undo put back is swept (02 1.2 P2; 03 5.6)', () => {
+  const tool = (payload: ToolPayload) => applyNow({ side: 'park', kind: 'tool', payload });
+  const undo = () => applyNow({ side: 'park', kind: 'undo', payload: {} });
+  const CASES = [['m_sprinkler', 'sprinkler', 5, 30], ['m_peel', 'peel', 17, 24]] as const;
+  for (const [id, kind, x, y] of CASES) {
+    it(`${kind}: removed, then undone, it is gone within one step and does not come back; the id and the tile are free`, () => {
+      unlockAll();
+      expect(cast('mischief', id, tileT(x, y), nowTick() + 1).ok).toBe(true);
+      run(5 * SEC);
+      const prop = props.find((p) => p.kind === kind);
+      expect(prop).toBeDefined();
+      expect(tool({ tool: 'remove', at: { x, y } }).ok).toBe(true);
+      run(2);
+      expect(effects).toHaveLength(0); // the effect ended with its prop
+      expect(undo().ok).toBe(true);
+      expect(propById(prop?.id ?? 0)?.kind).toBe(kind); // the undo did put it back ...
+      run(1);
+      expect(propById(prop?.id ?? 0)).toBeUndefined(); // ... and nothing owns it, so it goes
+      expect(props.some((p) => p.kind === kind)).toBe(false);
+      expect(OCC[I(x, y)]).toBe(0);
+      run(220 * SEC);
+      expect(props.some((p) => p.kind === kind)).toBe(false);
+      expect(canCast('mischief', id, tileT(x, y)).ok).toBe(true); // no phantom (reason.peel_here, reason.taken)
+    });
+    it(`${kind}: removed and undone before a step runs, its effect never noticed: it stays and runs on`, () => {
+      unlockAll();
+      cast('mischief', id, tileT(x, y), nowTick() + 1);
+      run(5 * SEC);
+      tool({ tool: 'remove', at: { x, y } });
+      expect(undo().ok).toBe(true);
+      run(1);
+      expect(props.some((p) => p.kind === kind)).toBe(true);
+      expect(effects).toHaveLength(1);
+    });
+  }
 });
 
 describe('m_pomeranian (02 9.3, 11.3): Pompon enters, snatches, runs to a gate, the victim chases 8 s, the item comes back, he waits outside 60 s', () => {

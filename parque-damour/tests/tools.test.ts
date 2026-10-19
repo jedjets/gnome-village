@@ -279,8 +279,9 @@ describe('repeat taps (02 8.3 bed, bench and tree rows)', () => {
     expect(reasonOf(tool({ tool: 'tree', at: at(5, 5) }))).toBe('ok');
     expect(propAt(5, 5)).toBeUndefined();
     expect(OCC[I(5, 5)]).toBe(0);
+    expect(propAt(15, 2)?.kind).toBe('tree'); // the starter tree at (15,2) is there before the tool ...
     expect(reasonOf(tool({ tool: 'tree', at: at(15, 2) }))).toBe('ok'); // a starter tree goes too
-    expect(propAt(9, 2)).toBeUndefined();
+    expect(propAt(15, 2)).toBeUndefined(); // ... and gone after it
   });
 
   it('tree species cycle plane -> chestnut -> lime per placement', () => {

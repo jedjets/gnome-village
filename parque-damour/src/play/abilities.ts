@@ -19,7 +19,7 @@ import { T } from '../core/clock.ts';
 import { emit } from '../core/events.ts';
 import { OK, fail, onResetCommands, registerHandler, type AbilityId, type ReasonKey, type Result, type Target } from '../core/commands.ts';
 import { nextEffectId, type EffectId, type PairId, type PropId, type Side } from '../core/ids.ts';
-import { I, KIND, Kind, inB, props } from '../world/grid.ts';
+import { I, KIND, Kind, inB, props, removeProp } from '../world/grid.ts';
 import { byId, nowTick, type Visitor } from '../entities/visitor.ts';
 import { midOf, pairById, pairOf, pairs, type Pair } from '../entities/romance.ts';
 import { isUnlocked, type Tier } from './progression.ts';
@@ -167,6 +167,7 @@ function resolve(d: AbilityDef, t: Target): Resolved | ReasonKey {
 export function canCast(side: Side, id: AbilityId, target: Target, at = commandTick()): Result {
   const d = BY_ID.get(id);
   if (!d) return fail('reason.not_here');
+  if (!target || typeof target !== 'object') return fail('reason.not_here'); // a command with no target at all (a malformed payload) is refused, never thrown
   if (d.side !== side) return fail('reason.wrong_side');
   if (!isUnlocked(id)) return fail('reason.locked');
   if ((sides.cooldowns[side][id] ?? 0) > at) return fail('reason.cooldown');
@@ -239,6 +240,22 @@ export function stepAbilities(dt: number): void {
     h?.end?.(e);
     effects.splice(k--, 1);
   }
+  sweepOrphanProps();
+}
+
+/**
+ * A sprinkler or a banana peel lives as long as its effect (02 1.2 P2: the sim owns what it places). The `remove` tool can take one
+ * (its effect ends with it) and an undo can put it back under the same id; with no effect behind it, it would stay for good. Such a prop
+ * is swept at once, so an ability prop is not undoable.
+ */
+function sweepOrphanProps(): void {
+  let orphans: PropId[] | null = null;
+  for (const p of props) {
+    if (p.placedBy !== 'sim' || (p.kind !== 'sprinkler' && p.kind !== 'peel')) continue;
+    if (effects.some((e) => e.propId === p.id)) continue;
+    (orphans ??= []).push(p.id);
+  }
+  if (orphans) for (const id of orphans) removeProp(id);
 }
 
 /* ---------- state for the snapshot ---------- */

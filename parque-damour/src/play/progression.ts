@@ -10,7 +10,7 @@
 // The points live here, in memory, and persist through the profile: save/store.ts reads them with progressState when it writes the profile
 // and puts them back with setProgress when it reads one (this layer may not import save/, 03 2.1), so they survive `park.new` and a
 // reload. The per-park tally (`{ day, cp, mp }`, saved and hashed with the park) counts the points of the day; at each new day the sim
-// emits the day's `feed.tally` line and starts the tally over (phase 5 of the step, 03 4.2).
+// emits the day's tally (a `step` event, params `tally: 'feed.tally'`, `cp`, `mp`) and starts it over (phase 5 of the step, 03 4.2).
 // Events: the sim listeners are registered by bindProgression, at load and again by anything that cleared the bus (a test); a duplicate
 // registration is harmless, since each event object is handled once. Nothing here reads MODE, the DOM or the wall clock.
 import { DAYLEN, T } from '../core/clock.ts';
@@ -147,9 +147,13 @@ export function contributed(p: Pair): boolean {
   return p.lastCupidAt >= 0 && (T.abs - p.lastCupidAt) * DAYLEN <= CUPID_WINDOW_S + 1e-6;
 }
 
-/** Phase 5 on a new day (03 4.2): the finished day's tally goes to the feed as `feed.tally`, and the count starts over. */
+/**
+ * Phase 5 on a new day (03 4.2): the finished day's tally is emitted for the feed's `feed.tally` line, and the count starts over.
+ * TODO(S6-ui): the param is `tally`, not `feed`, on purpose: ui/feed.ts (outside this stage's files) still pushes its own zero line on
+ * `newday` (`fromNewDay`), and a `feed` param here would make two lines. When the UI stage deletes `fromNewDay`, rename `tally` to `feed`.
+ */
 export function stepProgression(): void {
-  emit({ kind: 'step', tick: nowTick(), x: 23.5, y: 23.5, params: { feed: 'feed.tally', cp: tally.cp, mp: tally.mp } });
+  emit({ kind: 'step', tick: nowTick(), x: 23.5, y: 23.5, params: { tally: 'feed.tally', cp: tally.cp, mp: tally.mp } });
   tally = { day: T.day, cp: 0, mp: 0 };
 }
 

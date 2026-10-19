@@ -10,15 +10,16 @@
 // busker with `spawnedForPlayer` comes in at the nearest gate (6 tiles from the tile when that gate is more than 20 away), walks to the tile
 // (the nearest shelter within 6 when the rain there is above 0.6), plays 90 s (act.ts: +3 charm within 8 while it plays, romance.ts) and
 // leaves; the effect lasts as long as the busker does. c_sunbeam: a weather override of r 3 for 60 s (02 3.5; needs.ts adds the comfort,
-// charm.ts the +1), removed with the effect.
+// charm.ts the +1), removed with the effect; while snow is falling (above 0.3) the WET of its 7 x 7 dries twice as fast (02 9.2 interaction:
+// the normal fall of weather.ts stepWet plus one more of the same size each step).
 // TODO(S6-art): the petal burst (fx 'petal' x 24), the bouquet in hand, the warm light pool of the sunbeam are events and data only; the
 // owner picks the drawings.
 import { DAYLEN, T } from '../core/clock.ts';
 import { clamp01 } from '../core/math.ts';
 import { emit } from '../core/events.ts';
 import { OK, fail } from '../core/commands.ts';
-import { OVERRIDE_TARGETS, CAP_OVERRIDES, addOverride, overrides, removeOverride, weatherAt } from '../core/weather.ts';
-import { BLOCK, I, KIND, Kind, N, NC, PETALS, WATER, inB, rebuildBlock } from '../world/grid.ts';
+import { OVERRIDE_TARGETS, CAP_OVERRIDES, W, WET_FALL, addOverride, overrides, removeOverride, weatherAt } from '../core/weather.ts';
+import { BLOCK, I, KIND, Kind, N, NC, PETALS, WATER, WET, inB, rebuildBlock } from '../world/grid.ts';
 import { nearestGate } from '../world/park.ts';
 import { goTo } from '../entities/move.ts';
 import { startWalk } from '../entities/act.ts';
@@ -48,6 +49,7 @@ export const MUSICIAN_SHELTER_R = 6;
 export const MUSICIAN_BUSKER_R = 8;
 export const SUNBEAM_T = 60 * SEC;
 export const SUNBEAM_R = 3;
+export const SUNBEAM_SNOW = 0.3; // "under snow" (02 9.2 gives no number): snow above this, the figure m_peel calls slippery
 
 /* ---------- small helpers ---------- */
 
@@ -230,7 +232,19 @@ const SUNBEAM_H: Handler = {
     e.overrideId = addOverride({ kind: 'sunbeam', x: e.x, y: e.y, r: SUNBEAM_R, until: e.until - 1, targets: OVERRIDE_TARGETS.sunbeam });
     fx(e.x, e.y, 'spark', 12);
   },
-  step: (e, now) => now >= e.until,
+  step: (e, now) => {
+    if (now >= e.until) return true;
+    if (W.snow > SUNBEAM_SNOW) {
+      const fall = WET_FALL / SEC; // stepWet has taken one fall off these tiles this step (no rain inside the sunbeam): this is the second
+      for (let y = e.y - e.r; y <= e.y + e.r; y++)
+        for (let x = e.x - e.r; x <= e.x + e.r; x++) {
+          if (!inB(x, y)) continue;
+          const v = WET[I(x, y)] as number;
+          if (v > 0) WET[I(x, y)] = v > fall ? v - fall : 0;
+        }
+    }
+    return false;
+  },
   end: (e) => {
     if (e.overrideId) removeOverride(e.overrideId);
   },

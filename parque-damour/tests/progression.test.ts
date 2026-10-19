@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SIM_DT, newPark, setSpeed, simulate } from '../src/core/loop.ts';
 import { DAYLEN, STEPS_PER_DAY, T } from '../src/core/clock.ts';
 import { applyNow } from '../src/core/commands.ts';
-import { clearListeners, on, type GameEvent } from '../src/core/events.ts';
+import { clearListeners, drain, on, type GameEvent } from '../src/core/events.ts';
 import { I, KIND, Kind, addProp, props } from '../src/world/grid.ts';
 import { rebuildCharm, charmAt } from '../src/world/charm.ts';
 import { ABILITIES } from '../src/play/abilities.ts';
@@ -20,6 +20,7 @@ import { part, tryForm, midOf, type Pair } from '../src/entities/romance.ts';
 import { completeStage } from '../src/entities/romance-stages.ts';
 import { land } from '../src/entities/embarrass.ts';
 import { PROFILE_KEY, clearAll, getProfile, loadProfile, savePark } from '../src/save/store.ts';
+import { clearFeed, feedEntries, initFeed } from '../src/ui/feed.ts';
 import { MemStorage, install } from './mem-storage.ts';
 
 let mem: MemStorage;
@@ -211,7 +212,7 @@ describe('points persist across parks and a profile reload; each unlock toasts o
     award('mischief', 1);
     const lines: GameEvent[] = [];
     on('step', (e) => {
-      if (e.params?.feed === 'feed.tally') lines.push(e);
+      if (e.params?.tally === 'feed.tally') lines.push(e);
     });
     for (let s = 0, n = STEPS_PER_DAY - Math.round((T.abs - 0.3) * STEPS_PER_DAY) + 2; s < n; s++) simulate(SIM_DT, 1);
     expect(T.day).toBe(2);
@@ -220,6 +221,18 @@ describe('points persist across parks and a profile reload; each unlock toasts o
     expect(points()).toEqual({ cp: 2, mp: 1 });
     stepProgression();
     expect(lines.at(-1)?.params).toMatchObject({ cp: 0, mp: 0 });
+  });
+  it('a new day with points earned puts exactly one feed.tally line in the feed, not the sim\'s and the stub\'s (one line, 02 7.3)', () => {
+    setArrivalsState({ arrivalT: 1e9, pace: 'calm' });
+    clearListeners();
+    initFeed();
+    clearFeed();
+    award('cupid', 3);
+    award('mischief', 1);
+    for (let s = 0, n = STEPS_PER_DAY - Math.round((T.abs - 0.3) * STEPS_PER_DAY) + 2; s < n; s++) simulate(SIM_DT, 1);
+    drain(0);
+    expect(T.day).toBe(2);
+    expect(feedEntries().filter((e) => e.key === 'feed.tally')).toHaveLength(1);
   });
   it('a profile written with the park holds cp, mp, the tiers and the announced ids, and a reload gives them back and announces nothing again', () => {
     award('cupid', 9);

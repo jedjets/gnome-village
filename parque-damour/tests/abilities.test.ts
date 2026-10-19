@@ -183,6 +183,22 @@ describe('refusals spend nothing (02 9.1 items 3 and 5; 03 5.4: "do not spend a 
     expect(reasonOf(canCast('mischief', 'm_pigeon', tileT(5, 5)))).toBe('reason.not_here');
     expect(reasonOf(canCast('mischief', 'm_pigeon', { kind: 'visitor', id: 4040 }))).toBe('reason.not_here');
   });
+  it('a command with no target (or a target that is not an object) is rejected reason.not_here inside apply, never thrown, and spends nothing (02 9.1 item 3)', () => {
+    unlockAll();
+    const got = outcomes();
+    const bad = (side: 'cupid' | 'mischief', id: AbilityId, target?: unknown): void => {
+      enqueue({ side, kind: 'ability', payload: { id, ...(target === undefined ? {} : { target }) } as unknown as { id: AbilityId; target: Target } });
+    };
+    bad('cupid', 'c_petals'); // no target key at all
+    bad('cupid', 'c_sunbeam', null);
+    bad('mischief', 'm_peel', 'tile');
+    bad('mischief', 'm_pigeon', 7);
+    const before = JSON.stringify(sidesState()), n = effects.length, draws = rngN();
+    expect(() => run(1)).not.toThrow();
+    expect(got).toEqual(['reason.not_here', 'reason.not_here', 'reason.not_here', 'reason.not_here']);
+    expect(JSON.stringify(sidesState())).toBe(before);
+    expect([effects.length, rngN()]).toEqual([n, draws]);
+  });
   it('in avatar mode every ability command is rejected reason.not_in_avatar (03 5.3)', () => {
     const got = outcomes();
     setMode('avatar', 'a_pigeon', 1);
