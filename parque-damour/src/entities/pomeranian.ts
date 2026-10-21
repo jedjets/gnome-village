@@ -13,13 +13,19 @@
 // S6 art (register section 4 "S6 art and S5 poses", picked by Claude on the owner's delegation, 2026-10-20): Pompon is drawn while he is in the
 // park, in a rolling dust cloud with what he took in his mouth (render/creatures.ts drawPompon, run 3), and the victim chases with both arms up
 // (render/figure-moves.ts, chase 1); the sim is unchanged.
+// S7 (07 S7.5, 02 10.5): the possessed Pompon (a_pomeranian) is the same record with `driven` set. play/avatar-pomeranian.ts gives the order
+// by setting st (and dest, targetId, cdUntil); stepPomeranian runs it: `snatch` is the run of the ability (the same snatch, carry and drop,
+// except that he drops at the gate's first tile, inside, and stays: `shakeOff` 1 s, then `wait`), `walk`, `chase` (a run at the pigeons, who
+// scatter as he comes within 3: creatures.ts), `play` (circles round a child 8 s), `goPaddle` then `paddle` 4 s then `shakeOff`, `goDig` then
+// `dig` 3 s, and `wait`. Leaving clears the flag and every state but `snatch` and `carry` then ends as `home`: he goes to the nearest gate.
 import { DAYLEN, T } from '../core/clock.ts';
 import { emit } from '../core/events.ts';
 import type { VisitorId } from '../core/ids.ts';
+import { BLOCK, I, inB, rebuildBlock } from '../world/grid.ts';
 import { nearestGate } from '../world/park.ts';
 import { findPath } from './astar.ts';
 import { walkDirect } from './act.ts';
-import { creatures, type Creature } from './creatures.ts';
+import { creatureById, creatures, type Creature } from './creatures.ts';
 import { land, firstItem } from './embarrass.ts';
 import { byId, nowTick } from './visitor.ts';
 
@@ -27,9 +33,16 @@ export const SPD_POM = 4.5; // 06 1.5
 export const POM_WAIT_T = 60; // s outside after the run (06 1.8)
 export const POM_REACH = 1.2; // tiles from the victim at which he snatches (a seated victim stands on a tile he cannot enter)
 export const POM_GATE_REACH = 0.3;
+export const POM_WALK_REACH = 0.3;
 export const POM_RUN_MAX = 60; // s: a run that has not ended by then goes home
 export const POM_REPLAN = 0.5; // s
 export const CHASE_EVERY = 30; // steps between the victim's re-aims at him
+export const PADDLE_T = 4; // s (02 10.5 step 4); then shakeOff
+export const DIG_T = 3;
+export const SHAKE_T = 1;
+export const PLAY_T = 8; // s round a child (step 3c)
+export const PLAY_R = 1.5; // tiles
+export const CHASE_REACH = 1; // tiles from the pigeon at which a chase is done
 
 /** The pomeranian's record, or undefined before seedCreatures (a parked test world). */
 export function pompon(): Creature | undefined {
@@ -60,12 +73,14 @@ export function sendPomeranian(victim: VisitorId): boolean {
   return true;
 }
 
-/** One step toward (gx, gy); true once within `reach` of it. */
-function aim(c: Creature, gx: number, gy: number, reach: number, dt: number, gate: ReturnType<typeof nearestGate>): boolean {
+/** One step toward (gx, gy); true once within `reach` of it, or (`lenient`, the player's) once he stands on the closest ground there is. */
+function aim(c: Creature, gx: number, gy: number, reach: number, dt: number, gate: ReturnType<typeof nearestGate>, lenient = false): boolean {
   if (Math.hypot(gx - c.x, gy - c.y) <= reach) return true;
   c.t -= dt;
   if (c.t <= 0 || Math.hypot(c.tx - c.x, c.ty - c.y) < 0.05) {
-    const w = findPath(c.x, c.y, gx, gy, { gateIn: gate.id, gateOut: gate.id }).path[0];
+    const r = findPath(c.x, c.y, gx, gy, { gateIn: gate.id, gateOut: gate.id });
+    const w = r.path[0];
+    if (lenient && r.partial && (!w || Math.hypot(w.x - c.x, w.y - c.y) < 0.3)) return true;
     c.tx = w ? w.x : gx;
     c.ty = w ? w.y : gy;
     c.t = POM_REPLAN;
@@ -85,7 +100,8 @@ function snatch(c: Creature, victim: NonNullable<ReturnType<typeof byId>>): void
   const item = firstItem(victim);
   const r = item ? land('snatched', victim.id, 'mischief') : null;
   if (!item || !r?.ok) {
-    c.st = 'home';
+    c.st = c.driven ? 'wait' : 'home';
+    c.targetId = 0;
     return;
   }
   victim.items[item] = false; // taken even when the pair laughs it off (the backfire): the item comes back all the same
@@ -102,6 +118,11 @@ function drop(c: Creature, g: ReturnType<typeof nearestGate>): void {
   emit({ kind: 'snatch', tick: nowTick(), x: c.x, y: c.y, ids: [c.id, c.targetId], params: { drop: 1 } });
   c.carry = null;
   c.targetId = 0;
+  if (c.driven) {
+    c.st = 'shakeOff'; // the player's Pompon stays in the park, on the gate's first tile
+    c.t = SHAKE_T;
+    return;
+  }
   c.x = c.tx = g.outside.x;
   c.y = c.ty = g.outside.y;
   c.outside = true;
@@ -109,19 +130,84 @@ function drop(c: Creature, g: ReturnType<typeof nearestGate>): void {
   c.cdUntil = T.abs + POM_WAIT_T / DAYLEN;
 }
 
-/** Phase 9, after stepCreatures (loop.ts): Pompon's run, if there is one. */
+function open(x: number, y: number): boolean {
+  rebuildBlock();
+  const rx = Math.round(x), ry = Math.round(y);
+  return inB(rx, ry) && BLOCK[I(rx, ry)] === 0;
+}
+
+/** The possessed Pompon's states other than the snatch (see the file header): an order is a state with its `dest` or `targetId`; done is `wait`. */
+function drivenStep(c: Creature, dt: number): void {
+  const g = nearestGate(c.x, c.y);
+  switch (c.st) {
+    case 'walk':
+    case 'goPaddle':
+    case 'goDig': {
+      const d = c.dest ?? { x: c.x, y: c.y };
+      if (!aim(c, d.x, d.y, POM_WALK_REACH, dt, g, true)) return;
+      delete c.dest;
+      c.t = c.st === 'goPaddle' ? PADDLE_T : DIG_T;
+      if (c.st === 'goDig') emit({ kind: 'fx', tick: nowTick(), x: c.x, y: c.y, ids: [c.id], params: { fx: 'dust', n: 3 } });
+      c.st = c.st === 'goPaddle' ? 'paddle' : c.st === 'goDig' ? 'dig' : 'wait';
+      return;
+    }
+    case 'chase': {
+      const p = creatureById(c.targetId) ?? c.dest; // a pigeon, or the crumbs they are at
+      if (!p || aim(c, p.x, p.y, CHASE_REACH, dt, g, true)) {
+        c.st = 'wait'; // the pigeons within 3 scatter as he comes (creatures.ts threats)
+        delete c.dest;
+      }
+      return;
+    }
+    case 'play': {
+      const ch = byId(c.targetId);
+      c.t -= dt;
+      if (!ch || c.t <= 0) {
+        c.st = 'wait';
+        return;
+      }
+      const a = (PLAY_T - c.t) * (SPD_POM / PLAY_R); // round the child at his speed
+      const x = ch.x + Math.cos(a) * PLAY_R, y = ch.y + Math.sin(a) * PLAY_R;
+      if (open(x, y)) {
+        c.face = x - c.x - (y - c.y) < 0 ? -1 : 1;
+        c.x = x;
+        c.y = y;
+      }
+      return;
+    }
+    case 'paddle':
+    case 'dig':
+    case 'shakeOff':
+      c.t -= dt;
+      if (c.t > 0) return;
+      c.st = c.st === 'paddle' ? 'shakeOff' : 'wait';
+      c.t = c.st === 'shakeOff' ? SHAKE_T : 0;
+      return;
+    default:
+      return; // wait
+  }
+}
+
+/** Phase 9, after stepCreatures (loop.ts): Pompon's run, if there is one, and the player's Pompon (S7). */
 export function stepPomeranian(dt: number): void {
   const c = pompon();
   if (!c || c.outside) return;
   const v = byId(c.targetId);
-  if (c.st === 'run') {
-    if (!v || T.abs > c.cdUntil) c.st = 'home';
-    else if (aim(c, v.x, v.y, POM_REACH, dt, nearestGate(v.x, v.y))) snatch(c, v);
+  if (c.st === 'run' || c.st === 'snatch') {
+    if (!v || T.abs > c.cdUntil) {
+      c.st = c.driven ? 'wait' : 'home';
+      c.targetId = 0;
+    } else if (aim(c, v.x, v.y, POM_REACH, dt, nearestGate(v.x, v.y))) snatch(c, v);
+    return;
+  }
+  if (c.driven && c.st !== 'carry') {
+    drivenStep(c, dt);
     return;
   }
   const g = nearestGate(c.x, c.y);
   if (c.st === 'carry' && v?.st === 'chase' && nowTick() % CHASE_EVERY === 0) walkDirect(v, c.x, c.y); // the victim chases him at 4.0 (move.ts speedOf)
-  if (!aim(c, g.outside.x, g.outside.y, POM_GATE_REACH, dt, g)) return;
+  const to = c.driven ? g.tiles[0] : g.outside; // the player's Pompon drops it inside the gate and stays
+  if (!aim(c, to.x, to.y, POM_GATE_REACH, dt, g)) return;
   if (c.st === 'carry') drop(c, g);
   else {
     c.carry = null; // 'home': no item to drop

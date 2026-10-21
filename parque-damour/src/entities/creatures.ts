@@ -8,16 +8,18 @@
 // pigeons walk at 1.2 and fly at 6.0 in a straight line (02 5.4), perch on a lamp, a bench, a fountain rim or a tree (02 11.2 item 2), go
 // to crumbs within 10 tiles (at most 5 a crumbs prop), peck a crumb every 4 s and empty it, and scatter 3 tiles over 3 s (06 1.8) from
 // a jogger within 2, a dog or the pomeranian within 3, or a child chasing within 1 (02 11.2 item 5; GV's rabbit scare at 2.4); 6 at a new
-// park, +1 every 90 s from the north edge to 12 (the planning tick, 03 4.3 item 4); a dog walker's dog follows 1 tile behind at 3.0 (GV
-// heeled at the master's speed x 1.12) and goes when its walker goes; the pomeranian's record exists from the start and waits outside
-// the south-west gate, not drawn and not stepped (S6 moves it, 02 11.3 item 2); the caps are 12 pigeons and 4 dogs with the pomeranian
-// (register 3.3). Every decision draws on the sim stream; positions, heights (z, in EH units: a lamp's head 1.65, a bench 0.45, a
-// fountain rim 0.9, a tree 2.2) and timers are saved and hashed. "A gathering" (3 pigeons at one crumbs prop) is announced once per
-// crumbs prop with params.feed on the `peck` that makes it (events.ts has no feed kind). A pigeon's crumbs are the ones its targetId
-// names at the spot it was sent to (targetCrumbs): a PropId is recycled, so crumbs dropped elsewhere can carry the id of crumbs it lost.
-// S6: the pigeon's `swoop` (m_pigeon, 02 9.3, 11.2 item 2): startSwoop sends a pigeon at 6.0 to follow a visitor (its `ownerId`, which a
-// pigeon has no other use for; `targetId` is the crumbs' slot), 2 s late in fog; on arrival the swoop hook the ability registered lands the
-// `poop` and the pigeon flies off to an open spot. The pomeranian's run is pomeranian.ts (this file is at its size).
+// park, +1 every 90 s from the north edge to 12 (the planning tick, 03 4.3 item 4); a dog walker's dog follows 1 tile behind at 3.0 and goes
+// when its walker goes; the pomeranian's record exists from the start and waits outside the south-west gate, not drawn (pomeranian.ts runs
+// him); the caps are 12 pigeons and 4 dogs with the pomeranian (register 3.3). Every decision draws on the sim stream; positions, heights
+// (z, in EH units: a lamp's head 1.65, a bench 0.45, a fountain rim 0.9, a tree 2.2) and timers are saved and hashed. "A gathering" (3
+// pigeons at one crumbs prop) is announced once per crumbs prop with params.feed on the `peck` that makes it. A pigeon's crumbs are the
+// ones its targetId names at the spot it was sent to (targetCrumbs): a PropId is recycled, so crumbs dropped elsewhere can carry its id.
+// S6: the pigeon's `swoop` (m_pigeon, 02 9.3): startSwoop sends a pigeon at 6.0 to follow a visitor (its `ownerId`; `targetId` is the
+// crumbs' slot), 2 s late in fog; on arrival the swoop hook the ability registered lands the `poop` and the pigeon flies off.
+// S7 (07 S7.5, 02 10.4): the possessed pigeon (a_pigeon) is the same record with `driven` set while it is the player's (absent otherwise, so
+// a park without avatars hashes as before). play/avatar-pigeon.ts gives its orders by setting st, tx, ty and the target fields; this file runs
+// them with the states it has (fly, swoop, peck, perch) and these: `wait` (an order done: nextPigeon stays put), `poop` (0.5 s) then `startled`
+// (1 s; 2 s when a threat comes near, instead of the scatter) and `drink` (3 s, after `flyDrink`). No MODE or PLAYER is read here (03 4.4).
 // Dropped from the range: rabbits, deer, foxes, folds, hutches, riders, taming, raids, the fox's barking at night, swimming, sweeps.
 import type { XY } from '../core/math.ts';
 import { T } from '../core/clock.ts';
@@ -27,6 +29,7 @@ import { nextCreatureId, type CreatureId, type PropId, type VisitorId } from '..
 import { BLOCK, I, KIND, Kind, inB, addProp, propById, props, rebuildBlock, removeProp, type Prop } from '../world/grid.ts';
 import { gateById } from '../world/park.ts';
 import { byId, nowTick, visitors } from './visitor.ts';
+import { R_STARTLE, gatherThreats, threatTo } from './creatures-threats.ts';
 
 export type CreatureKind = 'pigeon' | 'dog' | 'pomeranian';
 /** 03 3.5. */
@@ -34,6 +37,7 @@ export type Creature = {
   id: CreatureId; kind: CreatureKind; x: number; y: number; z: number; face: -1 | 1;
   st: string; t: number; tx: number; ty: number; ownerId: VisitorId; targetId: number;
   perchPropId: PropId; carry: 'hat' | 'purse' | 'baguette' | 'iceCream' | null; cdUntil: number; outside: boolean;
+  driven?: true; dest?: XY; // S7: the player's pigeon or Pompon (dest: where Pompon runs); present only while possessed, so the hash does not see them
 };
 
 /* ---------- numbers (register 3.3; 02 5.4, 11.2, 11.3; 06 1.4, 1.5, 1.6, 1.8) ---------- */
@@ -44,10 +48,6 @@ export const PIGEON_TOPUP_STEPS = 5400; // 90 s
 export const SPD_PIGEON_WALK = 1.2;
 export const SPD_PIGEON_FLY = 6.0;
 export const SPD_DOG = 3.0;
-export const R_SCATTER_JOGGER = 2;
-export const R_SCATTER_DOG = 3;
-export const R_SCATTER_POM = 3;
-export const R_SCATTER_CHILD = 1;
 export const SCATTER_T = 3; // s
 export const SCATTER_D = 3; // tiles
 export const R_CRUMBS_ATTRACT = 10;
@@ -187,7 +187,7 @@ function targetCrumbs(c: Creature): Prop | undefined {
 /* ---------- scatter (02 11.2 item 5) ---------- */
 
 function onGround(c: Creature): boolean {
-  return c.kind === 'pigeon' && (c.st === 'walk' || c.st === 'peck' || c.st === 'idle');
+  return c.kind === 'pigeon' && (c.st === 'walk' || c.st === 'peck' || c.st === 'idle' || c.st === 'wait');
 }
 
 /** A pigeon on the ground flies 3 tiles away from (fx, fy) for 3 s. */
@@ -214,40 +214,6 @@ export function scatterNear(x: number, y: number, r: number): void {
   for (const c of creatures) if (onGround(c) && Math.hypot(c.x - x, c.y - y) <= r) scatter(c, x, y);
 }
 
-/** This step's scatter triggers (02 11.2 item 5): a jogger (2), a child chasing a pigeon (1), a dog or the pomeranian (3), in that order. */
-type Threat = { x: number; y: number; r2: number };
-const pool: Threat[] = []; // reused every step: no garbage per step (03 15.2)
-let nThreats = 0;
-function threat(x: number, y: number, r: number): void {
-  const t = pool[nThreats] ?? (pool[nThreats] = { x: 0, y: 0, r2: 0 });
-  t.x = x;
-  t.y = y;
-  t.r2 = r * r;
-  nThreats++;
-}
-function gatherThreats(): void {
-  nThreats = 0;
-  for (const v of visitors) {
-    if (v.archetype === 'jogger') threat(v.x, v.y, R_SCATTER_JOGGER);
-    else if (v.archetype === 'child' && v.st === 'play' && v.job.creatureId !== undefined) threat(v.x, v.y, R_SCATTER_CHILD);
-  }
-  for (const o of creatures) {
-    if (o.outside) continue;
-    if (o.kind === 'dog') threat(o.x, o.y, R_SCATTER_DOG);
-    else if (o.kind === 'pomeranian') threat(o.x, o.y, R_SCATTER_POM);
-  }
-}
-
-/** The first trigger near a pigeon on the ground, or null. */
-function threatTo(c: Creature): XY | null {
-  for (let k = 0; k < nThreats; k++) {
-    const t = pool[k] as Threat;
-    const dx = t.x - c.x, dy = t.y - c.y;
-    if (dx * dx + dy * dy <= t.r2) return t;
-  }
-  return null;
-}
-
 /** Fog (m_fog, S6): every pigeon perches until `until` (T.abs) wherever it is (02 11.2 item 5). */
 export function perchAll(until: number): void {
   for (const c of creatures) {
@@ -260,6 +226,10 @@ export function perchAll(until: number): void {
 
 /* ---------- the swoop (m_pigeon, 02 9.3) ---------- */
 
+export const POOP_T = 0.5; // s: the landing beat of a possessed swoop (S7), then `startled` for STARTLED_POOP_T
+export const STARTLED_POOP_T = 1;
+export const STARTLED_T = 2; // s: a possessed pigeon with a threat close by (a dog within 2: 02 10.4)
+export const DRINK_T = 3;
 export const SWOOP_REACH = 0.45; // tiles from the visitor's head at which the pigeon lands the poop
 export const SWOOP_FOG_DELAY = 2; // s: in fog the pigeon takes longer (it was perched, 02 9.3)
 const SWOOP_Z = 1.1; // EH: head height in flight
@@ -320,6 +290,11 @@ function swoopStep(c: Creature, dt: number): void {
   }
   swoopHook(c, v.id);
   c.ownerId = 0;
+  if (c.driven) {
+    c.st = 'poop'; // the player's pigeon stays where it landed: the beat, then startled (stepPigeon), then wait
+    c.t = POOP_T;
+    return;
+  }
   const to = openAround(c.x, c.y, 8);
   c.st = 'fly';
   c.tx = to ? to.x : c.x;
@@ -362,6 +337,11 @@ function crumbsFor(c: Creature): Prop | null {
 /** The next thing a pigeon does when its timer runs out (sim draws): crumbs first, else walk, peck, perch or fly somewhere. */
 function nextPigeon(c: Creature): void {
   c.perchPropId = 0;
+  if (c.driven) {
+    c.st = 'wait'; // the player decides (S7)
+    c.targetId = 0;
+    return;
+  }
   const cr = crumbsFor(c);
   if (cr) {
     c.targetId = cr.id;
@@ -411,7 +391,7 @@ function land(c: Creature): void {
   const perch = c.perchPropId ? propById(c.perchPropId) : undefined;
   if (perch) {
     c.st = 'perch';
-    c.z = PERCH_Z[perch.kind] ?? 0;
+    c.z = PERCH_Z[perch.kind] ?? 1.2; // the AI perches only where PERCH_Z has a height; a possessed pigeon may also take the bandstand
     c.t = rnd(8, 20);
     return;
   }
@@ -438,9 +418,13 @@ function stepPigeon(c: Creature, dt: number): void {
     c.cdUntil = 0;
   }
   if (onGround(c)) {
-    const th = threatTo(c);
+    const th = threatTo(c, c.driven ? R_STARTLE : Infinity); // the player's pigeon minds only what is within 2 tiles (02 10.4)
     if (th) {
-      scatter(c, th.x, th.y);
+      if (c.driven) {
+        c.st = 'startled'; // the player's pigeon flutters in place: its order is lost, not thrown 3 tiles away (02 10.4)
+        c.t = STARTLED_T;
+        c.targetId = 0;
+      } else scatter(c, th.x, th.y);
       return;
     }
     if (!open(c.x, c.y)) {
@@ -455,8 +439,29 @@ function stepPigeon(c: Creature, dt: number): void {
   }
   switch (c.st) {
     case 'fly':
+    case 'flyDrink':
       c.z += ((c.perchPropId ? 1.8 : 1.2) - c.z) * Math.min(1, dt * 4);
-      if (moveTo(c, SPD_PIGEON_FLY, dt, true)) land(c);
+      if (!moveTo(c, SPD_PIGEON_FLY, dt, true)) return;
+      if (c.st === 'fly') land(c);
+      else {
+        c.z = 0; // a possessed pigeon at the water's edge (S7)
+        c.st = 'drink';
+        c.t = DRINK_T;
+      }
+      return;
+    case 'wait':
+      if (!c.driven) nextPigeon(c); // the player let go: the AI decides
+      return;
+    case 'poop':
+    case 'startled':
+    case 'drink':
+      c.t -= dt;
+      c.z -= c.z * Math.min(1, dt * 4);
+      if (c.t > 0) return;
+      if (c.st === 'poop') {
+        c.st = 'startled';
+        c.t = STARTLED_POOP_T;
+      } else nextPigeon(c);
       return;
     case 'swoop':
       swoopStep(c, dt);
@@ -493,8 +498,8 @@ function stepPigeon(c: Creature, dt: number): void {
       if (cr) {
         cr.data.stock = (cr.data.stock ?? 1) - 1; // one crumb a peck (02 11.2 item 3)
         if ((cr.data.stock ?? 0) <= 0) dropCrumbsProp(cr);
-        else {
-          c.t = PECK_T;
+        else if (!c.driven) {
+          c.t = PECK_T; // one crumb a peck; the player's pigeon pecks once (02 10.4 3b)
           return;
         }
       }
@@ -503,7 +508,7 @@ function stepPigeon(c: Creature, dt: number): void {
     }
     case 'perch':
       c.t -= dt;
-      if (c.t <= 0 || (c.perchPropId !== 0 && !propById(c.perchPropId))) {
+      if ((c.t <= 0 && !c.driven) || (c.perchPropId !== 0 && !propById(c.perchPropId))) {
         const to = openAround(c.x, c.y, 6);
         c.perchPropId = 0;
         c.st = to ? 'fly' : 'walk';
@@ -563,7 +568,7 @@ export function stepCreatures(dt: number): void {
     if (c.outside || c.kind !== 'dog') continue;
     if (!stepDog(c, dt)) remove(c);
   }
-  gatherThreats(); // after the dogs moved, as the pigeons see them
+  gatherThreats(creatures); // after the dogs moved, as the pigeons see them
   for (const c of creatures) if (c.kind === 'pigeon') stepPigeon(c, dt);
 }
 

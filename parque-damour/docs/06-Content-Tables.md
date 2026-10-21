@@ -314,7 +314,7 @@ Archetype weights per arrival roll (design §4.2.4). They do not vary by season 
 | `gardener` | staff, 1, never leaves | - | 1 | grown | m | yes |
 | `vendor` | staff, 1 per kiosk | - | 3 | grown | 50/50 | yes |
 | `child` | with a `family` parent | - | - | young | 50/50 | yes |
-| `cameo` | by an ability: flower seller, rival stranger, mime | - | - | grown | flower seller f; stranger the sex the targeted member `seeks`, or opposite the partner's when `any`; mime m | no |
+| `cameo` | by an ability: flower seller (also `a_florist`'s, with `spawnedForPlayer`), rival stranger, mime | - | - | grown | flower seller f; stranger m (it flirts only with the woman of a pair: owner 2026-10-21, register section 4 "S5/S6 owner answers", recorded for S10); mime m | no |
 
 `ARRIVAL_MOD[phase][archetype]`: all 1.0 in v1 (a tuning hook; see section 18).
 
@@ -778,62 +778,64 @@ The clock chip's day is `t('hud.day', { n, season: '@hud.season.<season>' })`: t
 | Key | EN | ES |
 |---|---|---|
 | `avatar.a_pigeon.name` | Pigeon | Paloma |
-| `avatar.a_pigeon.hint1` | Tap someone: swoop | TODO |
-| `avatar.a_pigeon.hint2` | Tap crumbs: peck | TODO |
-| `avatar.a_pigeon.hint3` | Tap a lamp or bench: perch | TODO |
+| `avatar.a_pigeon.hint1` | Tap someone: swoop | Toca a alguien: en picado |
+| `avatar.a_pigeon.hint2` | Tap crumbs: peck | Toca migas: picotear |
+| `avatar.a_pigeon.hint3` | Tap a lamp or bench: perch | Toca una farola o un banco: posarte |
 | `avatar.a_pomeranian.name` | Pomeranian | Pomerania |
-| `avatar.a_pomeranian.hint1` | Tap someone with a hat or bag: snatch | TODO |
-| `avatar.a_pomeranian.hint2` | Tap pigeons: chase | TODO |
-| `avatar.a_pomeranian.hint3` | Tap the lawn: dig | TODO |
+| `avatar.a_pomeranian.hint1` | Tap someone with a hat or bag: snatch | Toca a alguien con sombrero o bolso: arrebatar |
+| `avatar.a_pomeranian.hint2` | Tap pigeons: chase | Toca palomas: perseguir |
+| `avatar.a_pomeranian.hint3` | Tap the lawn: dig | Toca el césped: cavar |
 | `avatar.a_mime.name` | Mime | Mimo |
-| `avatar.a_mime.hint1` | Tap a path: invisible wall | TODO |
-| `avatar.a_mime.hint2` | Tap a couple: mimic | TODO |
-| `avatar.a_mime.hint3` | Tap a bench: statue | TODO |
+| `avatar.a_mime.hint1` | Tap a path: invisible wall | Toca un camino: pared invisible |
+| `avatar.a_mime.hint2` | Tap a couple: mimic | Toca a una pareja: imitar |
+| `avatar.a_mime.hint3` | Tap a bench: statue | Toca un banco: estatua |
 | `avatar.a_florist.name` | Flower seller | Florista |
-| `avatar.a_florist.hint1` | Tap a courting visitor: bouquet | TODO |
-| `avatar.a_florist.hint2` | Tap the lawn: petals | TODO |
-| `avatar.a_florist.hint3` | Tap a flowerbed: refill | TODO |
+| `avatar.a_florist.hint1` | Tap a courting visitor: bouquet | Toca a alguien que corteja: ramo |
+| `avatar.a_florist.hint2` | Tap the lawn: petals | Toca el césped: pétalos |
+| `avatar.a_florist.hint3` | Tap a flowerbed: refill | Toca un parterre: reponer |
 | `avatar.a_busker.name` | Busker | Músico callejero |
-| `avatar.a_busker.hint1` | Tap a spot: play there | TODO |
-| `avatar.a_busker.hint2` | Tap a couple: serenade | TODO |
-| `avatar.a_busker.hint3` | Tap the bandstand: play there | TODO |
+| `avatar.a_busker.hint1` | Tap a spot: play there | Toca un sitio: tocar allí |
+| `avatar.a_busker.hint2` | Tap a couple: serenade | Toca a una pareja: serenata |
+| `avatar.a_busker.hint3` | Tap the bandstand: play there | Toca el quiosco de música: tocar allí |
 | `avatar.a_matchmaker.name` | Matchmaker | Casamentera |
-| `avatar.a_matchmaker.hint1` | Tap a single: introduce | TODO |
-| `avatar.a_matchmaker.hint2` | Tap a couple: encourage | TODO |
-| `avatar.a_matchmaker.hint3` | Tap the kiosk: baguette | TODO |
+| `avatar.a_matchmaker.hint1` | Tap a single: introduce | Toca a un soltero: presentar |
+| `avatar.a_matchmaker.hint2` | Tap a couple: encourage | Toca a una pareja: animar |
+| `avatar.a_matchmaker.hint3` | Tap the kiosk: baguette | Toca el quiosco: baguette |
 | `avatar.side_tier` | {side} · T{tier} | {side} · T{tier} |
 | `avatar.says` | {name}: {what} | {name}: {what} |
-| `avatar.busy` | {name}: busy | TODO |
-| `avatar.goes_on` | {name} goes on alone | TODO |
-| `avatar.you` | {name} · you | TODO |
-| `avatar.waiting` | waiting for your tap | TODO |
-| `avatar.status.swooping` | swooping | TODO |
-| `avatar.status.ruffled` | ruffled, give it a moment | TODO |
-| `avatar.status.pecking` | pecking | TODO |
-| `avatar.status.perching` | perching | TODO |
-| `avatar.status.drinking` | drinking | TODO |
-| `avatar.status.snatching` | snatching | TODO |
-| `avatar.status.panting` | panting, give it a moment | TODO |
-| `avatar.status.chasing` | chasing | TODO |
-| `avatar.status.playing` | playing | TODO |
-| `avatar.status.paddling` | paddling | TODO |
-| `avatar.status.digging` | digging | TODO |
-| `avatar.status.mimicking` | mimicking | TODO |
-| `avatar.status.statue` | a statue | TODO |
-| `avatar.status.wall` | an invisible wall | TODO |
-| `avatar.status.resting` | resting | TODO |
-| `avatar.status.bouquet` | a bouquet | TODO |
-| `avatar.status.picking` | picking flowers | TODO |
-| `avatar.status.petals` | petals | TODO |
-| `avatar.status.serenade` | a serenade | TODO |
-| `avatar.status.bandstand` | playing on the bandstand | TODO |
-| `avatar.status.playing_here` | playing here | TODO |
-| `avatar.status.introduction` | an introduction | TODO |
-| `avatar.status.encouragement` | a word of encouragement | TODO |
-| `avatar.status.baguette` | a fresh baguette | TODO |
-| `avatar.status.sharing` | sharing bread | TODO |
+| `avatar.busy` | {name}: busy | {name}: ocupado |
+| `avatar.goes_on` | {name} goes on alone | {name} sigue por su cuenta |
+| `avatar.you` | {name} · you | {name} · tú |
+| `avatar.waiting` | waiting for your tap | esperando tu toque |
+| `avatar.status.walking` | walking | andando |
+| `avatar.status.flying` | flying | volando |
+| `avatar.status.swooping` | swooping | en picado |
+| `avatar.status.ruffled` | ruffled, give it a moment | alborotada, dale un momento |
+| `avatar.status.pecking` | pecking | picoteando |
+| `avatar.status.perching` | perching | posándose |
+| `avatar.status.drinking` | drinking | bebiendo |
+| `avatar.status.snatching` | snatching | arrebatando |
+| `avatar.status.panting` | panting, give it a moment | jadeando, dale un momento |
+| `avatar.status.chasing` | chasing | persiguiendo |
+| `avatar.status.playing` | playing | jugando |
+| `avatar.status.paddling` | paddling | chapoteando |
+| `avatar.status.digging` | digging | cavando |
+| `avatar.status.mimicking` | mimicking | imitando |
+| `avatar.status.statue` | a statue | una estatua |
+| `avatar.status.wall` | an invisible wall | una pared invisible |
+| `avatar.status.resting` | resting | descansando |
+| `avatar.status.bouquet` | a bouquet | un ramo |
+| `avatar.status.picking` | picking flowers | cogiendo flores |
+| `avatar.status.petals` | petals | pétalos |
+| `avatar.status.serenade` | a serenade | una serenata |
+| `avatar.status.bandstand` | playing on the bandstand | tocando en el quiosco de música |
+| `avatar.status.playing_here` | playing here | tocando aquí |
+| `avatar.status.introduction` | an introduction | una presentación |
+| `avatar.status.encouragement` | a word of encouragement | unas palabras de ánimo |
+| `avatar.status.baguette` | a fresh baguette | una baguette recién hecha |
+| `avatar.status.sharing` | sharing bread | compartiendo pan |
 
-`walking` and `flying` statuses are silent (design §10.1); `busy` toasts `avatar.busy`; every other status toasts `avatar.says` with `what = t('avatar.status.<status>')`.
+`walking` and `flying` statuses are silent (design §10.1; their keys exist because the cascade returns them and the tap's `avatarStatus` event carries every status); `busy` toasts `avatar.busy`; every other status toasts `avatar.says` with `what = t('avatar.status.<status>')`. S7 (the logic; the shell's toasts are the next stage) built the keys for the cascades of `a_pigeon`, `a_pomeranian` and `a_florist`; the other keys belong to S10's three avatars, which answer `reason.not_here` until then.
 
 ### 16.8 Card and pair card
 | Key | EN | ES |
@@ -918,8 +920,10 @@ The clock chip's day is `t('hud.day', { n, season: '@hud.season.<season>' })`: t
 | `doing.shakeOff` | shaking it off | TODO |
 | `doing.paddle` | paddling | TODO |
 | `doing.dig` | digging | TODO |
-| `doing.hand` | handing over a bouquet | TODO |
-| `doing.pick` | picking flowers | TODO |
+| `doing.hand` | handing over a bouquet | entregando un ramo |
+| `doing.pick` | picking flowers | cogiendo flores |
+| `doing.goPick` | off to the flowerbed | yendo al parterre |
+| `doing.goScatter` | off to scatter petals | yendo a esparcir pétalos |
 | `doing.wall` | an invisible wall | TODO |
 | `doing.mimicStart` | mimicking | TODO |
 | `doing.statue` | a statue | TODO |
@@ -1127,11 +1131,11 @@ The five `sheet.options.pace*` rows are the Options sheet's **Park pace** settin
 | `reason.busy` | busy | ocupado |
 | `reason.wrong_side` | not for this side | TODO |
 | `reason.wrong_mode` | not in this mode | TODO |
-| `reason.startled` | startled by a dog | TODO |
-| `reason.big_dog` | the big dog is watching | TODO |
-| `reason.basket_empty` | the basket is empty: pick some flowers | TODO |
-| `reason.nobody_for_them` | nobody for them just now | TODO |
-| `reason.had_to_go` | they had to go | TODO |
+| `reason.startled` | startled by a dog | asustada por un perro |
+| `reason.big_dog` | the big dog is watching | el perro grande vigila |
+| `reason.basket_empty` | the basket is empty: pick some flowers | la cesta está vacía: coge flores |
+| `reason.nobody_for_them` | nobody for them just now | nadie para ellos por ahora |
+| `reason.had_to_go` | they had to go | tuvieron que irse |
 
 ### 16.14 Aria labels (`data-t-aria` on static controls)
 | Key | EN | ES |

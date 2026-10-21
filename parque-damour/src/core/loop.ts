@@ -8,6 +8,8 @@
 // park at once and stays paused; every other command waits for the first step, so live order equals replay order.
 // Dropped from the range: 12026-12031 (water, slump, surface), 12033-12037 (materials, index, gnomes, flora, critters, parts), 12039 (breeding).
 // This is the one module allowed to read the wall clock (07 0.7 item 6). Frame listeners are registered by main.ts (03 2.1: L4 imports L0-L3).
+// S7: a park.new issued in avatar mode returns to creator mode (newPark) and emits a `mode` event so the shell follows; this file imports
+// play/avatar.ts so that its three commands and the possessed actor's decide are registered wherever the loop is.
 // S4 part B fills phases 5 (the regulars' day), 7 (arrivals and the gardener's entry), 8 (visitors), 9 (creatures) and 12 (the 1.2 s
 // planning tick in the order of 03 4.3: the facility index, the staff's paving search, the vendor check, the pigeon top-up; every 72
 // steps, counted in whole ticks like the wear so no float sum drifts); a new park also seeds its creatures (six pigeons and the
@@ -25,13 +27,13 @@ import { clamp } from './math.ts';
 import { T, isNewDay, stepClock, syncClock } from './clock.ts';
 import { forceWeather, stepWeather, stepWet } from './weather.ts';
 import { OK, applyPending, clearPending, registerHandler, resetCommands, setStepper, setTickSource, type CommandKind } from './commands.ts';
-import { clearEvents, drain, markStep } from './events.ts';
+import { clearEvents, drain, emit, markStep } from './events.ts';
 import { genPark } from '../world/gen.ts';
 import { props } from '../world/grid.ts';
 import { stepIce } from '../world/water.ts';
 import { decayWear } from '../world/wear.ts';
 import { charmDirty, markCharmDirty, rebuildCharm } from '../world/charm.ts';
-import { setMode } from '../play/mode.ts';
+import { getMode, setMode } from '../play/mode.ts';
 import { stepRegularReturns } from '../entities/names.ts';
 import { stepArrivals, stepVisitors } from '../entities/visitor.ts';
 import { ensureGardener, ensureVendors, facilities, resetStaff, stepStaffPlanning } from '../entities/staff.ts';
@@ -43,6 +45,7 @@ import { alumniRoll, newDay, stepRomance } from '../entities/romance.ts';
 import { resetDay } from '../entities/embarrass.ts';
 import { resetCharges, stepAbilities } from '../play/abilities.ts';
 import { stepProgression } from '../play/progression.ts';
+import '../play/avatar.ts'; // registers the avatar commands and the possessed actor's decide (S7)
 
 export const SIM_DT = 1 / 60;
 /** The planning tick: every 1.2 s, 72 steps (03 4.3; GV planT 12038). */
@@ -233,7 +236,9 @@ registerHandler('speed', (c) => {
   return OK;
 });
 registerHandler('park.new', (c) => {
-  newPark(c.payload.seed);
+  const was = getMode();
+  newPark(c.payload.seed); // creator mode, PLAYER 0; the lists are rebuilt, so a visitor spawned for the player is gone with the rest (02 10.1 item 5)
+  if (was === 'avatar') emit({ kind: 'mode', tick: 0, params: { mode: 'creator' } }); // the shell drops the avatar's strip and button
   return OK;
 });
 registerHandler('debug.weather', (c) => {

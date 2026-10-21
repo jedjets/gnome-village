@@ -44,6 +44,7 @@ export const BUSY: Readonly<Record<string, true>> = {
   wipe: true, shake: true, stumble: true, chase: true, huff: true, flap: true, huddle: true, distracted: true, baffled: true, lost: true, duck: true,
   eat: true, sit: true, read: true, feed: true, chat: true, bench: true, stroll: true, picnic: true, kiss: true, proposal: true, boat: true,
   photo: true, paint: true, play: true, pave: true, tidy: true, serve: true, shelter: true, goLeave: true, laugh: true,
+  hand: true, pick: true, scatter: true, // the flower seller avatar's three holds (S7, act-romance.ts)
 };
 /** 02 5.3 CAN_INTERRUPT (GV CAN_HELP 4564): what a romance stage start (S5) or the matchmaker (S7) may pull a visitor out of. */
 export const CAN_INTERRUPT: Readonly<Record<string, true>> = {
@@ -139,8 +140,8 @@ function pick<K extends string>(table: ReadonlyArray<readonly [K, number]>): K {
 
 /* ---------- rungs 1-5 and 8 (02 5.2) ---------- */
 
-/** Rung 1: an embarrassment landed this tick: its reaction state (02 6.4). */
-function reactionRung(v: Visitor): boolean {
+/** Rung 1: an embarrassment landed this tick: its reaction state (02 6.4). The possessed actor takes it too (avatar.ts avatarDecide). */
+export function reactionRung(v: Visitor): boolean {
   const k = v.pendingEmb;
   if (!k) return false;
   release(v);
@@ -509,7 +510,7 @@ export function decide(v: Visitor): void {
     child(v);
     return;
   }
-  if (v.archetype === 'cameo') return; // scripted by its ability (S6)
+  if (v.archetype === 'cameo' && !v.spawnedForPlayer) return; // scripted by its ability (S6); the avatar's flower seller, once let go, lives on (S7)
   if (shelterRung(v)) return; // rung 2
   if (leaveRung(v)) return; // rung 3
   if (eatRung(v)) return; // rung 4

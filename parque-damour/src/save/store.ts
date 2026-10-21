@@ -47,9 +47,9 @@ import {
 import { parkSeed, setParkSeed } from '../world/gen.ts';
 import { iceState, setIceState } from '../world/water.ts';
 import { markCharmDirty } from '../world/charm.ts';
-import { arrivalsState, setArrivalsState, setVisitorsState, visitorsState } from '../entities/visitor.ts';
+import { arrivalsState, byId as visitorById, setArrivalsState, setVisitorsState, visitorsState } from '../entities/visitor.ts';
 import { namesState, regularsState, resetNames, setNamesState } from '../entities/names.ts';
-import { creaturesState, gatheredState, setCreaturesState, setGatheredState } from '../entities/creatures.ts';
+import { creatureById, creaturesState, gatheredState, setCreaturesState, setGatheredState } from '../entities/creatures.ts';
 import { pavingState, resetStaff, setPavingState } from '../entities/staff.ts';
 import { alumniState, pairsState, pinnedPair, romanceSched, setRomanceState } from '../entities/romance.ts';
 import { defaultProfile, migratePark, migrateProfile } from './migrate.ts';
@@ -467,11 +467,10 @@ export function snapshot(): ParkSaveV1 {
 
 /**
  * Put the park back as a snapshot left it, silently (no events; the queued commands and events go with the old timeline). MODE and PLAYER
- * come back with it; every derived cache follows: BLOCK is rebuilt at once, the water bodies and the render caches see a new world version
- * (markBlockDirty), the charm field is marked dirty, the id counters, free list and reservations are the snapshot's, the undo stack is
- * emptied (setLog's restore hooks: never saved, register 3.11) and the tree cycle is the snapshot's. The ids reserved for the emptied
- * entries stay reserved for good (a known limitation, see the file header). Throws on a snapshot of another version or with a damaged layer,
- * before anything changes: loadPark() only hands over saves migrate.ts checked.
+ * come back with it (creator if the saved actor is not in the lists); every derived cache follows: BLOCK is rebuilt at once, the render
+ * caches see a new world version, the charm field is dirty, the id counters, free list and reservations are the snapshot's, the undo stack is
+ * emptied (setLog's restore hooks, register 3.11) and the tree cycle is the snapshot's. The ids reserved for the emptied entries stay reserved
+ * (a known limitation, see the file header). Throws on another version or a damaged layer, before anything changes.
  */
 export function restore(s: ParkSaveV1): void {
   if (s.v !== SCHEMA_VERSION) throw new Error('unknown park save version ' + String(s.v));
@@ -501,12 +500,13 @@ export function restore(s: ParkSaveV1): void {
   setLog(s.log); // runs the restore hooks: undo.ts empties its stack, tools.ts derives a tree cycle ...
   if (typeof s.treeTurn === 'number') setNextSpecies(s.treeTurn); // ... which the saved one replaces
   restoreLife(s);
+  const av = getAvatar();
+  if (getMode() === 'avatar' && !(av === 'a_pigeon' || av === 'a_pomeranian' ? creatureById(getPlayer()) : visitorById(getPlayer()))) setMode('creator'); // its actor is not in the save
   rebuildBlock();
   markCharmDirty();
 }
 
-/** The visitors, the creatures, the regulars, the paving job, the schedulers' counters (S4 part B), the pairs, the alumni, the pin and the
- * feed (S5); a save without them has none. */
+/** The visitors, creatures, regulars, paving job, schedulers (S4 part B), pairs, alumni, pin and feed (S5); a save without them has none. */
 function restoreLife(s: ParkSaveV1): void {
   setVisitorsState(s.visitors ?? []);
   resetNames();

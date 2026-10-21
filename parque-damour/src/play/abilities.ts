@@ -106,6 +106,15 @@ export function cooldownLeft(side: Side, id: string, at = commandTick()): number
   const ready = sides.cooldowns[side][id] ?? 0;
   return ready > at ? (ready - at) / STEPS_PER_SEC : 0;
 }
+/**
+ * An avatar action that stands for ability `id` (07 S7.6 step 9, 02 10.10: the swoop is m_pigeon, the snatch m_pomeranian, the bouquet
+ * and the petals c_bouquet and c_petals) starts that ability's cooldown on its side, as a cast does; the avatar's `ruffled`, `panting` and
+ * the florist's two waits are these. `at` is the tick the action happens at.
+ */
+export function startCooldown(side: Side, id: AbilityId, at = commandTick()): void {
+  const d = BY_ID.get(id);
+  if (d) sides.cooldowns[side][id] = at + Math.round(d.cooldown * STEPS_PER_SEC);
+}
 /** Uses left today of a limited ability; Infinity for one without charges. */
 export function chargesLeft(side: Side, id: string): number {
   const d = BY_ID.get(id);
@@ -179,8 +188,8 @@ export function canCast(side: Side, id: AbilityId, target: Target, at = commandT
   return h ? h.check(r, at) : fail('reason.not_here'); // S10's: unlocked, a good target, and no rules yet
 }
 
-/** Every pair within 6 tiles of (x, y), and the pair `direct`, now has a Cupid action behind it (02 9.1 item 7). */
-function markCupid(x: number, y: number, direct: PairId): void {
+/** Every pair within 6 tiles of (x, y), and the pair `direct`, now has a Cupid action behind it (02 9.1 item 7); the florist avatar's bouquet marks too. */
+export function markCupid(x: number, y: number, direct: PairId): void {
   for (const p of pairs) {
     const m = midOf(p);
     if (p.id === direct || Math.hypot(m.x - x, m.y - y) <= R_CUPID) p.lastCupidAt = T.abs;

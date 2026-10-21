@@ -24,6 +24,10 @@
 // single no longer draws its seeks and every arrival after it, the weather and the pairs moved; all six fixtures were re-recorded once more
 // (each fixture's note holds the old and the new values), det-s6's m_pomeranian cast got a new target and tick (its note says why), and run 1
 // now counts the Pairs that are not one woman and one man (none, in any of the six).
+// S7 (avatar mode): the avatar code is inert without avatar commands, so the six fixtures above did not move; det-s7 is det-s6 plus one session
+// of the pigeon avatar (avatar.enter, six avatar.tap, avatar.leave) between det-s6's tools and abilities, straddling run 5's snapshot at step
+// 20,000 (the save holds MODE avatar, the possessed pigeon and the shared m_pigeon cooldown, and the replay re-applies the commands after it).
+// Run 1 also checks that every avatar command applies and in which order the statuses come.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -47,7 +51,7 @@ type Fixture = { seed: number; steps: number; progress?: { cp: number; mp: numbe
 const load = (name: string): Fixture => JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures', name + '.json'), 'utf8')) as Fixture;
 const FIXTURES = {
   'det-s2': load('det-s2'), 'det-s3': load('det-s3'), 'det-s4': load('det-s4'), 'det-s4l': load('det-s4l'), 'det-s5': load('det-s5'),
-  'det-s6': load('det-s6'),
+  'det-s6': load('det-s6'), 'det-s7': load('det-s7'),
 } as const;
 const fixture = FIXTURES['det-s2']; // the state-hash tests below run on det-s2's park
 
@@ -192,6 +196,23 @@ describe('the fixtures (08 3.2 item 1)', () => {
     expect(s6.commands.map((c) => c.tick)).toEqual(s6.commands.map((c) => c.tick).sort((a, b) => a - b));
   });
 
+  it('det-s7 is det-s6 plus a pigeon session: avatar.enter, six avatar.tap and avatar.leave, between the tools and abilities it would reject (S7)', () => {
+    const s6 = FIXTURES['det-s6'], s7 = FIXTURES['det-s7'];
+    expect([s7.seed, s7.steps, s7.progress]).toEqual([s6.seed, s6.steps, s6.progress]);
+    expect(s7.commands.filter((c) => !c.kind.startsWith('avatar.'))).toEqual(s6.commands);
+    const av = s7.commands.filter((c) => c.kind.startsWith('avatar.'));
+    expect(av.map((c) => c.kind)).toEqual(['avatar.enter', ...Array.from({ length: 6 }, () => 'avatar.tap'), 'avatar.leave']);
+    expect(av.every((c) => c.side === 'mischief')).toBe(true);
+    expect((av[0] as FixtureCommand).payload).toEqual({ avatar: 'a_pigeon' });
+    // the session ends before the first tool or ability after it (a bench and c_petals at 20,100) and starts after the last speed change before it
+    const first = Math.min(...s6.commands.filter((c) => c.tick > 14000 && (c.kind === 'tool' || c.kind === 'ability')).map((c) => c.tick));
+    expect(first).toBe(20100);
+    expect((av.at(-1) as FixtureCommand).tick).toBeLessThan(first);
+    expect(av.filter((c) => c.tick > 20000).map((c) => c.kind)).toEqual(['avatar.tap', 'avatar.leave']); // run 5 replays these
+    expect(av.filter((c) => c.tick <= 20000)).toHaveLength(6); // and the save at 20,000 holds the session
+    expect(s7.expect).not.toEqual(s6.expect);
+  });
+
 });
 
 /** Run 1's numbers per fixture, kept for runs 4 and 6 (the same steps from the same seed and log give the same numbers: runs 1 and 2). */
@@ -205,7 +226,7 @@ function run1(name: keyof typeof FIXTURES): { hash: number; rngN: number; tick: 
   return a;
 }
 
-for (const name of ['det-s2', 'det-s3', 'det-s4', 'det-s4l', 'det-s5', 'det-s6'] as const) {
+for (const name of ['det-s2', 'det-s3', 'det-s4', 'det-s4l', 'det-s5', 'det-s6', 'det-s7'] as const) {
   const fx = FIXTURES[name];
   describe(`determinism over 3 sim days, ${name} (brief 9 row 5; 08 3.2)`, () => {
     it('runs 1 and 2: the same seed and commands give the same hash, draw count and tick; run 3: one extra setWeather differs', () => {
@@ -225,6 +246,10 @@ for (const name of ['det-s2', 'det-s3', 'det-s4', 'det-s4l', 'det-s5', 'det-s6']
       // S6: det-s6 casts its eight abilities and every one lands (the events 'cast'; a refused one would be a 'rejected' with its own reason)
       let casts = 0;
       on('cast', () => casts++);
+      // S7: det-s7's pigeon session; every avatar command applies, in the order the fixture sends them
+      const statuses: string[] = [], modes: string[] = [];
+      on('avatarStatus', (e) => statuses.push(String(e.params?.status).replace('avatar.status.', '')));
+      on('mode', (e) => modes.push(String(e.params?.mode)));
       let most = 0, atMidday = 0;
       const a = run(fx, {
         hook: (step) => {
@@ -235,13 +260,15 @@ for (const name of ['det-s2', 'det-s3', 'det-s4', 'det-s4l', 'det-s5', 'det-s6']
       expect(formed).toBeGreaterThan(0);
       expect(sameSex).toBe(0);
       expect(stages).toBeGreaterThan(0);
-      if (name === 'det-s4' || name === 'det-s4l' || name === 'det-s5' || name === 'det-s6') {
+      if (name === 'det-s4' || name === 'det-s4l' || name === 'det-s5' || name === 'det-s6' || name === 'det-s7') {
         expect([atMidday, most]).toEqual([CAP_PEOPLE, CAP_PEOPLE]);
         expect(rejected.length).toBeGreaterThan(0);
         expect(new Set(rejected)).toEqual(new Set(['reason.park_full']));
       } else expect(most).toBeLessThanOrEqual(CAP_PEOPLE);
-      expect(arrivalsState().pace).toBe(name === 'det-s4l' || name === 'det-s5' || name === 'det-s6' ? 'lively' : 'calm'); // these send a pace
-      expect(casts).toBe(name === 'det-s6' ? 8 : 0);
+      expect(arrivalsState().pace).toBe(name === 'det-s4l' || name === 'det-s5' || name === 'det-s6' || name === 'det-s7' ? 'lively' : 'calm'); // these send a pace
+      expect(casts).toBe(name === 'det-s6' || name === 'det-s7' ? 8 : 0);
+      expect(statuses).toEqual(name === 'det-s7' ? ['flying', 'swooping', 'ruffled', 'perching', 'drinking', 'flying'] : []);
+      expect(modes).toEqual(name === 'det-s7' ? ['avatar', 'creator'] : []);
       console.log(name + ': seed ' + fx.seed + ' steps ' + a.tick + ' rngN ' + a.rngN + ' stateHash ' + a.hash + ' (0x' + a.hash.toString(16) + ') formed ' + formed + ' stages ' + stages);
       expect(a.tick).toBe(64800);
       expect(a.rngN).toBeGreaterThan(0);
@@ -280,7 +307,10 @@ for (const name of ['det-s2', 'det-s3', 'det-s4', 'det-s4l', 'det-s5', 'det-s6']
       expect(after.length).toBeGreaterThan(0);
       if (name !== 'det-s2') expect(after.filter((c) => c.kind === 'tool' || c.kind === 'undo').map((c) => c.kind)).toEqual(['tool', 'tool', 'tool', 'tool', 'undo']);
       // S6: det-s6's c_petals and m_pigeon are replayed from the snapshot too (the petals' layer, the swoop and the cooldowns restore with it)
-      expect(after.filter((c) => c.kind === 'ability')).toHaveLength(name === 'det-s6' ? 2 : 0);
+      expect(after.filter((c) => c.kind === 'ability')).toHaveLength(name === 'det-s6' || name === 'det-s7' ? 2 : 0);
+      // S7: det-s7's snapshot at 20,000 holds the pigeon session; the sixth tap and the leave are replayed from it
+      expect(after.filter((c) => c.kind.startsWith('avatar.')).map((c) => c.kind)).toEqual(name === 'det-s7' ? ['avatar.tap', 'avatar.leave'] : []);
+      expect(JSON.parse(JSON.stringify(snap)).mode.mode).toBe(name === 'det-s7' ? 'avatar' : 'creator');
       const rejected: string[] = [];
       on('rejected', (e) => rejected.push(String(e.params?.reason)));
       restore(snap);

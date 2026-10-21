@@ -15,11 +15,13 @@
 // Park pace (owner 2026-10-14): the Park group gains setPace, which enqueues the logged `park.pace` command as setWeather does.
 // S5: the State group gains pairs, featured and alumni (read only); the Park group land (07 S5.6 step 5: no ability triggers an
 // embarrassment yet, so the harness lands one directly, as an ability will) and setPin (the Romances sheet's pin, UI state).
+// S7: the Park group gains mode (read only: MODE, PLAYER, the avatar) and avatarEnter, avatarTap and avatarLeave, which enqueue the logged
+// avatar commands as the shell will (the picker, a tap on the world, the Creator button).
 // S6: the State group gains effects (the live list), the Park group ability (enqueues the logged `ability` command, as the rail will) and setProgress (the points a fixture starts from).
 import { T } from '../core/clock.ts';
 import { seedVisual, rngN } from '../core/rng.ts';
 import { SIM_DT, SP, setSpeed, simulate, tick } from '../core/loop.ts';
-import { applyNow, enqueue, log, replay, type AbilityId, type Pace, type Target } from '../core/commands.ts';
+import { AVATAR_SIDE, applyNow, enqueue, log, replay, type AbilityId, type Hit, type Pace, type Target } from '../core/commands.ts';
 import { drain } from '../core/events.ts';
 import { W, type WeatherKind } from '../core/weather.ts';
 import { BEDC, ICE, KIND, OCC, PAVEDAY, PETALS, WATER, WEAR, WET, props } from '../world/grid.ts';
@@ -34,6 +36,8 @@ import { visitors } from '../entities/visitor.ts';
 import { creatures } from '../entities/creatures.ts';
 import { alumniState, featured, pairs, setPin } from '../entities/romance.ts';
 import { effects } from '../play/abilities.ts';
+import { getAvatar, getMode, getPlayer, type AvatarId } from '../play/mode.ts';
+import type { XY } from '../core/math.ts';
 import { progressState, setProgress } from '../play/progression.ts';
 import { land } from '../entities/embarrass.ts';
 import { FT, qualityLevel } from './perf.ts';
@@ -103,6 +107,22 @@ export function buildHarness(api: HarnessApi) {
     /** Enqueues the logged `ability` command for `id` (its own side) at `target`; it applies on the next step and is validated there. */
     ability: (id: AbilityId, target: Target): void => {
       enqueue({ side: id.startsWith('c_') ? 'cupid' : 'mischief', kind: 'ability', payload: { id, target } });
+    },
+    /** MODE, PLAYER (0 for none) and the possessed avatar, read only (register 3.9). */
+    mode: () => ({ mode: getMode(), player: getPlayer(), avatar: getAvatar() }),
+    /** Enqueues the logged `avatar.enter` command for `avatar` on its own side; it applies on the next step (locked: reason.locked). */
+    avatarEnter: (avatar: AvatarId): void => {
+      enqueue({ side: AVATAR_SIDE[avatar], kind: 'avatar.enter', payload: { avatar } });
+    },
+    /** Enqueues the logged `avatar.tap` for `tile` with the hit the UI would have resolved (a bare tile by default), on the possessed avatar's side. */
+    avatarTap: (tile: XY, hit?: Hit): void => {
+      const a = getAvatar();
+      enqueue({ side: a ? AVATAR_SIDE[a] : 'mischief', kind: 'avatar.tap', payload: { tile, hit: hit ?? { kind: 'tile', id: 0, tile } } });
+    },
+    /** Enqueues the logged `avatar.leave` on the possessed avatar's side. */
+    avatarLeave: (): void => {
+      const a = getAvatar();
+      enqueue({ side: a ? AVATAR_SIDE[a] : 'mischief', kind: 'avatar.leave', payload: {} });
     },
     /** The profile's points, as a fixture sets them before a run (det-s6: tier 1 on both ladders); the announced ids stay. */
     setProgress: (cp: number, mp: number): void => setProgress({ cp, mp, unlocked: progressState().unlocked }),

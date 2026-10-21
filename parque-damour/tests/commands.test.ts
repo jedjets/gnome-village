@@ -11,6 +11,8 @@ import {
   type Command,
 } from '../src/core/commands.ts';
 import { arrivalsState } from '../src/entities/visitor.ts';
+import { enterAvatar, leaveAvatar } from '../src/play/avatar.ts';
+import { setProgress } from '../src/play/progression.ts';
 import { parkSeed } from '../src/world/gen.ts';
 import { clearListeners, drain, watch, type GameEvent } from '../src/core/events.ts';
 import { T } from '../src/core/clock.ts';
@@ -111,15 +113,13 @@ describe('core/commands the log and rejection (03 5.2 item 3, 5.4)', () => {
     expect(first?.kind === 'tool' && 'at' in first.payload ? first.payload.at.x : -1).toBe(50);
   });
   it('a command no module applies is rejected reason.not_here, not logged, and emits one rejected event', () => {
-    // `avatar.leave` waits for S7 (visitor.call, the example until S4 part B, now has its handler in entities/visitor.ts)
-    setMode('avatar', 'a_pigeon', 1);
-    const r = applyNow({ side: 'mischief', kind: 'avatar.leave', payload: {} });
-    setMode('creator');
+    // every kind of 03 5.1 has its handler since S7 (visitor.call from S4 part B, avatar.* now), so a kind of a later version stands for one
+    const r = applyCommand(bad({ side: 'mischief', kind: 'a.later.kind', payload: {} }));
     expect(r).toEqual({ ok: false, reason: 'reason.not_here' });
     expect(log()).toHaveLength(0);
     drain(0);
     expect(rejected).toHaveLength(1);
-    expect(rejected[0]?.params).toMatchObject({ reason: 'reason.not_here', side: 'mischief', kind: 'avatar.leave' });
+    expect(rejected[0]?.params).toMatchObject({ reason: 'reason.not_here', side: 'mischief', kind: 'a.later.kind' });
   });
   it('a handler that refuses is rejected with its reason and not logged', () => {
     const r = applyNow({ side: 'park', kind: 'undo', payload: {} });
@@ -170,6 +170,90 @@ describe('core/commands side and mode rules (03 5.3)', () => {
     registerHandler('avatar.leave', () => OK);
     expect(applyCommand(bad({ side: 'mischief', kind: 'avatar.leave', payload: {} })).ok).toBe(true);
     expect(applyCommand(bad({ side: 'cupid', kind: 'avatar.leave', payload: {} }))).toEqual({ ok: false, reason: 'reason.wrong_side' });
+  });
+});
+
+describe('core/commands the avatar commands, with their handlers (S7; 03 5.1, 5.3; 08 2.1)', () => {
+  const SIDES = { a_pigeon: 'mischief', a_pomeranian: 'mischief', a_mime: 'mischief', a_florist: 'cupid', a_busker: 'cupid', a_matchmaker: 'cupid' } as const;
+  beforeEach(() => {
+    registerHandler('avatar.enter', (c) => enterAvatar(c.payload.avatar)); // the stubs of install() stood in for S7's handlers
+    registerHandler('avatar.leave', () => leaveAvatar());
+    setProgress({ cp: 70, mp: 70 });
+  });
+  const tap = (side: 'cupid' | 'mischief' | 'park', x = 12, y = 12): Command =>
+    bad({ side, kind: 'avatar.tap', payload: { tile: { x, y }, hit: { kind: 'tile', id: 0, tile: { x, y } } } });
+  it('avatar.enter takes only the avatar\'s own side, for each of the six; the park side and the other side are wrong_side', () => {
+    for (const [id, side] of Object.entries(SIDES)) {
+      const other = side === 'cupid' ? 'mischief' : 'cupid';
+      expect(applyCommand(bad({ side: other, kind: 'avatar.enter', payload: { avatar: id } })), id).toEqual({ ok: false, reason: 'reason.wrong_side' });
+      expect(applyCommand(bad({ side: 'park', kind: 'avatar.enter', payload: { avatar: id } })), id).toEqual({ ok: false, reason: 'reason.wrong_side' });
+    }
+    expect(getMode()).toBe('creator');
+    expect(log()).toHaveLength(0);
+  });
+  it('avatar.enter: S10\'s three are reason.not_here, a locked one reason.locked, an unknown id wrong_side; none is logged', () => {
+    for (const id of ['a_mime', 'a_busker', 'a_matchmaker'] as const)
+      expect(applyCommand(bad({ side: SIDES[id], kind: 'avatar.enter', payload: { avatar: id } })), id).toEqual({ ok: false, reason: 'reason.not_here' });
+    setProgress({ cp: 0, mp: 0 });
+    expect(applyCommand(bad({ side: 'cupid', kind: 'avatar.enter', payload: { avatar: 'a_florist' } }))).toEqual({ ok: false, reason: 'reason.locked' });
+    expect(applyCommand(bad({ side: 'mischief', kind: 'avatar.enter', payload: { avatar: 'a_dragon' } }))).toEqual({ ok: false, reason: 'reason.wrong_side' });
+    expect(log()).toHaveLength(0);
+    drain(0);
+    expect(rejected).toHaveLength(5);
+  });
+  it('avatar.tap and avatar.leave: creator mode is wrong_mode; in avatar mode only the possessed avatar\'s side may send them', () => {
+    expect(applyCommand(tap('mischief'))).toEqual({ ok: false, reason: 'reason.wrong_mode' });
+    expect(applyCommand(bad({ side: 'mischief', kind: 'avatar.leave', payload: {} }))).toEqual({ ok: false, reason: 'reason.wrong_mode' });
+    expect(applyCommand(bad({ side: 'mischief', kind: 'avatar.enter', payload: { avatar: 'a_pigeon' } })).ok).toBe(true);
+    expect(applyCommand(tap('cupid'))).toEqual({ ok: false, reason: 'reason.wrong_side' });
+    expect(applyCommand(tap('park'))).toEqual({ ok: false, reason: 'reason.wrong_side' });
+    expect(applyCommand(bad({ side: 'cupid', kind: 'avatar.leave', payload: {} }))).toEqual({ ok: false, reason: 'reason.wrong_side' });
+    expect(applyCommand(tap('mischief')).ok).toBe(true);
+    expect(applyCommand(bad({ side: 'mischief', kind: 'avatar.leave', payload: {} })).ok).toBe(true);
+    expect(log().map((c) => c.kind)).toEqual(['avatar.enter', 'avatar.tap', 'avatar.leave']);
+  });
+  it('in avatar mode the park-side kinds that are not the strip\'s still apply: speed, visitor.call, park.pace; tool, undo and ability do not', () => {
+    applyCommand(bad({ side: 'cupid', kind: 'avatar.enter', payload: { avatar: 'a_florist' } }));
+    expect(getMode()).toBe('avatar');
+    expect(applyCommand(bad({ side: 'park', kind: 'speed', payload: { speed: 2 } })).ok).toBe(true);
+    expect(applyCommand(bad({ side: 'park', kind: 'park.pace', payload: { pace: 'lively' } })).ok).toBe(true);
+    expect(applyCommand(bad({ side: 'park', kind: 'visitor.call', payload: { gate: 'g_west' } })).ok).toBe(true);
+    for (const c of [
+      bad({ side: 'park', kind: 'tool', payload: { tool: 'bed', at: { x: 3, y: 3 } } }),
+      bad({ side: 'park', kind: 'undo', payload: {} }),
+      bad({ side: 'cupid', kind: 'ability', payload: { id: 'c_petals', target: { kind: 'park' } } }),
+    ])
+      expect(applyCommand(c), c.kind).toEqual({ ok: false, reason: 'reason.not_in_avatar' });
+  });
+  it('a malformed avatar.tap (no tile, off the park) is rejected not_here or outside, changes nothing and is not logged', () => {
+    applyCommand(bad({ side: 'mischief', kind: 'avatar.enter', payload: { avatar: 'a_pigeon' } }));
+    const h = stateHash();
+    const n = log().length;
+    expect(applyCommand(bad({ side: 'mischief', kind: 'avatar.tap', payload: {} }))).toEqual({ ok: false, reason: 'reason.not_here' });
+    expect(applyCommand(tap('mischief', 99, 4))).toEqual({ ok: false, reason: 'reason.outside' });
+    expect(applyCommand(bad({ side: 'mischief', kind: 'avatar.tap', payload: { tile: { x: 5, y: 5 } } })).ok).toBe(true); // a missing hit is none: the tile step
+    expect(stateHash()).not.toBe(h);
+    expect(log()).toHaveLength(n + 1);
+  });
+  it('a snapshot, a session of avatar commands (a refused tap among them) and a replay of the log from the snapshot give the same hash', () => {
+    const snap = JSON.parse(JSON.stringify(snapshot())) as ReturnType<typeof snapshot>;
+    const at = (step: number, c: Parameters<typeof enqueue>[0]): void => {
+      while (tick() < step - 1) simulate(SIM_DT, 0);
+      enqueue(c);
+    };
+    at(10, { side: 'mischief', kind: 'avatar.enter', payload: { avatar: 'a_pigeon' } });
+    at(30, { side: 'mischief', kind: 'avatar.tap', payload: { tile: { x: 20, y: 30 }, hit: { kind: 'tile', id: 0, tile: { x: 20, y: 30 } } } });
+    at(40, { side: 'mischief', kind: 'avatar.tap', payload: { tile: { x: -2, y: 30 }, hit: { kind: 'none', id: 0, tile: null } } }); // refused: not logged
+    at(300, { side: 'mischief', kind: 'avatar.tap', payload: { tile: { x: 10, y: 40 }, hit: { kind: 'tile', id: 0, tile: { x: 10, y: 40 } } } });
+    at(500, { side: 'mischief', kind: 'avatar.leave', payload: {} });
+    while (tick() < 800) simulate(SIM_DT, 0);
+    expect(log().map((c) => c.kind)).toEqual(['avatar.enter', 'avatar.tap', 'avatar.tap', 'avatar.leave']);
+    const a = stateHash();
+    const cmds = log().map((c) => ({ ...c }));
+    restore(snap);
+    replay(cmds, 800);
+    expect(tick()).toBe(800);
+    expect(stateHash()).toBe(a);
   });
 });
 

@@ -268,12 +268,15 @@ describe('03 7.9 phase 6 and 04 7.6 (S6): the featured pair\'s rose glow, a hair
     cam.angT = 0;
     centreOn(20, 20);
   });
-  it('none with no pair; two for the pair; none while the ring is up on either member (one or the other); none when both are off screen; each a hair before its member', () => {
+  it('none with no pair; two for the pair; with the ring on one member the partner keeps its glow (owner 2026-10-21); none when both are off screen; each a hair before its member', () => {
     expect(featuredDrawables(0).length).toBe(0);
     const { p, a, b } = pairAt(20, 20, 1);
     expect(featuredDrawables(0).map((d) => d.kind)).toEqual(['ring', 'ring']);
-    expect(featuredDrawables(a.id).length).toBe(0); // the pair shares its spot: a ring on one and a glow on the other would double up
-    expect(featuredDrawables(b.id).length).toBe(0);
+    // only the selected figure swaps its glow for the selection ring: the partner's glow stays, at the partner's place
+    const forA = featuredDrawables(a.id).map((d) => [d.x, d.y]);
+    expect(forA).toEqual([[b.x, b.y]]);
+    const forB = featuredDrawables(b.id).map((d) => [d.x, d.y]);
+    expect(forB).toEqual([[a.x, a.y]]);
     expect(featuredDrawables(a.id + b.id + 100).length).toBe(2); // someone else's ring does not hide it
     setPin(p.id);
     expect(featuredDrawables(0).length).toBe(2);
@@ -320,6 +323,12 @@ describe('03 7.9 phase 6 and 04 7.6 (S6): the featured pair\'s rose glow, a hair
     expect(RING_ORBIT_MIN).toBeGreaterThan(5);
     expect(radius(0.3)).toBe(RING_MIN);
     expect(radius(1.3)).toBeGreaterThan(RING_MIN * 1.5);
+    // S7 (owner 2026-10-21, the glow strengthened at Fit): the floors are 18, 10 and 2.1 px, and 1.3 and 2.4 draw as they did (0.95 h of a 22 EH figure)
+    expect([RING_MIN, RING_ORBIT_MIN, RING_STAR_MIN]).toEqual([18, 10, 2.1]);
+    expect(radius(1.3)).toBeCloseTo(0.95 * 22 * 1.3, 6);
+    expect(radius(2.4)).toBeCloseTo(0.95 * 22 * 2.4, 6);
+    expect(0.5 * 22 * 1.3).toBeGreaterThan(RING_ORBIT_MIN); // the orbit and the twinkle floors lie under their 1.3 values too
+    expect(0.075 * 22 * 1.3).toBeGreaterThan(RING_STAR_MIN);
   });
   it('Pompon is drawn once he is in the park, and not while he waits outside; a pigeon on its dive is drawn 1.45 times its size', () => {
     const v = adult(20, 20);

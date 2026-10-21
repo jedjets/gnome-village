@@ -15,6 +15,10 @@ import { pairs, tryForm, type Pair } from '../src/entities/romance.ts';
 import { BACKFIRE_T, EMB_KINDS, canTarget, embCost, land } from '../src/entities/embarrass.ts';
 import { ensureGardener } from '../src/entities/staff.ts';
 import { visitors } from '../src/entities/visitor.ts';
+import { AVATAR_SIDE, applyNow } from '../src/core/commands.ts';
+import { avatarTap } from '../src/play/avatar.ts';
+import { getPlayer } from '../src/play/mode.ts';
+import { creatureById } from '../src/entities/creatures.ts';
 import { en } from '../src/ui/strings/en.ts';
 import { es } from '../src/ui/strings/es.ts';
 
@@ -243,5 +247,88 @@ describe('the abilities keep the tone rules (S6; 02 13 T3, T4; 07 S6.8)', () => 
     const v = single(20, 20, 'f');
     v.embToday = 3;
     expect(canCast('mischief', 'm_pigeon', { kind: 'visitor', id: v.id })).toEqual({ ok: false, reason: 'reason.enough_today' });
+  });
+});
+
+describe('the avatars keep the tone rules (S7; 02 13 T3, T4, T5, T9; 02 10.4, 10.5, 10.7, 10.10)', () => {
+  const kid = (x: number, y: number): Visitor => {
+    const c = spawnVisitor('child', 'g_west', {}) as Visitor;
+    Object.assign(c, { x, y, path: null, st: 'idle', t: 0, leaveAt: T.abs + 0.9 });
+    return c;
+  };
+  const tap = (v: Visitor) => avatarTap({ x: Math.round(v.x), y: Math.round(v.y) }, { kind: 'visitor', id: v.id, tile: { x: Math.round(v.x), y: Math.round(v.y) } });
+  const enter = (a: 'a_pigeon' | 'a_pomeranian' | 'a_florist') => expect(applyNow({ side: AVATAR_SIDE[a], kind: 'avatar.enter', payload: { avatar: a } }).ok).toBe(true);
+  beforeEach(() => {
+    bindProgression();
+    resetProgress();
+    setProgress({ cp: 70, mp: 70 });
+    setArrivalsState({ arrivalT: 1e9, pace: 'calm' });
+  });
+  it('no avatar targets a child: the pigeon and the florist refuse with reason.not_children, the pomeranian only plays with it; embToday stays 0 and the items stay', () => {
+    const c = kid(20, 20);
+    c.items.iceCream = true;
+    enter('a_pigeon');
+    expect(tap(c)).toBe('reason.not_children');
+    applyNow({ side: 'mischief', kind: 'avatar.leave', payload: {} });
+    enter('a_florist');
+    expect(tap(c)).toBe('reason.not_children');
+    applyNow({ side: 'cupid', kind: 'avatar.leave', payload: {} });
+    enter('a_pomeranian');
+    expect(tap(c)).toBe('avatar.status.playing'); // a game, never a snatch (the ice cream stays)
+    for (let s = 0; s < 60 * 12; s++) simulate(SIM_DT, 1);
+    expect([c.embToday, c.pendingEmb, c.items.iceCream]).toEqual([0, null, true]);
+  });
+  it('the 4th landing of the day is refused by the avatars too (T5): the pigeon and the pomeranian answer reason.enough_today', () => {
+    const v = single(20, 20, 'f');
+    v.embToday = 3;
+    v.items.hat = true;
+    enter('a_pigeon');
+    expect(tap(v)).toBe('reason.enough_today');
+    applyNow({ side: 'mischief', kind: 'avatar.leave', payload: {} });
+    enter('a_pomeranian');
+    expect(tap(v)).toBe('reason.enough_today');
+    expect(v.embToday).toBe(3);
+  });
+  it('staff are not the pigeon\'s or the pomeranian\'s targets (they fall through to the tile steps): a gardener is flown past, not pooped on', () => {
+    const gard = spawnVisitor('gardener', 'g_west', {}) as Visitor;
+    Object.assign(gard, { x: 20, y: 20, path: null, st: 'idle', t: 0 });
+    gard.items.hat = true;
+    enter('a_pigeon');
+    expect(tap(gard)).toBe('avatar.status.flying');
+    expect(gard.embToday).toBe(0);
+    applyNow({ side: 'mischief', kind: 'avatar.leave', payload: {} });
+    enter('a_pomeranian');
+    expect(tap(gard)).toBe('avatar.status.walking');
+  });
+  it('the pomeranian\'s snatch gives it back within 10 s of the take (T4), as m_pomeranian\'s does, and Pompon stays in the park', () => {
+    const v = single(30, 20, 'f');
+    Object.assign(v.items, { hat: true, purse: true });
+    const before = { ...v.items };
+    enter('a_pomeranian');
+    const c = creatureById(getPlayer());
+    for (let s = 0; s < 60 * 8; s++) simulate(SIM_DT, 1);
+    expect(c?.st).toBe('wait');
+    expect(tap(v)).toBe('avatar.status.snatching');
+    let took = -1, gave = -1;
+    for (let s = 1; s <= 60 * 90 && gave < 0; s++) {
+      simulate(SIM_DT, 1);
+      if (took < 0 && !v.items.hat) took = s;
+      if (took >= 0 && v.items.hat) gave = s;
+    }
+    expect(took).toBeGreaterThan(0);
+    expect(gave - took).toBeLessThan(10 * 60);
+    expect(v.items).toEqual(before);
+    expect(c?.outside).toBe(false);
+  });
+  it('the florist only ever raises affinity: a bouquet costs the pair nothing, and a person in a reaction is not handed one', () => {
+    const { p, a, b } = pairAt(1, 3);
+    const aff = p.affinity;
+    enter('a_florist');
+    const f = visitors.find((x) => x.spawnedForPlayer) as Visitor;
+    Object.assign(f, { x: a.x, y: a.y + 3, st: 'idle', t: 0, path: null });
+    expect(tap(a)).toBe('avatar.status.bouquet');
+    for (let s = 0; s < 60 * 10; s++) simulate(SIM_DT, 1);
+    expect(p.affinity).toBeGreaterThanOrEqual(aff);
+    expect([a.embToday, b.embToday]).toEqual([0, 0]);
   });
 });

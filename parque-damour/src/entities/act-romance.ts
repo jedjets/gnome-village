@@ -10,6 +10,11 @@
 // timers, never from a draw). The Stroll moves as one unit at 2.4 (move.ts speedOf): the initiator walks the loop's corners, the other
 // half a tile behind (02 4.3 couple item 1, 6.2 stage 4). Reactions end standing; the snatched chase ends in a 3 s huff; a flap flees 3
 // tiles; a lost visitor wanders and stops when the partner is within 2 (02 6.4, 04 9.3).
+// S7 (07 S7.5, 02 10.7): the flower seller avatar's states, which PLAYER_HOLD names `hand`, `pick` and `scatter`, and the two walks that lead
+// to the last two: `hand` (walk to the person, 30 s at most, give the bouquet within 1.4 tiles), `goPick` then `pick` (4 s at a flowerbed: the
+// basket is 3 again), `goScatter` then `scatter` (2 s at a lawn tile). What a bouquet and the petals do beyond the walk (the affinity, the
+// cooldowns, the Cupid mark, the c_petals cast) is play/avatar-florist.ts, handed in as the florist hook (entities cannot import play/).
+// Visitors left in these states by the player finish them under the AI (BUSY holds them).
 import { T } from '../core/clock.ts';
 import { rnd } from '../core/rng.ts';
 import { emit } from '../core/events.ts';
@@ -22,6 +27,21 @@ import { finish, release, startLeave, takeSeat, walkDirect } from './act.ts';
 import { byId, nowTick, type Visitor } from './visitor.ts';
 import { midOf, pairById, partnerOf, type Pair } from './romance.ts';
 import { RAIN_STAGE, REACTION_STATES, STAGE_STATES, completeStage, interruptStage } from './romance-stages.ts';
+
+export const PICK_T = 4; // s at a flowerbed (02 10.7 3b)
+export const SCATTER_T = 2; // s at the lawn tile (4)
+export const BASKET = 3; // bouquets in a full basket (register 3.8, 02 10.2)
+export const HAND_NEAR = 1.4; // tiles within which the bouquet is given
+export const HAND_MAX_T = 30; // s: she gives up (as the cameo of c_bouquet does)
+export const HAND_AIM_STEPS = 30; // steps between her re-aims at the person
+/** The flower seller's states (the holds and the walks to them). */
+export const FLORIST_STATES: Readonly<Record<string, true>> = { hand: true, pick: true, scatter: true, goPick: true, goScatter: true };
+export type FloristAct = 'bouquet' | 'petals';
+let floristHook: (v: Visitor, what: FloristAct) => void = () => {};
+/** play/avatar-florist.ts hands in what a bouquet given and petals scattered do (affinity, cooldown, Cupid mark, the c_petals cast). */
+export function setFloristHook(fn: (v: Visitor, what: FloristAct) => void): void {
+  floristHook = fn;
+}
 
 /** The snatched chase ends in this huff (02 6.4); a lost visitor wanders a step every 5 s and stops within 2 of the partner. */
 export const SNATCH_HUFF_T = 3;
@@ -180,11 +200,57 @@ function reactionStep(v: Visitor, dt: number): void {
   v.decideT = 0;
 }
 
+/** One step of the flower seller's states (see the file header). */
+function floristStep(v: Visitor, dt: number): void {
+  switch (v.st) {
+    case 'goPick':
+    case 'goScatter':
+      if (v.path) return;
+      v.t = v.st === 'goPick' ? PICK_T : SCATTER_T;
+      if (v.st === 'goPick') v.st = 'pick';
+      else {
+        v.st = 'scatter';
+        floristHook(v, 'petals');
+      }
+      return;
+    case 'pick':
+      v.t -= dt;
+      if (v.t > 0) return;
+      v.basket = BASKET;
+      finish(v, 0);
+      return;
+    case 'scatter':
+      v.t -= dt;
+      if (v.t <= 0) finish(v, 0);
+      return;
+    case 'hand': {
+      const w = byId(v.job.visitorId ?? 0);
+      v.t -= dt;
+      if (!w || v.t <= 0) {
+        finish(v, 0); // the person left, or she never caught up
+        return;
+      }
+      if (Math.hypot(w.x - v.x, w.y - v.y) > HAND_NEAR) {
+        v.job.step = (v.job.step ?? 0) + 1;
+        if (!v.path || v.job.step % HAND_AIM_STEPS === 0) goTo(v, w.x, w.y);
+        return;
+      }
+      floristHook(v, 'bouquet');
+      finish(v, 0);
+      return;
+    }
+  }
+}
+
 /**
  * The romance and reaction states (03 2.5 act.ts: "the reaction states and backfire scenes are S5's"). True when `v` was in one of
  * them (act.ts then does nothing more this step); false for every other state, and for a seat walk that is not a pair's.
  */
 export function actRomance(v: Visitor, dt: number): boolean {
+  if (FLORIST_STATES[v.st]) {
+    floristStep(v, dt);
+    return true;
+  }
   if (REACTION_STATES[v.st] || v.st === 'laugh') {
     reactionStep(v, dt);
     return true;
