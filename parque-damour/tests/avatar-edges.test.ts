@@ -14,7 +14,7 @@ import { creatureById, thePomeranian, type Creature } from '../src/entities/crea
 import { stateHash } from '../src/save/store.ts';
 import { run, unlockAll, world, SEC } from './abilities-world.ts';
 
-type AvatarId = 'a_pigeon' | 'a_pomeranian';
+type AvatarId = 'a_pigeon' | 'a_pomeranian' | 'a_florist';
 const enter = (id: AvatarId) => applyNow({ side: AVATAR_SIDE[id], kind: 'avatar.enter', payload: { avatar: id } });
 const leave = () => applyNow({ side: AVATAR_SIDE[getAvatar() ?? 'a_pigeon'], kind: 'avatar.leave', payload: {} });
 const tap = (x: number, y: number) => avatarTap({ x, y }, { kind: 'tile', id: 0, tile: { x, y } });
@@ -111,6 +111,19 @@ describe('03 5.3 and 02 10.5 (S7 review): Pompon can be possessed again at once;
       expect(enter('a_pomeranian')).toEqual({ ok: false, reason: 'reason.busy' });
       expect(stateHash()).toBe(h);
       expect(pom.driven).toBeUndefined();
+    }
+  });
+});
+
+describe('07 S7.7 item 2 (the gate): a stale hit id in avatar.tap falls through to walking (02 10.3 item 4; 03 5.2 item 4)', () => {
+  it('on a path tile the pomeranian and the flower seller get avatar.status.walking when the tapped visitor id is gone', () => {
+    let g = { x: -1, y: -1 };
+    for (let i = 0; i < KIND.length && g.x < 0; i++) if (KIND[i] === Kind.gravel && BLOCK[i] === 0) g = { x: i % 48, y: Math.floor(i / 48) };
+    expect(g.x).toBeGreaterThanOrEqual(0);
+    for (const id of ['a_pomeranian', 'a_florist'] as const) {
+      expect(enter(id).ok).toBe(true);
+      expect(avatarTap(g, { kind: 'visitor', id: 99999, tile: g })).toBe('avatar.status.walking');
+      expect(leave().ok).toBe(true);
     }
   });
 });
