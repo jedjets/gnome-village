@@ -5,17 +5,18 @@ Committed in `.claude/`, so it loads automatically in every Claude Code session 
 | Tool | Where | State |
 |---|---|---|
 | [ponytail](https://github.com/DietrichGebert/ponytail) 5.3.2 | plugin `ponytail@ponytail` | on |
-| [small-business](https://github.com/anthropics/knowledge-work-plugins/tree/main/small-business) 1.35.1 | plugin `small-business@knowledge-work-plugins` | on |
+| [small-business](https://github.com/anthropics/knowledge-work-plugins/tree/main/small-business) 1.35.1 | plugin `small-business@knowledge-work-plugins` | **off** (~11.7k tokens per session) |
 | [ECC](https://github.com/affaan-m/ECC) | plugin `ecc@ecc` | **off** (~47k tokens per session) |
 | [lavish-axi](https://github.com/kunchenguid/lavish-axi) | skill `.claude/skills/lavish` (`skills-lock.json`) | on |
 | [rtk](https://github.com/rtk-ai/rtk) v1.0.1, OSS edition | `.claude/hooks/` (SessionStart install + Bash PreToolUse) | on when `rtk` is on PATH (cloud: auto-installed at session start, source build ~5 min if release downloads are blocked) |
 
 Not installed: caveman (ponytail chosen instead), firstmate, BuildPartner.
 
-## ECC on demand
+## ECC / small-business on demand
 
-Enable for yourself only (not committed): `claude plugin enable ecc@ecc --scope local`, then restart the session.
-Turn off again: `claude plugin disable ecc@ecc --scope local`.
+Enable for yourself only (not committed): `claude plugin enable <plugin> --scope local`, then restart the session.
+Turn off again: `claude plugin disable <plugin> --scope local`.
+`<plugin>` is `ecc@ecc` or `small-business@knowledge-work-plugins`.
 
 ## Local machine
 
