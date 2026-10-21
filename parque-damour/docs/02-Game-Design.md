@@ -589,6 +589,7 @@ Refusals: child → "not the children"; a dog within 2 tiles sets `startled` 2 s
 | 4 | lawn tile | tile | run there, `dig` 3 s (dust) | 'digging' | — |
 | 5 | any tile | | run there | 'walking' | — |
 Refusal: a dog walker's dog within 3 tiles → "the big dog is watching" (no snatch).
+Entering (owner 2026-10-22, S7 follow-up, the rule as built): the possessed Pompon may enter during his 60 s wait outside after an `m_pomeranian` run (section 9.3, 11.3): picking the Pomeranian then walks him in at once through the gate he waits at, and the rest of that wait is dropped (the avatar's own wait is its 60 s `panting` cooldown, which is `m_pomeranian`'s, so the ability and the avatar still share it). Only a run that is still going (`run`, `snatch`, `carry`, `home`) is `reason.busy`: let go in the park, he can be taken again at once, where he stands. While he waits for a tap he stands (no dust); the dust-cloud dash is for moving.
 
 ### 10.6 `a_mime`
 | Step | Candidate | Radius | Action | Returns | Scores |

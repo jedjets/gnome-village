@@ -19,6 +19,7 @@ import { P2, ellPath, fillOf, inkOf, linePath, polyPath, softPath, type Ink } fr
 import { TAU } from '../core/math.ts';
 import { h01 } from './romance-fx.ts';
 import { bead, speedLines } from './fx-play.ts';
+import { POSE_STATES, drawPigeonPose, pigeonCycle, type PigeonPose } from './creatures-poses.ts';
 
 export type PigeonOpts = { face: 1 | -1; mode: 'walk' | 'fly'; phase: number };
 
@@ -168,13 +169,20 @@ function fluff(pen: Pen, x: number, y: number, rx: number, ry: number, hex: stri
 
 /* ---------- the game's pigeon in its five states and the walkers' two dogs (the picked options page) ---------- */
 
-export type PigeonState = 'walk' | 'peck' | 'perch' | 'fly' | 'scatter';
+export type PigeonState = 'walk' | 'peck' | 'perch' | 'fly' | 'scatter' | PigeonPose;
 
-/** A pigeon at ground or perch point p, facing f, in one of its five states; s = 0.18 EH z (04 7.4), culled under 1.6 px. */
+/**
+ * A pigeon at ground or perch point p, facing f, in one of its five states, or one of the player's four poses (creatures-poses.ts; `phase` is
+ * then its cycle); s = 0.18 EH z (04 7.4), culled under 1.6 px.
+ */
 export function drawPigeonState(c: Ink, p: Pt, f: 1 | -1, st: PigeonState, phase: number, s = 0.18 * EH * c.pen.z): void {
   const { ctx, z } = c.pen;
   const P = c.pen.spec.palette;
   if (s < 1.6) return;
+  if (st === 'wait' || st === 'poop' || st === 'startled' || st === 'drink') {
+    drawPigeonPose(c, p, f, st, phase, s);
+    return;
+  }
   const fill = (path: Path2D, hex: string, k = 1, a?: number): void => {
     ctx.fillStyle = fillOf(c, hex, k, a);
     ctx.fill(path);
@@ -396,12 +404,13 @@ export const DOG_TROT_HZ = 2;
 
 /**
  * The five states the sim gives a pigeon (07 S4.6 step 9); anything else (idle) stands as a still walk. The player's pigeon (S7, 02 10.4) adds
- * `flyDrink` (in the air for the water's edge: fly), `startled` (it flutters in place for 2 s: the take-off pose, wings thrown up), `drink` (the beak
- * to the water: the peck pose) and `wait` and `poop` (standing: the still walk); its swoop is drawn by drawSwoop.
+ * `flyDrink` (in the air for the water's edge: fly) and four states with a pose of their own since the owner's answer of 2026-10-22
+ * (creatures-poses.ts): `wait` (looking about), `poop` (the tail up, the bead), `startled` (puffed, hopping in place) and `drink` (the dip and
+ * lift); its swoop is drawn by drawSwoop.
  */
 export function pigeonStateOf(st: string): PigeonState {
-  if (st === 'peck' || st === 'perch' || st === 'fly' || st === 'scatter') return st;
-  return st === 'flyDrink' ? 'fly' : st === 'startled' ? 'scatter' : st === 'drink' ? 'peck' : 'walk';
+  if (st === 'peck' || st === 'perch' || st === 'fly' || st === 'scatter' || POSE_STATES.has(st)) return st as PigeonState;
+  return st === 'flyDrink' ? 'fly' : 'walk';
 }
 
 /**
@@ -412,11 +421,11 @@ export function pomRuns(st: string): boolean {
   return st !== 'idle' && st !== 'wait' && st !== 'dig' && st !== 'paddle' && st !== 'shakeOff';
 }
 
-/** A pigeon in state `st` at point p (its flight or perch height already in p); `tSim` is sim seconds, `id` staggers the flock. */
-export function drawPigeonOf(c: Ink, p: Pt, st: string, face: 1 | -1, id: number, tSim: number): void {
+/** A pigeon in state `st` at point p (its flight or perch height already in p); `tSim` is sim seconds, `id` staggers the flock, `t` is the state's timer (a poop's beat). */
+export function drawPigeonOf(c: Ink, p: Pt, st: string, face: 1 | -1, id: number, tSim: number, t = 0): void {
   const ps = pigeonStateOf(st);
-  const flying = ps === 'fly' || ps === 'scatter';
-  const phase = flying ? tSim * PIGEON_FLAP_HZ + id * 0.37 : st === 'walk' ? tSim * PIGEON_WALK_HZ + id * 0.37 : 0.15;
+  const flying = ps === 'fly' || ps === 'scatter', cyc = pigeonCycle(st, id, t, tSim);
+  const phase = cyc >= 0 ? cyc : flying ? tSim * PIGEON_FLAP_HZ + id * 0.37 : st === 'walk' ? tSim * PIGEON_WALK_HZ + id * 0.37 : 0.15;
   drawPigeonState(c, p, face, ps, phase);
 }
 

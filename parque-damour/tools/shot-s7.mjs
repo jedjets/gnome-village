@@ -10,6 +10,10 @@
 //   pigeon           a tap on the Pigeon card: possessed, the camera followed to zoom 1.5 (entered from 1.0), the strip "Pigeon · you" with "waiting for your
 //                    tap", the three hint chips in row 1, the Park strip and the switch hidden, the mode button "Creator", the 6 s toast "Playing as Pigeon", the ring
 //   pigeon-fly       a real tap on a lawn tile some tiles away, one sim step: the pigeon in the air, the strip "flying", the ring on the ground below it
+//   pigeon-poop      a real tap on an adult a few tiles off, one sim step, then stepped to the swoop's landing beat (`poop`): the pigeon's own pose, tail up, the
+//                    bead falling, at zoom 3.4 (S7 follow-up 4, owner 2026-10-22; the pose is creatures-poses.ts)
+//   pigeon-startled  the same bird stepped on into its `startled` second: puffed up, hopping in place, the alarm ticks over its head
+//   pigeon-drink     a real tap on the pond from far out (zoom 0.3), stepped to the water's edge: the dip, a ripple at the beak, at zoom 3.4
 //   pomeranian       Creator (the actor goes on alone), then the Pomeranian card: Pompon in from the gate, standing (no dust) at the first tile, his ring, his hints
 //   florist          Cupid T1 earned; the Flower seller card: Violette in from the south-west gate with her basket, the Cupid accent on the chips and the stripe
 //   florist-close    the same, the camera pinched in to 3.4 to see the basket and the apron
@@ -23,6 +27,9 @@ export const S7_SCENES = [
   { name: 'picker', turn: 0, z: 1.0, abs: 0.552, pre: 'callCrowd', act: 's7Picker' },
   { name: 'pigeon', keep: true, act: 's7Pigeon' },
   { name: 'pigeon-fly', keep: true, act: 's7PigeonFly' },
+  { name: 'pigeon-poop', keep: true, act: 's7PigeonPoop' },
+  { name: 'pigeon-startled', keep: true, act: 's7PigeonStartled' },
+  { name: 'pigeon-drink', keep: true, act: 's7PigeonDrink' },
   { name: 'pomeranian', keep: true, act: 's7Pom' },
   { name: 'florist', keep: true, act: 's7Florist' },
   { name: 'florist-close', keep: true, act: 's7FloristClose' },
@@ -196,6 +203,87 @@ export function s7Actions(h) {
         const dbg = await page.evaluate(() => ({ hint: document.getElementById('hint').textContent, log: window.__PD.log().slice(-3), me: window.__PD.creatures.find((c) => c.id === window.__PD.mode().player) }));
         throw new Error(`s7 pigeon-fly: the pigeon is ${JSON.stringify(st)}, want fly and "flying"; tapped ${JSON.stringify(t)}; ${JSON.stringify(dbg)}`);
       }
+    },
+    /** A real tap on an adult a few tiles from the pigeon, one sim step, stepped to the landing beat of the swoop: the pigeon in its poop pose at zoom 3.4. */
+    async s7PigeonPoop(page) {
+      await hideHint(page, true);
+      await page.evaluate(() => {
+        const pd = window.__PD, me = pd.creatures.find((c) => c.id === pd.mode().player);
+        for (let i = 0; i < 900 && me.st !== 'wait'; i++) pd.simulate(1); // the flight of the last scene is over
+      });
+      const t = await page.evaluate(() => {
+        const pd = window.__PD, me = pd.creatures.find((c) => c.id === pd.mode().player);
+        let best = null, bd = Infinity;
+        for (const v of pd.visitors) {
+          if (v.archetype === 'child' || v.archetype === 'gardener' || v.archetype === 'vendor' || v.embToday >= 3 || v.path) continue;
+          const d = Math.hypot(v.x - me.x, v.y - me.y), s = pd.screenOf(v.x, v.y);
+          if (d > 2.5 && d < 7 && s.x > 40 && s.x < 350 && s.y > 200 && s.y < 470 && d < bd) {
+            bd = d;
+            best = { x: v.x, y: v.y, id: v.id };
+          }
+        }
+        return best;
+      });
+      if (!t) throw new Error('s7 pigeon-poop: nobody standing in view three to seven tiles from the pigeon');
+      await tapTile(page, t.x, t.y);
+      await page.evaluate(() => window.__PD.simulate(1)); // the tap waits for the first step
+      const st = await page.evaluate(() => {
+        const pd = window.__PD, me = pd.creatures.find((c) => c.id === pd.mode().player);
+        for (let i = 0; i < 1500 && me.st !== 'poop'; i++) pd.simulate(1);
+        pd.simulate(8); // a quarter second into the half-second beat: the bead is on its way down
+        return me.st;
+      });
+      if (st !== 'poop') throw new Error(`s7 pigeon-poop: the pigeon is ${st}, not in its poop beat`);
+      await zoomTo(page, 3.4);
+      await sleep(2000);
+    },
+    /** The same bird stepped on into the second of `startled` the landing leaves it in. */
+    async s7PigeonStartled(page) {
+      const st = await page.evaluate(() => {
+        const pd = window.__PD, me = pd.creatures.find((c) => c.id === pd.mode().player);
+        for (let i = 0; i < 300 && me.st !== 'startled'; i++) pd.simulate(1);
+        pd.simulate(7);
+        return me.st;
+      });
+      if (st !== 'startled') throw new Error(`s7 pigeon-startled: the pigeon is ${st}`);
+      await sleep(1200);
+      const doing = await text(page, '#cDo');
+      if (!doing.startsWith('ruffled')) throw new Error(`s7 pigeon-startled: the strip says "${doing}"`);
+    },
+    /** A real tap on the pond (pinched out to 0.3 so it is in reach), stepped to the water's edge, pinched back in: the dip and the ripple. */
+    async s7PigeonDrink(page) {
+      await page.evaluate(() => {
+        const pd = window.__PD, me = pd.creatures.find((c) => c.id === pd.mode().player);
+        for (let i = 0; i < 600 && me.st !== 'wait'; i++) pd.simulate(1); // the startle is over
+        pd.cam.z = 0.3;
+      });
+      await sleep(1500);
+      const t = await page.evaluate(() => {
+        const pd = window.__PD, me = pd.creatures.find((c) => c.id === pd.mode().player);
+        let best = null, bd = Infinity;
+        for (let y = 2; y < 46; y++)
+          for (let x = 2; x < 46; x++) {
+            if (!(pd.layers.WATER[y * 48 + x] > 0)) continue;
+            const s = pd.screenOf(x, y), d = Math.hypot(x - me.x, y - me.y);
+            if (s.x > 30 && s.x < 360 && s.y > 170 && s.y < 500 && d < bd) {
+              bd = d;
+              best = { x, y };
+            }
+          }
+        return best;
+      });
+      if (!t) throw new Error('s7 pigeon-drink: no water in view at zoom 0.3');
+      await tapTile(page, t.x, t.y);
+      await page.evaluate(() => window.__PD.simulate(1));
+      const st = await page.evaluate(() => {
+        const pd = window.__PD, me = pd.creatures.find((c) => c.id === pd.mode().player);
+        for (let i = 0; i < 3000 && me.st !== 'drink'; i++) pd.simulate(1);
+        pd.simulate(5); // a twelfth of a second into the dip
+        return me.st;
+      });
+      if (st !== 'drink') throw new Error(`s7 pigeon-drink: the pigeon is ${st}, not drinking`);
+      await zoomTo(page, 3.4);
+      await sleep(2200);
     },
     /** Creator, then the Pomeranian card (Mischief T1): Pompon from the gate to its first tile, standing at rest. */
     async s7Pom(page) {

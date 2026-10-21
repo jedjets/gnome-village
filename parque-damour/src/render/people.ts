@@ -44,6 +44,7 @@ import { lampOn } from './props.ts';
 import { BREATH_RAD, FH, drawVisitor, figureScale, handOf, poseOf } from './figures.ts';
 import { P2, opts, type Ink, type Opts, type RigLook } from './figure-rig.ts';
 import { breedOf, lookOf, newLook } from './figure-look.ts';
+import { drinkFace, pigeonCycle } from './creatures-poses.ts';
 import { DOG_EH, DOG_TROT_HZ, PIGEON_FLAP_HZ, PIGEON_WALK_HZ, SWOOP_SCALE, drawDog, drawDogOf, drawLead, drawPigeonOf, drawPigeonState, drawPompon, drawSwoop, pigeonStateOf, pomRuns } from './creatures.ts';
 import { drawCap, drawNotes, handPetals } from './fx-play.ts';
 import { blit, spriteFor, spriteFrame, type Sprite, type SpriteLight } from './figure-sprites.ts';
@@ -336,13 +337,14 @@ function drawCreature(d: Drawable, c: CanvasRenderingContext2D): void {
   }
   if (cr.kind === 'pigeon') {
     // a pigeon from a sprite: its bob (3 Hz) or flap (5 Hz) in 8 frames; peck and perch hold still
-    const st = cr.st, ps = pigeonStateOf(st), fl = ps === 'fly' || ps === 'scatter', walk = st === 'walk'; // the player's flyDrink, startled and drink read as fly, scatter and peck (S7)
+    const st = cr.st, ps = pigeonStateOf(st), fl = ps === 'fly' || ps === 'scatter', walk = st === 'walk'; // the player's flyDrink reads as fly (S7)
     const ph = fl ? tSim() * PIGEON_FLAP_HZ + cr.id * 0.37 : tSim() * PIGEON_WALK_HZ + cr.id * 0.37;
-    const fr = fl ? frameOf(ph, BEAST_FRAMES) : walk ? frameOf(ph * 3, BEAST_FRAMES) : 0;
-    if (!still) return drawPigeonOf(INK, P0, st, pd.face, cr.id, tSim());
-    const s = pd.h, w = Math.ceil(2.8 * s) + 6, ay = Math.ceil(1.8 * s) + 4;
+    const cyc = pigeonCycle(st, cr.id, cr.t, tSim()); // the player's wait, poop, startled and drink own poses go round their cycle in the same 8 frames (creatures-poses.ts)
+    const fr = cyc >= 0 ? frameOf(cyc, BEAST_FRAMES) : fl ? frameOf(ph, BEAST_FRAMES) : walk ? frameOf(ph * 3, BEAST_FRAMES) : 0;
+    if (!still) return drawPigeonOf(INK, P0, st, pd.face, cr.id, tSim(), cr.t);
+    const s = pd.h, w = Math.ceil(2.8 * s) + 6, ay = Math.ceil((cyc >= 0 ? 2.5 : 1.8) * s) + 4; // the startle's ticks stand 2.4 s over the feet
     blit(c, spriteFor('pg|' + st + pd.face + fr + '|' + zq + LK, LIGHT, zq, dpr, w, ay + Math.ceil(0.8 * s) + 4, w / 2, ay, (g, at) => {
-      const phase = fl ? (fr + 0.5) / BEAST_FRAMES : walk ? (fr + 0.5) / BEAST_FRAMES / 3 : 0.15;
+      const phase = cyc >= 0 || fl ? (fr + 0.5) / BEAST_FRAMES : walk ? (fr + 0.5) / BEAST_FRAMES / 3 : 0.15;
       drawPigeonState({ pen: { ctx: g, spec: style(), z: zq }, warm: 0 }, at, pd.face, pigeonStateOf(st), phase);
       return null;
     }), pd.sx, pd.sy, z, dpr);
@@ -530,7 +532,8 @@ export function peopleDrawables(): Drawable[] {
     d.draw = drawCreature;
     d.v = null;
     d.c = c;
-    d.face = faceOf(C_HEAD, c.id, moving ? c.tx - c.x : 0, moving ? c.ty - c.y : 0, c.face);
+    const toWater = pigeon && c.st === 'drink' ? drinkFace(c.x, c.y) : 0; // the drinking pigeon turns to the pond (a look only)
+    d.face = toWater !== 0 ? toWater : faceOf(C_HEAD, c.id, moving ? c.tx - c.x : 0, moving ? c.ty - c.y : 0, c.face);
     d.sx = P0.x;
     d.sy = P0.y;
     d.h = s;

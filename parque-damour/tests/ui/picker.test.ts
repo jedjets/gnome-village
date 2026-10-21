@@ -398,10 +398,7 @@ describe('04 7.4, 07 S7.6 step 7: the player ring and the possessed look', () =>
   });
   it('the possessed pigeon\'s states read as the drawn ones, Pompon stands while he waits and runs when he moves (render/creatures.ts)', () => {
     expect(pigeonStateOf('flyDrink')).toBe('fly');
-    expect(pigeonStateOf('startled')).toBe('scatter');
-    expect(pigeonStateOf('drink')).toBe('peck');
-    expect(pigeonStateOf('wait')).toBe('walk');
-    expect(pigeonStateOf('poop')).toBe('walk');
+    for (const st of ['startled', 'drink', 'wait', 'poop']) expect(pigeonStateOf(st), st).toBe(st); // their own poses since 2026-10-22 (tests/pigeon-poses.test.ts)
     for (const st of ['peck', 'perch', 'fly', 'scatter', 'walk']) expect(pigeonStateOf(st)).toBe(st);
     for (const st of ['wait', 'idle', 'dig', 'paddle', 'shakeOff']) expect(pomRuns(st), st).toBe(false);
     for (const st of ['run', 'carry', 'home', 'walk', 'chase', 'play', 'snatch', 'goDig', 'goPaddle']) expect(pomRuns(st), st).toBe(true);
