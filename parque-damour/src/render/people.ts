@@ -44,8 +44,8 @@ import { lampOn } from './props.ts';
 import { BREATH_RAD, FH, drawVisitor, figureScale, handOf, poseOf } from './figures.ts';
 import { P2, opts, type Ink, type Opts, type RigLook } from './figure-rig.ts';
 import { breedOf, lookOf, newLook } from './figure-look.ts';
-import { DOG_EH, DOG_TROT_HZ, PIGEON_FLAP_HZ, PIGEON_WALK_HZ, SWOOP_SCALE, drawDog, drawDogOf, drawLead, drawPigeonOf, drawPigeonState, drawPompon, drawSwoop, pigeonStateOf } from './creatures.ts';
-import { drawCap, drawNotes } from './fx-play.ts';
+import { DOG_EH, DOG_TROT_HZ, PIGEON_FLAP_HZ, PIGEON_WALK_HZ, SWOOP_SCALE, drawDog, drawDogOf, drawLead, drawPigeonOf, drawPigeonState, drawPompon, drawSwoop, pigeonStateOf, pomRuns } from './creatures.ts';
+import { drawCap, drawNotes, handPetals } from './fx-play.ts';
 import { blit, spriteFor, spriteFrame, type Sprite, type SpriteLight } from './figure-sprites.ts';
 import { SEATS, seatPos } from '../entities/staff.ts';
 import { pairById } from '../entities/romance.ts';
@@ -201,11 +201,15 @@ function tSim(): number {
 /** The look and options of a drawable's visitor into LOOK and POSE: its seat, slope and lamp warmth from the drawable. */
 function prepare(pd: PersonDrawable, v: Visitor): void {
   lookOf(v, style().palette, figureScale(v), LOOK);
+  if (v.spawnedForPlayer && v.archetype === 'cameo') LOOK.carry = v.basket > 0 && !FLORIST_BUSY[v.st] ? 'bouquet' : 'none'; // a_florist: a bouquet from the basket in hand
   poseOf(v, pd.face, tSim(), POSE);
   POSE.seatPx = pd.e * EH * cam.z;
   POSE.slope = pd.slope;
   POSE.warm = pd.warm;
 }
+
+/** The possessed florist's states with both hands busy (stooping at the bed, throwing petals): no bouquet held out (04 7.4 a_florist). */
+const FLORIST_BUSY: Readonly<Record<string, true>> = { pick: true, goPick: true, scatter: true, goScatter: true };
 
 function drawPerson(d: Drawable, c: CanvasRenderingContext2D): void {
   const pd = d as PersonDrawable, v = pd.v;
@@ -229,6 +233,12 @@ function drawPerson(d: Drawable, c: CanvasRenderingContext2D): void {
   }
   chatBubble(pd, v, c);
   busk(pd, v, c);
+  if (v.st === 'scatter' && v.spawnedForPlayer && pd.h >= 8) {
+    // a_florist scatters petals (c_petals): a few rose petals drifting from her front hand (fx-play.ts handPetals, 04 7.4)
+    P0.x = pd.sx;
+    P0.y = pd.sy;
+    handPetals(gamePen(c), handOf(P0, LOOK, POSE, cam.z, true, C1), pd.h, tSim());
+  }
 }
 
 /** The busker's cap on the path in front of him with its coins, and his ink notes rising from the bellows, while he plays (busker 1, standing). */
@@ -313,7 +323,7 @@ function drawCreature(d: Drawable, c: CanvasRenderingContext2D): void {
     // Pompon, in the park only while he runs (render/creatures.ts drawPompon): what he has taken in his mouth, in the victim's hat colour
     const o = byId(cr.targetId);
     if (o) lookOf(o, style().palette, figureScale(o), LOOK);
-    drawPompon(INK, P0, pd.face, cr.st !== 'idle', tSim(), cr.carry, o ? LOOK.hatHex : style().palette.crowdHat[2] as string, pd.h);
+    drawPompon(INK, P0, pd.face, pomRuns(cr.st), tSim(), cr.carry, o ? LOOK.hatHex : style().palette.crowdHat[2] as string, pd.h);
     return;
   }
   if (cr.kind === 'pigeon' && cr.st === 'swoop' && cr.t <= 0) {
@@ -326,7 +336,7 @@ function drawCreature(d: Drawable, c: CanvasRenderingContext2D): void {
   }
   if (cr.kind === 'pigeon') {
     // a pigeon from a sprite: its bob (3 Hz) or flap (5 Hz) in 8 frames; peck and perch hold still
-    const st = cr.st, fl = st === 'fly' || st === 'scatter', walk = st === 'walk';
+    const st = cr.st, ps = pigeonStateOf(st), fl = ps === 'fly' || ps === 'scatter', walk = st === 'walk'; // the player's flyDrink, startled and drink read as fly, scatter and peck (S7)
     const ph = fl ? tSim() * PIGEON_FLAP_HZ + cr.id * 0.37 : tSim() * PIGEON_WALK_HZ + cr.id * 0.37;
     const fr = fl ? frameOf(ph, BEAST_FRAMES) : walk ? frameOf(ph * 3, BEAST_FRAMES) : 0;
     if (!still) return drawPigeonOf(INK, P0, st, pd.face, cr.id, tSim());
@@ -509,7 +519,7 @@ export function peopleDrawables(): Drawable[] {
     const s = (pigeon ? 0.18 * (diving ? SWOOP_SCALE : 1) : c.kind === 'pomeranian' ? POM_EH : DOG_EH) * EH * cam.z;
     if (!onScreen(P0.x, P0.y, s) || s < 1.6) continue;
     const d = take();
-    const moving = c.st === 'walk' || c.st === 'fly' || c.st === 'scatter' || diving || (c.kind === 'pomeranian' && c.st !== 'idle');
+    const moving = c.st === 'walk' || c.st === 'fly' || c.st === 'flyDrink' || c.st === 'scatter' || diving || (c.kind === 'pomeranian' && pomRuns(c.st));
     d.kind = c.kind;
     d.id = c.id;
     d.x = c.x;

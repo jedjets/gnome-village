@@ -24,16 +24,19 @@
 // S6 (03 8.2 item 2): with an ability armed (ui/ability-strip.ts) a tap on the world is its target: ability-strip.tapAbility resolves it by
 // the ability's type from pickAt and the tile, enqueues the logged `ability` command and leaves the ability armed (the sim validates
 // again; a refusal comes back as `rejected` and hud.ts toasts it).
-// TODO(S7): avatar.tap; TODO(S8): initAudio on Begin and Continue.
+// S7 (03 8.2 item 1; 07 S7.6 step 6): in the avatar mode a tap on the world is the logged `avatar.tap` on the possessed avatar's side, with the
+// tile (an apron tile goes on: the sim says `reason.outside`) and the hit pickAt resolved, the avatar itself left out of the candidates so a
+// tap beside it reaches what is there; the camera follows the actor again (GV playerCommand 11278); hud.ts toasts what comes back. A Continue
+// that restored the avatar mode shows it at once (hud.initHud calls applyMode). TODO(S8): initAudio on Begin and Continue.
 import { newPark as loopNewPark, onFrame, onFrameEnd, setSpeed, start } from './core/loop.ts';
 import { T } from './core/clock.ts';
-import { enqueue } from './core/commands.ts';
+import { AVATAR_SIDE, enqueue } from './core/commands.ts';
 import { watch } from './core/events.ts';
 import type { XY } from './core/math.ts';
 import { I, props } from './world/grid.ts';
 import { parkSeed } from './world/gen.ts';
 import { ghost } from './play/tools.ts';
-import { getMode } from './play/mode.ts';
+import { getAvatar, getMode, getPlayer } from './play/mode.ts';
 import { CTR, ZOOM_START, cam, centreOn, fitCam, resize, setAngle, setFollowLookup, setupInput, stepCamera, type ToolClass as Gesture } from './render/camera.ts';
 import { pickAt, screenToTile } from './render/project.ts';
 import { followPos, pickCreatures, pickPeople } from './render/people.ts';
@@ -46,9 +49,9 @@ import { $, applyDom, layoutOverlays, openConfirm, toast } from './ui/dom.ts';
 import { showIntro, startLang } from './ui/intro.ts';
 import { activeTool, armedGhost, brushSize, buildRail, cancelGhost, syncSpeed, tapGhost, toolClass, updateRail } from './ui/rail.ts';
 import { armedAbility, tapAbility } from './ui/ability-strip.ts';
-import { initHud, updateHud } from './ui/hud.ts';
+import { initHud, noteAvatarTap, updateHud } from './ui/hud.ts';
 import { initSheets, paceQueued } from './ui/sheets.ts';
-import { clearSel, initCard, select, selectedVisitor } from './ui/card.ts';
+import { clearSel, followActor, initCard, select, selectedVisitor } from './ui/card.ts';
 import { clearFeed, feedState, initFeed, setFeedState, type FeedEntry } from './ui/feed.ts';
 import {
   clearPark, enqueueProfilePace, getProfile, loadPark, profilePace, resetAutosave, restore, saveBeforeNew, savePark, setFeedIO, stepAutosave,
@@ -125,8 +128,36 @@ function gesture(): Gesture {
   return c === 'none' ? 'hand' : c === 'brush' ? 'brush' : 'other';
 }
 
+/**
+ * 03 8.2 item 1: a tap on the world in the avatar mode. The people and creatures pickAt may choose from leave out the actor itself (the
+ * sim ignores a hit on it as well, avatar-pick.ts); the tile is the tapped one, apron included; the answer is a `rejected` or an
+ * `avatarStatus` event hud.ts toasts. The camera follows the actor again (a drag had let it go: 02 10.2).
+ */
+function onAvatarTap(sx: number, sy: number): void {
+  const a = getAvatar();
+  if (!a) return;
+  const tile = screenToTile(sx, sy, true);
+  if (!tile) {
+    toast('reason.outside');
+    return;
+  }
+  const self = getPlayer(), creature = a === 'a_pigeon' || a === 'a_pomeranian';
+  const hit = pickAt(
+    sx,
+    sy,
+    pickPeople().filter((p) => creature || p.id !== self),
+    pickCreatures().filter((c) => !creature || c.id !== self),
+  );
+  noteAvatarTap(hit);
+  enqueue({ side: AVATAR_SIDE[a], kind: 'avatar.tap', payload: { tile: { x: tile.x, y: tile.y }, hit } });
+  followActor();
+}
+
 function onTap(sx: number, sy: number): void {
-  if (getMode() === 'avatar') return; // TODO(S7): avatar.tap with pickAt and screenToTile(allowApron)
+  if (getMode() === 'avatar') {
+    onAvatarTap(sx, sy);
+    return;
+  }
   if (armedAbility() !== null) {
     tapAbility(pickAt(sx, sy, pickPeople(), pickCreatures()), screenToTile(sx, sy, true)); // 03 8.2 item 2: the target by the ability's type
     return;

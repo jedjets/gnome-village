@@ -17,7 +17,7 @@ import { depth } from '../../src/play/undo.ts';
 import { setMode } from '../../src/play/mode.ts';
 import { $ } from '../../src/ui/dom.ts';
 import { setLang } from '../../src/ui/i18n.ts';
-import { activeTool, armedGhost, brushSize, buildRail, cancelGhost, placeGhost, setGroup, setTool, tapGhost, updateRail } from '../../src/ui/rail.ts';
+import { activeTool, armedGhost, brushSize, buildRail, cancelGhost, placeGhost, setGroup, setTool, syncMode, tapGhost, updateRail } from '../../src/ui/rail.ts';
 import { en } from '../../src/ui/strings/en.ts';
 
 const ROOT = join(import.meta.dirname, '..', '..');
@@ -118,7 +118,23 @@ describe('08 2.9 rail.test.ts: body.avatar hides the park strip (03 10.2; GV CSS
     for (const id of ['tools', 'sizewrap', 'bUndo', 'bPlace', 'bCancel']) expect(getComputedStyle($(id)).display, id).toBe('none');
     expect(getComputedStyle(document.querySelector('#row2 .ctx') as HTMLElement).display).toBe('none');
   });
-  it.todo('the avatar hint strip shows in avatar mode (S7)');
+  it('the avatar hint strip shows in avatar mode: three chips in row 1 in place of the switch and the strip, none outside it (S7; tests/ui/picker.test.ts drives it from the mode event)', () => {
+    expect(shown('hints')).toBe(false);
+    setMode('avatar', 'a_florist', 1);
+    document.body.classList.add('avatar');
+    syncMode();
+    expect(shown('hints')).toBe(true);
+    expect(shown('groups')).toBe(false);
+    expect([...document.querySelectorAll('#hints .hc')].map((c) => c.textContent)).toEqual([en['avatar.a_florist.hint1'], en['avatar.a_florist.hint2'], en['avatar.a_florist.hint3']]);
+    expect($('hints').dataset.side).toBe('cupid');
+    expect($('bMode').textContent).toBe(en['rail.creator']);
+    setMode('creator');
+    document.body.classList.remove('avatar');
+    syncMode();
+    expect(shown('hints')).toBe(false);
+    expect($('hints').children).toHaveLength(0);
+    expect($('bMode').textContent).toBe(en['rail.be_someone']);
+  });
 });
 
 describe('02 8.2, 04 5.4 item 4: row 2 by context (GV updateGbar 11018, showUndo 11116)', () => {

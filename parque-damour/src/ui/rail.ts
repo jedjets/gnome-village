@@ -18,10 +18,17 @@
 // ABILITIES, locked ones dimmed with the tier badge, arming, the cooldown chip in row 2's #cdChip); arming is held there and armAbility /
 // armedAbility are re-exported here: for these groups row 2 holds the chip alone (the Undo and the Park context are the Park group's;
 // the chip says "Pick an ability" with nothing armed, so the row keeps its height and the strip does not jump on arming). The group
-// switch, a Park tool and the avatar mode disarm. TODO(S7): mode through the `mode` event; TODO(S8): mute through audio.
+// switch, a Park tool and the avatar mode disarm. TODO(S8): mute through audio.
+// S7 (07 S7.6 step 7; 02 10.1; 04 5.4 items 5-6): row 3's mode button is the avatar mode's switch: "Be someone" opens the Avatar picker
+// (sheets.ts, picker.ts), "Creator" (the mode button's text while body.avatar is on) enqueues the logged `avatar.leave` on the possessed
+// avatar's side; neither sets the class: hud.ts does, from the sim's `mode` event, and calls syncMode, which disarms the tool and the ability,
+// presses the button and fills row 1's three hint chips (#hints, the avatar's `hints` keys; CSS shows them in place of the switch and the
+// strip) in the current language.
 import { T } from '../core/clock.ts';
-import { enqueue } from '../core/commands.ts';
+import { AVATAR_SIDE, enqueue } from '../core/commands.ts';
 import type { XY } from '../core/math.ts';
+import { AVATARS } from '../play/avatar.ts';
+import { getAvatar, getMode } from '../play/mode.ts';
 import { TOOLS, ghost, toolById, type Ghost, type ToolClass, type ToolId } from '../play/tools.ts';
 import { depth } from '../play/undo.ts';
 import { fitToggle, follow, turn } from '../render/camera.ts';
@@ -312,10 +319,41 @@ function speedCmd(v: number): void {
   enqueue({ side: 'park', kind: 'speed', payload: { speed: Math.max(0, Math.min(8, Math.round(v))) as Dial } });
 }
 
+/** Row 1's three hint chips of the avatar mode (02 10.1 item 3): the possessed avatar's `hints` keys through t(); none outside the mode. */
+function paintHints(): void {
+  const box = $('hints'), d = AVATARS.find((o) => o.id === getAvatar());
+  if (!d || !document.body.classList.contains('avatar')) {
+    box.replaceChildren();
+    return;
+  }
+  box.dataset.side = d.side;
+  box.replaceChildren(
+    ...d.hints.map((k) => {
+      const c = document.createElement('span');
+      c.className = 'hc';
+      c.textContent = t(k);
+      return c;
+    }),
+  );
+}
+
+/**
+ * hud.ts calls this once body.avatar follows the sim's mode: the button is pressed and says Creator while the mode lasts, entering disarms
+ * the Park tool, the ability and the ghost (the hand is the tool; the strips are hidden, 04 5.4 item 6), and the hint chips are filled.
+ */
+export function syncMode(): void {
+  const avatar = document.body.classList.contains('avatar');
+  $('bMode').setAttribute('aria-pressed', avatar ? 'true' : 'false');
+  if (avatar) setTool('hand'); // also disarms an ability and drops a live ghost
+  paintLabels();
+  layoutOverlays();
+}
+
 function paintLabels(): void {
   $('bMute').textContent = t(muted ? 'rail.sound_off' : 'rail.sound_on');
   const avatar = document.body.classList.contains('avatar');
   $('bMode').textContent = t(avatar ? 'rail.creator' : 'rail.be_someone');
+  paintHints();
   if (group === 'park') {
     document.querySelectorAll<HTMLElement>('#tools .tool').forEach((b) => {
       const lb = b.querySelector('.lb');
@@ -368,14 +406,11 @@ export function buildRail(h: RailHandlers): void {
     paintLabels();
   });
 
-  const bMode = $('bMode');
-  bMode.addEventListener('click', () => {
-    const on = !document.body.classList.contains('avatar');
-    setBodyClass('avatar', on);
-    bMode.setAttribute('aria-pressed', on ? 'true' : 'false');
-    if (on) setTool('hand'); // the Park strip, row 2 and Undo are hidden in avatar mode (02 8.2); setTool also disarms an ability
-    paintLabels();
-    layoutOverlays();
+  // Be someone opens the picker; Creator lets the actor go (the `mode` event then drops body.avatar: hud.ts)
+  $('bMode').addEventListener('click', () => {
+    const a = getAvatar();
+    if (getMode() === 'avatar' && a) enqueue({ side: AVATAR_SIDE[a], kind: 'avatar.leave', payload: {} });
+    else toggleSheet('picker');
   });
 
   $('bPhoto').addEventListener('click', () => {

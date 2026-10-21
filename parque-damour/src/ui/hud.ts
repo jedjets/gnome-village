@@ -18,19 +18,28 @@
 // flashes the number that gained to --ink for FLASH_MS (shell.css `.flash`); an `unlock` event toasts "Unlocked: Musician (Cupid T1)"
 // through t() once per tier crossed (the first item of the row: the feed line, feed.ts, names each one); a refusal that needs a number
 // (the seconds of a cooldown, the tier of a locked ability) gets it from ability-strip.refusalParams, since `rejected` carries none.
-// TODO(S7): body.avatar from the `mode` event.
+// S7 (07 S7.6 steps 6-7; 02 10.1, 03 8.2 item 1; 04 5.4 item 6): body.avatar follows the sim's `mode` event (applyMode; boot calls it too, so a
+// Continue that restored the avatar mode shows it): the class, the rail's hint chips, button and disarming (rail.syncMode), the strip, the zoom to
+// 1.5 and the follow (card.syncAvatar); entering toasts "Playing as Pigeon. Tap someone: swoop" for 6 s (GV 11259, TOAST_LONG_S), leaving
+// `avatar.goes_on`. The `avatarStatus` event of a tap is toasted "Pigeon: swooping" (`avatar.says`), `walking` and `flying` silent (GV 11276-11277;
+// 02 10.1 item 6); a refused `avatar.tap` is "Pigeon: busy" (`avatar.busy`, the hold check) or "Pigeon: <the reason>" (what GV's `msg` was), with the
+// florist's cooldown seconds and a victim's name filled in from what the shell last tapped (noteAvatarTap, which main.ts calls).
 import { T, SEASON_KEYS } from '../core/clock.ts';
 import { enqueue } from '../core/commands.ts';
-import { watch } from '../core/events.ts';
+import { watch, type GameEvent } from '../core/events.ts';
 import { W } from '../core/weather.ts';
 import { byId, people } from '../entities/visitor.ts';
 import { STAGE_IDS, featured, shownStage } from '../entities/romance.ts';
+import { cooldownLeft } from '../play/abilities.ts';
+import { getAvatar, getMode } from '../play/mode.ts';
 import { points } from '../play/progression.ts';
+import type { Hit } from '../render/project.ts';
 import { WCOLD } from '../render/ambient.ts';
-import { $, ageToast, layoutOverlays, toast } from './dom.ts';
-import { plural, t, onLang } from './i18n.ts';
+import { $, TOAST_LONG_S, ageToast, layoutOverlays, setBodyClass, toast } from './dom.ts';
+import { plural, t, onLang, type Params } from './i18n.ts';
 import { renderCensus, sheetOpen, toggleSheet, updateSheets } from './sheets.ts';
-import { updateCard } from './card.ts';
+import { actorName, syncAvatar, updateCard } from './card.ts';
+import { syncMode } from './rail.ts';
 import { ageFeed } from './feed.ts';
 import { refusalParams } from './ability-strip.ts';
 
@@ -101,6 +110,47 @@ function romanceChip(): void {
   shownRom = { id: p.id, stage: k };
 }
 
+/* ---------- the avatar mode (02 10.1; 03 10.2) ---------- */
+
+/** What the shell last tapped for the avatar (its hit), to give a refusal's words the person and the cooldown they are about. */
+let lastHit: Hit | null = null;
+export function noteAvatarTap(hit: Hit | null): void {
+  lastHit = hit;
+}
+
+/**
+ * Bring the shell in line with the sim's mode (the `mode` event, and boot): body.avatar, the rail (hint chips, the button, nothing armed), the
+ * strip, the zoom and the follow; then the event's toast: the 6 s intro on entering, `avatar.goes_on` on leaving (a New carries none).
+ */
+export function applyMode(ev: GameEvent | null = null): void {
+  const on = getMode() === 'avatar' && getAvatar() !== null;
+  setBodyClass('avatar', on);
+  syncMode();
+  syncAvatar();
+  const p = ev?.params;
+  if (!p) return;
+  if (p.mode === 'avatar') {
+    if (on) toast('avatar.intro', { name: String(p.name ?? ''), hint: String(p.hint ?? '') }, TOAST_LONG_S);
+  } else if (typeof p.toast === 'string') toast(p.toast, { name: String(p.name ?? '') });
+}
+
+/** The words a refusal of an `avatar.tap` needs: the seconds the florist waits (the bouquet's or the petals' cooldown), the victim's name. */
+function refusalWords(r: string): Params | undefined {
+  if (r === 'reason.cooldown') return { s: Math.max(1, Math.ceil(cooldownLeft('cupid', lastHit?.kind === 'visitor' ? 'c_bouquet' : 'c_petals') - 1e-9)) };
+  if (r === 'reason.enough_today') {
+    const v = lastHit?.kind === 'visitor' ? byId(lastHit.id) : undefined;
+    return v ? { name: v.name } : undefined;
+  }
+  return undefined;
+}
+
+/** A refused tap of the avatar: busy is "Pigeon: busy", any other reason "Pigeon: not the children" (GV toasted every message after the name). */
+function avatarRefused(r: string): void {
+  const name = actorName();
+  if (r === 'reason.busy') toast('avatar.busy', { name });
+  else toast('avatar.says', { name, what: t(r, refusalWords(r)) });
+}
+
 /** The frame listeners for the command results (03 5.4); registered once. */
 let watching = false;
 function watchResults(): void {
@@ -108,7 +158,15 @@ function watchResults(): void {
   watching = true;
   watch('rejected', (ev) => {
     const r = ev.params?.reason;
-    if (typeof r === 'string' && r.startsWith('reason.')) toast(r, refusalParams(r));
+    if (typeof r !== 'string' || !r.startsWith('reason.')) return;
+    if (ev.params?.kind === 'avatar.tap') avatarRefused(r);
+    else toast(r, refusalParams(r));
+  });
+  watch('mode', (ev) => applyMode(ev));
+  watch('avatarStatus', (ev) => {
+    const p = ev.params, s = String(p?.status ?? '');
+    if (!p || s === 'avatar.status.walking' || s === 'avatar.status.flying') return; // silent (02 10.1 item 6)
+    toast('avatar.says', { name: String(p.name ?? ''), what: String(p.what ?? '@' + s) });
   });
   // a tier reached: one toast per ladder and tier (the row's items arrive in one step; the first is named, the feed line names each)
   let lastUnlock = '';
@@ -151,6 +209,7 @@ export function initHud(h: HudHooks = {}): void {
   });
   onLang(paint);
   paint();
+  applyMode(); // a Continue that restored the avatar mode shows it, silently
   layoutOverlays();
 }
 

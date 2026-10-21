@@ -61,6 +61,8 @@
       <button class="gb" type="button" data-group="mischief" aria-pressed="false" data-t="rail.mischief" data-t-aria="aria.group_mischief">Mischief</button>
     </div>
     <div id="tools"></div>
+    <!-- the avatar mode's three hint chips (02 10.1 item 3; 04 5.4 item 6): shown by body.avatar in place of the switch and the strip -->
+    <div id="hints" role="group" data-t-aria="aria.avatar_hints"></div>
   </div>
   <!-- row 2, the context (04 5.4 item 4; GV #gbar 184-195): one glass bar with the tool's label or the ranked reason (#depth), the brush
        size (#sizewrap) or Place / Cancel for a live ghost; Undo beside it; the cooldown chip from S6 -->
@@ -89,7 +91,7 @@
     </div>
     <div class="grp">
       <button class="gb" id="bMute" type="button" aria-pressed="false" data-t-aria="aria.sound">Sound</button>
-      <button class="gb" id="bMode" type="button" aria-pressed="false" data-t-aria="aria.mode">Be someone</button>
+      <button class="gb" id="bMode" type="button" aria-pressed="false" aria-haspopup="dialog" aria-expanded="false" aria-controls="picker" data-t-aria="aria.mode">Be someone</button>
       <button class="gb" id="bPhoto" type="button" data-t="rail.photo" data-t-aria="aria.photo">Photo</button>
       <button class="gb" id="bNew" type="button" data-t="rail.new" data-t-aria="aria.new">New</button>
       <button class="gb" id="bOptions" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="options" data-t="rail.options" data-t-aria="aria.options">Options</button>

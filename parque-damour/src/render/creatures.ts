@@ -394,9 +394,22 @@ export const PIGEON_FLAP_HZ = 5;
 export const DOG_EH = 0.45;
 export const DOG_TROT_HZ = 2;
 
-/** The five states the sim gives a pigeon (07 S4.6 step 9); anything else (idle) stands as a still walk. */
+/**
+ * The five states the sim gives a pigeon (07 S4.6 step 9); anything else (idle) stands as a still walk. The player's pigeon (S7, 02 10.4) adds
+ * `flyDrink` (in the air for the water's edge: fly), `startled` (it flutters in place for 2 s: the take-off pose, wings thrown up), `drink` (the beak
+ * to the water: the peck pose) and `wait` and `poop` (standing: the still walk); its swoop is drawn by drawSwoop.
+ */
 export function pigeonStateOf(st: string): PigeonState {
-  return st === 'peck' || st === 'perch' || st === 'fly' || st === 'scatter' ? st : 'walk';
+  if (st === 'peck' || st === 'perch' || st === 'fly' || st === 'scatter') return st;
+  return st === 'flyDrink' ? 'fly' : st === 'startled' ? 'scatter' : st === 'drink' ? 'peck' : 'walk';
+}
+
+/**
+ * Does Pompon run (the dust-cloud dash, 04 7.4 run 3) in state `st`? Every state of an errand and of the player's Pompon that moves him does:
+ * he stands, without the dust, while he waits for a tap (`wait`, and `idle` at the gate), digs, paddles and shakes himself dry (S7).
+ */
+export function pomRuns(st: string): boolean {
+  return st !== 'idle' && st !== 'wait' && st !== 'dig' && st !== 'paddle' && st !== 'shakeOff';
 }
 
 /** A pigeon in state `st` at point p (its flight or perch height already in p); `tSim` is sim seconds, `id` staggers the flock. */

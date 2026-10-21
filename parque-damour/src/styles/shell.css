@@ -9,7 +9,9 @@
    the census summary's two parts with a dot between (the dot is punctuation, not a string: 03 P7).
    S6 (04 5.2 item 6, 5.4 items 2-4, 5.6): the Cupid and Mischief pills (a flat swatch in --berry or --ember, a locked one at opacity .45
    with the tier badge for its swatch), row 2's cooldown chip with its ring, the Points chip's flash, and the Progress sheet's ladders
-   and unlock table. TODO(S11): audit. */
+   and unlock table.
+   S7 (07 S7.6 step 7; 04 5.4 item 6, 5.5 item 3, 5.6): the avatar mode's three hint chips in row 1 (in place of the switch and the
+   strip), the avatar strip without bars, the picker's 2 x 3 cards with their side stripe and portrait. TODO(S11): audit. */
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
 html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--body-bg);
@@ -164,8 +166,7 @@ body.avatar #card{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:8p
 body.avatar #card h3{font-size:14px;margin:0}
 body.avatar #card .sub{margin:0;flex:1 1 auto;white-space:nowrap;font-size:11px}
 body.avatar #card .rel{flex-basis:100%;margin:0 0 2px}
-body.avatar #card .bars{flex-basis:100%;display:flex;gap:8px;margin-top:4px}
-body.avatar #card .bar{flex:1 1 0;margin-top:0;grid-template-columns:auto 1fr;gap:4px;font-size:11px}
+body.avatar #card .bars{display:none} /* an avatar has no needs that matter (02 10.3 item 6): the strip is the name, the side and tier, and what it is doing */
 body.avatar #card .doing{flex-basis:100%;margin-top:3px;font-size:11px}
 
 /* ---------- sheets (GV 48-72, 196-225); `div.sheet`, never `.sheet`: body.sheet (03 10.2) must not match a sheet rule (it hid the page) ---------- */
@@ -199,6 +200,28 @@ div.sheet .row.ev span{display:block;font-size:12px;line-height:1.32}
 #optionsList .val{min-height:42px;display:flex;align-items:center;padding:0 12px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
 #optionsList .row{min-height:44px;align-items:center;padding-left:10px}
 body:not(.dev) #optionsList .dev{display:none}
+/* the Avatar picker (04 5.6; 02 12.4): six cards in a 2 x 3 grid, a 3 px side stripe on the left (--berry Cupid, --ember Mischief), a 40 x 40
+   portrait, the name, "Cupid · T3" and, for a locked one, the lock glyph and "Locked · Cupid T1", for an S10 one "Coming soon"; the locked
+   and the coming ones are dimmed like a locked pill and answer a tap with a toast */
+#pickerList{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#pickerList .pk{display:flex;align-items:center;gap:8px;min-width:0;min-height:56px;padding:6px 8px 6px 7px;border-radius:10px;
+  border:1px solid var(--glass-line);border-left:3px solid var(--ember);background:var(--well);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+#pickerList .pk[data-side="cupid"]{border-left-color:var(--berry)}
+#pickerList .pk canvas{position:static;flex:0 0 40px;width:40px;height:40px;border-radius:8px;background:var(--paper-2)} /* the page-wide canvas rule fills the screen */
+#pickerList .pk .tx{display:flex;flex-direction:column;min-width:0}
+#pickerList .pk b{font-size:13px;font-weight:700;line-height:1.25}
+#pickerList .pk small{font-size:11px;line-height:1.3;color:var(--ink-soft)}
+#pickerList .pk small.st{font-style:italic}
+#pickerList .pk{position:relative}
+#pickerList .pk svg{position:absolute;right:7px;top:6px;width:11px;height:11px;display:block;color:var(--ink-soft)}
+#pickerList .pk.locked,#pickerList .pk.soon{opacity:.45}
+#pickerList .pk:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+/* a short phone (320 x 568 in either language): the summary line goes and the cards tighten, so the six show in the room between the chips and the rail */
+@media (max-height:620px){
+  #pickerSum{display:none}
+  #pickerList{gap:5px}
+  #pickerList .pk{min-height:48px;padding-top:3px;padding-bottom:3px}
+}
 /* S5, the romance core (02 12.2-12.4; 04 5.5 item 2, 5.6): the Romance chip's pulse on a stage change; the pair card (two name buttons
    with the --berry heart between, the stage chip, the Heart bar with the 1 px --ink gate tick, two doing lines, Pin as a .gb); the
    Romances rows ("A & B", Pin, the stage chip, the affinity bar, "n today"). Token colours only (04 4.5). */
@@ -278,8 +301,17 @@ body.photo .hud,body.photo #rail,body.photo #card,body.photo #hint,body.photo #f
 body.photo #photoX{display:block}
 
 /* ---------- avatar mode (GV 169, 183; 03 10.2) ---------- */
-body.avatar #tools,body.avatar #row2 .ctx,body.avatar #sizewrap,body.avatar #bPlace,body.avatar #bCancel,body.avatar #bUndo,body.avatar #cdChip{display:none!important}
+body.avatar #groups,body.avatar #tools,body.avatar #row2 .ctx,body.avatar #sizewrap,body.avatar #bPlace,body.avatar #bCancel,body.avatar #bUndo,body.avatar #cdChip{display:none!important}
 body.avatar #row2{min-height:0} /* its children are all hidden: the row keeps no height (the 44 px floor is for the ability groups' chip) */
+/* row 1 in the avatar mode (04 5.4 item 6): the switch and the strip go, the avatar's three hints stand in glass chips, wrapping onto a second
+   line where they do not fit; a dot in the side's accent leads each one (--berry Cupid, --ember Mischief). They only tell: no buttons. */
+#hints{display:none;flex:1 1 auto;min-width:0;flex-wrap:wrap;justify-content:center;gap:6px;pointer-events:none;--hint-accent:var(--ember)}
+#hints[data-side="cupid"]{--hint-accent:var(--berry)}
+body.avatar #hints{display:flex}
+#hints .hc{pointer-events:auto;display:flex;align-items:center;gap:6px;max-width:100%;padding:4px 11px 4px 9px;border-radius:14px;
+  background:var(--glass);border:1px solid var(--glass-line);box-shadow:var(--shadow);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);
+  font-size:11px;font-weight:600;line-height:1.3;color:var(--ink)}
+#hints .hc::before{content:"";flex:0 0 7px;width:7px;height:7px;border-radius:50%;background:var(--hint-accent)}
 
 /* ---------- intro (GV 140-156) ---------- */
 #intro{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;

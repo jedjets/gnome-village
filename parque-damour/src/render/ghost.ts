@@ -22,14 +22,22 @@
 // the figure, with three gold twinkles turning round it, so the eye finds them in a crowd, at Fit and at night; unlit like the selection ring
 // (a marker is not dimmed by the dark), a drawable just under its member in the painter order, and not on the member the selection ring is on:
 // the ring replaces that glow and the partner keeps its own (featuredDrawables; owner 2026-10-21). Floors on its size keep it findable at Fit (RING_MIN).
+// S7 (07 S7.6 step 7; register section 4 row "Avatar picker and player ring", Claude's pick on the owner's delegation, 2026-10-21): the player ring,
+// drawn instead of the selection ring for the possessed actor, a visitor or a creature (GV playerRing 9529-9535: a soft ring on the ground under the
+// player's own gnome, so it is never lost in the crowd): two ellipses at the feet, the outer one `paper` at alpha 0.75 over a hairline of `ink` at 0.22 so
+// it reads on a pale lawn, the inner one at 0.62 of it and alpha 0.45, a `paper` fill at 0.14; unlit, on sim seconds, a painter drawable just under the
+// actor (phase 6) so it lies on the ground and the actor stands over its back arc. A pigeon in the air has it on the ground below. The avatar is never a Pair member (cameos never pair), so it never wears the featured glow too
+// (featuredDrawables is told the possessed visitor as well).
 import { DAYLEN, T } from '../core/clock.ts';
 import { now } from '../core/loop.ts';
 import { css, hx, mixc, type XY } from '../core/math.ts';
 import type { Ghost } from '../play/tools.ts';
 import { byId } from '../entities/visitor.ts';
+import { creatureById } from '../entities/creatures.ts';
+import { getAvatar, getMode, getPlayer } from '../play/mode.ts';
 import { featured } from '../entities/romance.ts';
 import { WHITE, lampGlow, style } from './ambient.ts';
-import { cam } from './camera.ts';
+import { EH, cam } from './camera.ts';
 import { screenInto } from './project.ts';
 import { anchorOf, type Anchor } from './people.ts';
 import { depthOf, type Drawable } from './order.ts';
@@ -194,6 +202,86 @@ export function drawSelection(c: CanvasRenderingContext2D, id: number): void {
   c.stroke();
   c.fillStyle = css(paper, 0.1);
   c.fill();
+}
+
+/* ---------- the player ring (07 S7.6 step 7; GV playerRing 9529) ---------- */
+
+/** The ring's floor (px, outer radius across) so it still reads at Fit, and its radii as fractions of a figure's height or a creature's EH. */
+export const PLAYER_RING_MIN = 9, PLAYER_RING_VISITOR = 0.5, PLAYER_RING_PIGEON = 0.42, PLAYER_RING_POM = 0.4;
+/** The id of the possessed visitor (the flower seller), 0 when the actor is a creature or there is no avatar mode. */
+export function playerVisitorId(): number {
+  const a = getAvatar();
+  return getMode() === 'avatar' && a === 'a_florist' ? getPlayer() : 0;
+}
+/** Is the avatar mode on (so draw.ts leaves the selection ring out, whether or not the actor is on screen)? */
+export function avatarRingOn(): boolean {
+  return getMode() === 'avatar' && getAvatar() !== null;
+}
+
+type PlayerRingD = Drawable & { gx: number; gy: number; r: number };
+const PLAYER_RING: PlayerRingD = { depth: 0, kind: 'ring', id: 0, x: 0, y: 0, z: 0, draw: drawPlayerRing, gx: 0, gy: 0, r: 0 };
+const PLAYER_OUT: Drawable[] = [];
+
+/**
+ * The player's ring as a painter drawable, a hair before the actor's own (phase 6), so it lies on the ground under the actor and its legs and
+ * body stand over the back of it, as GV's playerRing was drawn under the gnome; none when the avatar mode is off, the actor is gone (a creature
+ * waiting outside, a visitor who left) or off screen. Reused each frame.
+ */
+export function playerDrawables(): Drawable[] {
+  PLAYER_OUT.length = 0;
+  const a = getAvatar(), id = getPlayer();
+  if (getMode() !== 'avatar' || !a || id === 0) return PLAYER_OUT;
+  const z = cam.z, d = PLAYER_RING;
+  if (a === 'a_pigeon' || a === 'a_pomeranian') {
+    const cr = creatureById(id);
+    if (!cr || cr.outside) return PLAYER_OUT;
+    screenInto(cr.x, cr.y, 0, MP);
+    d.gx = MP.x;
+    d.gy = MP.y;
+    d.r = (a === 'a_pigeon' ? PLAYER_RING_PIGEON : PLAYER_RING_POM) * EH * z;
+    d.x = cr.x;
+    d.y = cr.y;
+  } else {
+    const v = byId(id);
+    if (!v) return PLAYER_OUT;
+    anchorOf(v, RING);
+    d.gx = RING.gx;
+    d.gy = RING.gy;
+    d.r = PLAYER_RING_VISITOR * RING.h;
+    d.x = v.x;
+    d.y = v.y;
+  }
+  d.r = Math.max(d.r, PLAYER_RING_MIN);
+  const m = d.r + 12;
+  if (d.gx < -m || d.gx > view.cw + m || d.gy < -m || d.gy > view.chh + m) return PLAYER_OUT;
+  d.depth = depthOf(d.x, d.y) - 0.02;
+  PLAYER_OUT.push(d);
+  return PLAYER_OUT;
+}
+
+/** The ring itself: `paper` at 0.75 over a hairline of `ink` at 0.22, an inner ring at 0.45, a faint fill, pulsing 6 % on sim seconds. */
+function drawPlayerRing(dr: Drawable, c: CanvasRenderingContext2D): void {
+  const d = dr as PlayerRingD, z = cam.z, P = style().palette, paper = hx(P.paper), ink = hx(P.ink);
+  const t = 0.5 + 0.5 * Math.sin(T.abs * DAYLEN * 3);
+  const R = d.r * (1 + 0.06 * t), lw = Math.max(1.4, 1.6 * z), y = d.gy + 1.5 * z;
+  c.save();
+  c.fillStyle = css(paper, 0.14);
+  c.beginPath();
+  c.ellipse(d.gx, y, R, R * 0.42, 0, 0, Math.PI * 2);
+  c.fill();
+  c.lineJoin = 'round';
+  c.lineWidth = lw + 2;
+  c.strokeStyle = css(ink, 0.22);
+  c.stroke();
+  c.lineWidth = lw;
+  c.strokeStyle = css(paper, 0.75);
+  c.stroke();
+  c.beginPath();
+  c.ellipse(d.gx, y, R * 0.62, R * 0.62 * 0.42, 0, 0, Math.PI * 2);
+  c.lineWidth = Math.max(1, 1.1 * z);
+  c.strokeStyle = css(paper, 0.45);
+  c.stroke();
+  c.restore();
 }
 
 /* ---------- the featured pair's rose glow (04 7.1 rule 9; ring 3) ---------- */

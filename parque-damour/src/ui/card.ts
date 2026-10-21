@@ -16,15 +16,24 @@
 // with a 1 px ink tick at the next stage's gate, both doing lines (once when they read the same), and the Pin toggle (the featured pair, romance.ts setPin: UI state per
 // client, 02 14.3). The single card of a paired member adds the Heart bar with the same tick and the relationship line "courting B ·
 // Stage" ("with B" for a couple, "married here" for an alumni couple), which switches back to the pair card when tapped.
-// TODO(S7): the avatar strip with " · you" and its doing lines (02 12.3 item 4).
+// S7 (02 10.1, 12.3 item 4; 04 5.5 item 3; GV CSS 173-178, updateCard 10830): in the avatar mode the card is the compact strip, kept up by
+// syncAvatar from hud.ts's `mode` event: the actor's name with " · you" (a creature's from its avatar name, the flower seller's her own),
+// "Mischief · T0" under it, and the doing line from the actor's own state (an avatar.status word, "waiting for your tap" when it has no order
+// running; GV 10830 read the gnome's state the same way, where the last string a tap returned is the toast's). Entering zooms to 1.5 when
+// below 1.3 (GV 11257) and follows the actor; every tap on the world follows it again (GV playerCommand 11278: a drag had let go). The
+// strip shows no bars: an avatar has no needs that matter (02 10.3 item 6). A census row, a Romances row or a tap on a name selects no one
+// while the strip is up, and leaving drops the follow and the card.
 import { clamp01 } from '../core/math.ts';
+import { creatureById, type Creature } from '../entities/creatures.ts';
 import { byId, type Visitor } from '../entities/visitor.ts';
+import { AVATARS } from '../play/avatar.ts';
+import { getAvatar, getMode, getPlayer } from '../play/mode.ts';
 import { cam, clampCam, follow } from '../render/camera.ts';
 import { screenInto, type Hit } from '../render/project.ts';
 import { SEAT_E } from '../render/people.ts';
 import { propById } from '../world/grid.ts';
 import { $, layoutOverlays } from './dom.ts';
-import { gender, t } from './i18n.ts';
+import { gender, hasKey, t } from './i18n.ts';
 import { pairById, pinnedPair, setPin, shownStage, STAGE_IDS, type Pair } from '../entities/romance.ts';
 import { GATES } from '../entities/romance-stages.ts';
 
@@ -69,6 +78,7 @@ function zoomOn(v: Visitor): void {
  * 1.8, the card shown (GV selectGnome 10867); anything else clears the selection and the follow (GV tapSelect 11249).
  */
 export function select(hit: Hit): void {
+  if (stripUp()) return; // the strip is the card of the avatar mode: nobody else is selected meanwhile
   const v = hit.kind === 'visitor' ? byId(hit.id) : undefined;
   if (!v) {
     clearSel();
@@ -121,7 +131,7 @@ export function initCard(): void {
 export function clearSel(): void {
   sel = NONE;
   const c = document.getElementById('card');
-  if (c) c.classList.remove('on');
+  if (c && !stripUp()) c.classList.remove('on'); // the avatar's strip stays up
   layoutOverlays();
 }
 
@@ -228,6 +238,10 @@ function pairCard(p: Pair, a: Visitor, b: Visitor): void {
 
 /** Fill the card from the selected visitor (GV updateCard 10818, every 0.35 s from hud.ts); one who has left clears the selection. */
 export function updateCard(): void {
+  if (stripUp()) {
+    stripCard();
+    return;
+  }
   if (sel.kind !== 'visitor') return;
   const v = byId(sel.id);
   if (!v) {
@@ -256,4 +270,96 @@ export function updateCard(): void {
   const d2 = document.getElementById('cDo2');
   if (d2) d2.hidden = true;
   $('cPin').hidden = true;
+}
+
+/* ---------- the avatar strip (02 12.3 item 4; 04 5.5 item 3) ---------- */
+
+/** Is the avatar mode on with an avatar chosen: the card is then the strip. */
+function stripUp(): boolean {
+  return getMode() === 'avatar' && getAvatar() !== null;
+}
+
+/** The possessed actor: a creature for the pigeon and Pompon, a visitor for the flower seller; neither when it is gone. */
+function actor(): { v?: Visitor; c?: Creature } {
+  const a = getAvatar(), id = getPlayer();
+  if (!a || id === 0) return {};
+  return a === 'a_pigeon' || a === 'a_pomeranian' ? { c: creatureById(id) } : { v: byId(id) };
+}
+
+/** The actor's name as a `t()` parameter: the flower seller's own, a creature's from its avatar name ("@avatar.a_pigeon.name"). */
+export function actorName(): string {
+  const a = getAvatar(), { v } = actor();
+  return v ? v.name : a ? '@avatar.' + a + '.name' : '';
+}
+
+/** What a creature's state is called in the strip (the avatar.status words of 06 16.7); a state not named here reads as walking. */
+const CREATURE_DOING: Readonly<Record<string, string>> = {
+  walk: 'walking', fly: 'flying', flyDrink: 'flying', scatter: 'flying', drink: 'drinking', peck: 'pecking', perch: 'perching', swoop: 'swooping',
+  poop: 'swooping', startled: 'ruffled', run: 'snatching', snatch: 'snatching', carry: 'snatching', home: 'walking', chase: 'chasing', play: 'playing',
+  goPaddle: 'walking', paddle: 'paddling', goDig: 'walking', dig: 'digging', shakeOff: 'panting',
+};
+/** The flower seller's action states (act-romance.ts FLORIST_STATES, sit) as avatar.status words. */
+const FLORIST_DOING: Readonly<Record<string, string>> = {
+  hand: 'bouquet', goPick: 'picking', pick: 'picking', goScatter: 'petals', scatter: 'petals', sit: 'resting',
+};
+
+/** The strip's doing line: the avatar.status word of what the actor is doing, "waiting for your tap" when no order is running. */
+function doingLine(v?: Visitor, c?: Creature): string {
+  if (c) {
+    if (c.st === 'wait' || c.st === 'idle') return t('avatar.waiting');
+    return t('avatar.status.' + (CREATURE_DOING[c.st] ?? 'walking'));
+  }
+  if (!v) return t('avatar.waiting');
+  const k = FLORIST_DOING[v.st];
+  if (k) return t('avatar.status.' + k);
+  if (v.sitPropId !== 0) return t('avatar.status.resting');
+  if (v.st === 'idle' || v.st === 'wander' || v.st === 'arrive' || v.st === 'goSit') return t(v.path ? 'avatar.status.walking' : 'avatar.waiting');
+  return hasKey('doing.' + v.st) ? t('doing.' + v.st) : t('avatar.waiting'); // a reaction: the pigeon's gift, a laugh
+}
+
+/** The strip: the name with " · you", "Mischief · T0", the doing line; no relationship line, no Pin, no bars (CSS). */
+function stripCard(): void {
+  const d = AVATARS.find((o) => o.id === getAvatar()), { v, c } = actor();
+  if (!d || (!v && !c)) return; // the actor is gone: the next `avatar.tap` lets go of the mode (avatar.ts)
+  const card = $('card');
+  card.classList.remove('pair');
+  card.classList.add('on');
+  $('cName').textContent = t('avatar.you', { name: actorName() });
+  $('cName').removeAttribute('aria-label');
+  $('cSub').classList.remove('chipline');
+  $('cSub').textContent = t('avatar.side_tier', { side: '@rail.' + d.side, tier: d.tier });
+  $('cRel').hidden = true;
+  $('cPin').hidden = true;
+  const d2 = document.getElementById('cDo2');
+  if (d2) d2.hidden = true;
+  $('cDo').textContent = doingLine(v, c);
+}
+
+/** The camera follows the possessed actor (a creature or a visitor by its id), at its flight height for the pigeon (people.ts followPos). */
+export function followActor(): void {
+  const a = getAvatar(), id = getPlayer();
+  if (!a || id === 0) return;
+  follow({ kind: a === 'a_pigeon' || a === 'a_pomeranian' ? 'creature' : 'visitor', id });
+}
+
+/**
+ * hud.ts's `mode` event (and boot, for a Continue that restored the avatar mode): entering drops any selection, zooms to 1.5 when below 1.3
+ * (GV 11257), follows the actor and shows the strip; leaving ends the follow and hides the card. The mode itself is already set (the sim).
+ */
+export function syncAvatar(): void {
+  sel = NONE;
+  if (stripUp()) {
+    if (cam.z < 1.3) cam.z = 1.5;
+    clampCam();
+    followActor();
+    $('card').classList.add('on');
+    updateCard();
+    layoutOverlays();
+    return;
+  }
+  follow(null);
+  clearSel();
+  $('card').classList.remove('pair');
+  $('cSub').classList.remove('chipline');
+  $('cName').removeAttribute('aria-label');
 }

@@ -19,7 +19,7 @@ import { aimMark, drawAimMark, setAimMark, clearAimMark } from '../../src/render
 import { screenInto } from '../../src/render/project.ts';
 import { $ } from '../../src/ui/dom.ts';
 import { setLang } from '../../src/ui/i18n.ts';
-import { armAbility, armedAbility, buildRail, setGroup, setTool, updateRail } from '../../src/ui/rail.ts';
+import { armAbility, armedAbility, buildRail, setGroup, setTool, syncMode, updateRail } from '../../src/ui/rail.ts';
 import { abilityTarget, paintChip, refusalParams, setArmed, tapAbility } from '../../src/ui/ability-strip.ts';
 import { en } from '../../src/ui/strings/en.ts';
 import { es } from '../../src/ui/strings/es.ts';
@@ -209,10 +209,16 @@ describe('02 9.1 item 1, 04 5.4 item 1: arming', () => {
     expect(armedAbility()).toBeNull();
     setGroup('mischief');
     pill('m_pigeon').click();
-    $('bMode').click(); // Be someone: the strips are hidden in avatar mode
+    // Be someone: the picker, a card, the sim's `mode` event and hud.ts's applyMode (tests/ui/picker.test.ts) leave the sim in avatar mode and
+    // body.avatar on; rail.syncMode then disarms the ability and the strips are hidden
+    setMode('avatar', 'a_pigeon', 1);
+    document.body.classList.add('avatar');
+    syncMode();
     expect(armedAbility()).toBeNull();
     expect(getComputedStyle($('tools')).display).toBe('none');
-    $('bMode').click();
+    setMode('creator');
+    document.body.classList.remove('avatar');
+    syncMode();
   });
   it('row 2: a Park hand shows Undo; an ability group shows the chip alone, "Pick an ability" with nothing armed, so the row never changes height (one contextual bar)', () => {
     expect(hidden('row2')).toBe(false);

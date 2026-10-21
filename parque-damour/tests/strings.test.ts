@@ -252,3 +252,44 @@ describe('the abilities, the unlocks and the Progress sheet (06 16.2, 16.6, 16.1
     setLang('en');
   });
 });
+
+describe('the avatar mode\'s UI strings (07 S7.6 steps 6-7; 02 10.1, 12.3 item 4, 12.4; 04 5.4 item 6, 5.6; S7 UI stage)', () => {
+  // every key the picker, the hint chips, the strip and the toasts of the avatar mode ask for: names, hints, statuses, the mode words
+  const params = (v: string): string[] => [...v.matchAll(/\{(\w+)\}/g)].map((m) => m[1] as string).sort();
+  const ids = Object.keys(AVATAR_SIDE);
+  const keys = [
+    ...ids.flatMap((id) => [`avatar.${id}.name`, `avatar.${id}.hint1`, `avatar.${id}.hint2`, `avatar.${id}.hint3`]),
+    'avatar.side_tier', 'avatar.says', 'avatar.busy', 'avatar.goes_on', 'avatar.you', 'avatar.waiting', 'avatar.intro', 'sheet.picker.title',
+    'sheet.picker.sum', 'sheet.picker.locked', 'rail.be_someone', 'rail.creator', 'rail.soon', 'rail.locked_at', 'aria.mode', 'aria.sheet_picker',
+    'aria.avatar_hints', 'reason.busy', 'reason.startled', 'reason.not_children', 'reason.basket_empty', 'reason.not_courting', 'reason.no_item',
+    'reason.cooldown', 'reason.enough_today',
+  ];
+  it('every one is in both tables with the same {params}, and the cascade statuses of 06 16.7 as well', () => {
+    const statuses = Object.keys(en).filter((k) => k.startsWith('avatar.status.'));
+    expect(statuses.length).toBeGreaterThanOrEqual(24);
+    for (const k of [...keys, ...statuses]) {
+      expect(en[k], k).toBeTruthy();
+      expect(es[k], k).toBeTruthy();
+      expect(params(es[k] as string), k).toEqual(params(en[k] as string));
+    }
+  });
+  it('the toasts and the strip read as the owner\'s design says, in English and in Spanish', () => {
+    setLang('en');
+    expect(t('avatar.intro', { name: '@avatar.a_pigeon.name', hint: '@avatar.a_pigeon.hint1' })).toBe('Playing as Pigeon. Tap someone: swoop');
+    expect(t('avatar.says', { name: '@avatar.a_pigeon.name', what: '@avatar.status.swooping' })).toBe('Pigeon: swooping');
+    expect(t('avatar.busy', { name: '@avatar.a_pigeon.name' })).toBe('Pigeon: busy');
+    expect(t('avatar.goes_on', { name: '@avatar.a_pomeranian.name' })).toBe('Pomeranian goes on alone');
+    expect(t('avatar.you', { name: 'Violette' })).toBe('Violette · you');
+    expect(t('avatar.side_tier', { side: '@rail.cupid', tier: 1 })).toBe('Cupid · T1');
+    expect(t('sheet.picker.locked', { side: '@rail.cupid', tier: 1 })).toBe('Locked · Cupid T1');
+    expect(en['avatar.waiting']).toBe('waiting for your tap');
+    setLang('es');
+    expect(t('avatar.intro', { name: '@avatar.a_pigeon.name', hint: '@avatar.a_pigeon.hint1' })).toBe('Juegas como Paloma. Toca a alguien: en picado');
+    expect(t('avatar.says', { name: '@avatar.a_pigeon.name', what: '@avatar.status.swooping' })).toBe('Paloma: en picado');
+    expect(t('avatar.busy', { name: '@avatar.a_pigeon.name' })).toBe('Paloma: ocupado');
+    expect(t('avatar.you', { name: '@avatar.a_pigeon.name' })).toBe('Paloma · tú');
+    expect(t('sheet.picker.locked', { side: '@rail.mischief', tier: 1 })).toBe('Bloqueado · Travesura T1');
+    expect(es['avatar.waiting']).toBe('esperando tu toque');
+    setLang('en');
+  });
+});

@@ -26,7 +26,9 @@
 // and the 5.2 s focus pin stands over it (render/ghost.ts setFocusMark).
 // S6 (02 12.4; 04 5.6): the Progress sheet is progress.ts (the two ladders, the tier ticks, the next unlock, the unlock table); this file
 // opens it and repaints it when what it shows changes (a point gained, the language), checked every frame from hud.ts.
-// TODO(S7): picker; TODO(S8): the Sound check sheet.
+// S7 (02 12.4; 04 5.6): the Avatar picker is picker.ts (six cards with a side stripe, a portrait, the tier and the lock state); this file
+// opens and repaints it (a tier reached, the language) and a card tap sends `avatar.enter` through picker.chooseAvatar and closes the sheet.
+// TODO(S8): the Sound check sheet.
 import { T, phaseOf } from '../core/clock.ts';
 import { watch } from '../core/events.ts';
 import { enqueue, pendingCount, type Pace } from '../core/commands.ts';
@@ -42,6 +44,7 @@ import { STAGE_IDS, pairById, pairs, partnerOf, pinnedPair, setPin, shownStage, 
 import { cam, clampCam, follow } from '../render/camera.ts';
 import { setFocusMark } from '../render/ghost.ts';
 import { progressKey, progressPainted, renderProgress } from './progress.ts';
+import { chooseAvatar, pickerKey, pickerPainted, renderPicker } from './picker.ts';
 
 /** What main.ts hands the sheets: the dev perf overlay's state and switch (debug/perf.ts, which ui/ may not import, 03 2.1). */
 export type SheetHooks = { perfOn?: () => boolean; setPerf?: (on: boolean) => void };
@@ -102,7 +105,8 @@ export function renderSheet(id: SheetId): void {
   else if (id === 'romances') renderRomances();
   else if (id === 'evlog') renderEvents();
   else if (id === 'progress') renderProgress();
-  // TODO(S7-S8): the picker and the sound check; until then they show the placeholder paragraph from index.html.
+  else if (id === 'picker') renderPicker();
+  // TODO(S8): the sound check; until then it shows the placeholder paragraph from index.html.
 }
 
 /** Every frame with real seconds (hud.ts): the census repaints every 1.2 s while it is open. */
@@ -112,6 +116,7 @@ export function updateSheets(dtr: number): void {
   if (open === 'romances' && romancesKey() !== romKey) renderRomances(); // a stage, a bar, a pin, a pair come or gone
   if (open === 'evlog' && feedEntries()[0] !== evTop) renderEvents();
   if (open === 'progress' && progressKey() !== progressPainted()) renderProgress(); // a point gained, the language
+  if (open === 'picker' && pickerKey() !== pickerPainted()) renderPicker(); // a tier reached, the language
   if (open !== 'census') {
     censusT = 0;
     return;
@@ -442,7 +447,13 @@ export function initSheets(h: SheetHooks = {}): void {
     const b = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-k]');
     if (b?.dataset.k) onOption(b.dataset.k);
   });
+  // a picker card sends `avatar.enter` and the sheet closes; a locked or coming one only toasts (picker.ts chooseAvatar)
+  document.getElementById('pickerList')?.addEventListener('click', (e) => {
+    const id = (e.target as HTMLElement | null)?.closest<HTMLElement>('.pk')?.dataset.id;
+    if (id && chooseAvatar(id)) closeSheets();
+  });
   onLang(() => {
     if (sheetOpen() === 'options') renderOptions();
+    if (sheetOpen() === 'picker') renderPicker();
   });
 }

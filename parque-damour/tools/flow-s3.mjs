@@ -23,6 +23,10 @@
 //      T1" and arms nothing; the Mischief group's Sprinkler pill arms, a tap on a lawn tile logs one `ability` command and the running sim
 //      applies it (the sprinkler prop appears, row 2's chip counts the cooldown down, the pill stays armed); a second tap inside the cooldown
 //      toasts "not yet (n s)" and puts no second sprinkler down.
+//  5e. Avatar mode (07 S7.7 item 4, the UI stage of S7): on the running park, "Be someone" opens the picker, the Pigeon card possesses a
+//      pigeon (body.avatar, three hint chips, the Park strip and the switch hidden, the strip "... · you", the button reads Creator); a tap on
+//      a lawn tile logs one `avatar.tap` and the pigeon goes there; Creator logs `avatar.leave` and the pigeon walks off on its own within 2 s
+//      (it is no longer driven and no longer waits for a tap), the strips are back and the toast says it "goes on alone".
 //   6. A Spanish browser (navigator.language es-ES), a fresh profile: the intro is in Spanish; after Begin and a reload it still is;
 //      EN tapped on the intro survives a reload (register 3.12).
 // Every action is a real tap or click (puppeteer's mouse at __PD.screenOf of a tile, or the DOM control). Exits 1 on any failed check,
@@ -208,6 +212,9 @@ async function run(base) {
 
     // 5d. Abilities
     await abilityCheck(page);
+
+    // 5e. Avatar mode
+    await avatarCheck(page);
   } finally {
     await browser.close();
   }
@@ -444,6 +451,84 @@ async function abilityCheck(page) {
   await page.waitForFunction(() => /^not yet \(\d+ s\)$/.test(document.getElementById('hint').textContent ?? ''), { timeout: 5_000 }).catch(() => {});
   const again = await page.evaluate(() => ({ text: document.getElementById('hint').textContent, sprinklers: window.__PD.props.filter((q) => q.kind === 'sprinkler').length }));
   check(/^not yet \(\d+ s\)$/.test(again.text) && again.sprinklers <= 1, `abilities: a second tap inside the cooldown toasts "${again.text}" (${again.sprinklers} sprinkler)`);
+}
+
+/**
+ * 5e. The avatar mode on the running park (see the header): the picker by the mode button, the Pigeon card, a tap on the lawn, Creator. Every
+ * action is a real click; the harness is read for the pigeon and the log.
+ */
+async function avatarCheck(page) {
+  const me = () =>
+    page.evaluate(() => {
+      const pd = window.__PD, m = pd.mode(), c = pd.creatures.find((o) => o.id === m.player) ?? pd.creatures.find((o) => o.driven);
+      return { mode: m.mode, avatar: m.avatar, x: c?.x ?? 0, y: c?.y ?? 0, st: c?.st ?? '', driven: !!c?.driven, id: c?.id ?? 0 };
+    });
+  const ui = () =>
+    page.evaluate(() => {
+      const shown = (id) => getComputedStyle(document.getElementById(id)).display !== 'none';
+      return {
+        avatar: document.body.classList.contains('avatar'),
+        chips: document.querySelectorAll('#hints .hc').length,
+        tools: shown('tools'), groups: shown('groups'), hints: shown('hints'),
+        name: document.getElementById('cName').textContent, doing: document.getElementById('cDo').textContent,
+        mode: document.getElementById('bMode').textContent,
+      };
+    });
+  const seq0 = await page.evaluate(() => window.__PD.log().reduce((m, c) => Math.max(m, c.seq), 0));
+  await page.click('#bMode');
+  await page.waitForFunction(() => document.getElementById('picker').classList.contains('on'), { timeout: 5_000 }).catch(() => {});
+  const six = await page.$$eval('#pickerList .pk', (els) => els.length);
+  check(six === 6, `avatar: "Be someone" opens the picker with ${six} cards`);
+  await page.click('#pickerList .pk[data-id="a_pigeon"]');
+  await page.waitForFunction(() => window.__PD.mode().mode === 'avatar' && document.body.classList.contains('avatar'), { timeout: 5_000 }).catch(() => {});
+  await sleep(1800); // the follow eases in (k = 1 - 0.02^dt)
+  const a = await ui(), m0 = await me();
+  check(m0.mode === 'avatar' && m0.avatar === 'a_pigeon' && m0.driven, `avatar: the pigeon is possessed (${JSON.stringify(m0)})`);
+  check(a.avatar && a.chips === 3 && a.hints && !a.tools && !a.groups, `avatar: three hint chips, the Park strip and the switch hidden (${JSON.stringify(a)})`);
+  check(a.name.endsWith(' · you') && a.mode === 'Creator', `avatar: the strip reads "${a.name}" / "${a.doing}", the button "${a.mode}"`);
+  const tile = await page.evaluate((x, y) => {
+    const pd = window.__PD, K = pd.layers.KIND, O = pd.layers.OCC;
+    let best = null, bd = Infinity;
+    for (let ty = 8; ty < 40; ty++)
+      for (let tx = 8; tx < 40; tx++) {
+        if (K[ty * 48 + tx] !== 0 || O[ty * 48 + tx] !== 0) continue; // lawn, nothing on it
+        const s = pd.screenOf(tx, ty), d = Math.hypot(tx - x, ty - y);
+        if (s.x > 40 && s.x < 350 && s.y > 200 && s.y < 520 && d > 3 && d < 7 && Math.abs(d - 5) < bd) {
+          bd = Math.abs(d - 5);
+          best = { x: tx, y: ty };
+        }
+      }
+    return best;
+  }, m0.x, m0.y);
+  check(tile !== null, 'avatar: a free lawn tile three to seven tiles from the pigeon, on screen');
+  if (!tile) return;
+  const p = await screenOfTile(page, tile.x, tile.y);
+  await page.mouse.click(p.x, p.y);
+  await page.waitForFunction((t) => window.__PD.log().some((c) => c.kind === 'avatar.tap' && c.payload.tile.x === t.x && c.payload.tile.y === t.y), { timeout: 5_000 }, tile).catch(() => {});
+  await sleep(1500);
+  const m1 = await me();
+  const taps = await page.evaluate((s) => window.__PD.log().filter((c) => c.seq > s && c.kind === 'avatar.tap').length, seq0);
+  const moved = Math.hypot(m1.x - m0.x, m1.y - m0.y);
+  check(taps === 1 && moved > 2, `avatar: a tap on the lawn logged ${taps} avatar.tap and the pigeon moved ${moved.toFixed(1)} tiles (now ${m1.st})`);
+  await page.click('#bMode'); // Creator
+  const t0 = Date.now();
+  await page.waitForFunction(() => window.__PD.mode().mode === 'creator', { timeout: 5_000 }).catch(() => {});
+  const leaves = await page.evaluate((s) => window.__PD.log().filter((c) => c.seq > s && c.kind === 'avatar.leave').length, seq0);
+  let free = false, cur = await me();
+  while (Date.now() - t0 < 2000 && !free) {
+    cur = await page.evaluate((id) => {
+      const c = window.__PD.creatures.find((o) => o.id === id);
+      return { x: c.x, y: c.y, st: c.st, driven: !!c.driven, id };
+    }, m1.id);
+    free = !cur.driven && cur.st !== 'wait';
+    if (!free) await sleep(100);
+  }
+  check(leaves === 1 && free, `avatar: Creator logged ${leaves} avatar.leave and the pigeon is on its own within ${Date.now() - t0} ms (${cur.st})`);
+  await sleep(500);
+  const z = await ui();
+  const toast = await page.evaluate(() => document.getElementById('hint').textContent);
+  check(!z.avatar && z.tools && z.groups && !z.hints && z.mode === 'Be someone', `avatar: the strips are back, the button reads "${z.mode}"`);
+  check(toast.endsWith('goes on alone'), `avatar: the toast says "${toast}"`);
 }
 
 /**

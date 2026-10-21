@@ -321,7 +321,8 @@ export function headRise(h: number, sitting: boolean): number {
  * shelter as themselves; pave as pave at the tile and walk between tiles; play as play for a child going round its parent's spot,
  * chase for a child after a pigeon, idle (the accordion held) for the busker; chase (S5: after the pomeranian) as chase; huddle as
  * shelter; every walk (wander, strollLoop, arrive, goBench, goSit, goPicnic, goKiosk, goEat, goLeave) as walk while it has a path;
- * idle, watch and S5's wipe, shake, duck, stumble, flap, distracted, baffled, lost and huff as idle (their faces from exprOf).
+ * idle, watch and S5's wipe, shake, duck, stumble, flap, distracted, baffled, lost and huff as idle (their faces from exprOf); S7's `pick`
+ * (the avatar florist at a flowerbed) as tidy.
  */
 export function stateOf(v: Visitor): State {
   if (v.sitPropId !== 0) return v.st === 'read' ? 'read' : v.st === 'feed' ? 'feed' : 'sit';
@@ -336,6 +337,8 @@ export function stateOf(v: Visitor): State {
       return v.st as State;
     case 'huddle':
       return 'shelter';
+    case 'pick':
+      return 'tidy'; // the flower seller stooping at the bed (S7: the gardener's stoop, her hands among the flowers)
     case 'pave':
       return v.path ? 'walk' : 'pave';
     case 'play':

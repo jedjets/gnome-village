@@ -23,7 +23,7 @@ import { drawWater } from './water.ts';
 import { drawLampPool, lampOn, propDrawables } from './props.ts';
 import { gamePen } from './flora.ts';
 import { drawWeatherOverlay, particleDrawables } from './effects.ts';
-import { drawAimMark, drawFocusMark, drawGhost, drawSelection, featuredDrawables, type Ghost } from './ghost.ts';
+import { avatarRingOn, drawAimMark, drawFocusMark, drawGhost, drawSelection, featuredDrawables, playerDrawables, playerVisitorId, type Ghost } from './ghost.ts';
 import { peopleDrawables } from './people.ts';
 import { sortByDepth, type Drawable } from './order.ts';
 
@@ -155,14 +155,15 @@ export function draw(ghost: Ghost | null = null, sel = 0): void {
   for (const d of propDrawables()) ITEMS.push(d);
   for (const d of peopleDrawables()) ITEMS.push(d);
   for (const d of particleDrawables()) ITEMS.push(d);
-  for (const d of featuredDrawables(sel)) ITEMS.push(d); // the featured pair's rose glow, under its members (not under the selected one)
+  for (const d of playerDrawables()) ITEMS.push(d); // the possessed actor's ring on the ground under it (S7)
+  for (const d of featuredDrawables(sel || playerVisitorId())) ITEMS.push(d); // the featured pair's rose glow, under its members (not under the selected or possessed one)
   sortByDepth(ITEMS);
   for (const d of ITEMS) d.draw(d, c);
-  // 7 the ghost panes (S3), the armed area ability's square (S6), the selection ring (S4), the focus pin (S5)
+  // 7 the ghost panes (S3), the armed area ability's square (S6), the selection ring (S4; not in the avatar mode, where phase 6 holds the player ring), the focus pin (S5)
   css(c);
   drawGhost(c, ghost);
   drawAimMark(c);
-  drawSelection(c, sel);
+  if (!avatarRingOn()) drawSelection(c, sel); // the possessed actor's ring (phase 6) replaces the selection ring (S7)
   drawFocusMark(c);
   // 8 the weather overlay and the fog wash (S9)
   drawWeatherOverlay();

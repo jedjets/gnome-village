@@ -557,4 +557,9 @@ export const es: Record<string, string> = {
   'doing.pick': 'cogiendo flores',
   'doing.goPick': 'yendo al parterre',
   'doing.goScatter': 'yendo a esparcir pétalos',
+  // S7 UI (07 S7.6 steps 6-7; 02 10.1, 12.4; 04 5.4 item 6, 5.6): the picker, the avatar's hint chips and the 6 s toast
+  'avatar.intro': 'Juegas como {name}. {hint}',
+  'sheet.picker.sum': 'Elige a quién ser y toca el parque para dar órdenes.',
+  'sheet.picker.locked': 'Bloqueado · {side} T{tier}',
+  'aria.avatar_hints': 'Qué puedes hacer',
 };
