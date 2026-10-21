@@ -14,7 +14,7 @@
 // (main.ts calls paceQueued), shows pressed while its command waits, 03 4.6), with the pressed pace's one-line hint; Language EN | ES
 // (intro.ts chooseLang: the tables, <html lang>, the profile); Sound on | off, a mirror of #bMute (its aria-pressed is the one state;
 // a tap presses #bMute); Speed, a read-out of the dial with a pointer to row 3 (the dial is the one control); under body.dev only
-// (03 10.2, CSS), the Sound check (a toast until S8 builds its sheet) and the perf overlay on | off through the hooks main.ts hands in
+// (03 10.2, CSS), the Sound check (soundcheck.ts, S8) and the perf overlay on | off through the hooks main.ts hands in
 // (ui/ may not import debug/, 03 2.1). Every string through t(). The open sheet repaints when what it shows changes (checked every
 // frame from hud.ts) or the language changes. Escape and the close button close any sheet; focus goes back to the control that opened
 // it (a tap that gave no focus leaves none to go back to).
@@ -28,14 +28,15 @@
 // opens it and repaints it when what it shows changes (a point gained, the language), checked every frame from hud.ts.
 // S7 (02 12.4; 04 5.6): the Avatar picker is picker.ts (six cards with a side stripe, a portrait, the tier and the lock state); this file
 // opens and repaints it (a tier reached, the language) and a card tap sends `avatar.enter` through picker.chooseAvatar and closes the sheet.
-// TODO(S8): the Sound check sheet.
+// S8 (05 2.6; 07 S8.6 step 11): the dev Sound check is soundcheck.ts; the Options row opens it, its buttons play every cue, the ambience bursts, the birds
+// and the music (the hooks main.ts hands in reach the board's motifs through the dev harness until the Music stage).
 import { T, phaseOf } from '../core/clock.ts';
 import { watch } from '../core/events.ts';
 import { enqueue, pendingCount, type Pace } from '../core/commands.ts';
 import { CAP_PEOPLE, arrivalsState, visitors, byId, type Visitor } from '../entities/visitor.ts';
 import { parkSeed } from '../world/gen.ts';
 import { getProfile, setProfilePace } from '../save/store.ts';
-import { $, confirmOpen, layoutOverlays, toast, SHEET_IDS, type SheetId } from './dom.ts';
+import { $, confirmOpen, layoutOverlays, SHEET_IDS, type SheetId } from './dom.ts';
 import { lang, onLang, plural, t } from './i18n.ts';
 import { chooseLang } from './intro.ts';
 import { select, selectedVisitor } from './card.ts';
@@ -45,9 +46,10 @@ import { cam, clampCam, follow } from '../render/camera.ts';
 import { setFocusMark } from '../render/ghost.ts';
 import { progressKey, progressPainted, renderProgress } from './progress.ts';
 import { chooseAvatar, pickerKey, pickerPainted, renderPicker } from './picker.ts';
+import { initSoundCheck, renderSoundCheck, setMusicHooks, type MusicHooks } from './soundcheck.ts';
 
 /** What main.ts hands the sheets: the dev perf overlay's state and switch (debug/perf.ts, which ui/ may not import, 03 2.1). */
-export type SheetHooks = { perfOn?: () => boolean; setPerf?: (on: boolean) => void };
+export type SheetHooks = { perfOn?: () => boolean; setPerf?: (on: boolean) => void; music?: () => MusicHooks | undefined };
 let hooks: SheetHooks = {};
 
 /** The census repaints this often while it is open (GV censusT 10843, 10991; 02 12.1). */
@@ -106,7 +108,7 @@ export function renderSheet(id: SheetId): void {
   else if (id === 'evlog') renderEvents();
   else if (id === 'progress') renderProgress();
   else if (id === 'picker') renderPicker();
-  // TODO(S8): the sound check; until then it shows the placeholder paragraph from index.html.
+  else if (id === 'snd') renderSoundCheck();
 }
 
 /** Every frame with real seconds (hud.ts): the census repaints every 1.2 s while it is open. */
@@ -386,14 +388,16 @@ function onOption(k: string): void {
   } else if (what === 'perf') {
     hooks.setPerf?.(v === 'on');
     renderOptions();
-  } else if (what === 'soundcheck') toast('toast.sound_check_later'); // TODO(S8): open the #snd sheet once it has its rows
+  } else if (what === 'soundcheck') openSheet('snd'); // the dev Sound check (soundcheck.ts); a second tap on Options comes back
 }
 
 let wired = false;
 export function initSheets(h: SheetHooks = {}): void {
   hooks = h;
+  if (h.music) setMusicHooks(h.music);
   if (wired) return;
   wired = true;
+  initSoundCheck();
   for (const id of SHEET_IDS) {
     const x = document.querySelector<HTMLButtonElement>('#' + id + ' .x');
     x?.addEventListener('click', closeSheets);
@@ -455,5 +459,6 @@ export function initSheets(h: SheetHooks = {}): void {
   onLang(() => {
     if (sheetOpen() === 'options') renderOptions();
     if (sheetOpen() === 'picker') renderPicker();
+    if (sheetOpen() === 'snd') renderSoundCheck();
   });
 }

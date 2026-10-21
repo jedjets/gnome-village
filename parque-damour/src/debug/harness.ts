@@ -17,10 +17,14 @@
 // embarrassment yet, so the harness lands one directly, as an ability will) and setPin (the Romances sheet's pin, UI state).
 // S7: the Park group gains mode (read only: MODE, PLAYER, the avatar) and avatarEnter, avatarTap and avatarLeave, which enqueue the logged
 // avatar commands as the shell will (the picker, a tap on the world, the Creator button).
+// S8 part A (05 8.3): the Audio group `audio`: the cue list, play, the decision log (the last 200), dryRun, state, music and ambience. The dry run
+// is how headless scripts run sound without a device: tone() and grain() count their calls and no node is made. `music.board(motif, variant)` and
+// `boardStop()` play the board's motifs B and C (src/debug/motifs.ts) for the Sound check's music buttons until the Music stage moves them into the
+// game; `music.motif` is the clock rule of 05 5.4 (C in [0.20, 0.80), else B), the Music stage replaces it with wantedMotif(f).
 // S6: the State group gains effects (the live list), the Park group ability (enqueues the logged `ability` command, as the rail will) and setProgress (the points a fixture starts from).
 import { T } from '../core/clock.ts';
 import { seedVisual, rngN } from '../core/rng.ts';
-import { SIM_DT, SP, setSpeed, simulate, tick } from '../core/loop.ts';
+import { SIM_DT, SP, onFrame, setSpeed, simulate, tick } from '../core/loop.ts';
 import { AVATAR_SIDE, applyNow, enqueue, log, replay, type AbilityId, type Hit, type Pace, type Target } from '../core/commands.ts';
 import { drain } from '../core/events.ts';
 import { W, type WeatherKind } from '../core/weather.ts';
@@ -41,6 +45,13 @@ import type { XY } from '../core/math.ts';
 import { progressState, setProgress } from '../play/progression.ts';
 import { land } from '../entities/embarrass.ts';
 import { FT, qualityLevel } from './perf.ts';
+import { auditLog, ctxState, dryCalls, duckDb, isMuted, isOn, mixState, setDryRun, unlockAudio } from '../audio/engine.ts';
+import { CUE_IDS, cue, type CueId } from '../audio/cues.ts';
+import { ambienceTimers, centre } from '../audio/ambience.ts';
+import { birdTimers } from '../audio/birds.ts';
+import { MUSIC_PICK } from '../audio/music.ts';
+import { viewCentreTile } from '../render/camera.ts';
+import { MOTIFS, type Variant } from './motifs.ts';
 
 export type HarnessApi = { newPark: (seed: number) => void };
 
@@ -141,7 +152,72 @@ export function buildHarness(api: HarnessApi) {
   /** seedVisual reseeds the visual stream; fxStep(dt, n) runs n steps of ambient spawning and particle motion, paused or not (08 4.1). */
   const screenshots = { seedVisual, fxStep };
   const meta = { version: 'dev', schemaVersion: SCHEMA_VERSION };
-  return { ...state, ...stepping, ...commands, ...picking, ...save, ...park, ...render, ...screenshots, ...meta };
+  return { ...state, ...stepping, ...commands, ...picking, ...save, ...park, ...render, ...audioGroup(), ...screenshots, ...meta };
+}
+
+/** The board motifs run on the frame clock while a Sound check button holds one (the Music stage drops this with debug/motifs.ts). */
+let boardWired = false;
+function playBoard(motif: 'B' | 'C', variant: Variant): void {
+  unlockAudio();
+  if (!boardWired) {
+    boardWired = true;
+    onFrame(() => {
+      MOTIFS.B.update();
+      MOTIFS.C.update();
+    });
+  }
+  const other = motif === 'B' ? MOTIFS.C : MOTIFS.B;
+  other.stop(); // one context, one musicBus (05 6.4 item 3)
+  MOTIFS[motif].play(variant);
+}
+function stopBoard(): void {
+  MOTIFS.B.stop();
+  MOTIFS.C.stop();
+}
+/** The clock rule of 05 5.4 item 1 (ADVISED hours; the Music stage owns wantedMotif). */
+const DAY_FROM = 0.2, DAY_TO = 0.8;
+function clockMotif(): 'B' | 'C' {
+  return T.f >= DAY_FROM && T.f < DAY_TO ? MUSIC_PICK.day : MUSIC_PICK.night;
+}
+
+/** 05 8.3: `window.__PD.audio`. */
+function audioGroup() {
+  const music = {
+    /** Which board motif plays ('B' or 'C'), else the clock rule's. */
+    get motif(): 'B' | 'C' {
+      return MOTIFS.B.variant() ? 'B' : MOTIFS.C.variant() ? 'C' : clockMotif();
+    },
+    get variant(): Variant {
+      return MOTIFS.B.variant() ?? MOTIFS.C.variant() ?? 'rising';
+    },
+    bar: 0,
+    tempo: 0,
+    duck: (): number => duckDb('music'),
+    state: (): string => {
+      const m = MOTIFS.B.variant() ? 'B' : MOTIFS.C.variant() ? 'C' : '';
+      return m ? m + ' ' + (MOTIFS[m].variant() as Variant) : 'stopped';
+    },
+    start: (): void => playBoard(clockMotif(), 'rising'),
+    stop: stopBoard,
+    board: playBoard,
+    boardStop: stopBoard,
+  };
+  const audio = {
+    cues: CUE_IDS,
+    /** Play a cue at a tile (the tile under the view by default); true when a note was scheduled. */
+    play: (id: CueId, x?: number, y?: number): boolean => {
+      const c = viewCentreTile();
+      return cue(id, x ?? c.x, y ?? c.y);
+    },
+    /** The last 200 cue and ambience decisions: the same array, live. */
+    log: auditLog(),
+    /** tone() and grain() count their calls instead of creating nodes; sound counts as on without a device. */
+    dryRun: (on: boolean): void => setDryRun(on),
+    state: () => ({ on: isOn(), muted: isMuted(), ctx: ctxState(), ...mixState(), calls: dryCalls() }),
+    music,
+    ambience: { centre, timers: (): Record<string, number> => ({ ...ambienceTimers(), ...birdTimers() }) },
+  };
+  return { audio };
 }
 
 export type Harness = ReturnType<typeof buildHarness>;

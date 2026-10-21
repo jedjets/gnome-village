@@ -81,6 +81,13 @@ export const en: Record<string, string> = {
   'sheet.options.sound_check': 'Sound check',
   'sheet.options.perf': 'Performance overlay',
   'sheet.sound.title': 'Sound check',
+  'sheet.sound.muted': 'Sound is muted',
+  'sheet.sound.cues': 'Cues',
+  'sheet.sound.alts': 'Kiss and splat: two recipes each',
+  'sheet.sound.ambience': 'Ambience',
+  'sheet.sound.birds': 'Birds',
+  'sheet.sound.music': 'Music',
+  'sheet.sound.stop_music': 'Stop music',
 
   'confirm.new_park': 'Start a new park? The current one is lost.',
   'confirm.yes': 'Yes',
@@ -91,7 +98,7 @@ export const en: Record<string, string> = {
   'toast.undone': 'Undone',
   'toast.start': 'Back to the fountain',
   'toast.load_failed': 'The saved park could not be read. Starting fresh.',
-  'toast.sound_check_later': 'The sound check comes with the sound',
+  'toast.sound_music_dev': 'The music buttons play in the dev build',
 
   'feed.season.spring': 'Spring in the park',
   'feed.season.summer': 'Summer in the park',

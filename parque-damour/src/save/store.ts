@@ -22,6 +22,8 @@
 // (calm when a save has none); the state hash covers it only when it is not calm, so every calm park keeps its hash. The profile's
 // settings.pace is the pace a new park gets (profilePace: Lively when absent); enqueueProfilePace is the shell's one call that sends it as a
 // logged `park.pace` command after every new park it starts (Begin, a failed Continue's fresh park, New via commands.ts enqueueAfterNew).
+// S8 part A (05 7.3; 07 S8.6 step 10): settings.muted is the sound setting (the Sound button and the Options sound row are one setting): setProfileMuted
+// writes it like setProfilePace, profileMuted reads it for main.ts's boot, before any audio context exists.
 // S5: the pairs, the alumni and the day's romance counters (sched.rolled, sched.alumniDay) are saved and hashed; the pinned pair is saved
 // and not hashed (UI state per client, 02 14.3); the feed joins the snapshot through the hook main.ts hands in (setFeedIO; not hashed).
 // S6: the park's effects, sides (cooldown ticks, charges left) and day tally are in the snapshot and the hash; the profile's points, tiers and
@@ -242,6 +244,18 @@ export function profilePace(): Pace {
 export function setProfilePace(pace: Pace): void {
   const { p, failed } = profileToWrite();
   p.settings.pace = pace;
+  warnFirst([wroteFail(writeProfile(p)), PROFILE_KEY], [failed, PROFILE_KEY]);
+}
+
+/** The profile's sound setting (register 3.11; 05 7.3 item 1): true when the player muted. Read at boot, before the audio context exists. */
+export function profileMuted(): boolean {
+  return getProfile().settings.muted === true;
+}
+
+/** Remember the sound setting in the profile (the Sound button and the Options sheet are one setting, 05 7.3 item 4). Written like setProfilePace. */
+export function setProfileMuted(muted: boolean): void {
+  const { p, failed } = profileToWrite();
+  p.settings.muted = muted;
   warnFirst([wroteFail(writeProfile(p)), PROFILE_KEY], [failed, PROFILE_KEY]);
 }
 

@@ -14,7 +14,7 @@ export type Key = 'G' | 'Em';
 export type StateName = 'flourish' | 'parted' | 'happily' | 'night' | 'rising' | 'stroll';
 export type MotifLetter = 'A' | 'B' | 'C';
 /** Music Gate passed 2026-10-12 (register section 4): the owner keeps B and C; A, this waltz, is retired.
- *  Default use: C by day, B from dusk to dawn (register 3.13). S8 moves B and C here from src/debug/motifs.ts. */
+ *  Default use: C by day, B from dusk to dawn (register 3.13). S8 moves B and C here from the board's motifs file. */
 export const MUSIC_PICK = { day: 'C', night: 'B' } as const satisfies Record<'day' | 'night', MotifLetter>;
 /** The motif the game would play at the start of a new park (f = 0.30 is day). */
 export const DEFAULT_MOTIF: MotifLetter = MUSIC_PICK.day;
@@ -312,7 +312,7 @@ export function setMusicKnob(k: KnobName, v: number): void {
 const MELODY_GAIN = 0.04; // 5.5 item 5
 const COUNTER_GAIN = 0.02;
 /**
- * Voice-stage makeup applied to every music voice (A here, B and C in debug/motifs.ts), knobs and musicBus untouched.
+ * Voice-stage makeup applied to every music voice (A here, B and C in the board's motifs file), knobs and musicBus untouched.
  * 05 5.5 item 5 lists the voice peaks and says their sum lands near -20 dBFS at the compressor input: 0.04 x 2.35 (three reed
  * oscillators) + 0.02 x 2.35 + 3 x 0.012 + 0.034 x 1.4 = 0.225, x 0.50 bus x 0.84 master = 0.094 = -20.5 dBFS. That is the
  * arithmetic sum; a measured peak of the real mix sat 12 dB under it (-33 dBFS, tools/audio-smoke.mjs round 3) because the

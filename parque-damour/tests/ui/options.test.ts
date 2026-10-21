@@ -220,7 +220,7 @@ describe('02 12.4, 04 5.6: Language, Sound and Speed mirror the one state each h
     expect(T.speed).toBe(0); // reading it changed nothing
     expect($('optionsSum').textContent).toBe('Park seed 101');
   });
-  it('the Sound check and perf rows show only under body.dev; perf goes through main.ts\'s hooks, the Sound check toasts', () => {
+  it('the Sound check and perf rows show only under body.dev; perf goes through main.ts\'s hooks, the Sound check opens its sheet (S8)', () => {
     openSheet('options');
     const dev = [...document.querySelectorAll('#optionsList .dev')];
     expect(dev).toHaveLength(2);
@@ -234,7 +234,7 @@ describe('02 12.4, 04 5.6: Language, Sound and Speed mirror the one state each h
     tap('perf:off');
     expect(perf.on).toBe(false);
     tap('soundcheck');
-    expect($('hint').textContent).toBe(en['toast.sound_check_later']);
+    expect(sheetOpen()).toBe('snd'); // S8: the placeholder toast of the Options stage became the dev Sound check sheet (soundcheck.ts)
   });
 });
 

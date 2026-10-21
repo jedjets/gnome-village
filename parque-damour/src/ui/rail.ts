@@ -18,7 +18,10 @@
 // ABILITIES, locked ones dimmed with the tier badge, arming, the cooldown chip in row 2's #cdChip); arming is held there and armAbility /
 // armedAbility are re-exported here: for these groups row 2 holds the chip alone (the Undo and the Park context are the Park group's;
 // the chip says "Pick an ability" with nothing armed, so the row keeps its height and the strip does not jump on arming). The group
-// switch, a Park tool and the avatar mode disarm. TODO(S8): mute through audio.
+// switch, a Park tool and the avatar mode disarm.
+// S8 (05 7.3, 7.5; 07 S8.6 step 10): #bMute is the sound setting: a tap mutes or unmutes the engine (a hard cut, audio/engine.ts setMuted) and writes
+// settings.muted to the profile (save/store.ts), `aria-pressed` follows the engine's state, and the Options sheet's Sound on | off presses this button, so
+// the two are one setting; there is no long press (the Sound check is reached from Options under the dev flag).
 // S7 (07 S7.6 step 7; 02 10.1; 04 5.4 items 5-6): row 3's mode button is the avatar mode's switch: "Be someone" opens the Avatar picker
 // (sheets.ts, picker.ts), "Creator" (the mode button's text while body.avatar is on) enqueues the logged `avatar.leave` on the possessed
 // avatar's side; neither sets the class: hud.ts does, from the sim's `mode` event, and calls syncMode, which disarms the tool and the ability,
@@ -27,11 +30,13 @@
 import { T } from '../core/clock.ts';
 import { AVATAR_SIDE, enqueue } from '../core/commands.ts';
 import type { XY } from '../core/math.ts';
+import { isMuted, setMuted } from '../audio/engine.ts';
 import { AVATARS } from '../play/avatar.ts';
 import { getAvatar, getMode } from '../play/mode.ts';
 import { TOOLS, ghost, toolById, type Ghost, type ToolClass, type ToolId } from '../play/tools.ts';
 import { depth } from '../play/undo.ts';
 import { fitToggle, follow, turn } from '../render/camera.ts';
+import { setProfileMuted } from '../save/store.ts';
 import { $, setBodyClass, toast, layoutOverlays } from './dom.ts';
 import { t, onLang } from './i18n.ts';
 import { closeSheets, toggleSheet } from './sheets.ts';
@@ -111,7 +116,6 @@ let group: Group = 'park';
 let tool: ToolId = 'hand';
 let armed: Armed | null = null;
 let want = 1; // the dial's value while paused
-let muted = false;
 let row2Key = '';
 
 export type RailHandlers = { onNew: () => void };
@@ -350,7 +354,7 @@ export function syncMode(): void {
 }
 
 function paintLabels(): void {
-  $('bMute').textContent = t(muted ? 'rail.sound_off' : 'rail.sound_on');
+  $('bMute').textContent = t(isMuted() ? 'rail.sound_off' : 'rail.sound_on');
   const avatar = document.body.classList.contains('avatar');
   $('bMode').textContent = t(avatar ? 'rail.creator' : 'rail.be_someone');
   paintHints();
@@ -400,9 +404,12 @@ export function buildRail(h: RailHandlers): void {
   $('bFit').addEventListener('click', () => toast(fitToggle() === 'whole' ? 'toast.fit' : 'toast.start'));
 
   const bm = $('bMute');
+  bm.setAttribute('aria-pressed', isMuted() ? 'true' : 'false'); // the profile's setting, restored at boot (05 7.3 item 1)
   bm.addEventListener('click', () => {
-    muted = !muted;
-    bm.setAttribute('aria-pressed', muted ? 'true' : 'false');
+    const m = !isMuted();
+    setMuted(m); // the hard cut or the return (05 7.3 items 2 and 3)
+    setProfileMuted(m);
+    bm.setAttribute('aria-pressed', m ? 'true' : 'false');
     paintLabels();
   });
 

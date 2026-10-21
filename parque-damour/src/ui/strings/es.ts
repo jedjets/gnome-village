@@ -81,6 +81,13 @@ export const es: Record<string, string> = {
   'sheet.options.sound_check': 'Prueba de sonido',
   'sheet.options.perf': 'Panel de rendimiento',
   'sheet.sound.title': 'Prueba de sonido',
+  'sheet.sound.muted': 'El sonido está silenciado',
+  'sheet.sound.cues': 'Efectos',
+  'sheet.sound.alts': 'Beso y plaf: dos recetas de cada uno',
+  'sheet.sound.ambience': 'Ambiente',
+  'sheet.sound.birds': 'Pájaros',
+  'sheet.sound.music': 'Música',
+  'sheet.sound.stop_music': 'Parar la música',
 
   'confirm.new_park': '¿Empezar un parque nuevo? El actual se pierde.',
   'confirm.yes': 'Sí',
@@ -91,7 +98,7 @@ export const es: Record<string, string> = {
   'toast.undone': 'Deshecho',
   'toast.start': 'De vuelta a la fuente',
   'toast.load_failed': 'No se pudo leer el parque guardado. Empezamos de nuevo.',
-  'toast.sound_check_later': 'La prueba de sonido llegará con el sonido',
+  'toast.sound_music_dev': 'Los botones de música suenan en la versión de desarrollo',
 
   'feed.season.spring': 'Primavera en el parque',
   'feed.season.summer': 'Verano en el parque',

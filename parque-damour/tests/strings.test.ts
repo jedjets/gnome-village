@@ -161,7 +161,7 @@ describe('the Options sheet and rail row 3\'s Options (register 3.10 and section
     'sheet.options.sound_check', 'sheet.options.perf', 'sheet.options.on', 'sheet.options.off',
   ];
   // the keys this stage defines that 06 has no row for yet (hand-back: Assumptions)
-  const NEW = ['rail.options', 'aria.options', 'sheet.options.lang_en', 'sheet.options.lang_es', 'sheet.options.speed_hint', 'toast.sound_check_later'];
+  const NEW = ['rail.options', 'aria.options', 'sheet.options.lang_en', 'sheet.options.lang_es', 'sheet.options.speed_hint'];
   it('every key of the sheet, the button and its aria-label is in both tables, with the same {params}', () => {
     for (const k of [...SHEET, ...NEW, 'aria.sheet_options']) {
       expect(en[k], k).toBeTruthy();

@@ -27,8 +27,13 @@
 // S7 (03 8.2 item 1; 07 S7.6 step 6): in the avatar mode a tap on the world is the logged `avatar.tap` on the possessed avatar's side, with the
 // tile (an apron tile goes on: the sim says `reason.outside`) and the hit pickAt resolved, the avatar itself left out of the candidates so a
 // tap beside it reaches what is there; the camera follows the actor again (GV playerCommand 11278); hud.ts toasts what comes back. A Continue
-// that restored the avatar mode shows it at once (hud.initHud calls applyMode). TODO(S8): initAudio on Begin and Continue.
-import { newPark as loopNewPark, onFrame, onFrameEnd, setSpeed, start } from './core/loop.ts';
+// that restored the avatar mode shows it at once (hud.initHud calls applyMode).
+// S8 part A (05 7.3, 7.5; 07 S8.6 steps 10 and 11): the profile's muted setting is restored at boot before any context exists; Begin and
+// Continue (the first gesture) unlock the audio context and bind the cues to the event bus; every frame hands the limiter the frame stamp and
+// runs the cue sources, the ambience and the songbirds in real seconds, paused or not (03 4.1 item 8); a pointerdown on the canvas resumes a
+// suspended context; visibilitychange suspends on hidden and resumes on shown unless muted (GV 12199); any button press sounds ui_tap; a New
+// resets the ambience's timers. The Sound check's music buttons reach the board's music through the dev harness's audio group.
+import { newPark as loopNewPark, now as frameNow, onFrame, onFrameEnd, setSpeed, start } from './core/loop.ts';
 import { T } from './core/clock.ts';
 import { AVATAR_SIDE, enqueue } from './core/commands.ts';
 import { watch } from './core/events.ts';
@@ -51,12 +56,19 @@ import { activeTool, armedGhost, brushSize, buildRail, cancelGhost, syncSpeed, t
 import { armedAbility, tapAbility } from './ui/ability-strip.ts';
 import { initHud, noteAvatarTap, updateHud } from './ui/hud.ts';
 import { initSheets, paceQueued } from './ui/sheets.ts';
+import type { MusicHooks } from './ui/soundcheck.ts';
 import { clearSel, followActor, initCard, select, selectedVisitor } from './ui/card.ts';
 import { clearFeed, feedState, initFeed, setFeedState, type FeedEntry } from './ui/feed.ts';
 import {
-  clearPark, enqueueProfilePace, getProfile, loadPark, profilePace, resetAutosave, restore, saveBeforeNew, savePark, setFeedIO, stepAutosave,
+  clearPark, enqueueProfilePace, getProfile, loadPark, profileMuted, profilePace, resetAutosave, restore, saveBeforeNew, savePark, setFeedIO, stepAutosave,
 } from './save/store.ts';
 import type { ParkSaveV1 } from './save/schema.ts';
+import { ctxState, isMuted, resume, setMuted, suspend, unlockAudio } from './audio/engine.ts';
+import { setNow } from './audio/limiter.ts';
+import { cue } from './audio/cues.ts';
+import { bindCues, resetCueSources, updateCueSources } from './audio/cues-bind.ts';
+import { resetAmbience, updateAmbience } from './audio/ambience.ts';
+import { resetBirds, updateBirds } from './audio/birds.ts';
 
 // the park save keeps the feed's 40 lines (register 3.11); save/ may not import ui/, so the shell hands it the reader and the writer (S5)
 setFeedIO({ get: () => feedState() as unknown as Array<Record<string, unknown>>, set: (s) => setFeedState(s as unknown as FeedEntry[]) });
@@ -102,6 +114,9 @@ function resetCamera(): void {
  * fountain) with the whole park one press of Fit away (GV newIsland 12115-12123).
  */
 function afterNewPark(seed: number): void {
+  resetAmbience(); // the countdowns belong to the old park (05 4.1 item 3)
+  resetBirds();
+  resetCueSources();
   clearParticles();
   clearSel();
   clearFeed();
@@ -240,6 +255,7 @@ function onStrokeEnd(): void {
 const held = { ids: new Set<number>(), brush: false };
 
 function onPointerDown(e: PointerEvent): void {
+  if (!isMuted() && ctxState() !== 'running' && ctxState() !== 'none') resume(); // iOS and a route change suspend the context (05 7.5 item 4)
   if (held.ids.size === 0) held.brush = gesture() === 'brush';
   held.ids.add(e.pointerId);
 }
@@ -276,8 +292,19 @@ let live = false; // a park is on screen: the autosave may write (never from the
 
 type Start = { kind: 'new'; seed: number } | { kind: 'load'; save: ParkSaveV1 };
 
+/** The Sound check's music buttons: until the Music stage moves B and C into the game they reach the board's motif code through the dev harness. */
+function devMusic(): MusicHooks | undefined {
+  type Board = { board?: MusicHooks['play']; boardStop?: MusicHooks['stop'] };
+  const m = (window as unknown as { __PD?: { audio?: { music?: Board } } }).__PD?.audio?.music;
+  return m?.board && m.boardStop ? { play: m.board, stop: m.boardStop } : undefined;
+}
+
 function begin(canvas: HTMLCanvasElement, from: Start, halt: boolean): void {
   if (live) return; // one start per page: the rail, the HUD and the watchers are wired once (intro.ts answers once as well)
+  unlockAudio(); // the Begin or Continue tap is the gesture that lets the context start (GV 12216-12217; muted: built and closed)
+  resetAmbience();
+  resetBirds();
+  bindCues(); // every trigger of 05 3.2 on the event bus, once
   initRender(canvas);
   resize(canvas);
   if (from.kind === 'load') {
@@ -301,7 +328,7 @@ function begin(canvas: HTMLCanvasElement, from: Start, halt: boolean): void {
   canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
   canvas.addEventListener('pointerup', onPointerUp, { passive: true });
   canvas.addEventListener('pointercancel', onPointerUp, { passive: true });
-  initSheets({ perfOn: () => FT.on, setPerf: setPerfOn }); // the Options sheet's dev perf entry (03 2.1: ui/ may not import debug/)
+  initSheets({ perfOn: () => FT.on, setPerf: setPerfOn, music: devMusic }); // the Options sheet's dev perf entry (03 2.1: ui/ may not import debug/)
   initFeed();
   setFollowLookup(followPos);
   buildRail({ onNew: askNew });
@@ -334,7 +361,13 @@ function begin(canvas: HTMLCanvasElement, from: Start, halt: boolean): void {
   // the autosave triggers of register 3.11 besides the 30 sim seconds (GV 12199 pattern)
   document.addEventListener('visibilitychange', () => {
     if (live && document.visibilityState === 'hidden') savePark();
+    if (document.visibilityState === 'hidden') suspend();
+    else if (!isMuted()) resume();
   });
+  document.addEventListener('click', (e) => {
+    const b = (e.target as Element | null)?.closest?.('button');
+    if (b && !b.closest('#snd')) cue('ui_tap', NaN, NaN); // any rail or sheet button press (05 3.2 row 36); the Sound check buttons sound their own cue
+  }, { passive: true });
   window.addEventListener('pagehide', () => {
     if (live) savePark();
   });
@@ -343,6 +376,10 @@ function begin(canvas: HTMLCanvasElement, from: Start, halt: boolean): void {
   // 03 4.1 items 7 to 11, after the loop's steps and drain: particles, the camera and the ambient spray, the draw, the HUD and the rail
   onFrame((dtr, ns) => {
     steps = ns;
+    setNow(frameNow()); // the limiter's real-time stamp for this frame's cues (05 2.4 item 1)
+    updateCueSources(dtr); // 03 4.1 item 8: the triggers read from state, the ambience, the songbirds; real seconds, paused or not
+    updateAmbience(dtr);
+    updateBirds(dtr);
     stepParticles(Math.min(0.05, dtr) * T.speed); // item 7: visual stream, sim seconds
     stepCamera(dtr); // item 9: turnStep, keepCentre, followStep
     ambientFx(dtr); // item 9: the fountains' spray and rings; nothing while paused
@@ -366,6 +403,7 @@ function begin(canvas: HTMLCanvasElement, from: Start, halt: boolean): void {
 
 function boot(): void {
   startLang(navigator.language); // the profile's choice once written, else the browser's; the profile holds it either way (register 3.12)
+  setMuted(profileMuted()); // the sound setting before any context exists (05 7.3 item 1)
   applyDom();
   const canvas = $('cv') as HTMLCanvasElement;
   const { seed, halt, dev } = readHash();

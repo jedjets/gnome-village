@@ -6,12 +6,20 @@
 //   gtone becomes toneAt and copies the caller's options (09 2.7 gotcha); mute is a hard cut on master then a 2 s suspend (05 7.3);
 //   duck() per 05 5.7; grain() per 05 2.3 item 5 (the one noise path); the music has its own convolver on the same IR so that
 //   stopMusic() silences dry and wet within 0.3 s (05 5.8 item 5, 6.5 item 4); screenOf has no SEAS term (flat ground).
+// S8 part A (07 S8.6 steps 1, 10, 11): the dry run of 05 8.3 (tone() and grain() only count their calls and no node is made, so a
+//   headless run needs no audio device; the decision log of the last 200 cue and ambience decisions sits here beside it); `panTo` sweeps
+//   a voice's pan over its length (the boulevard car, 05 4.7); shifted() offsets every note a callback schedules (a cue's `delay`);
+//   easeMix()/holdMix() own the two parameters the ambience may move (05 2.2 item 4: master lowpass and the shared reverb return,
+//   2 s time constant), so a Sound check hush demo hands them back; unlockAudio() is the gesture call (Begin, Continue, a
+//   pointerdown while suspended, 05 7.5 item 4). Mute at boot (profile) closes master before the first note.
 // Dropped from the range: the dead `y === undefined` guard of panOf (6082).
-// Real time: this module never reads the wall clock; AC.currentTime is the music clock (05 1 item 3).
+// Real time: this module never reads the wall clock; AC.currentTime is the music clock (05 1 item 3); the log stamps with the
+//   limiter's frame time.
 import { clamp, clamp01 } from '../core/math.ts';
 import { mulberry32 } from '../core/rng.ts';
 import { view } from '../render/camera.ts';
 import { screenOf } from '../render/project.ts';
+import { now as frameNow } from './limiter.ts';
 
 export type Wave = 'sine' | 'triangle' | 'sawtooth' | 'square';
 export type BusName = 'cue' | 'amb' | 'music';
@@ -30,6 +38,7 @@ export interface ToneOpts {
   wob?: number; // LFO Hz
   wobd?: number; // LFO depth as a fraction of freq (default 0.05, GV 6109)
   bus?: BusName;
+  panTo?: number; // S8: pan ramps linearly from `pan` to this over the note (05 4.7: the passing car)
 }
 
 export interface GrainOpts {
@@ -67,7 +76,26 @@ let musicOut: GainNode | null = null; // dry + music reverb, faded by startMusic
 let grainBuf: AudioBuffer | null = null;
 let audioOn = false;
 let muted = false;
+let dryRun = false; // 05 8.3: no node is made; a call is counted
+let shift = 0; // seconds added to every note scheduled inside shifted()
 let suspendTimer = 0;
+let mixLp = MASTER_LP; // the targets the ambience last set (05 2.2 item 4)
+let mixVerb = VERB_GAIN;
+let mixHoldUntil = 0; // AC time until which a Sound check demo holds the mix
+const dryCount = { tone: 0, grain: 0 };
+/** What the dry run saw of one note (the last DRY_NOTES are kept): enough for a test to check a pitch, a gain or a delay. */
+export interface DryNote {
+  k: 'tone' | 'grain';
+  f: number;
+  dur: number;
+  gain: number;
+  delay: number;
+  pan: number;
+  bus: BusName;
+  to?: number; // the glide target of a tone
+}
+export const DRY_NOTES = 256;
+const dryRing: DryNote[] = [];
 let musicLevel = BUS_GAIN.music;
 const duckState: Record<'amb' | 'music', { db: number; until: number }> = {
   amb: { db: 0, until: 0 },
@@ -190,14 +218,112 @@ export function initAudio(): void {
   buses = { cue: cueBus, amb: ambBus, music: musicBus };
   ducks = { amb: ambDuck, music: musicDuck };
   audioOn = true;
+  if (muted) {
+    master.gain.value = FLOOR; // the profile says muted (05 7.3 item 1): the graph exists, nothing is heard
+    armSuspend();
+  }
+}
+
+/** 05 7.3 item 2: after a mute the context runs 2 s more (the cut is a 20 ms ramp) and then suspends. */
+function armSuspend(): void {
+  clearTimeout(suspendTimer);
+  suspendTimer = globalThis.setTimeout(() => {
+    if (muted) suspend();
+  }, 2000) as unknown as number;
+}
+
+/** The gesture call: Begin, Continue, a Sound check press, a pointerdown while suspended (GV 12216-12217; 05 7.5 item 4). */
+export function unlockAudio(): void {
+  initAudio();
+  if (!muted) resume();
+}
+
+/* ---------- the dry run and the decision log (05 8.3) ---------- */
+export type LogWhy = 'muted' | 'inaudible' | 'gated' | 'ok';
+export interface LogRow {
+  t: number;
+  id: string;
+  x: number;
+  y: number;
+  a: number;
+  played: boolean;
+  why: LogWhy;
+}
+export const LOG_CAP = 200;
+const logRows: LogRow[] = [];
+let logSink: ((r: LogRow) => void) | null = null;
+/** A listener on every decision as it is logged (a test or the harness counts what the ring of 200 has forgotten). */
+export function setLogSink(fn: ((r: LogRow) => void) | null): void {
+  logSink = fn;
+}
+
+/** One decision of a cue or an ambience layer; the last LOG_CAP are kept. `t` is the frame stamp of the limiter. */
+export function logPush(id: string, x: number, y: number, a: number, played: boolean, why: LogWhy): void {
+  if (logRows.length >= LOG_CAP) logRows.shift();
+  const r: LogRow = { t: frameNow(), id, x, y, a, played, why };
+  logRows.push(r);
+  if (logSink) logSink(r);
+}
+export function auditLog(): readonly LogRow[] {
+  return logRows;
+}
+export function clearLog(): void {
+  logRows.length = 0;
+}
+/** The ambience's grain budget (05 1 item 2): a sliding second of the limiter's frame stamps. */
+export const AMB_GRAINS_PER_S = 6;
+const ambGrains: number[] = [];
+function ambGrainOk(): boolean {
+  const t = frameNow();
+  while (ambGrains.length && t - (ambGrains[0] as number) >= 1000) ambGrains.shift();
+  if (ambGrains.length >= AMB_GRAINS_PER_S) return false;
+  ambGrains.push(t);
+  return true;
+}
+/** tone() and grain() record to the dry run instead of creating nodes. */
+export function setDryRun(on: boolean): void {
+  dryRun = on;
+}
+export function isDryRun(): boolean {
+  return dryRun;
+}
+/** The calls the dry run counted (tone and grain), and zero them with reset. */
+export function dryCalls(reset = false): { tone: number; grain: number } {
+  const c = { ...dryCount };
+  if (reset) {
+    dryCount.tone = dryCount.grain = 0;
+    dryRing.length = 0;
+  }
+  return c;
+}
+function noteDry(n: DryNote): void {
+  if (dryRing.length >= DRY_NOTES) dryRing.shift();
+  dryRing.push(n);
+}
+/** The notes the dry run saw since the last clear (at most DRY_NOTES); a test reads pitches and gains from them. */
+export function dryNotes(clear = false): DryNote[] {
+  const l = dryRing.slice();
+  if (clear) dryRing.length = 0;
+  return l;
+}
+/** Every note scheduled inside `fn` starts `d` seconds later (a cue's `delay`, the second laugher 0.4 s after the first). */
+export function shifted(d: number, fn: () => void): void {
+  const was = shift;
+  shift += d;
+  try {
+    fn();
+  } finally {
+    shift = was;
+  }
 }
 
 /* ---------- state ---------- */
 export function getAC(): AudioContext | null {
   return AC;
 }
+/** True when notes may be scheduled: the graph is built, or the dry run stands in for it (05 8.3). */
 export function isOn(): boolean {
-  return audioOn;
+  return audioOn || dryRun;
 }
 export function isMuted(): boolean {
   return muted;
@@ -205,7 +331,7 @@ export function isMuted(): boolean {
 export function ctxState(): AudioContextState | 'none' {
   return AC ? AC.state : 'none';
 }
-/** The bus node a voice built outside tone() connects to (music.ts, debug/motifs.ts). */
+/** The bus node a voice built outside tone() connects to (music.ts and the board's motifs file). */
 export function busOf(name: BusName): GainNode | null {
   return buses ? buses[name] : null;
 }
@@ -243,11 +369,17 @@ export function envelope(g: AudioParam, t: number, vol: number, att: number, dur
 }
 
 /** Pan a node into a bus (and the shared reverb unless dry). GV 6104–6106 with the bus of 05 7.1. */
-export function connectVoice(src: AudioNode, bus: BusName, pan: number, dry: boolean): void {
+export function connectVoice(src: AudioNode, bus: BusName, pan: number, dry: boolean, sweep?: { to: number; t0: number; t1: number }): void {
   if (!AC || !buses) return;
   const dest = buses[bus];
   const p = AC.createStereoPanner ? AC.createStereoPanner() : null;
-  const tail: AudioNode = p ? (p.pan.value = clamp(pan, -1, 1), src.connect(p), p) : src;
+  if (p && sweep) {
+    p.pan.setValueAtTime(clamp(pan, -1, 1), sweep.t0);
+    p.pan.linearRampToValueAtTime(clamp(sweep.to, -1, 1), sweep.t1);
+  }
+  if (p && !sweep) p.pan.value = clamp(pan, -1, 1);
+  if (p) src.connect(p);
+  const tail: AudioNode = p ?? src;
   tail.connect(dest);
   // the music carries its own room after the bus; cues and ambience go 1:1 into the shared one (GV 6105)
   if (verb && !dry && bus !== 'music') tail.connect(verb);
@@ -255,8 +387,14 @@ export function connectVoice(src: AudioNode, bus: BusName, pan: number, dry: boo
 
 /** GV 6090–6113. */
 export function tone(freq: number, dur: number, o: ToneOpts = {}): void {
-  if (!audioOn || muted || !AC) return;
-  const t = AC.currentTime + (o.delay ?? 0);
+  if (!isOn() || muted) return; // GV 6092, with the dry run standing in for the graph (05 8.3)
+  if (dryRun) {
+    dryCount.tone++;
+    noteDry({ k: 'tone', f: freq, dur, gain: o.gain ?? 0.08, delay: (o.delay ?? 0) + shift, pan: o.pan ?? 0, bus: o.bus ?? 'cue', to: o.to });
+    return;
+  }
+  if (!AC) return;
+  const t = AC.currentTime + (o.delay ?? 0) + shift;
   const osc = AC.createOscillator();
   osc.type = o.type ?? 'sine';
   osc.frequency.setValueAtTime(freq, t);
@@ -265,7 +403,7 @@ export function tone(freq: number, dur: number, o: ToneOpts = {}): void {
   const vol = Math.max(0.0008, o.gain ?? 0.08);
   envelope(g.gain, t, vol, o.att ?? 0.045, dur, o.hold ?? 0);
   osc.connect(g);
-  connectVoice(g, o.bus ?? 'cue', o.pan ?? 0, !!o.dry);
+  connectVoice(g, o.bus ?? 'cue', o.pan ?? 0, !!o.dry, o.panTo !== undefined ? { to: o.panTo, t0: t, t1: t + dur } : undefined);
   if (o.wob) {
     const l = AC.createOscillator();
     l.frequency.value = o.wob;
@@ -290,9 +428,16 @@ export function toneAt(x: number, y: number, freq: number, dur: number, o: ToneO
 
 /** 05 2.3 item 5: one noise burst through a gliding bandpass, always dry, at most 0.12 s. */
 export function grain(dur: number, o: GrainOpts): void {
-  if (!audioOn || muted || !AC || !grainBuf) return;
+  if (!isOn() || muted) return;
+  if (o.bus === 'amb' && !ambGrainOk()) return; // the ambience may call grain() at most 6 times per real second (05 1 item 2)
+  if (dryRun) {
+    dryCount.grain++;
+    noteDry({ k: 'grain', f: o.f0, dur: Math.min(GRAIN_MAX, dur), gain: o.gain, delay: (o.delay ?? 0) + shift, pan: o.pan ?? 0, bus: o.bus ?? 'cue' });
+    return;
+  }
+  if (!AC || !grainBuf) return;
   const d = Math.min(GRAIN_MAX, Math.max(0.005, dur));
-  const t = AC.currentTime + (o.delay ?? 0);
+  const t = AC.currentTime + (o.delay ?? 0) + shift;
   const src = AC.createBufferSource();
   src.buffer = grainBuf;
   const bp = AC.createBiquadFilter();
@@ -339,6 +484,35 @@ export function setMasterLowpass(hz: number, tc = 2): void {
   if (!AC || !masterLP) return;
   masterLP.frequency.setTargetAtTime(hz, AC.currentTime, tc);
 }
+/**
+ * The two parameters the ambience may automate (05 2.2 item 4): the master lowpass and the shared reverb return (the music's own room
+ * stays on its motif). The ambience states the mix it wants every frame; a change eases with a 2 s time constant, never a jump.
+ */
+export function easeMix(lp: number, verb: number, tc = 2): void {
+  if (!AC || !masterLP || !verbGain) {
+    mixLp = lp; // no graph (dry run, tests): the state is still readable
+    mixVerb = verb;
+    return;
+  }
+  if (AC.currentTime < mixHoldUntil || (lp === mixLp && verb === mixVerb)) return;
+  mixLp = lp;
+  mixVerb = verb;
+  masterLP.frequency.setTargetAtTime(lp, AC.currentTime, tc);
+  verbGain.gain.setTargetAtTime(verb, AC.currentTime, tc);
+}
+/** The Sound check's `hush` (a cue with no tone): the mix moves to (lp, verb) for `secs`, then easeMix takes it back to what the weather wants. */
+export function holdMix(lp: number, verb: number, secs: number, tc = 0.5): void {
+  mixLp = lp;
+  mixVerb = verb;
+  if (!AC || !masterLP || !verbGain) return;
+  mixHoldUntil = AC.currentTime + secs;
+  masterLP.frequency.setTargetAtTime(lp, AC.currentTime, tc);
+  verbGain.gain.setTargetAtTime(verb, AC.currentTime, tc);
+}
+export function mixState(): { lowpass: number; verb: number } {
+  return { lowpass: mixLp, verb: mixVerb };
+}
+
 /** The `level` knob: musicBus 0.50 by default (05 7.1). */
 export function setMusicLevel(v: number): void {
   musicLevel = v;
@@ -365,10 +539,7 @@ export function setMuted(m: boolean): void {
   const now = AC.currentTime;
   if (m) {
     master.gain.setTargetAtTime(FLOOR, now, 0.02);
-    clearTimeout(suspendTimer);
-    suspendTimer = window.setTimeout(() => {
-      if (muted) suspend();
-    }, 2000);
+    armSuspend();
   } else {
     clearTimeout(suspendTimer);
     resume();
@@ -376,8 +547,9 @@ export function setMuted(m: boolean): void {
   }
 }
 export function suspend(): void {
-  if (AC && AC.state === 'running') void AC.suspend();
+  if (AC && AC.state === 'running') AC.suspend().catch(() => undefined);
 }
+/** GV 12199 and 05 7.5 item 4: a suspended or interrupted context (a hidden tab, an unplugged headset) comes back; a closed one stays closed. */
 export function resume(): void {
-  if (AC && AC.state !== 'running') void AC.resume();
+  if (AC && AC.state !== 'running') AC.resume().catch(() => undefined);
 }

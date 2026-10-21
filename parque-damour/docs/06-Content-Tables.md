@@ -982,7 +982,13 @@ The clock chip's day is `t('hud.day', { n, season: '@hud.season.<season>' })`: t
 | `sheet.options.on` | On | TODO |
 | `sheet.options.off` | Off | TODO |
 | `sheet.sound.title` | Sound check | TODO |
-| `sheet.sound.muted` | Sound is muted | TODO |
+| `sheet.sound.muted` | Sound is muted | El sonido está silenciado |
+| `sheet.sound.cues` | Cues | Efectos |
+| `sheet.sound.alts` | Kiss and splat: two recipes each | Beso y plaf: dos recetas de cada uno |
+| `sheet.sound.ambience` | Ambience | Ambiente |
+| `sheet.sound.birds` | Birds | Pájaros |
+| `sheet.sound.music` | Music | Música |
+| `sheet.sound.stop_music` | Stop music | Parar la música |
 
 The Visitors chip opens the sheet titled Census (register 3.10: "Visitors chip … opens Census"; 02 §12.2, §12.4); "visitors" is the chip's own word (`hud.visitors`, 16.3).
 
@@ -1079,7 +1085,7 @@ The five `sheet.options.pace*` rows are the Options sheet's **Park pace** settin
 | `toast.load_failed` | The saved park could not be read. Starting fresh. | TODO |
 | `toast.speed` | Speed {n}x | TODO |
 | `toast.paused` | Paused | TODO |
-| `toast.sound_check_later` | The sound check comes with the sound | TODO |
+| `toast.sound_music_dev` | The music buttons play in the dev build | Los botones de música suenan en la versión de desarrollo |
 | `confirm.new_park` | Start a new park? The current one is lost. | TODO |
 | `confirm.yes` | Yes | TODO |
 | `confirm.no` | No | TODO |

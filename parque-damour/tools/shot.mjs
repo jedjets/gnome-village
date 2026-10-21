@@ -24,6 +24,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import puppeteer from 'puppeteer-core';
 import { S5_ART_SCENES, S6_SCENES, s6Actions } from './shot-s6.mjs';
 import { S7_SCENES, s7Actions } from './shot-s7.mjs';
+import { S8_SCENES, s8Actions } from './shot-s8.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
@@ -162,6 +163,8 @@ const SCENE_SETS = {
   s6: S6_SCENES,
   // s7: the UI stage of S7 (07 S7.7 item 3): the Avatar picker, the possessed pigeon, Pompon and the flower seller, by real taps (tools/shot-s7.mjs)
   s7: S7_SCENES,
+  // s8: the dev Sound check sheet (07 S8.7 item 6) and the harness log of a press of every cue button (tools/shot-s8.mjs)
+  s8: S8_SCENES,
   s3: [
     { name: 'rail', turn: 0, z: 1.3 },
     { name: 'ghost-ok', turn: 0, z: 1.3, at: [24, 29], act: 'ghostOk' },
@@ -537,6 +540,7 @@ const ACTIONS = {
 
 Object.assign(ACTIONS, s6Actions({ tapTile, runBriefly, sleep, s5Pair, s5Until }));
 Object.assign(ACTIONS, s7Actions({ tapTile, runBriefly, sleep }));
+Object.assign(ACTIONS, s8Actions({ sleep }));
 
 function parseArgs(argv) {
   const out = { slice: 's0', url: '', days: 0, smoke: false };
