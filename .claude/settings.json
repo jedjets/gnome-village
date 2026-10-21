@@ -50,5 +50,9 @@
         "repo": "affaan-m/ECC"
       }
     }
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "f=\"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/ponytail-statusline.sh\"; [ -f \"$f\" ] && bash \"$f\""
   }
 }

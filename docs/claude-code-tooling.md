@@ -10,6 +10,8 @@ Committed in `.claude/`, so it loads automatically in every Claude Code session 
 | [lavish-axi](https://github.com/kunchenguid/lavish-axi) | skill `.claude/skills/lavish` (`skills-lock.json`) | on |
 | [rtk](https://github.com/rtk-ai/rtk) v1.0.1, OSS edition | `.claude/hooks/` (SessionStart install + Bash PreToolUse) | on when `rtk` is on PATH (cloud: auto-installed at session start, source build ~5 min if release downloads are blocked) |
 
+Status line: ponytail mode badge (`statusLine` in `.claude/settings.json`; blank if ponytail is not installed).
+
 Not installed: caveman (ponytail chosen instead), firstmate, BuildPartner.
 
 ## ECC / small-business on demand
