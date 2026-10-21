@@ -499,6 +499,22 @@ export function setVerb(g: number, tc = 0.05): void {
   verbGain.gain.setTargetAtTime(g, AC.currentTime, tc);
   musicVerbGain.gain.setTargetAtTime(g, AC.currentTime, tc);
 }
+/**
+ * S8 part B (05 5.4 item 4d, 5.5 item 2): the music room's return alone; the shared reverb of cues and ambience keeps its own return
+ * (setVerb moves both, as the board's knob does). Holds `from` until `t0` on the audio clock and ramps linearly to `to` at `t1`
+ * (`t1 <= t0`: a plain set to `to`). The game's switch ramps C's 0.30 to B's 0.45 or back over the 2 s crossfade.
+ */
+export function rampMusicRoom(from: number, to: number, t0: number, t1: number): void {
+  if (!AC || !musicVerbGain) return;
+  const g = musicVerbGain.gain;
+  g.cancelScheduledValues(Math.min(t0, AC.currentTime));
+  if (t1 <= t0) {
+    g.setValueAtTime(to, t0);
+    return;
+  }
+  g.setValueAtTime(from, t0);
+  g.linearRampToValueAtTime(to, t1);
+}
 export function setMasterLowpass(hz: number, tc = 2): void {
   if (!AC || !masterLP) return;
   masterLP.frequency.setTargetAtTime(hz, AC.currentTime, tc);

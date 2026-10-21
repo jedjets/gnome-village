@@ -1,6 +1,7 @@
 // src/debug/music-board.ts
 // The Music Gate board (05 section 6): three motifs on the real engine, nine knobs each, both variants, the cue bed, Choose.
-// Third Vite entry; never imported by main.ts (05 6.1 item 2). NEW.
+// Third Vite entry; never imported by main.ts (05 6.1 item 2). NEW. Since S8 part B (05 6.5 item 3e) it plays A, the retired waltz, from
+// src/debug/motifs.ts and B and C from src/audio/music.ts: the game's own motifs, in a fixed variant (no state, no clock rule).
 // window.__PDAUDIO (rms, peak on an AnalyserNode at master) is installed in DEV or under #debug so tools/audio-smoke.mjs can measure.
 import { vrng } from '../core/rng.ts';
 import { setViewport } from '../render/camera.ts';
@@ -9,40 +10,21 @@ import {
 } from '../audio/engine.ts';
 import { setNow } from '../audio/limiter.ts';
 import { cue, CUE_IDS, type CueId } from '../audio/cues.ts';
-import { MUSIC_KNOBS, musicInput, musicState, setMusicKnob, startMusic, stopMusic, updateMusic, isPlaying, type KnobName } from '../audio/music.ts';
-import { MOTIFS, type Motif, type Variant } from './motifs.ts';
+import { MOTIFS, musicState, updateMusic, type Motif, type Variant } from '../audio/music.ts';
+import { MOTIF_A, waltzPlaying, waltzState } from './motifs.ts';
 import { getProfile, setMusicPick } from '../save/store.ts';
 import { $, ageToast, toast } from '../ui/dom.ts';
 import { t } from '../ui/i18n.ts';
 
 type Letter = 'A' | 'B' | 'C';
 const LETTERS: Letter[] = ['A', 'B', 'C'];
+type KnobName = 'tempo' | 'detune' | 'brightness' | 'reverb' | 'density' | 'bass' | 'chords' | 'vibrato' | 'level';
 const KNOBS: KnobName[] = ['tempo', 'detune', 'brightness', 'reverb', 'density', 'bass', 'chords', 'vibrato', 'level'];
 const STEP: Record<KnobName, number> = { tempo: 0.01, detune: 0.5, brightness: 10, reverb: 0.01, density: 0.01, bass: 0.001, chords: 0.0005, vibrato: 0.01, level: 0.01 };
 const NAME_KEY: Record<Letter, string> = { A: 'gate.motif_name.A', B: 'gate.motif_name.B', C: 'gate.motif_name.C' };
 const HEAD_KEY: Record<Letter, string> = { A: 'gate.motif.A', B: 'gate.motif.B', C: 'gate.motif.C' };
 
-/** Motif A is the game's own music.ts behind the Motif interface; a variant change while playing is a live 5.6 state change. */
-const motifA: Motif = {
-  id: 'A',
-  name: 'Musette waltz',
-  knobs: MUSIC_KNOBS,
-  set: (k, v) => setMusicKnob(k as KnobName, v),
-  play(v) {
-    musicInput.featuredStage = v === 'rising' ? 3 : 0;
-    musicInput.affinityDelta = v === 'rising' ? 0.01 : 0;
-    musicInput.parted = v === 'parted';
-    musicInput.happily = false;
-    musicInput.fireworks = false;
-    musicInput.light = 1;
-    musicInput.buskerPan = null;
-    if (!isPlaying()) startMusic(0.6);
-  },
-  stop: stopMusic,
-  update: updateMusic,
-  variant: () => (isPlaying() ? (musicInput.parted ? 'parted' : 'rising') : null),
-};
-const motifs: Record<Letter, Motif> = { A: motifA, B: MOTIFS.B, C: MOTIFS.C };
+const motifs: Record<Letter, Motif> = { A: MOTIF_A, B: MOTIFS.B, C: MOTIFS.C };
 
 let selected: Letter = 'A';
 const readouts: Partial<Record<Letter, HTMLPreElement>> = {};
@@ -100,7 +82,8 @@ function updateReadout(L: Letter): void {
     if (out) out.value = fmt(knobs[k] as number);
   }
   const data: Record<string, unknown> = { motif: L, variant: m.variant(), knobs };
-  if (L === 'A') data.state = musicState();
+  if (L === 'A') data.state = waltzState();
+  else if (m.variant()) data.state = musicState();
   const pre = readouts[L];
   if (pre) pre.textContent = JSON.stringify(data, null, 1);
 }
@@ -222,7 +205,7 @@ function fitView(): void {
 /* ---------- the measuring hook (tools/audio-smoke.mjs) ---------- */
 type Hook = {
   rms(): number; cueRms(): number; peak(): number; peakHold(): number; outPeakHold(): number; resetPeak(): void;
-  state(): { ctx: AudioContextState | 'none'; on: boolean; music: ReturnType<typeof musicState>; playing: Record<Letter, Variant | null> };
+  state(): { ctx: AudioContextState | 'none'; on: boolean; music: ReturnType<typeof musicState>; waltz: ReturnType<typeof waltzState>; playing: Record<Letter, Variant | null> };
 };
 let hookTick: (() => void) | null = null;
 function installHook(): void {
@@ -261,7 +244,7 @@ function installHook(): void {
     outPeakHold: () => outHold,
     resetPeak: () => { hold = 0; outHold = 0; },
     state: () => ({
-      ctx: ctxState(), on: isOn(), music: musicState(),
+      ctx: ctxState(), on: isOn(), music: musicState(), waltz: waltzState(),
       playing: { A: motifs.A.variant(), B: motifs.B.variant(), C: motifs.C.variant() },
     }),
   };
@@ -274,10 +257,11 @@ function frame(ts: number): void {
   const dtr = last ? Math.min(0.05, (ts - last) / 1000) : 0;
   last = ts;
   setNow(ts); // the limiter's real-time stamp (05 2.4 item 1); S8 hands it the loop's frame time
-  for (const L of LETTERS) motifs[L].update();
+  updateMusic(dtr); // B and C, the game's scheduler
+  MOTIF_A.update();
   if (hookTick) hookTick();
   ageToast(dtr);
-  if (isPlaying()) updateReadout('A');
+  if (waltzPlaying()) updateReadout('A');
 }
 
 build();

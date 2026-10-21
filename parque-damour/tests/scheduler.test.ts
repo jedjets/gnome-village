@@ -5,16 +5,23 @@
 // stamp set by hand) and a fake audibleGain (setAmbienceEnv), the decisions read from the log of 05 8.3, and the dry run of 05 8.3: a 3-day run
 // at 8x with sound on ends with rngN and the state hash of the silent run and 200 rows in the log (that test sits in cues.test.ts, which binds the
 // cues to the bus). No AudioContext, no device.
+// S8 part B (08 2.8, 05 5.4 and 5.8; 07 S8.6 steps 7 and 9, 12): the last block is the music's scheduler on the dry run's fake context clock: the clock
+// rule at f 0.19, 0.20, 0.79 and 0.80, a switch only at a phrase start of the playing motif with its 2 s ramps and the outgoing motif silent after T + 2 s,
+// one switch at a time, no gap in the scheduled notes, the same notes at speed 0, 1 and 8, mute (nothing scheduled, nothing in a burst on unmute), and a
+// 3-day run at 8x with the music playing that ends with rngN and the state hash of the silent run.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { T } from '../src/core/clock.ts';
-import { SIM_DT, newPark, simulate } from '../src/core/loop.ts';
-import { clearListeners } from '../src/core/events.ts';
+import { SIM_DT, newPark, setSpeed, simulate } from '../src/core/loop.ts';
+import { enqueue, type CommandInput } from '../src/core/commands.ts';
+import { clearListeners, drain } from '../src/core/events.ts';
 import { rngN, seedVisual } from '../src/core/rng.ts';
 import { W } from '../src/core/weather.ts';
 import { ICE, I, props } from '../src/world/grid.ts';
 import { effects, type Effect } from '../src/play/abilities.ts';
+import { bindProgression, setProgress } from '../src/play/progression.ts';
+import { stateHash } from '../src/save/store.ts';
 import { spawnVisitor, visitors } from '../src/entities/visitor.ts';
 import { pairs, type Pair } from '../src/entities/romance.ts';
 import { CTR, cam, centreOn, setViewport } from '../src/render/camera.ts';
@@ -25,6 +32,9 @@ import { resetGaps, setNow } from '../src/audio/limiter.ts';
 import { resetCueSources } from '../src/audio/cues-bind.ts';
 import { BELLS, BURSTS, ambienceTimers, burst, centre, resetAmbience, setAmbienceEnv, updateAmbience } from '../src/audio/ambience.ts';
 import { CHORUS, VESPERS, VOICE_NAMES, birdTimers, resetBirds, singFrom, songChance, updateBirds } from '../src/audio/birds.ts';
+import { bindMusicState, resetMusicState } from '../src/audio/music-state.ts';
+import { XFADE_S, isPhraseStart, shouldSwitch } from '../src/audio/music-switch.ts';
+import { clearMusicLog, musicLog, musicState, noteLog, previewMusic, startMusic, stopMusic, updateMusic } from '../src/audio/music.ts';
 import '../src/play/tools.ts';
 
 let ms = 0;
@@ -581,4 +591,285 @@ describe('src/audio obeys the rules of 05 1 (hard rules 1 to 3)', () => {
       expect(src, f).not.toMatch(/import \{[^}]*\b(enqueue|applyNow|setTick|setSpeed|simulate)\b[^}]*\} from/);
     }
   });
+});
+
+/* ====================================================================================================================
+   The music scheduler (05 5.4, 5.8): the clock rule, the switch at a phrase start, the 2 s crossfade, mute, 8x
+   ==================================================================================================================== */
+describe('the music scheduler on the fake context clock (05 5.4 and 5.8; 07 S8.6 steps 7 and 9; 08 2.8)', () => {
+  type Note = ReturnType<typeof noteLog>[number];
+  const mrun = (sec: number, each?: () => void): void => {
+    for (let i = 0; i < Math.round(sec * 60); i++) {
+      each?.();
+      updateMusic(1 / 60);
+    }
+  };
+  const mbars = (m: 'B' | 'C') => musicLog().filter((r) => r.kind === 'bar' && r.motif === m);
+  const mrow = (m: 'B' | 'C', n: number) => mbars(m).find((r) => r.bar === n);
+  /** Run until bar `n` of `m` has been built (the bar is built a fraction of a second before it starts). */
+  const muntil = (m: 'B' | 'C', n: number): void => {
+    for (let i = 0; i < 60 * 600 && !mrow(m, n); i++) updateMusic(1 / 60);
+    expect(mrow(m, n), `${m} bar ${n}`).toBeDefined();
+  };
+  const switches = () => musicLog().filter((r) => r.kind === 'switch');
+  const starts = (m: 'B' | 'C', from: number): Note[] => noteLog().filter((n) => n.motif === m && n.t >= from);
+
+  beforeEach(() => {
+    stopMusic();
+    clearMusicLog();
+    resetMusicState();
+    bindMusicState();
+    seedVisual(7);
+    T.speed = 1;
+  });
+  afterEach(() => {
+    stopMusic();
+    setMuted(false);
+  });
+
+  it('startMusic starts the wanted motif at once with no crossfade: f 0.19 B, 0.20 C, 0.79 C, 0.80 B; a new park (0.30) starts with C, Continue at night (0.90) with B', () => {
+    for (const [f, want] of [[0.19, 'B'], [0.2, 'C'], [0.79, 'C'], [0.8, 'B'], [0.3, 'C'], [0.9, 'B']] as const) {
+      sky(f, 1);
+      clearMusicLog();
+      startMusic();
+      expect(musicState()).toMatchObject({ motif: want, playing: true, xfade: null });
+      mrun(1);
+      expect(noteLog().length).toBeGreaterThan(0);
+      expect(noteLog().every((n) => n.motif === want)).toBe(true);
+      expect(musicLog().filter((r) => r.kind === 'ramp' || r.kind === 'switch')).toHaveLength(0);
+      expect(musicLog()[0]).toMatchObject({ kind: 'start', motif: want });
+      stopMusic();
+    }
+  });
+
+  it('C to B: the clock crosses 0.80 during the first bar of a C phrase, nothing changes until the next phrase start T, 2 bars later, and B\'s first note is at T exactly', () => {
+    sky(0.79, 1);
+    startMusic();
+    muntil('C', 2); // bar 2 is a phrase start of C (2 bars); it has just been built, so this is its first bar
+    sky(0.8, 1);
+    mrun(14);
+    const sw = switches();
+    expect(sw).toHaveLength(1);
+    const T0 = (sw[0] as { t: number }).t;
+    expect(isPhraseStart('C', (mrow('C', 4) as { bar: number }).bar)).toBe(true);
+    expect(T0).toBe((mrow('C', 4) as { t: number }).t); // the start of bar 4: two bars after bar 2, not bar 3
+    expect(T0 - (mrow('C', 2) as { t: number }).t).toBeCloseTo(((mrow('C', 3) as { t: number }).t - (mrow('C', 2) as { t: number }).t) * 2, 9);
+    expect(mbars('B').filter((r) => r.t < T0)).toHaveLength(0); // no B bar before T
+    expect(starts('B', 0).every((n) => n.t >= T0)).toBe(true);
+    expect(Math.min(...starts('B', 0).map((n) => n.t))).toBe(T0);
+    expect(mrow('B', 0)).toMatchObject({ t: T0, state: 'night', variant: 'rising', bpm: 84 });
+    expect(musicState()).toMatchObject({ motif: 'B', xfade: null });
+  });
+
+  it('B to C: the clock crosses 0.20 during the first bar of a B phrase, the switch waits for the phrase start 4 bars later, and C\'s first note is at T exactly', () => {
+    sky(0.19, 1);
+    startMusic();
+    muntil('B', 4);
+    sky(0.2, 1);
+    mrun(20);
+    const sw = switches();
+    expect(sw).toHaveLength(1);
+    const T0 = (sw[0] as { t: number }).t;
+    expect(T0).toBe((mrow('B', 8) as { t: number }).t); // bars 5, 6 and 7 of B are not phrase starts
+    expect(mbars('C').filter((r) => r.t < T0)).toHaveLength(0);
+    expect(Math.min(...starts('C', 0).map((n) => n.t))).toBe(T0);
+    expect(mrow('C', 0)).toMatchObject({ t: T0, variant: 'rising' });
+    expect(sw[0]).toMatchObject({ motif: 'B', other: 'C' });
+  });
+
+  it('a change that is gone again before the phrase start switches nothing (the clock is read once a bar)', () => {
+    sky(0.79, 1);
+    startMusic();
+    muntil('C', 2);
+    sky(0.8, 1);
+    muntil('C', 3); // bar 3 saw the wish (not a phrase start)
+    sky(0.79, 1); // and it is gone before bar 4 is built
+    mrun(20);
+    expect(switches()).toHaveLength(0);
+    expect(musicState().motif).toBe('C');
+  });
+
+  it('the ramps: the incoming gain 0 to 1 and the outgoing 1 to 0 over [T, T + 2 s], the room 0.30 to 0.45 (C to B) or 0.45 to 0.30 (B to C), all linear and starting at T', () => {
+    expect(XFADE_S).toBe(2);
+    sky(0.79, 1);
+    startMusic();
+    muntil('C', 2);
+    sky(0.8, 1);
+    mrun(12);
+    const T0 = (switches()[0] as { t: number }).t;
+    const ramps = musicLog().filter((r) => r.kind === 'ramp');
+    expect(ramps.map((r) => [r.target, r.motif, r.from, r.to, r.t, r.t1])).toEqual([
+      ['gain', 'B', 0, 1, T0, T0 + 2], ['gain', 'C', 1, 0, T0, T0 + 2], ['room', 'B', 0.3, 0.45, T0, T0 + 2],
+    ]);
+    // back again: B to C at the next B phrase start
+    sky(0.2, 1);
+    mrun(20);
+    const back = switches();
+    expect(back).toHaveLength(2);
+    const T1 = (back[1] as { t: number }).t;
+    expect(musicLog().filter((r) => r.kind === 'ramp' && r.t === T1).map((r) => [r.target, r.motif, r.from, r.to, (r.t1 as number) - r.t])).toEqual([
+      ['gain', 'C', 0, 1, 2], ['gain', 'B', 1, 0, 2], ['room', 'C', 0.45, 0.3, 2],
+    ]);
+  });
+
+  it('the outgoing motif schedules nothing at or after T + 2 s, halts then, and the scheduled notes have no gap across the switch', () => {
+    sky(0.79, 1);
+    startMusic();
+    muntil('C', 2);
+    sky(0.8, 1);
+    mrun(12);
+    const T0 = (switches()[0] as { t: number }).t;
+    expect(Math.max(...noteLog().filter((n) => n.motif === 'C').map((n) => n.t))).toBeLessThan(T0 + 2);
+    expect(mbars('C').every((r) => r.t < T0 + 2)).toBe(true);
+    const halt = musicLog().find((r) => r.kind === 'halt') as { t: number; motif: string };
+    expect(halt.motif).toBe('C');
+    expect(halt.t).toBeGreaterThanOrEqual(T0 + 2);
+    expect(halt.t).toBeLessThan(T0 + 2 + 0.1);
+    // no gap: consecutive onsets from 2 s before T to 4 s after are at most a beat of B apart
+    const onsets = [...new Set(noteLog().map((n) => n.t))].filter((t) => t >= T0 - 2 && t <= T0 + 4).sort((a, b) => a - b);
+    expect(onsets.length).toBeGreaterThan(8);
+    for (let i = 1; i < onsets.length; i++) expect((onsets[i] as number) - (onsets[i - 1] as number)).toBeLessThanOrEqual(0.8);
+  });
+
+  it('one switch at a time: a wish during the crossfade waits for it to end and for the incoming motif\'s own phrase start', () => {
+    expect(shouldSwitch('C', 'B', 2, false)).toBe(true);
+    expect(shouldSwitch('C', 'B', 3, false)).toBe(false); // not a phrase start
+    expect(shouldSwitch('C', 'B', 2, true)).toBe(false); // a switch is running
+    expect(shouldSwitch('C', 'C', 2, false)).toBe(false); // nothing wanted
+    expect(shouldSwitch('B', 'C', 4, false)).toBe(true);
+    expect(shouldSwitch('B', 'C', 2, false)).toBe(false);
+    sky(0.79, 1);
+    startMusic();
+    muntil('C', 2);
+    sky(0.8, 1);
+    for (let i = 0; i < 60 * 30 && switches().length === 0; i++) updateMusic(1 / 60);
+    const T0 = (switches()[0] as { t: number }).t;
+    sky(0.79, 1); // the clock wants C again, at once
+    mrun(30);
+    const sw = switches();
+    expect(sw).toHaveLength(2);
+    expect((sw[1] as { t: number }).t).toBeGreaterThanOrEqual(T0 + 2); // after the first crossfade
+    expect((sw[1] as { t: number }).t).toBe((mrow('B', 4) as { t: number }).t); // at B's first phrase start after T (bar 4)
+    expect(sw[1]).toMatchObject({ motif: 'B', other: 'C' });
+  });
+
+  it('a fixed variant (the board, the Sound check) ignores the clock rule and the state', () => {
+    sky(0.9, 1);
+    previewMusic('C', 'parted');
+    mrun(3);
+    sky(0.5, 1);
+    mrun(20);
+    expect(switches()).toHaveLength(0);
+    expect(musicState()).toMatchObject({ motif: 'C', variant: 'parted', fixed: true });
+    expect(mbars('C').every((r) => r.bpm === 96 && r.state === 'fixed')).toBe(true);
+    previewMusic('B', 'rising'); // another button: the first stops at once
+    mrun(3);
+    expect(musicState()).toMatchObject({ motif: 'B', variant: 'rising', fixed: true });
+  });
+
+  it('music is real time: the notes are the same at speed 0 (paused), 1 and 8 (05 1 item 3, 5.8)', () => {
+    const play = (speed: number): Note[] => {
+      stopMusic();
+      clearMusicLog();
+      seedVisual(11);
+      sky(0.5, 1);
+      T.speed = speed;
+      startMusic();
+      mrun(20);
+      return noteLog().slice();
+    };
+    const paused = play(0);
+    expect(paused.length).toBeGreaterThan(30);
+    expect(play(1)).toEqual(paused);
+    expect(play(8)).toEqual(paused);
+  });
+
+  it('mute: a muted frame schedules nothing, the music returns at the next bar and nothing is played in a burst on unmute (05 7.3 items 2 and 3)', () => {
+    sky(0.5, 1);
+    startMusic();
+    mrun(5);
+    const before = noteLog().length;
+    const sim = rngN();
+    setMuted(true);
+    mrun(10);
+    expect(noteLog().length).toBe(before); // nothing scheduled
+    expect(musicState().playing).toBe(true); // still the lead
+    setMuted(false);
+    clearMusicLog();
+    mrun(0.05);
+    const unmuted = musicLog().length ? (musicLog()[0] as { t: number }).t : 0;
+    mrun(4.5);
+    const resumed = noteLog().slice();
+    expect(resumed.length).toBeGreaterThan(8);
+    const barStarts = new Set(musicLog().filter((r) => r.kind === 'bar').map((r) => r.t));
+    expect(barStarts.has((resumed[0] as { t: number }).t)).toBe(true); // the first note after the mute opens a bar
+    expect(unmuted).toBeGreaterThanOrEqual(0);
+    const groups = new Map<number, number>();
+    for (const n of resumed) groups.set(n.t, (groups.get(n.t) ?? 0) + 1);
+    expect(Math.max(...groups.values())).toBeLessThanOrEqual(5); // bass, three comp notes and the clarinet at most: no backlog dumped at one instant
+    expect(rngN()).toBe(sim);
+  });
+
+  it('mute during a wish: the switch still happens at a phrase start after unmute, and the old motif halts after its 2 s', () => {
+    sky(0.79, 1);
+    startMusic();
+    muntil('C', 2);
+    setMuted(true);
+    sky(0.8, 1);
+    mrun(6);
+    expect(switches()).toHaveLength(0); // nothing is built while muted
+    setMuted(false);
+    mrun(14);
+    expect(switches()).toHaveLength(1);
+    expect(musicLog().some((r) => r.kind === 'halt' && r.motif === 'C')).toBe(true);
+    expect(musicState()).toMatchObject({ motif: 'B', xfade: null });
+  });
+
+  it('a 3-day run at 8x with the music playing ends with rngN and the state hash of the silent run; it switched at dusk and at dawn, each at a phrase start', () => {
+    const fx = JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures', 'det-s6.json'), 'utf8')) as {
+      seed: number; steps: number; progress?: { cp: number; mp: number }; commands: Array<{ tick: number } & CommandInput>;
+    };
+    const by = new Map<number, Array<{ tick: number } & CommandInput>>();
+    for (const c of fx.commands) by.set(c.tick, [...(by.get(c.tick) ?? []), c]);
+    const play = (music: boolean): { rngN: number; hash: number; seq: string; atPhrase: boolean } => {
+      clearListeners();
+      bindProgression();
+      bindMusicState();
+      stopMusic();
+      clearMusicLog();
+      resetMusicState();
+      newPark(fx.seed);
+      setProgress({ cp: fx.progress?.cp ?? 0, mp: fx.progress?.mp ?? 0 });
+      setSpeed(8);
+      setDryRun(music);
+      seedVisual(1);
+      setViewport(390, 844, 1);
+      cam.z = 0.8;
+      centreOn(CTR, CTR);
+      if (music) startMusic();
+      for (let step = 1; step <= fx.steps; step++) {
+        for (const c of by.get(step) ?? []) enqueue({ side: c.side, kind: c.kind, payload: c.payload } as CommandInput);
+        simulate(SIM_DT, 3);
+        if (step % 8 !== 0) continue;
+        drain(3);
+        if (music) updateMusic(1 / 60); // a frame at 8x: eight steps
+      }
+      const sw = switches();
+      const bars = musicLog().filter((r) => r.kind === 'bar');
+      const atPhrase = sw.every((r) => bars.some((b) => b.motif === r.motif && b.t === r.t && isPhraseStart(r.motif, b.bar)));
+      const out = { rngN: rngN(), hash: stateHash(), seq: sw.map((r) => r.motif + r.other).join(' '), atPhrase };
+      setDryRun(false);
+      stopMusic();
+      return out;
+    };
+    const silent = play(false);
+    const loud = play(true);
+    expect(loud.rngN).toBe(silent.rngN);
+    expect(loud.hash).toBe(silent.hash);
+    expect(loud.atPhrase).toBe(true);
+    // a day lasts 45 s at 8x, so the music crosses twice a day (05 5.4 item 8): C to B at dusk, B to C at dawn, alternating
+    const seq = loud.seq.split(' ');
+    expect(seq.length).toBeGreaterThanOrEqual(5);
+    seq.forEach((s, i) => expect(s).toBe(i % 2 === 0 ? 'CB' : 'BC'));
+  }, 240_000);
 });

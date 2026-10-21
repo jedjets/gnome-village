@@ -32,7 +32,10 @@
 // Continue (the first gesture) unlock the audio context and bind the cues to the event bus; every frame hands the limiter the frame stamp and
 // runs the cue sources, the ambience and the songbirds in real seconds, paused or not (03 4.1 item 8); a pointerdown on the canvas resumes a
 // suspended context; visibilitychange suspends on hidden and resumes on shown unless muted (GV 12199); any button press sounds ui_tap; a New
-// resets the ambience's timers. The Sound check's music buttons reach the board's music through the dev harness's audio group.
+// resets the ambience's timers.
+// S8 part B (05 5.4, 5.8; 07 S8.6 steps 7 to 9): once the park is up (a new one or the saved one, so the clock rule sees its f) startMusic starts the
+// wanted motif with its first bar 1.5 s after the tap; every frame updateMusic schedules the look-ahead, paused or not; a New park restarts it; the
+// Sound check's music buttons play the game's own B and C in a fixed variant. The retired waltz is the board's and never reaches this file.
 import { newPark as loopNewPark, now as frameNow, onFrame, onFrameEnd, setSpeed, start } from './core/loop.ts';
 import { T } from './core/clock.ts';
 import { AVATAR_SIDE, enqueue } from './core/commands.ts';
@@ -69,6 +72,7 @@ import { cue } from './audio/cues.ts';
 import { bindCues, resetCueSources, updateCueSources } from './audio/cues-bind.ts';
 import { resetAmbience, updateAmbience } from './audio/ambience.ts';
 import { resetBirds, updateBirds } from './audio/birds.ts';
+import { previewMusic, restartMusic, startMusic, stopMusic, updateMusic } from './audio/music.ts';
 
 // the park save keeps the feed's 40 lines (register 3.11); save/ may not import ui/, so the shell hands it the reader and the writer (S5)
 setFeedIO({ get: () => feedState() as unknown as Array<Record<string, unknown>>, set: (s) => setFeedState(s as unknown as FeedEntry[]) });
@@ -292,12 +296,8 @@ let live = false; // a park is on screen: the autosave may write (never from the
 
 type Start = { kind: 'new'; seed: number } | { kind: 'load'; save: ParkSaveV1 };
 
-/** The Sound check's music buttons: until the Music stage moves B and C into the game they reach the board's motif code through the dev harness. */
-function devMusic(): MusicHooks | undefined {
-  type Board = { board?: MusicHooks['play']; boardStop?: MusicHooks['stop'] };
-  const m = (window as unknown as { __PD?: { audio?: { music?: Board } } }).__PD?.audio?.music;
-  return m?.board && m.boardStop ? { play: m.board, stop: m.boardStop } : undefined;
-}
+/** The Sound check's music buttons: the game's own B and C in a fixed variant, and stop (05 2.6 item 2). */
+const soundCheckMusic = (): MusicHooks => ({ play: previewMusic, stop: stopMusic });
 
 function begin(canvas: HTMLCanvasElement, from: Start, halt: boolean): void {
   if (live) return; // one start per page: the rail, the HUD and the watchers are wired once (intro.ts answers once as well)
@@ -324,11 +324,12 @@ function begin(canvas: HTMLCanvasElement, from: Start, halt: boolean): void {
     beginPace();
   }
   live = true;
+  startMusic({ delayS: 1.5 }); // the wanted motif of this park's clock, 1.5 s after the tap, fading in over 4 s (05 5.8 item 1)
   setupInput(canvas, { onTap, toolClass: gesture, onStrokeStart, onPaint });
   canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
   canvas.addEventListener('pointerup', onPointerUp, { passive: true });
   canvas.addEventListener('pointercancel', onPointerUp, { passive: true });
-  initSheets({ perfOn: () => FT.on, setPerf: setPerfOn, music: devMusic }); // the Options sheet's dev perf entry (03 2.1: ui/ may not import debug/)
+  initSheets({ perfOn: () => FT.on, setPerf: setPerfOn, music: soundCheckMusic }); // the Options sheet's dev perf entry (03 2.1: ui/ may not import debug/)
   initFeed();
   setFollowLookup(followPos);
   buildRail({ onNew: askNew });
@@ -343,6 +344,7 @@ function begin(canvas: HTMLCanvasElement, from: Start, halt: boolean): void {
     if (ev.params?.kind !== 'park.new') return;
     clearPark();
     afterNewPark(parkSeed());
+    restartMusic(); // 05 5.8 item 5: New stops the music; the new park (f 0.30) starts it again
     toast('toast.new_park');
   });
   setPerfCounts(() => ({
@@ -380,6 +382,7 @@ function begin(canvas: HTMLCanvasElement, from: Start, halt: boolean): void {
     updateCueSources(dtr); // 03 4.1 item 8: the triggers read from state, the ambience, the songbirds; real seconds, paused or not
     updateAmbience(dtr);
     updateBirds(dtr);
+    updateMusic(dtr); // 05 5.8 item 2: the look-ahead of the playing motif (both while they cross); real seconds, paused or not
     stepParticles(Math.min(0.05, dtr) * T.speed); // item 7: visual stream, sim seconds
     stepCamera(dtr); // item 9: turnStep, keepCentre, followStep
     ambientFx(dtr); // item 9: the fountains' spray and rings; nothing while paused

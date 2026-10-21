@@ -18,13 +18,15 @@
 // S7: the Park group gains mode (read only: MODE, PLAYER, the avatar) and avatarEnter, avatarTap and avatarLeave, which enqueue the logged
 // avatar commands as the shell will (the picker, a tap on the world, the Creator button).
 // S8 part A (05 8.3): the Audio group `audio`: the cue list, play, the decision log (the last 200), dryRun, state, music and ambience. The dry run
-// is how headless scripts run sound without a device: tone() and grain() count their calls and no node is made. `music.board(motif, variant)` and
-// `boardStop()` play the board's motifs B and C (src/debug/motifs.ts) for the Sound check's music buttons until the Music stage moves them into the
-// game; `music.motif` is the clock rule of 05 5.4 (C in [0.20, 0.80), else B), the Music stage replaces it with wantedMotif(f).
+// is how headless scripts run sound without a device: tone() and grain() count their calls and no node is made.
+// S8 part B: `music` is the game's own (src/audio/music.ts): `motif`, `variant`, `bar` and `tempo` of the playing motif, `wanted` (the clock rule of
+// 05 5.4, wantedMotif(f)), `state()` a line, `log()` the conductor's decisions (starts, bars, the switch and its ramps) and `notes()` the notes it
+// scheduled, which are the proxies a headless run has for "heard"; under dryRun(true) the conductor runs on a fake context clock that `tick(dt)`
+// advances. `play(motif, variant)` is the Sound check's fixed variant. The board's waltz (src/debug/motifs.ts) is not reachable from the game.
 // S6: the State group gains effects (the live list), the Park group ability (enqueues the logged `ability` command, as the rail will) and setProgress (the points a fixture starts from).
 import { T } from '../core/clock.ts';
 import { seedVisual, rngN } from '../core/rng.ts';
-import { SIM_DT, SP, onFrame, setSpeed, simulate, tick } from '../core/loop.ts';
+import { SIM_DT, SP, setSpeed, simulate, tick } from '../core/loop.ts';
 import { AVATAR_SIDE, applyNow, enqueue, log, replay, type AbilityId, type Hit, type Pace, type Target } from '../core/commands.ts';
 import { drain } from '../core/events.ts';
 import { W, type WeatherKind } from '../core/weather.ts';
@@ -49,9 +51,8 @@ import { auditLog, ctxState, dryCalls, duckDb, isMuted, isOn, mixState, setDryRu
 import { CUE_IDS, cue, type CueId } from '../audio/cues.ts';
 import { ambienceTimers, centre } from '../audio/ambience.ts';
 import { birdTimers } from '../audio/birds.ts';
-import { MUSIC_PICK } from '../audio/music.ts';
+import { clearMusicLog, isPlaying, musicLog, musicState, noteLog, previewMusic, startMusic, stopMusic, updateMusic, wantedMotif } from '../audio/music.ts';
 import { viewCentreTile } from '../render/camera.ts';
-import { MOTIFS, type Variant } from './motifs.ts';
 
 export type HarnessApi = { newPark: (seed: number) => void };
 
@@ -155,52 +156,44 @@ export function buildHarness(api: HarnessApi) {
   return { ...state, ...stepping, ...commands, ...picking, ...save, ...park, ...render, ...audioGroup(), ...screenshots, ...meta };
 }
 
-/** The board motifs run on the frame clock while a Sound check button holds one (the Music stage drops this with debug/motifs.ts). */
-let boardWired = false;
-function playBoard(motif: 'B' | 'C', variant: Variant): void {
-  unlockAudio();
-  if (!boardWired) {
-    boardWired = true;
-    onFrame(() => {
-      MOTIFS.B.update();
-      MOTIFS.C.update();
-    });
-  }
-  const other = motif === 'B' ? MOTIFS.C : MOTIFS.B;
-  other.stop(); // one context, one musicBus (05 6.4 item 3)
-  MOTIFS[motif].play(variant);
-}
-function stopBoard(): void {
-  MOTIFS.B.stop();
-  MOTIFS.C.stop();
-}
-/** The clock rule of 05 5.4 item 1 (ADVISED hours; the Music stage owns wantedMotif). */
-const DAY_FROM = 0.2, DAY_TO = 0.8;
-function clockMotif(): 'B' | 'C' {
-  return T.f >= DAY_FROM && T.f < DAY_TO ? MUSIC_PICK.day : MUSIC_PICK.night;
-}
-
 /** 05 8.3: `window.__PD.audio`. */
 function audioGroup() {
   const music = {
-    /** Which board motif plays ('B' or 'C'), else the clock rule's. */
+    /** The playing motif ('B' or 'C'), else the one the clock wants. */
     get motif(): 'B' | 'C' {
-      return MOTIFS.B.variant() ? 'B' : MOTIFS.C.variant() ? 'C' : clockMotif();
+      return musicState().motif ?? wantedMotif(T.f);
     },
-    get variant(): Variant {
-      return MOTIFS.B.variant() ?? MOTIFS.C.variant() ?? 'rising';
+    get variant(): 'rising' | 'parted' {
+      return musicState().variant ?? 'rising';
     },
-    bar: 0,
-    tempo: 0,
+    get bar(): number {
+      return musicState().bar;
+    },
+    get tempo(): number {
+      return musicState().tempo;
+    },
+    wanted: (): 'B' | 'C' => wantedMotif(T.f),
+    playing: isPlaying,
     duck: (): number => duckDb('music'),
     state: (): string => {
-      const m = MOTIFS.B.variant() ? 'B' : MOTIFS.C.variant() ? 'C' : '';
-      return m ? m + ' ' + (MOTIFS[m].variant() as Variant) : 'stopped';
+      const m = musicState();
+      return m.playing ? `${m.motif} ${m.variant} ${m.state} ${m.tempo.toFixed(1)}bpm bar ${m.bar}${m.xfade ? ' crossfade' : ''}` : 'stopped';
     },
-    start: (): void => playBoard(clockMotif(), 'rising'),
-    stop: stopBoard,
-    board: playBoard,
-    boardStop: stopBoard,
+    full: musicState,
+    log: musicLog,
+    notes: noteLog,
+    clear: clearMusicLog,
+    /** The fake context clock of the dry run: `dt` real seconds, then the scheduler runs (the frame loop does this with the real clock). */
+    tick: (dt = 1 / 60): void => updateMusic(dt),
+    start: (): void => {
+      unlockAudio();
+      startMusic();
+    },
+    stop: stopMusic,
+    play: (motif: 'B' | 'C', variant: 'rising' | 'parted'): void => {
+      unlockAudio();
+      previewMusic(motif, variant);
+    },
   };
   const audio = {
     cues: CUE_IDS,
