@@ -14,7 +14,7 @@
 //   The kiss and splat recipes are picked in cues-alts.ts (05 section 3.2 rows 8 and 15, two alternatives each, 07 S8.6 step 13).
 // Real time: gaps are the limiter's rAF stamps (05 2.4 item 1); this file never reads the clock and never writes the simulation.
 import { vrnd } from '../core/rng.ts';
-import { audibleGain, duck, grain, holdMix, isMuted, isOn, logPush, panOf, shifted, tone } from './engine.ts';
+import { audibleGain, duck, grain, holdMix, isMuted, isOn, logPush, panOf, shifted, stalled, tone } from './engine.ts';
 import { canPass, stamp } from './limiter.ts';
 import { ALT_GAIN, KISS_PLAY, SPLAT_PLAY } from './cues-alts.ts';
 
@@ -378,6 +378,10 @@ export function cue(id: CueId, x: number, y: number, p: CueParams = {}): boolean
   if (!isOn()) return false;
   if (isMuted()) {
     logPush(id, x, y, 0, false, 'muted'); // (a) nothing stamped
+    return false;
+  }
+  if (stalled()) {
+    logPush(id, x, y, 0, false, 'stalled'); // (a) a suspended or interrupted context hears nothing: no gap is stamped for it
     return false;
   }
   const def = CUES[id];

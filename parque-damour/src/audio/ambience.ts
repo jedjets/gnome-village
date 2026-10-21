@@ -23,7 +23,7 @@ import { visitors } from '../entities/visitor.ts';
 import { featured, midOf } from '../entities/romance.ts';
 import { effects } from '../play/abilities.ts';
 import { cam, viewCentreTile } from '../render/camera.ts';
-import { MASTER_LP, VERB_GAIN, audibleGain, easeMix, isMuted, isOn, logPush, panOf, tone } from './engine.ts';
+import { MASTER_LP, VERB_GAIN, audibleGain, easeMix, isMuted, isOn, logPush, panOf, stalled, tone } from './engine.ts';
 import { gate } from './limiter.ts';
 import { cue } from './cues.ts';
 
@@ -317,8 +317,8 @@ export function burst(name: Burst): void {
 /** Once per frame, real seconds (capped at 0.05): the later() queue, the mix, the bells, then every layer in 05 4's order. */
 export function updateAmbience(dtr: number): void {
   if (!isOn()) return;
-  if (isMuted()) {
-    prevF = T.f; // no peal for a crossing slept through
+  if (isMuted() || stalled()) {
+    prevF = T.f; // no peal for a crossing slept through (muted, or the context frozen: stalled())
     pending.length = 0;
     return;
   }

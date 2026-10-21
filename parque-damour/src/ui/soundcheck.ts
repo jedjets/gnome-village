@@ -41,6 +41,7 @@ function pill(label: string, k: string): HTMLButtonElement {
   b.type = 'button';
   b.textContent = label;
   b.dataset.k = k;
+  b.style.minHeight = '44px'; // pills at least 44 px tall (04 11 item 5); shell.css #snd button is 26 px and the sheet scrolls
   return b;
 }
 function heading(text: string): HTMLElement {

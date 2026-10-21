@@ -79,6 +79,7 @@ let muted = false;
 let dryRun = false; // 05 8.3: no node is made; a call is counted
 let shift = 0; // seconds added to every note scheduled inside shifted()
 let suspendTimer = 0;
+let stallSince = -1; // the frame stamp at which the context was first seen not running; -1 while it runs
 let mixLp = MASTER_LP; // the targets the ambience last set (05 2.2 item 4)
 let mixVerb = VERB_GAIN;
 let mixHoldUntil = 0; // AC time until which a Sound check demo holds the mix
@@ -239,7 +240,7 @@ export function unlockAudio(): void {
 }
 
 /* ---------- the dry run and the decision log (05 8.3) ---------- */
-export type LogWhy = 'muted' | 'inaudible' | 'gated' | 'ok';
+export type LogWhy = 'muted' | 'stalled' | 'inaudible' | 'gated' | 'ok';
 export interface LogRow {
   t: number;
   id: string;
@@ -325,6 +326,24 @@ export function getAC(): AudioContext | null {
 export function isOn(): boolean {
   return audioOn || dryRun;
 }
+/** How long (real ms, the limiter's frame stamps) a context that is not running still takes notes: a resume() in flight, not an interruption. */
+export const STALL_GRACE_MS = 1000;
+/**
+ * True when the context has not been running for more than STALL_GRACE_MS (a suspended or interrupted one, 05 7.5 item 4: a route change, a
+ * call, a locked screen on iOS, the page visible all the while). Its clock is frozen, so a note scheduled now would wait and sound together
+ * with every other one when resume() finally lands, and a cue would stamp a gap for a note nobody hears. resume() restarts the window, so
+ * the first press after a gesture is never lost. Called every frame by the ambience, so the stamp is the moment the state was first seen.
+ */
+export function stalled(): boolean {
+  if (dryRun || !AC) return false;
+  if (AC.state === 'running') {
+    stallSince = -1;
+    return false;
+  }
+  const t = frameNow();
+  if (stallSince < 0) stallSince = t;
+  return t - stallSince > STALL_GRACE_MS;
+}
 export function isMuted(): boolean {
   return muted;
 }
@@ -387,7 +406,7 @@ export function connectVoice(src: AudioNode, bus: BusName, pan: number, dry: boo
 
 /** GV 6090–6113. */
 export function tone(freq: number, dur: number, o: ToneOpts = {}): void {
-  if (!isOn() || muted) return; // GV 6092, with the dry run standing in for the graph (05 8.3)
+  if (!isOn() || muted || stalled()) return; // GV 6092, with the dry run standing in for the graph (05 8.3); no pile-up on a frozen clock
   if (dryRun) {
     dryCount.tone++;
     noteDry({ k: 'tone', f: freq, dur, gain: o.gain ?? 0.08, delay: (o.delay ?? 0) + shift, pan: o.pan ?? 0, bus: o.bus ?? 'cue', to: o.to });
@@ -428,7 +447,7 @@ export function toneAt(x: number, y: number, freq: number, dur: number, o: ToneO
 
 /** 05 2.3 item 5: one noise burst through a gliding bandpass, always dry, at most 0.12 s. */
 export function grain(dur: number, o: GrainOpts): void {
-  if (!isOn() || muted) return;
+  if (!isOn() || muted || stalled()) return;
   if (o.bus === 'amb' && !ambGrainOk()) return; // the ambience may call grain() at most 6 times per real second (05 1 item 2)
   if (dryRun) {
     dryCount.grain++;
@@ -551,5 +570,7 @@ export function suspend(): void {
 }
 /** GV 12199 and 05 7.5 item 4: a suspended or interrupted context (a hidden tab, an unplugged headset) comes back; a closed one stays closed. */
 export function resume(): void {
-  if (AC && AC.state !== 'running') AC.resume().catch(() => undefined);
+  if (!AC || AC.state === 'running') return;
+  stallSince = frameNow(); // a resume in flight: notes scheduled now wait only for it (see stalled())
+  AC.resume().catch(() => undefined);
 }

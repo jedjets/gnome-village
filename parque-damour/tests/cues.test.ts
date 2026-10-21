@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { T } from '../src/core/clock.ts';
-import { SIM_DT, newPark, setSpeed, setTick, simulate } from '../src/core/loop.ts';
+import { SIM_DT, newPark, setSpeed, simulate } from '../src/core/loop.ts';
 import { enqueue, type CommandInput } from '../src/core/commands.ts';
 import { clearListeners, drain, watch, type EventFn, type EventKind, type GameEvent } from '../src/core/events.ts';
 import { rngN, seedVisual } from '../src/core/rng.ts';
@@ -248,9 +248,9 @@ function spyBus(): { bus: EventBus; kinds: EventKind[]; fire: (ev: Partial<GameE
   };
 }
 const TRIGGERS: EventKind[] = [
-  'sit', 'stand', 'chat', 'laugh', 'stage', 'linger', 'embarrassed', 'watch', 'proposal', 'happily', 'parted', 'bouquet', 'peck', 'scatter',
-  'fly', 'swoop', 'bark', 'snatch', 'wall', 'eat', 'arrive', 'leave', 'lampsLit', 'cast', 'unlock', 'rejected', 'applied', 'step', 'cue',
-];
+  'sit', 'stand', 'laugh', 'stage', 'linger', 'embarrassed', 'watch', 'fx', 'happily', 'parted', 'bouquet', 'peck', 'scatter',
+  'fly', 'swoop', 'bark', 'snatch', 'wall', 'eat', 'arrive', 'leave', 'lampsLit', 'newday', 'cast', 'unlock', 'rejected', 'applied', 'step', 'cue',
+]; // the murmur (`chat` once a stage) and the ring (`proposal` at the walk's start) are read from the sim's state and its `fx` spark: tests/cue-sources.test.ts
 
 describe('bindCues: every trigger of 05 3.2 on the event bus', () => {
   it('subscribes the 29 event kinds the table names', () => {
@@ -259,24 +259,14 @@ describe('bindCues: every trigger of 05 3.2 on the event bus', () => {
     expect([...new Set(seen)].sort()).toEqual([...TRIGGERS].sort());
   });
 
-  it('a bench sits and creaks, a table does not; a chat murmurs in the speaker\'s voice, alternating', () => {
+  it('a bench sits and creaks, a table does not; the `chat` and `proposal` events themselves are silent', () => {
     const s = spyBus();
     bindCues(s.bus);
     s.fire({ kind: 'sit', x: CTR, y: CTR, ids: [1], params: { prop: 'bench' } });
     s.fire({ kind: 'sit', x: CTR, y: CTR, ids: [1], params: { prop: 'table' } });
+    s.fire({ kind: 'chat', x: CTR, y: CTR, ids: [1, 2] });
+    s.fire({ kind: 'proposal', x: CTR, y: CTR, ids: [1, 2, 3] });
     expect(played()).toEqual(['bench_creak']);
-    const f = spawnVisitor('single', 'g_north', { sex: 'f', name: 'Fleur' }), m = spawnVisitor('single', 'g_north', { sex: 'm', name: 'Marc' });
-    for (const v of [f, m]) Object.assign(v as object, { x: CTR, y: CTR });
-    clearLog();
-    dryNotes(true);
-    tick();
-    s.fire({ kind: 'chat', x: CTR, y: CTR, ids: [f?.id ?? 0, m?.id ?? 0] });
-    tick(200);
-    s.fire({ kind: 'chat', x: CTR, y: CTR, ids: [f?.id ?? 0, m?.id ?? 0] });
-    const murmurs = dryNotes().filter((_n, i) => i % 4 === 0).map((n) => n.f);
-    expect(played()).toEqual(['murmur', 'murmur']);
-    expect(murmurs[0]).toBeGreaterThanOrEqual(260 * 0.9); // her base
-    expect(murmurs[1]).toBeLessThanOrEqual(190 * 1.1); // then his
   });
 
   it('a backfire laughs on both members, the second 0.4 s after the first, with no gasp', () => {
@@ -325,7 +315,7 @@ describe('bindCues: every trigger of 05 3.2 on the event bus', () => {
     expect(played().filter((id) => id === 'flutter').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('stages: Notice sighs, Kiss kisses, the rest are silent; linger sighs; the proposal rings 8 sim seconds later', () => {
+  it('stages: Notice sighs, Kiss kisses, the rest are silent; linger sighs', () => {
     const s = spyBus();
     bindCues(s.bus);
     s.fire({ kind: 'stage', x: CTR, y: CTR, ids: [1, 2, 3], params: { stage: '@stage.notice' } });
@@ -336,16 +326,6 @@ describe('bindCues: every trigger of 05 3.2 on the event bus', () => {
     tick();
     s.fire({ kind: 'linger', x: CTR, y: CTR, ids: [1, 2, 3] });
     expect(played()).toEqual(['sigh', 'kiss', 'sigh']);
-    setTick(1000);
-    s.fire({ kind: 'proposal', x: CTR, y: CTR, ids: [1, 2, 3] });
-    updateCueSources(0);
-    expect(played()).not.toContain('ring');
-    setTick(1000 + 479);
-    updateCueSources(0);
-    expect(played()).not.toContain('ring');
-    setTick(1000 + 480);
-    updateCueSources(0);
-    expect(played().at(-1)).toBe('ring');
   });
 
   it('Happily chords and fires three bursts at the pair (d = 0, 0.9, 1.7 s); Parted and the bouquet sound where they happen', () => {
@@ -386,7 +366,7 @@ describe('bindCues: every trigger of 05 3.2 on the event bus', () => {
     expect(played()).toEqual(['coo', 'flutter', 'yap', 'yap']);
   });
 
-  it('the rest: wall mimes, eat clinks at a kiosk, arrive and leave hinge, unlock chimes, a refusal refuses (not a wrong mode)', () => {
+  it('the rest: wall mimes, eat clinks at a kiosk, arrive and leave hinge, unlock chimes, a refusal refuses (not an avatar command that finds the mode as asked)', () => {
     const s = spyBus();
     bindCues(s.bus);
     const at = { x: CTR, y: CTR };
@@ -397,8 +377,8 @@ describe('bindCues: every trigger of 05 3.2 on the event bus', () => {
     tick();
     s.fire({ kind: 'leave', ...at });
     s.fire({ kind: 'unlock', params: { id: 'c_bouquet' } });
-    s.fire({ kind: 'rejected', params: { reason: 'reason.not_here' } });
-    s.fire({ kind: 'rejected', params: { reason: 'reason.wrong_mode' } });
+    s.fire({ kind: 'rejected', params: { reason: 'reason.not_here', kind: 'tool' } });
+    s.fire({ kind: 'rejected', params: { reason: 'reason.wrong_mode', kind: 'avatar.enter' } }); // silent as hud.ts is: the mode event has toasted
     expect(played()).toEqual(['mime', 'clink', 'gate_hinge', 'gate_hinge', 'unlock', 'refuse']);
     expect(auditLog().filter((r) => r.id === 'unlock' || r.id === 'refuse').every((r) => Number.isNaN(r.x) && r.a === 1)).toBe(true); // unpositioned
   });
@@ -482,7 +462,7 @@ describe('a 3-day seeded run emits the events 05 3.2 names (05 8.2 item 2)', () 
     clearListeners();
     bindProgression();
     const seen = new Set<string>();
-    for (const k of TRIGGERS) watch(k, () => seen.add(k));
+    for (const k of [...TRIGGERS, 'chat', 'proposal'] as EventKind[]) watch(k, () => seen.add(k)); // `chat` and `proposal` are the sim's, read as state by the audio
     newPark(fx.seed);
     setSpeed(1);
     setProgress({ cp: fx.progress?.cp ?? 0, mp: fx.progress?.mp ?? 0 });
@@ -494,7 +474,7 @@ describe('a 3-day seeded run emits the events 05 3.2 names (05 8.2 item 2)', () 
       if (st % 8 === 0) drain(1);
     }
     // the sim emits these in the fixture's 3 days
-    for (const k of ['sit', 'stand', 'chat', 'stage', 'linger', 'embarrassed', 'proposal', 'happily', 'bouquet', 'peck', 'scatter', 'fly', 'bark', 'snatch', 'eat', 'arrive', 'leave', 'lampsLit', 'cast', 'rejected', 'applied', 'step'])
+    for (const k of ['sit', 'stand', 'chat', 'stage', 'linger', 'embarrassed', 'proposal', 'fx', 'newday', 'happily', 'bouquet', 'peck', 'scatter', 'fly', 'bark', 'snatch', 'eat', 'arrive', 'leave', 'lampsLit', 'cast', 'rejected', 'applied', 'step'])
       expect(seen.has(k), k).toBe(true);
     // bound and waiting for their emitters: `laugh` (a backfire), `parted` (a Parted ending) are rare, `watch` and `cue` are S10's, `swoop` and `wall` the avatars', `unlock` a tier
     const later = TRIGGERS.filter((k) => !seen.has(k)).sort();

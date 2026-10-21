@@ -1,6 +1,7 @@
 // src/audio/cues-bind.ts
 // bindCues(bus): every trigger of 05 3.2 on the event bus, and updateCueSources(dtr): the triggers the simulation leaves to be read from its
-// state (footsteps by stride, the wasp and the sprinkler while they last, `ready` when a cooldown runs out, the proposal's ring at t + 8 sim s).
+// state (footsteps by stride, the wasp and the sprinkler while they last, the Chat's murmur every 3 s of sim time, `ready` when a cooldown
+// runs out with a charge left or the charges come back at f = 0). The proposal's ring is the sim's own `fx` spark, 8 s into the kneel.
 // NEW (the cue table is 05 3.2; the event kinds are core/events.ts). Split from cues.ts (AGENTS rule 9, 03 2.8).
 // Audio reads and never writes: this file subscribes with `watch` (frame listeners, delivered after the frame's steps), looks at the
 // visitors, the creatures, the effects and the clock, and calls cue(). The simulation emits no `step` per stride (the `step` kind carries
@@ -10,11 +11,14 @@
 // `cue` (a generic carrier: params.id is a cue id), and the m_rival arrival (S10); `laugh` has the backfire's emitter only today.
 import { log } from '../core/commands.ts';
 import { watch, type EventFn, type EventKind, type GameEvent } from '../core/events.ts';
+import { DAYLEN, T } from '../core/clock.ts';
 import { tick } from '../core/loop.ts';
 import { I, KIND, Kind } from '../world/grid.ts';
 import { byId, visitors } from '../entities/visitor.ts';
-import { cooldownLeft, effects } from '../play/abilities.ts';
-import { STEP_STRIDE, cue, type CueId, type CueParams } from './cues.ts';
+import { pairById } from '../entities/romance.ts';
+import { chargesLeft, cooldownLeft, effects } from '../play/abilities.ts';
+import { CUES, STEP_STRIDE, cue, type CueId, type CueParams } from './cues.ts';
+import { audibleGain } from './engine.ts';
 import { fireworksBurst, humLamps, later } from './ambience.ts';
 
 /** The part of the event module bindCues needs, so a test hands in a spy. */
@@ -23,7 +27,9 @@ export interface EventBus {
 }
 
 const NOWHERE = NaN; // an unpositioned cue (pan 0, a 1)
-const RING_SIM_S = 8; // the proposal's sparkle comes 8 sim seconds after the kneel (05 3.2 row 9)
+/** The talk bubble's turn in sim seconds, render/people.ts CHAT_TURN_S (a test keeps the two equal): the murmur follows the bubble. */
+export const CHAT_TURN_S = 3;
+const MURMUR_RETRY_S = 0.3; // a murmur another voice kept waiting (the 110 ms voice gate) tries again for this long into its turn
 const BACKFIRE_GAP_S = 0.4; // the second member laughs 0.4 s after the first (05 3.3 item 5)
 const BEAT_WASP = 30; // ticks: one `wasp` per 0.5 s (05 3.2 row 18)
 const BEAT_SPRINKLER = 60; // ticks: one `sprinkler` per 1 s while it is up (row 19)
@@ -48,18 +54,22 @@ export const EMB_CUE: Readonly<Record<string, CueId>> = {
 /* ---------- state read each frame (reset with the park) ---------- */
 const strides = new Map<number, { x: number; y: number; d: number }>();
 const beats = new Map<number, number>();
-const cooling: Array<{ side: 'cupid' | 'mischief'; id: string }> = [];
-const simLater: Array<{ due: number; fn: () => void }> = [];
+type Cooling = { side: 'cupid' | 'mischief'; id: string };
+const cooling: Cooling[] = []; // casts whose cooldown has not run out yet
+const awaitingDay: Cooling[] = []; // cooldown out but no charge left: `ready` waits for f = 0 (05 3.2 row 34)
+const chatTurn = new Map<number, number>(); // pair id -> the 3 s turn its murmur last sounded for
 let lastTick = 0;
-let chats = 0;
 
-export function resetCueSources(): void {
+function forgetSources(): void {
   strides.clear();
   beats.clear();
   cooling.length = 0;
-  simLater.length = 0;
+  awaitingDay.length = 0;
+  chatTurn.clear();
+}
+export function resetCueSources(): void {
+  forgetSources();
   lastTick = 0;
-  chats = 0;
 }
 
 /** The tile of the tool command a `applied` event stands for: the log's entry of that tick (05 3.2 row 37; the event carries no place). */
@@ -110,11 +120,6 @@ export function bindCues(bus: EventBus = { watch }): void {
 
   on('sit', (ev) => ev.params?.prop === 'bench' && cue('bench_creak', ...at(ev)));
   on('stand', (ev) => ev.params?.prop === 'bench' && cue('bench_creak', ...at(ev)));
-  on('chat', (ev) => {
-    const sp = ev.ids?.[chats++ % 2]; // the speaker alternates (row 4)
-    const w = where(sp, ev);
-    cue('murmur', w.x, w.y, { actor: sp, ...voiceParams(sp ?? 0) });
-  });
   on('laugh', (ev) => {
     (ev.ids ?? []).slice(0, 2).forEach((id, i) => {
       const go = (): void => {
@@ -133,9 +138,11 @@ export function bindCues(bus: EventBus = { watch }): void {
   on('linger', (ev) => cue('sigh', ...at(ev), { actor: ev.ids?.[0], ...voiceParams(ev.ids?.[0] ?? 0) }));
   on('embarrassed', embarrassed);
   on('watch', (ev) => cue('gasp', ...at(ev), { actor: ev.ids?.[0], ...voiceParams(ev.ids?.[0] ?? 0) })); // S10: at fireworks
-  on('proposal', (ev) => {
-    const [x, y] = at(ev);
-    simLater.push({ due: tick() + RING_SIM_S * 60, fn: () => cue('ring', x, y) });
+  // the ring: the sparkle the sim puts 8 s into the kneel, at the pair (act-romance.ts HEARTS.ringAt; 05 3.2 row 9, "the kneeler")
+  on('fx', (ev) => ev.params?.fx === 'spark' && ev.params.romance && cue('ring', ...at(ev)));
+  on('newday', () => {
+    // the charges are back at f = 0: an ability whose cooldown ran out with none left is ready now (row 34)
+    for (const c of awaitingDay.splice(0)) if (chargesLeft(c.side, c.id) > 0) cue('ready', NOWHERE, NOWHERE);
   });
   on('happily', (ev) => {
     cue('happily', ...at(ev));
@@ -157,7 +164,13 @@ export function bindCues(bus: EventBus = { watch }): void {
   on('lampsLit', () => humLamps());
   on('cast', cast);
   on('unlock', () => cue('unlock', NOWHERE, NOWHERE));
-  on('rejected', (ev) => ev.params?.reason !== 'reason.wrong_mode' && cue('refuse', NOWHERE, NOWHERE)); // the toast of hud.ts, with a sound
+  on('rejected', (ev) => {
+    // every refusal hud.ts toasts, with a sound: it keeps silent only for an avatar command that finds the mode already as asked (hud.ts watchResults)
+    const r = ev.params?.reason;
+    if (typeof r !== 'string' || !r.startsWith('reason.')) return;
+    if (r === 'reason.wrong_mode' && String(ev.params?.kind ?? '').startsWith('avatar.')) return;
+    cue('refuse', NOWHERE, NOWHERE);
+  });
   on('applied', (ev) => {
     if (ev.params?.kind !== 'tool') return;
     const p = toolAt(ev.tick);
@@ -201,6 +214,28 @@ function footsteps(): void {
   if (strides.size > seen + 8) for (const id of strides.keys()) if (!byId(id)) strides.delete(id);
 }
 
+/**
+ * The Chat's murmur (05 3.2 row 4: every 3 s, the speaker alternates). The sim emits `chat` once, at the stage start, so the turns are read
+ * as the talk bubbles are drawn (render/people.ts chatBubble): in place, the turn floor(sim s / 3 + pair id) % 2 names the speaker, and the
+ * speaker murmurs once when his or her turn begins, in his or her own voice.
+ */
+function murmurs(): void {
+  const s = T.abs * DAYLEN, talking = new Set<number>();
+  for (const v of visitors) {
+    if (v.st !== 'chat' || v.path) continue;
+    const p = pairById(v.job.pairId ?? 0);
+    if (!p) continue;
+    talking.add(p.id);
+    const clock = s / CHAT_TURN_S + p.id, turn = Math.floor(clock);
+    if ((turn % 2 === 0 ? p.a : p.b) !== v.id || chatTurn.get(p.id) === turn) continue;
+    // a second pair's speaker turns at the same instant: the voice gate holds it back a few frames, so it asks again early in its turn
+    const heard = audibleGain(v.x, v.y) >= CUES.murmur.thresh;
+    if (!cue('murmur', v.x, v.y, { actor: v.id, ...voiceParams(v.id) }) && heard && (clock - turn) * CHAT_TURN_S < MURMUR_RETRY_S) continue;
+    chatTurn.set(p.id, turn);
+  }
+  if (chatTurn.size > talking.size + 8) for (const id of chatTurn.keys()) if (!talking.has(id)) chatTurn.delete(id);
+}
+
 /** The wasp every 0.5 s and the sprinkler every 1 s while their effect is up (rows 18 and 19), by the effect's age in ticks. */
 function abilityLoops(): void {
   const now = tick(), live = new Set<number>();
@@ -215,29 +250,19 @@ function abilityLoops(): void {
   if (beats.size > live.size) for (const id of beats.keys()) if (!live.has(id)) beats.delete(id);
 }
 
-/** Once per frame after the events: the triggers read from state (05 3.2 rows 1, 2, 9, 18, 19 and 34). */
+/** Once per frame after the events: the triggers read from state (05 3.2 rows 1, 2, 4, 18, 19 and 34). */
 export function updateCueSources(_dtr: number): void {
   const now = tick();
-  if (now < lastTick) {
-    // a New or a restore: the old timeline's pending rings and strides are not this park's
-    simLater.length = 0;
-    strides.clear();
-    beats.clear();
-    cooling.length = 0;
-  }
+  if (now < lastTick) forgetSources(); // a New or a restore: the old timeline's strides, beats and cooldowns are not this park's
   lastTick = now;
   footsteps();
+  murmurs();
   abilityLoops();
-  for (let i = simLater.length - 1; i >= 0; i--) {
-    const q = simLater[i] as (typeof simLater)[number];
-    if (now < q.due) continue;
-    simLater.splice(i, 1);
-    q.fn();
-  }
   for (let i = cooling.length - 1; i >= 0; i--) {
-    const c = cooling[i] as (typeof cooling)[number];
+    const c = cooling[i] as Cooling;
     if (cooldownLeft(c.side, c.id) > 0) continue;
     cooling.splice(i, 1);
-    cue('ready', NOWHERE, NOWHERE); // a cooldown reached 0 (row 34)
+    if (chargesLeft(c.side, c.id) > 0) cue('ready', NOWHERE, NOWHERE); // a cooldown reached 0 with a use left (row 34)
+    else if (awaitingDay.length < 16) awaitingDay.push(c); // a spent charge: the day's first moment (f = 0) is the ready moment
   }
 }

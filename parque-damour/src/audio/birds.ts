@@ -18,7 +18,7 @@ import { props, type Prop } from '../world/grid.ts';
 import { featured } from '../entities/romance.ts';
 import { view } from '../render/camera.ts';
 import { screenOf } from '../render/project.ts';
-import { audibleGain, isMuted, isOn, logPush, panOf, tone } from './engine.ts';
+import { audibleGain, isMuted, isOn, logPush, panOf, stalled, tone } from './engine.ts';
 import { centre } from './ambience.ts';
 
 type Note = { f: number; d: number; g?: number; a?: number; to?: number; w?: number; wd?: number; gap?: number };
@@ -152,7 +152,7 @@ export function birdTimers(): { song: number; replies: number } {
 
 /** Every frame with real seconds (capped at 0.05 by the caller): the songbirds. */
 export function updateBirds(dtr: number): void {
-  if (!isOn() || isMuted()) return;
+  if (!isOn() || isMuted() || stalled()) return;
   const dt = Math.min(dtr, 0.05);
   const romantic = (featured()?.stage ?? 0) >= 5;
   for (let i = replies.length - 1; i >= 0; i--) {

@@ -98,6 +98,13 @@ describe('the Sound check sheet (05 2.6)', () => {
     expect(heads).toEqual([en['sheet.sound.cues'], en['sheet.sound.alts'], en['sheet.sound.ambience'], en['sheet.sound.birds'], en['sheet.sound.music']]);
   });
 
+  it('every pill is at least 44 px tall (04 11 item 5: pills >= 44 px)', () => {
+    open();
+    const pills = [...document.querySelectorAll<HTMLElement>('#sndRow button')];
+    expect(pills).toHaveLength(59);
+    for (const b of pills) expect(b.style.minHeight, b.textContent ?? '').toBe('44px');
+  });
+
   it('the headings follow the language; the ids stay code identifiers', () => {
     setLang('es');
     open();

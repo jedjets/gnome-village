@@ -208,3 +208,115 @@ describe('tone() schedules nothing while muted; mute is a hard cut (05 7.3 items
     expect(ctx.state).toBe('suspended'); // muted: left asleep
   });
 });
+
+describe('a suspended or interrupted context takes notes for 1 s and then none (05 7.5 item 4; the clock is frozen, so a pile would sound at once)', () => {
+  type Ctx = { state: string; resume: () => Promise<void> };
+  let fake: FakeAudio;
+  type Engine = typeof import('../src/audio/engine.ts');
+  let E: Engine;
+  let C: typeof import('../src/audio/cues.ts');
+  let L: typeof import('../src/audio/limiter.ts');
+  let ctx: Ctx;
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.useFakeTimers();
+    fake = installFakeAudio();
+    E = await import('../src/audio/engine.ts');
+    C = await import('../src/audio/cues.ts');
+    L = await import('../src/audio/limiter.ts');
+    const cam = await import('../src/render/camera.ts');
+    cam.setViewport(390, 844, 1);
+    cam.centreOn(cam.CTR, cam.CTR);
+    E.initAudio();
+    ctx = fake.ctx() as unknown as Ctx;
+    L.setNow(0);
+  });
+  afterEach(() => {
+    fake.uninstall();
+    vi.useRealTimers();
+  });
+  const holdResume = (): void => {
+    ctx.resume = () => Promise.resolve(); // an interruption that holds: resume() is asked and not granted
+  };
+
+  it('tone() and grain() schedule for 1 s from the first frame the context is seen not running, then nothing; running again, they schedule', () => {
+    for (const state of ['suspended', 'interrupted']) {
+      ctx.state = 'running';
+      E.stalled();
+      const before = fake.made.osc + fake.made.src;
+      ctx.state = state;
+      L.setNow(10_000);
+      expect(E.stalled()).toBe(false); // seen now
+      E.tone(440, 0.1, { gain: 0.01 });
+      L.setNow(10_000 + E.STALL_GRACE_MS);
+      E.grain(0.05, { f0: 900, f1: 400, gain: 0.01 });
+      expect(fake.made.osc + fake.made.src).toBe(before + 2);
+      L.setNow(10_000 + E.STALL_GRACE_MS + 1);
+      expect(E.stalled(), state).toBe(true);
+      E.tone(440, 0.1, { gain: 0.01 });
+      E.tone(440, 0.1, { gain: 0.01, bus: 'amb', delay: 0.4 });
+      E.grain(0.05, { f0: 900, f1: 400, gain: 0.01 });
+      expect(fake.made.osc + fake.made.src, state).toBe(before + 2);
+      ctx.state = 'running';
+      E.tone(440, 0.1, { gain: 0.01 });
+      expect(fake.made.osc + fake.made.src, state).toBe(before + 3);
+    }
+  });
+
+  it('resume() restarts the window, so the first press after a gesture is heard though the context is still coming back', () => {
+    holdResume();
+    ctx.state = 'interrupted';
+    L.setNow(0);
+    E.stalled();
+    L.setNow(5000);
+    expect(E.stalled()).toBe(true);
+    E.unlockAudio(); // a Sound check press, a pointerdown while suspended
+    expect(ctx.state).toBe('interrupted');
+    const before = fake.made.osc;
+    E.tone(440, 0.1, { gain: 0.01 });
+    expect(fake.made.osc).toBe(before + 1);
+    L.setNow(5000 + E.STALL_GRACE_MS + 1);
+    E.tone(440, 0.1, { gain: 0.01 });
+    expect(fake.made.osc).toBe(before + 1);
+  });
+
+  it('cue() on a stalled context logs `stalled` and stamps no gap, so the cue sounds when the context is back', () => {
+    ctx.state = 'interrupted';
+    L.setNow(0);
+    E.stalled();
+    L.setNow(3000);
+    expect(C.cue('laugh', NaN, NaN)).toBe(false);
+    expect(E.auditLog().at(-1)).toMatchObject({ id: 'laugh', played: false, why: 'stalled' });
+    expect(L.lastStamp('laugh')).toBeUndefined();
+    ctx.state = 'running';
+    expect(C.cue('laugh', NaN, NaN)).toBe(true);
+  });
+
+  it('the ambience and the songbirds schedule nothing on a frozen clock (10 s of frames: no oscillators past the grace)', async () => {
+    const Amb = await import('../src/audio/ambience.ts');
+    const Birds = await import('../src/audio/birds.ts');
+    const Clock = await import('../src/core/clock.ts');
+    Clock.T.light = 0.9; // day: the songbirds sing
+    Clock.T.f = 0.4;
+    let ms = 0;
+    const frames = (sec: number): void => {
+      for (let i = 0; i < sec * 20; i++) {
+        ms += 50;
+        L.setNow(ms);
+        Amb.updateAmbience(0.05);
+        Birds.updateBirds(0.05);
+      }
+    };
+    frames(120);
+    const running = fake.made.osc + fake.made.src;
+    expect(running).toBeGreaterThan(0); // the same frames with the context running do sound
+    ctx.state = 'interrupted';
+    frames(2); // the grace, and a little more
+    const afterGrace = fake.made.osc + fake.made.src;
+    frames(120);
+    expect(fake.made.osc + fake.made.src).toBe(afterGrace);
+    ctx.state = 'running';
+    frames(120);
+    expect(fake.made.osc + fake.made.src).toBeGreaterThan(afterGrace);
+  });
+});
