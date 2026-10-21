@@ -11,7 +11,7 @@
    with the tier badge for its swatch), row 2's cooldown chip with its ring, the Points chip's flash, and the Progress sheet's ladders
    and unlock table.
    S7 (07 S7.6 step 7; 04 5.4 item 6, 5.5 item 3, 5.6): the avatar mode's three hint chips in row 1 (in place of the switch and the
-   strip), the avatar strip without bars, the picker's 2 x 3 cards with their side stripe and portrait. TODO(S11): audit. */
+   strip), the avatar strip with its three bars, the picker's 2 x 3 cards with their side stripe and portrait. TODO(S11): audit. */
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
 html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--body-bg);
@@ -167,8 +167,8 @@ body.avatar #card h3{font-size:14px;margin:0}
 body.avatar #card .sub{margin:0;flex:1 1 auto;white-space:nowrap;font-size:11px}
 body.avatar #card .rel{flex-basis:100%;margin:0 0 2px}
 /* the strip's three bars (owner 2026-10-22; GV 173-178 had them side by side at 8.5 px): Mood, Rested and Full, or the flower seller's Blooms */
-body.avatar #card .bars{display:flex;flex-basis:100%;gap:10px;margin-top:4px}
-body.avatar #card .bar{flex:1 1 0;min-width:0;grid-template-columns:auto 1fr;gap:4px;margin-top:0;font-size:9.5px;letter-spacing:0;text-transform:none}
+body.avatar #card .bars{display:flex;flex-basis:100%;gap:8px;margin-top:4px}
+body.avatar #card .bar{flex:1 1 0;min-width:0;grid-template-columns:auto 1fr;gap:4px;margin-top:0;font-size:11px;letter-spacing:0;text-transform:none}
 body.avatar #card .bar span{white-space:nowrap}
 body.avatar #card .doing{flex-basis:100%;margin-top:3px;font-size:11px}
 

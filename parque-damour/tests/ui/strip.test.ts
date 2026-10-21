@@ -169,7 +169,7 @@ describe('the avatar strip shows three bars (04 5.5 item 3)', () => {
   });
   it('shell.css: in the strip the bars sit side by side on one line in the card\'s width, labels on one line, the Heart bar never shows', () => {
     const css = readFileSync(join(ROOT, 'src', 'styles', 'shell.css'), 'utf8');
-    expect(css).toMatch(/body\.avatar #card \.bars\{display:flex;flex-basis:100%;gap:10px/);
+    expect(css).toMatch(/body\.avatar #card \.bars\{display:flex;flex-basis:100%;gap:8px/);
     expect(css).toMatch(/body\.avatar #card \.bar\{flex:1 1 0;min-width:0;grid-template-columns:auto 1fr/);
     expect(css).toMatch(/body\.avatar #card \.bar span\{white-space:nowrap\}/);
     enter('a_pigeon');
