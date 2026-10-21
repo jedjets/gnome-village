@@ -166,7 +166,10 @@ body.avatar #card{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:8p
 body.avatar #card h3{font-size:14px;margin:0}
 body.avatar #card .sub{margin:0;flex:1 1 auto;white-space:nowrap;font-size:11px}
 body.avatar #card .rel{flex-basis:100%;margin:0 0 2px}
-body.avatar #card .bars{display:none} /* an avatar has no needs that matter (02 10.3 item 6): the strip is the name, the side and tier, and what it is doing */
+/* the strip's three bars (owner 2026-10-22; GV 173-178 had them side by side at 8.5 px): Mood, Rested and Full, or the flower seller's Blooms */
+body.avatar #card .bars{display:flex;flex-basis:100%;gap:10px;margin-top:4px}
+body.avatar #card .bar{flex:1 1 0;min-width:0;grid-template-columns:auto 1fr;gap:4px;margin-top:0;font-size:9.5px;letter-spacing:0;text-transform:none}
+body.avatar #card .bar span{white-space:nowrap}
 body.avatar #card .doing{flex-basis:100%;margin-top:3px;font-size:11px}
 
 /* ---------- sheets (GV 48-72, 196-225); `div.sheet`, never `.sheet`: body.sheet (03 10.2) must not match a sheet rule (it hid the page) ---------- */

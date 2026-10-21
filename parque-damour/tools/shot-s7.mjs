@@ -94,8 +94,23 @@ export function s7Actions(h) {
         name: document.getElementById('cName').textContent,
         cardOn: document.getElementById('card').classList.contains('on'),
         z: window.__PD.cam.z,
+        bars: [...document.querySelectorAll('#cBars .bar')].filter((b) => getComputedStyle(b).display !== 'none').map((b) => b.querySelector('span').textContent),
+        barsCut: (() => {
+          // the three bars sit inside the card, and no label is cut inside its own cell
+          const cr = document.getElementById('card').getBoundingClientRect(), bad = [];
+          for (const b of document.querySelectorAll('#cBars .bar')) {
+            const r = b.getBoundingClientRect(), sp = b.querySelector('span'), tr = b.querySelector('i').getBoundingClientRect();
+            if (getComputedStyle(b).display === 'none') continue;
+            if (r.right > cr.right - 4 || r.left < cr.left + 4) bad.push(sp.textContent + ' pokes out of the card');
+            if (sp.scrollWidth > sp.clientWidth + 1 || tr.width < 18) bad.push(sp.textContent + ': label ' + sp.scrollWidth + ' px, track ' + Math.round(tr.width) + ' px');
+          }
+          return bad;
+        })(),
       };
     });
+    const wantBars = who.startsWith('florist') ? ['Mood', 'Rested', 'Blooms'] : who.endsWith(' es') ? ['Ánimo', 'Descanso', 'Saciedad'] : ['Mood', 'Rested', 'Full'];
+    if (JSON.stringify(r.bars) !== JSON.stringify(wantBars)) throw new Error(`s7 ${who}: the strip's bars are ${JSON.stringify(r.bars)}, want ${JSON.stringify(wantBars)}`);
+    if (r.barsCut.length) throw new Error(`s7 ${who}: ${r.barsCut.join('; ')}`);
     if (r.hints.length !== 3 || !r.hintsShown) throw new Error(`s7 ${who}: want three hint chips in row 1, got ${JSON.stringify(r.hints)} (shown ${r.hintsShown})`);
     if (r.tools || r.groups || r.undo || r.size) throw new Error(`s7 ${who}: the Park strip, the switch, Undo or the size row still show ${JSON.stringify(r)}`);
     if (!/ · (you|tú)$/.test(r.name) || !r.cardOn) throw new Error(`s7 ${who}: the strip reads "${r.name}" (card on: ${r.cardOn})`);

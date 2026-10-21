@@ -854,6 +854,8 @@ The clock chip's day is `t('hud.day', { n, season: '@hud.season.<season>' })`: t
 | `card.bar.rested` | Rested | TODO |
 | `card.bar.full` | Full | TODO |
 | `card.bar.heart` | Heart | TODO |
+| `card.bar.blooms` | Blooms (the flower seller's strip, where the single card says Full; ES Flores; owner 2026-10-22) | TODO |
+| `card.bar.blooms_n` | Basket: {n} of {max} blooms (the bar's aria-label; ES Cesta: {n} de {max} flores) | TODO |
 | `card.pair.title` | {a} & {b} | {a} & {b} |
 | `card.pair.stage` | {stage} · {n} of 7 | TODO |
 | `card.pair.emb` | {n} today | TODO |

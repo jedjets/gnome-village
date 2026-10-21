@@ -34,6 +34,8 @@ export const es: Record<string, string> = {
   'card.bar.rested': 'Descanso',
   'card.bar.full': 'Saciedad',
   'card.bar.heart': 'Corazón',
+  'card.bar.blooms': 'Flores',
+  'card.bar.blooms_n': 'Cesta: {n} de {max} flores',
 
   'rail.park': 'Parque',
   'rail.cupid': 'Cupido',

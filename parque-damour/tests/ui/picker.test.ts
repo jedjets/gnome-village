@@ -193,7 +193,7 @@ describe('07 S7.6 step 7, 03 10.2, 04 5.4 item 6, 5.5 item 3: entering the avata
     expect($('bMode').getAttribute('aria-pressed')).toBe('true');
     expect($('bMode').getAttribute('aria-expanded')).toBe('false');
   });
-  it('the strip: "Pigeon · you", "Mischief · T0", "waiting for your tap"; no bars; the card is on', () => {
+  it('the strip: "Pigeon · you", "Mischief · T0", "waiting for your tap", the three bars Mood, Rested and Full (tests/ui/strip.test.ts); the card is on', () => {
     enter('a_pigeon');
     (creatureById(getPlayer()) as NonNullable<ReturnType<typeof creatureById>>).st = 'wait'; // a bird that was pecking goes on pecking until told (avatar-pigeon.ts)
     updateHud(0.4);
@@ -201,7 +201,8 @@ describe('07 S7.6 step 7, 03 10.2, 04 5.4 item 6, 5.5 item 3: entering the avata
     expect($('cName').textContent).toBe('Pigeon · you');
     expect($('cSub').textContent).toBe('Mischief · T0');
     expect($('cDo').textContent).toBe('waiting for your tap');
-    expect(shown('cBars')).toBe(false);
+    expect(shown('cBars')).toBe(true);
+    expect([...document.querySelectorAll<HTMLElement>('#cBars .bar')].filter((b) => getComputedStyle(b).display !== 'none').map((b) => b.querySelector('span')?.textContent)).toEqual(['Mood', 'Rested', 'Full']);
     expect($('cRel').hidden).toBe(true);
     setLang('es');
     updateHud(0.4);

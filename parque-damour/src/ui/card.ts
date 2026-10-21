@@ -21,13 +21,16 @@
 // "Mischief · T0" under it, and the doing line from the actor's own state (an avatar.status word, "waiting for your tap" when it has no order
 // running; GV 10830 read the gnome's state the same way, where the last string a tap returned is the toast's). Entering zooms to 1.5 when
 // below 1.3 (GV 11257) and follows the actor; every tap on the world follows it again (GV playerCommand 11278: a drag had let go). The
-// strip shows no bars: an avatar has no needs that matter (02 10.3 item 6). A census row, a Romances row or a tap on a name selects no one
+// strip shows three bars since the owner's answer of 2026-10-22 (04 5.5 item 3): Mood, Rested and Full for the pigeon and Pompon, Mood,
+// Rested and the basket's blooms for the flower seller (stripBars). A census row, a Romances row or a tap on a name selects no one
 // while the strip is up, and leaving drops the follow and the card.
 import { clamp01 } from '../core/math.ts';
 import { creatureById, type Creature } from '../entities/creatures.ts';
 import { byId, type Visitor } from '../entities/visitor.ts';
+import { BASKET } from '../entities/act-romance.ts';
 import { AVATARS } from '../play/avatar.ts';
-import { getAvatar, getMode, getPlayer } from '../play/mode.ts';
+import { abilityById, cooldownLeft, type AbilityId } from '../play/abilities.ts';
+import { getAvatar, getMode, getPlayer, type AvatarId } from '../play/mode.ts';
 import { cam, clampCam, follow } from '../render/camera.ts';
 import { screenInto, type Hit } from '../render/project.ts';
 import { SEAT_E } from '../render/people.ts';
@@ -173,6 +176,15 @@ function bar(need: 'mood' | 'rest' | 'full' | 'heart', value: number, low: boole
   return b;
 }
 
+/** The third bar's label: "Full" for a person and a creature, "Blooms" for the flower seller's basket (strip only); the key stays on the span for a language change. */
+function fullLabel(key: 'card.bar.full' | 'card.bar.blooms'): void {
+  const s = document.querySelector<HTMLElement>('#cBars .bar[data-need="full"] > span');
+  if (!s) return;
+  s.dataset.t = key;
+  const text = t(key);
+  if (s.textContent !== text) s.textContent = text;
+}
+
 /** The Heart bar with the 1 px ink tick at the next stage's gate (04 5.5 item 1); no tick after the Proposal. */
 function heartBar(p: Pair | undefined): void {
   const b = bar('heart', p?.affinity ?? 0, false, !!p);
@@ -223,6 +235,7 @@ function pairCard(p: Pair, a: Visitor, b: Visitor): void {
   $('cSub').classList.add('chipline');
   $('cRel').hidden = true;
   for (const n of ['mood', 'rest', 'full'] as const) bar(n, 0, false, false);
+  fullLabel('card.bar.full');
   heartBar(p);
   $('cDo').textContent = t('doing.' + a.st);
   const d2 = doing2(), second = t('doing.' + b.st);
@@ -255,6 +268,7 @@ export function updateCard(): void {
   }
   $('card').classList.remove('pair');
   $('cSub').classList.remove('chipline');
+  fullLabel('card.bar.full');
   $('cName').textContent = v.name;
   $('cName').removeAttribute('aria-label');
   $('cSub').textContent = t('card.sub', { archetype: '@archetype.' + v.archetype, age: '@age.' + v.ageWord });
@@ -317,7 +331,42 @@ function doingLine(v?: Visitor, c?: Creature): string {
   return hasKey('doing.' + v.st) ? t('doing.' + v.st) : t('avatar.waiting'); // a reaction: the pigeon's gift, a laugh
 }
 
-/** The strip: the name with " · you", "Mischief · T0", the doing line; no relationship line, no Pin, no bars (CSS). */
+/** The ability whose cooldown an avatar's own action runs on: the pigeon's `ruffled` 25 s and Pompon's `panting` 60 s (02 10.4, 10.5). */
+const AVATAR_CD: Readonly<Partial<Record<AvatarId, AbilityId>>> = { a_pigeon: 'm_pigeon', a_pomeranian: 'm_pomeranian' };
+
+/**
+ * The strip's bars of a pigeon or Pompon, 0 to 1. A creature has no needs in the sim (02 10.3 item 6), so each bar reads its nearest
+ * equivalent from what the creature shows (owner 2026-10-22; assumption of the follow-up stage, nothing is stored): Mood (comfort) is 1 and
+ * dips to 0.25 while startled and 0.5 while shaking off water; Rested (energy) is the cooldown of its own action run backwards, empty the
+ * moment it swoops or snatches and full again at the end of the 25 s or 60 s wait; Full (1 - hunger) is 1, since a creature never hungers.
+ */
+export function creatureBars(c: Creature, a: AvatarId): { mood: number; rest: number; full: number } {
+  const id = AVATAR_CD[a], def = id ? abilityById(id) : undefined;
+  const rest = id && def ? 1 - cooldownLeft('mischief', id) / def.cooldown : 1;
+  return { mood: c.st === 'startled' ? 0.25 : c.st === 'shakeOff' ? 0.5 : 1, rest: clamp01(rest), full: 1 };
+}
+
+/** Fill the strip's three bars: a creature's from creatureBars, the flower seller's Mood and Rested from her needs and the third from her basket. */
+function stripBars(a: AvatarId, v?: Visitor, c?: Creature): void {
+  const heart = bar('heart', 0, false, false);
+  heart?.removeAttribute('aria-label');
+  if (c) {
+    const k = creatureBars(c, a);
+    fullLabel('card.bar.full');
+    bar('mood', k.mood, k.mood < LOW_MOOD);
+    bar('rest', k.rest, k.rest < LOW_RESTED);
+    bar('full', k.full, k.full < LOW_FULL)?.removeAttribute('aria-label');
+    return;
+  }
+  if (!v) return;
+  bar('mood', v.comfort, v.comfort < LOW_MOOD);
+  bar('rest', v.energy, v.energy < LOW_RESTED);
+  fullLabel('card.bar.blooms');
+  const full = bar('full', v.basket / BASKET, v.basket <= 0); // an empty basket turns the bar --ember, as a low need does
+  full?.setAttribute('aria-label', t('card.bar.blooms_n', { n: v.basket, max: BASKET }));
+}
+
+/** The strip: the name with " · you", "Mischief · T0", the three bars, the doing line; no relationship line, no Pin. */
 function stripCard(): void {
   const d = AVATARS.find((o) => o.id === getAvatar()), { v, c } = actor();
   if (!d || (!v && !c)) return; // the actor is gone: the next `avatar.tap` lets go of the mode (avatar.ts)
@@ -330,6 +379,7 @@ function stripCard(): void {
   $('cSub').textContent = t('avatar.side_tier', { side: '@rail.' + d.side, tier: d.tier });
   $('cRel').hidden = true;
   $('cPin').hidden = true;
+  stripBars(d.id, v, c);
   const d2 = document.getElementById('cDo2');
   if (d2) d2.hidden = true;
   $('cDo').textContent = doingLine(v, c);
