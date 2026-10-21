@@ -12,6 +12,7 @@
 // little under 04 5.6's 2.2 so her sunhat and her feet both fit the 40 px) and, for the three avatars S10 builds, a plain bust in `zinc` with the one mark that names each (the mime's beret and stripes, the
 // busker's flat cap and accordion, the matchmaker's beret, ponytail and baguette). They are drawn in full daylight (computeAmbientAt) and the
 // day's light is put back at once, so a night sky never dims a card (the next frame's computeAmbient would do it anyway).
+import { T } from '../core/clock.ts';
 import { AVATAR_SIDE, enqueue } from '../core/commands.ts';
 import type { Visitor } from '../entities/visitor.ts';
 import { AVATARS, type AvatarDef } from '../play/avatar.ts';
@@ -171,7 +172,7 @@ export function drawPortrait(cv: HTMLCanvasElement, id: AvatarId): void {
 
 /* ---------- the sheet ---------- */
 
-/** The padlock of a locked card: an inline SVG in currentColor (04 12 item 12), 11 px. */
+/** The padlock of a locked card: an inline SVG in currentColor (04 12 item 12), the badge on the portrait's bottom right corner. */
 const LOCK =
   '<svg viewBox="0 0 11 11" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">' +
   '<rect x="2" y="5" width="7" height="5" rx="1.2"/><path d="M3.6 5 V3.6 A1.9 1.9 0 0 1 7.4 3.6 V5"/></svg>';
@@ -195,19 +196,23 @@ function card(d: AvatarDef): HTMLButtonElement {
   const cv = document.createElement('canvas');
   cv.setAttribute('aria-hidden', 'true');
   drawPortrait(cv, d.id);
+  const pt = document.createElement('span'); // the portrait and, on a locked card, its padlock badge
+  pt.className = 'pt';
+  pt.append(cv);
   const tx = document.createElement('span');
   tx.className = 'tx';
   const side = '@rail.' + d.side;
   tx.append(line('b', t('avatar.' + d.id + '.name')));
   if (locked) {
-    // the lock glyph and "Locked · Mischief T1" say the side and the tier, so the "Mischief · T1" line is not repeated
+    // the lock glyph and "Locked · Mischief T1" say the side and the tier, so the "Mischief · T1" line is not repeated; the glyph is a badge on
+    // the portrait's corner (CSS), where no word can lie under it however the words wrap on a 320 px phone and the words keep their whole line
     tx.append(line('small', t('sheet.picker.locked', { side, tier: d.tier }), 'st'));
-    b.insertAdjacentHTML('beforeend', LOCK); // the glyph sits in the card's top right corner (CSS), so the words keep their whole line
+    pt.insertAdjacentHTML('beforeend', LOCK);
   } else {
     tx.append(line('small', t('avatar.side_tier', { side, tier: d.tier })));
     if (soon) tx.append(line('small', t('rail.soon'), 'st'));
   }
-  b.append(cv, tx);
+  b.append(pt, tx);
   return b;
 }
 
@@ -235,7 +240,7 @@ export function renderPicker(): void {
 
 /**
  * A tap on a card: an unlocked, playable avatar sends `avatar.enter` and returns true (the sheet closes); a locked one toasts its tier, an
- * S10 one "Coming soon", and both return false. The command applies at the next step (a paused park applies it on the unpause, 03 4.6).
+ * S10 one "Coming soon", and both return false. The command applies at the next step (a paused park applies it on the unpause, 03 4.6, and a toast says so).
  */
 export function chooseAvatar(id: string): boolean {
   const d = AVATARS.find((a) => a.id === id);
@@ -249,5 +254,6 @@ export function chooseAvatar(id: string): boolean {
     return false;
   }
   enqueue({ side: AVATAR_SIDE[d.id], kind: 'avatar.enter', payload: { avatar: d.id } });
+  if (T.speed === 0) toast('avatar.paused'); // the command waits for the first step after the unpause (03 4.6): say so, or the tap looks dead
   return true;
 }

@@ -23,7 +23,8 @@
 // 1.5 and the follow (card.syncAvatar); entering toasts "Playing as Pigeon. Tap someone: swoop" for 6 s (GV 11259, TOAST_LONG_S), leaving
 // `avatar.goes_on`. The `avatarStatus` event of a tap is toasted "Pigeon: swooping" (`avatar.says`), `walking` and `flying` silent (GV 11276-11277;
 // 02 10.1 item 6); a refused `avatar.tap` is "Pigeon: busy" (`avatar.busy`, the hold check) or "Pigeon: <the reason>" (what GV's `msg` was), with the
-// florist's cooldown seconds and a victim's name filled in from what the shell last tapped (noteAvatarTap, which main.ts calls).
+// florist's cooldown seconds and a victim's name filled in from what the shell last tapped (noteAvatarTap, which main.ts calls). An avatar
+// command refused as `reason.wrong_mode` (the mode already as asked, e.g. a tap queued behind Creator while paused) toasts nothing.
 import { T, SEASON_KEYS } from '../core/clock.ts';
 import { enqueue } from '../core/commands.ts';
 import { watch, type GameEvent } from '../core/events.ts';
@@ -159,7 +160,11 @@ function watchResults(): void {
   watch('rejected', (ev) => {
     const r = ev.params?.reason;
     if (typeof r !== 'string' || !r.startsWith('reason.')) return;
-    if (ev.params?.kind === 'avatar.tap') avatarRefused(r);
+    const kind = String(ev.params?.kind ?? '');
+    // an avatar command that finds the mode already as asked (a second Be someone or Creator or tap queued behind the first while the park is
+    // paused, 03 4.6) says nothing: the `mode` event has already toasted the answer, and "not in this mode" would replace it
+    if (r === 'reason.wrong_mode' && kind.startsWith('avatar.')) return;
+    if (kind === 'avatar.tap') avatarRefused(r);
     else toast(r, refusalParams(r));
   });
   watch('mode', (ev) => applyMode(ev));

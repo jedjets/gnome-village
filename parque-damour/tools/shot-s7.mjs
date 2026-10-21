@@ -14,7 +14,8 @@
 //   florist-close    the same, the camera pinched in to 3.4 to see the basket and the apron
 //   florist-pick     a real tap on a flowerbed (the camera pinched out to reach it): she walks there and stoops among the flowers, pinched in to 3.4
 //   florist-petals   a real tap on a lawn tile near her: she throws petals, the flurry drifting from her hand, pinched in to 3.4
-//   320              a 320 x 568 phone back in the Creator mode: the picker capped between the chips and the rail, scrolling inside
+//   320              a 320 x 568 phone back in the Creator mode, the first-launch profile (no points): the picker between the chips and the rail, the
+//                    six cards whole (the sheet does not scroll, no card cut, no words out of a card, checked)
 //   320-es           the same in Spanish (ES tapped in the Options sheet), where the lines are longer
 //   avatar-320-es    the Pomeranian (the longest hints) on that phone in Spanish: the rail with three chips, under 40 % of the screen
 export const S7_SCENES = [
@@ -44,6 +45,27 @@ export function s7Actions(h) {
     if (!(await sheetOn(page, 'picker'))) await page.click('#bMode');
     await page.waitForFunction(() => document.getElementById('picker').classList.contains('on') && document.querySelectorAll('#pickerList .pk').length === 6, { timeout: 5_000 });
   };
+  /**
+   * The six cards fit the sheet (07 S7.7 item 3: nothing cut, no overlap): the sheet does not scroll, no card is cut by its edge and no words
+   * poke out of their card (a 320 px phone, either language, whichever cards are locked: S7 UI fix).
+   */
+  const checkPickerFit = (page, who) =>
+    page.evaluate((who) => {
+      const sh = document.getElementById('picker'), sr = sh.getBoundingClientRect(), bad = [];
+      if (sh.scrollHeight > sh.clientHeight + 1) bad.push(`the sheet scrolls (${sh.scrollHeight} > ${sh.clientHeight})`);
+      for (const b of document.querySelectorAll('#pickerList .pk')) {
+        const r = b.getBoundingClientRect();
+        if (r.bottom > sr.bottom - 1 || r.top < sr.top || r.right > sr.right || r.left < sr.left) bad.push(`${b.dataset.id} is cut by the sheet`);
+        for (const e of b.querySelectorAll('.tx > *'))
+          for (const n of e.childNodes) {
+            if (n.nodeType !== 3) continue;
+            const range = document.createRange();
+            range.selectNodeContents(n);
+            for (const q of range.getClientRects()) if (q.right > r.right - 1 || q.bottom > r.bottom) bad.push(`${b.dataset.id}: "${e.textContent}" pokes out of its card`);
+          }
+      }
+      if (bad.length) throw new Error(`s7 ${who}: ${bad.join('; ')}`);
+    }, who);
   /** A real tap on `id`'s card and a real unpause: the actor is possessed, body.avatar is on, the picker has closed. */
   const enter = async (page, id) => {
     await openPicker(page);
@@ -98,6 +120,14 @@ export function s7Actions(h) {
       });
       await hideHint(page, true);
       await openPicker(page);
+      // a locked card answers a tap with "Unlocks at Cupid T1", and that toast must sit above the sheet (z-index), or the tap looks dead
+      await page.click('#pickerList .pk[data-id="a_florist"]');
+      const lock = await page.evaluate(() => {
+        const h = document.getElementById('hint');
+        return { on: h.classList.contains('on'), text: h.textContent, zHint: Number(getComputedStyle(h).zIndex), zSheet: Number(getComputedStyle(document.getElementById('picker')).zIndex) };
+      });
+      if (!lock.on || lock.text !== 'Unlocks at Cupid T1' || !(lock.zHint > lock.zSheet)) throw new Error(`s7 picker: the locked card's toast is ${JSON.stringify(lock)}`);
+      await checkPickerFit(page, 'picker');
       const st = await page.$$eval('#pickerList .pk', (els) => els.map((b) => b.dataset.id + (b.classList.contains('locked') ? ':locked' : b.classList.contains('soon') ? ':soon' : '')));
       const want = ['a_pigeon', 'a_pomeranian', 'a_mime:soon', 'a_florist:locked', 'a_busker:soon', 'a_matchmaker:soon'];
       if (JSON.stringify(st) !== JSON.stringify(want)) throw new Error(`s7 picker: want ${JSON.stringify(want)}, got ${JSON.stringify(st)}`);
@@ -266,19 +296,26 @@ export function s7Actions(h) {
     /** Creator, a 320 x 568 phone (the runner resized it): the picker open, capped between the chips and the rail. */
     async s7Small(page) {
       await leave(page);
-      await page.evaluate(() => (window.__PD.cam.z = 1.0));
+      // the first-launch profile (no points): the Pomeranian and the Flower seller locked, the longest set of lines
+      await page.evaluate(() => {
+        window.__PD.cam.z = 1.0;
+        window.__PD.setProgress(0, 0);
+      });
       await hideHint(page, true);
       await openPicker(page);
       await sleep(300);
+      await checkPickerFit(page, '320');
     },
     /** ES tapped in the Options sheet, the picker open again: the Spanish names and lines. */
     async s7SmallEs(page) {
       await chooseEs(page);
       await openPicker(page);
       await sleep(300);
+      await checkPickerFit(page, '320-es');
     },
     /** The Pomeranian in Spanish on the small phone: three chips ("Toca a alguien con sombrero o bolso: arrebatar" is the longest). */
     async s7SmallAvatarEs(page) {
+      await page.evaluate(() => window.__PD.setProgress(8, 8)); // the Pomeranian is open again
       await enter(page, 'a_pomeranian');
       await page.evaluate(() => window.__PD.simulate(240));
       await sleep(1800);

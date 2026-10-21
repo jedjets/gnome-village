@@ -409,8 +409,10 @@ export function buildRail(h: RailHandlers): void {
   // Be someone opens the picker; Creator lets the actor go (the `mode` event then drops body.avatar: hud.ts)
   $('bMode').addEventListener('click', () => {
     const a = getAvatar();
-    if (getMode() === 'avatar' && a) enqueue({ side: AVATAR_SIDE[a], kind: 'avatar.leave', payload: {} });
-    else toggleSheet('picker');
+    if (getMode() === 'avatar' && a) {
+      enqueue({ side: AVATAR_SIDE[a], kind: 'avatar.leave', payload: {} });
+      if (T.speed === 0) toast('avatar.paused'); // it waits for the first step after the unpause (03 4.6)
+    } else toggleSheet('picker');
   });
 
   $('bPhoto').addEventListener('click', () => {

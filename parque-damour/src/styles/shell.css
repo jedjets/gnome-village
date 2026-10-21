@@ -207,20 +207,29 @@ body:not(.dev) #optionsList .dev{display:none}
 #pickerList .pk{display:flex;align-items:center;gap:8px;min-width:0;min-height:56px;padding:6px 8px 6px 7px;border-radius:10px;
   border:1px solid var(--glass-line);border-left:3px solid var(--ember);background:var(--well);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
 #pickerList .pk[data-side="cupid"]{border-left-color:var(--berry)}
-#pickerList .pk canvas{position:static;flex:0 0 40px;width:40px;height:40px;border-radius:8px;background:var(--paper-2)} /* the page-wide canvas rule fills the screen */
+#pickerList .pk .pt{position:relative;flex:0 0 40px;width:40px;height:40px}
+#pickerList .pk canvas{position:static;width:100%;height:100%;border-radius:8px;background:var(--paper-2)} /* the page-wide canvas rule fills the screen */
 #pickerList .pk .tx{display:flex;flex-direction:column;min-width:0}
 #pickerList .pk b{font-size:13px;font-weight:700;line-height:1.25}
 #pickerList .pk small{font-size:11px;line-height:1.3;color:var(--ink-soft)}
 #pickerList .pk small.st{font-style:italic}
-#pickerList .pk{position:relative}
-#pickerList .pk svg{position:absolute;right:7px;top:6px;width:11px;height:11px;display:block;color:var(--ink-soft)}
+#pickerList .pk svg{position:absolute;right:-4px;bottom:-4px;width:15px;height:15px;padding:2px;box-sizing:border-box;border-radius:50%;display:block;background:var(--paper);
+  color:var(--ink-soft);box-shadow:0 0 0 1px var(--glass-line)} /* a locked card's padlock: a badge on the portrait's corner, never on a word */
 #pickerList .pk.locked,#pickerList .pk.soon{opacity:.45}
 #pickerList .pk:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+/* a narrow phone (320 px, either language): the portrait shrinks to 32 px, the card's padding and gap tighten and a name that still does not fit
+   breaks inside the card, so the words get the room and nothing pokes out of a card */
+@media (max-width:340px){
+  #pickerList .pk{gap:6px;padding-left:5px;padding-right:5px}
+  #pickerList .pk .pt{flex-basis:32px;width:32px;height:32px}
+  #pickerList .pk b{font-size:12px;overflow-wrap:anywhere}
+}
 /* a short phone (320 x 568 in either language): the summary line goes and the cards tighten, so the six show in the room between the chips and the rail */
 @media (max-height:620px){
   #pickerSum{display:none}
-  #pickerList{gap:5px}
-  #pickerList .pk{min-height:48px;padding-top:3px;padding-bottom:3px}
+  #pickerList{gap:4px}
+  #pickerList .pk{min-height:44px;padding-top:2px;padding-bottom:2px}
+  #pickerList .pk b,#pickerList .pk small{line-height:1.2}
 }
 /* S5, the romance core (02 12.2-12.4; 04 5.5 item 2, 5.6): the Romance chip's pulse on a stage change; the pair card (two name buttons
    with the --berry heart between, the stage chip, the Heart bar with the 1 px --ink gate tick, two doing lines, Pin as a .gb); the
@@ -277,8 +286,9 @@ body.sheet #card{opacity:0!important;pointer-events:none!important}
 #progressList .urow.locked,#progressList .urow.locked small{color:var(--stone)}
 
 /* ---------- toast, feed, perf (GV 157-163) ---------- */
+/* z-index 9: over a sheet (8), so a locked card's "Unlocks at Cupid T1" and the intro show above the picker; the confirm (25) and the intro screen (20) stay above */
 #hint{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 150px);
-  z-index:8;background:var(--toast);color:var(--on-ink);font-size:12px;font-weight:500;padding:7px 14px;
+  z-index:9;background:var(--toast);color:var(--on-ink);font-size:12px;font-weight:500;padding:7px 14px;
   border-radius:16px;opacity:0;transition:opacity .3s;pointer-events:none;max-width:88vw;text-align:center;line-height:1.35}
 #hint.on{opacity:1}
 #feed{position:fixed;left:10px;top:calc(env(safe-area-inset-top,0px) + 86px);z-index:5;max-width:min(66vw,300px);

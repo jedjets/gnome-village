@@ -12,6 +12,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { T } from '../../src/core/clock.ts';
 import { SIM_DT, newPark, simulate } from '../../src/core/loop.ts';
 import { AVATAR_SIDE, clearPending, enqueue, log, pendingCount } from '../../src/core/commands.ts';
 import { drain, emit } from '../../src/core/events.ts';
@@ -397,5 +398,82 @@ describe('04 7.4, 07 S7.6 step 7: the player ring and the possessed look', () =>
     for (const st of ['peck', 'perch', 'fly', 'scatter', 'walk']) expect(pigeonStateOf(st)).toBe(st);
     for (const st of ['wait', 'idle', 'dig', 'paddle', 'shakeOff']) expect(pomRuns(st), st).toBe(false);
     for (const st of ['run', 'carry', 'home', 'walk', 'chase', 'play', 'snatch', 'goDig', 'goPaddle']) expect(pomRuns(st), st).toBe(true);
+  });
+});
+
+describe('S7 UI fixes: a refusal after the mode ended, a command waiting on a paused park, the toast over the sheet, the six cards at 320 px', () => {
+  it('an avatar.tap queued behind Creator is refused as wrong_mode and toasts nothing: "Pigeon goes on alone" stays, no ": not in this mode"', () => {
+    enter('a_pigeon');
+    const to = { x: 30, y: 30 };
+    enqueue({ side: 'mischief', kind: 'avatar.leave', payload: {} });
+    enqueue({ side: 'mischief', kind: 'avatar.tap', payload: { tile: to, hit: { kind: 'tile', id: 0, tile: to } } });
+    step();
+    expect(getMode()).toBe('creator');
+    expect(document.body.classList.contains('avatar')).toBe(false);
+    expect(hint()).toBe('Pigeon goes on alone');
+    // the plain rejected event of a creator-mode tap says nothing either, and another command's wrong mode still does
+    emit({ kind: 'rejected', tick: 0, params: { reason: 'reason.wrong_mode', side: 'mischief', kind: 'avatar.tap' } });
+    drain(0);
+    expect(hint()).toBe('Pigeon goes on alone');
+    emit({ kind: 'rejected', tick: 0, params: { reason: 'reason.wrong_mode', side: 'park', kind: 'tool' } });
+    drain(0);
+    expect(hint()).toBe('not in this mode');
+  });
+  it('Be someone on a paused park toasts that it waits for the run, queues the one command, and a second pick behind it does not replace "Playing as Pigeon"', () => {
+    setProgress({ cp: 0, mp: 8 });
+    T.speed = 0;
+    $('bMode').click();
+    card('a_pigeon').click();
+    expect(hint()).toBe(en['avatar.paused']);
+    expect(pendingCount()).toBe(1);
+    expect(getMode()).toBe('creator'); // nothing applies while paused (03 4.6)
+    $('bMode').click();
+    card('a_pomeranian').click();
+    expect(hint()).toBe(en['avatar.paused']);
+    expect(pendingCount()).toBe(2);
+    T.speed = 1; // the unpause: the first step applies both
+    step();
+    expect(getMode()).toBe('avatar');
+    expect(getAvatar()).toBe('a_pigeon');
+    expect(hint()).toBe('Playing as Pigeon. Tap someone: swoop');
+  });
+  it('Creator on a paused park toasts it too; on a running park neither button toasts the pause; Spanish has the line', () => {
+    enter('a_pigeon');
+    $('hint').textContent = '';
+    T.speed = 0;
+    $('bMode').click();
+    expect(hint()).toBe(en['avatar.paused']);
+    expect(pendingCount()).toBe(1);
+    T.speed = 1;
+    step();
+    expect(hint()).toBe('Pigeon goes on alone');
+    $('hint').textContent = '';
+    $('bMode').click();
+    card('a_pigeon').click();
+    expect(hint()).toBe('');
+    expect(es['avatar.paused']).toBeTruthy();
+    expect(es['avatar.paused']).not.toBe(en['avatar.paused']);
+  });
+  it('shell.css: the toast (z 9) sits over the sheets (z 8), the intro (20) and the confirm (25) over both', () => {
+    const css = readFileSync(join(ROOT, 'src', 'styles', 'shell.css'), 'utf8');
+    const z = (sel: string): number => Number(new RegExp(`${sel.replace(/[.#]/g, '\\$&')}\\{[^}]*?z-index:(\\d+)`).exec(css)?.[1]);
+    expect(z('div.sheet')).toBe(8);
+    expect(z('#hint')).toBeGreaterThan(z('div.sheet'));
+    expect(z('#intro')).toBeGreaterThan(z('#hint'));
+    expect(z('#confirm')).toBeGreaterThan(z('#intro'));
+  });
+  it('the padlock is a badge on the locked portrait (never in the words, never a loose corner glyph over the name), and the 320 px rules are in shell.css', () => {
+    openSheet('picker');
+    const pt = card('a_florist').querySelector(':scope > .pt') as HTMLElement;
+    expect(pt.querySelector('canvas')).not.toBeNull();
+    expect(pt.querySelector('svg')).not.toBeNull();
+    expect(card('a_florist').querySelector('.tx svg')).toBeNull();
+    expect(card('a_florist').querySelector(':scope > svg')).toBeNull();
+    expect(card('a_florist').querySelector('small.st')?.textContent).toBe('Locked · Cupid T1');
+    expect(card('a_pigeon').querySelector('svg')).toBeNull();
+    const css = readFileSync(join(ROOT, 'src', 'styles', 'shell.css'), 'utf8');
+    expect(css).toMatch(/@media \(max-width:340px\)\{[^@]*#pickerList \.pk \.pt\{[^}]*32px/);
+    expect(css).toMatch(/@media \(max-height:620px\)\{[^@]*#pickerList \.pk\{min-height:44px/);
+    expect(css).toMatch(/#pickerList \.pk \.pt\{position:relative/); // the badge's anchor
   });
 });
