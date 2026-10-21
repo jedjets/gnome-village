@@ -13,8 +13,8 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { T } from '../../src/core/clock.ts';
-import { SIM_DT, newPark, simulate } from '../../src/core/loop.ts';
-import { AVATAR_SIDE, clearPending, enqueue, log, pendingCount } from '../../src/core/commands.ts';
+import { PAUSED_KINDS, SIM_DT, newPark, simulate, tick } from '../../src/core/loop.ts';
+import { AVATAR_SIDE, applyPending, clearPending, enqueue, log, pendingCount } from '../../src/core/commands.ts';
 import { drain, emit } from '../../src/core/events.ts';
 import { css, hx } from '../../src/core/math.ts';
 import { getAvatar, getMode, getPlayer, setMode, type AvatarId } from '../../src/play/mode.ts';
@@ -79,6 +79,12 @@ const hint = (): string => $('hint').textContent ?? '';
 /** One sim step (the pending commands apply at its start), then the frame: the events reach the shell and the chips and the card repaint. */
 function step(n = 1): void {
   for (let i = 0; i < n; i++) simulate(SIM_DT, 0);
+  drain(0);
+  updateHud(0.4);
+}
+/** A paused frame (loop.frame at speed 0): the paused kinds apply with no step, then the events reach the shell. */
+function pausedFrame(): void {
+  applyPending(tick() + 1, PAUSED_KINDS);
   drain(0);
   updateHud(0.4);
 }
@@ -419,40 +425,41 @@ describe('S7 UI fixes: a refusal after the mode ended, a command waiting on a pa
     drain(0);
     expect(hint()).toBe('not in this mode');
   });
-  it('Be someone on a paused park toasts that it waits for the run, queues the one command, and a second pick behind it does not replace "Playing as Pigeon"', () => {
+  it('Be someone on a paused park answers at once (owner 2026-10-22): the one command applies in the paused frame, "Playing as Pigeon" shows, the park stays paused and nothing says it is', () => {
     setProgress({ cp: 0, mp: 8 });
     T.speed = 0;
-    $('bMode').click();
-    card('a_pigeon').click();
-    expect(hint()).toBe(en['avatar.paused']);
-    expect(pendingCount()).toBe(1);
-    expect(getMode()).toBe('creator'); // nothing applies while paused (03 4.6)
-    $('bMode').click();
-    card('a_pomeranian').click();
-    expect(hint()).toBe(en['avatar.paused']);
-    expect(pendingCount()).toBe(2);
-    T.speed = 1; // the unpause: the first step applies both
-    step();
-    expect(getMode()).toBe('avatar');
-    expect(getAvatar()).toBe('a_pigeon');
-    expect(hint()).toBe('Playing as Pigeon. Tap someone: swoop');
+    try {
+      $('bMode').click();
+      card('a_pigeon').click();
+      expect(hint()).toBe(''); // no "park paused" toast any more
+      expect(pendingCount()).toBe(1);
+      expect(getMode()).toBe('creator'); // until the frame runs
+      pausedFrame();
+      expect([getMode(), getAvatar(), pendingCount(), T.speed]).toEqual(['avatar', 'a_pigeon', 0, 0]);
+      expect(document.body.classList.contains('avatar')).toBe(true);
+      expect($('bMode').textContent).toBe('Creator');
+      expect(hint()).toBe('Playing as Pigeon. Tap someone: swoop');
+    } finally {
+      T.speed = 1;
+    }
   });
-  it('Creator on a paused park toasts it too; on a running park neither button toasts the pause; Spanish has the line', () => {
+  it('Creator on a paused park answers at once too: "Pigeon goes on alone", the strips back; and the key avatar.paused is gone from both tables', () => {
     enter('a_pigeon');
     $('hint').textContent = '';
     T.speed = 0;
-    $('bMode').click();
-    expect(hint()).toBe(en['avatar.paused']);
-    expect(pendingCount()).toBe(1);
-    T.speed = 1;
-    step();
-    expect(hint()).toBe('Pigeon goes on alone');
-    $('hint').textContent = '';
-    $('bMode').click();
-    card('a_pigeon').click();
-    expect(hint()).toBe('');
-    expect(es['avatar.paused']).toBeTruthy();
-    expect(es['avatar.paused']).not.toBe(en['avatar.paused']);
+    try {
+      $('bMode').click();
+      expect(hint()).toBe('');
+      expect(pendingCount()).toBe(1);
+      pausedFrame();
+      expect([getMode(), getPlayer(), pendingCount()]).toEqual(['creator', 0, 0]);
+      expect(document.body.classList.contains('avatar')).toBe(false);
+      expect(hint()).toBe('Pigeon goes on alone');
+    } finally {
+      T.speed = 1;
+    }
+    expect('avatar.paused' in en).toBe(false);
+    expect('avatar.paused' in es).toBe(false);
   });
   it('shell.css: the toast (z 9) sits over the sheets (z 8), the intro (20) and the confirm (25) over both', () => {
     const css = readFileSync(join(ROOT, 'src', 'styles', 'shell.css'), 'utf8');

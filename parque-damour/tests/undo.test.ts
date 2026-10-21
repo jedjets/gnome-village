@@ -6,10 +6,10 @@
 // back). 08 2.5 undo.test.ts rows. S4 part B review fixes: a removed kiosk's vendor comes back with its name in its old place among the held
 // names (the list is hashed in order), never past 30 people (03 3.11) and never under a name someone else took meanwhile (02 4.5 item 5).
 import { describe, it, expect, beforeEach } from 'vitest';
-import { PLAN_STEPS, SIM_DT, newPark, simulate, tick } from '../src/core/loop.ts';
+import { PAUSED_KINDS, PLAN_STEPS, SIM_DT, newPark, setSpeed, simulate, tick } from '../src/core/loop.ts';
 import { T } from '../src/core/clock.ts';
 import { W } from '../src/core/weather.ts';
-import { applyNow, enqueue, log, replay, type Command, type CommandInput, type Result, type ToolPayload } from '../src/core/commands.ts';
+import { applyNow, applyPending, enqueue, log, replay, type Command, type CommandInput, type Result, type ToolPayload } from '../src/core/commands.ts';
 import { clearListeners, on, type GameEvent } from '../src/core/events.ts';
 import { rngN } from '../src/core/rng.ts';
 import { idsState } from '../src/core/ids.ts';
@@ -310,7 +310,22 @@ describe('undo is logged and cleared (03 5.6 items 4 and 5; 02 8.5 item 4; regis
     expect(depth()).toBe(1);
   });
 
-  it.todo('avatar.enter gives canUndo() === false (needs the avatar command: S7 play/avatar.ts calls clearUndo; 07 S7)');
+  it('avatar.enter gives canUndo() === false (S7 play/avatar.ts calls clearUndo; 03 5.6 item 5; 08 2.5), a paused park included, and Creator does not bring the history back', () => {
+    expect(tool({ tool: 'lamp', at: at(5, 5) }).ok).toBe(true);
+    expect([canUndo(), depth()]).toEqual([true, 1]);
+    expect(applyNow({ side: 'mischief', kind: 'avatar.enter', payload: { avatar: 'a_pigeon' } }).ok).toBe(true);
+    expect([canUndo(), depth()]).toEqual([false, 0]);
+    expect(applyNow({ side: 'mischief', kind: 'avatar.leave', payload: {} }).ok).toBe(true);
+    expect(canUndo()).toBe(false);
+    expect(reasonOf(undo())).toBe('reason.nothing_to_undo'); // the lamp stays; the history is gone
+    expect(tool({ tool: 'lamp', at: at(7, 5) }).ok).toBe(true); // a new stroke starts a new history
+    expect(canUndo()).toBe(true);
+    setSpeed(0);
+    enqueue({ side: 'mischief', kind: 'avatar.enter', payload: { avatar: 'a_pigeon' } });
+    applyPending(tick() + 1, PAUSED_KINDS); // the paused frame applies it at once
+    expect([canUndo(), depth()]).toEqual([false, 0]);
+    setSpeed(1);
+  });
 });
 
 const snap = (): ParkSaveV1 => JSON.parse(JSON.stringify(snapshot())) as ParkSaveV1;

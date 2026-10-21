@@ -12,7 +12,6 @@
 // little under 04 5.6's 2.2 so her sunhat and her feet both fit the 40 px) and, for the three avatars S10 builds, a plain bust in `zinc` with the one mark that names each (the mime's beret and stripes, the
 // busker's flat cap and accordion, the matchmaker's beret, ponytail and baguette). They are drawn in full daylight (computeAmbientAt) and the
 // day's light is put back at once, so a night sky never dims a card (the next frame's computeAmbient would do it anyway).
-import { T } from '../core/clock.ts';
 import { AVATAR_SIDE, enqueue } from '../core/commands.ts';
 import type { Visitor } from '../entities/visitor.ts';
 import { AVATARS, type AvatarDef } from '../play/avatar.ts';
@@ -240,7 +239,7 @@ export function renderPicker(): void {
 
 /**
  * A tap on a card: an unlocked, playable avatar sends `avatar.enter` and returns true (the sheet closes); a locked one toasts its tier, an
- * S10 one "Coming soon", and both return false. The command applies at the next step (a paused park applies it on the unpause, 03 4.6, and a toast says so).
+ * S10 one "Coming soon", and both return false. The command applies at once, a paused park included (loop.PAUSED_KINDS, 03 4.6; owner 2026-10-22).
  */
 export function chooseAvatar(id: string): boolean {
   const d = AVATARS.find((a) => a.id === id);
@@ -254,6 +253,5 @@ export function chooseAvatar(id: string): boolean {
     return false;
   }
   enqueue({ side: AVATAR_SIDE[d.id], kind: 'avatar.enter', payload: { avatar: d.id } });
-  if (T.speed === 0) toast('avatar.paused'); // the command waits for the first step after the unpause (03 4.6): say so, or the tap looks dead
   return true;
 }

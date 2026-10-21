@@ -519,7 +519,6 @@ export const es: Record<string, string> = {
   'avatar.says': '{name}: {what}',
   'avatar.busy': '{name}: ocupado',
   'avatar.goes_on': '{name} sigue por su cuenta',
-  'avatar.paused': 'Parque en pausa: pasará cuando siga corriendo',
   'avatar.you': '{name} · tú',
   'avatar.waiting': 'esperando tu toque',
   'avatar.status.walking': 'andando',

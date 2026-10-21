@@ -26,7 +26,7 @@
 import { clamp } from './math.ts';
 import { T, isNewDay, stepClock, syncClock } from './clock.ts';
 import { forceWeather, stepWeather, stepWet } from './weather.ts';
-import { OK, applyPending, clearPending, registerHandler, resetCommands, setStepper, setTickSource, type CommandKind } from './commands.ts';
+import { OK, applyPending, clearPending, registerHandler, resetCommands, setFirstKinds, setStepper, setTickSource, type CommandKind } from './commands.ts';
 import { clearEvents, drain, emit, markStep } from './events.ts';
 import { genPark } from '../world/gen.ts';
 import { props } from '../world/grid.ts';
@@ -51,10 +51,12 @@ export const SIM_DT = 1 / 60;
 /** The planning tick: every 1.2 s, 72 steps (03 4.3; GV planT 12038). */
 export const PLAN_STEPS = 72;
 /**
- * The kinds a paused frame applies (03 4.6): `speed`, so the dial can unpause, and `park.new` (owner 2026-10-13: a New confirmed while
- * paused gives the fresh park at once, still paused). Every other command waits for the first step after the unpause.
+ * The kinds a paused frame applies (03 4.6): `speed`, so the dial can unpause, `park.new` (owner 2026-10-13: a New confirmed while paused
+ * gives the fresh park at once, still paused), and `avatar.enter` and `avatar.leave` (owner 2026-10-22: Be someone and Creator answer at
+ * once on a paused park, so the player can look round as the actor before the run). Every other command waits for the first step after
+ * the unpause. They also sort ahead of the rest within a tick (commands.ts setFirstKinds), so the replay order is the live one.
  */
-export const PAUSED_KINDS: ReadonlySet<CommandKind> = new Set<CommandKind>(['speed', 'park.new']);
+export const PAUSED_KINDS: ReadonlySet<CommandKind> = new Set<CommandKind>(['speed', 'park.new', 'avatar.enter', 'avatar.leave']);
 /** Milliseconds spent per sim phase since boot (GV 12014; the names are the phases of 03 4.2). */
 export const SP: Record<string, number> = { cmd: 0, time: 0, weather: 0, day: 0, abilities: 0, arrivals: 0, visitors: 0, creatures: 0, romance: 0, wear: 0, plan: 0, charm: 0 };
 
@@ -230,6 +232,7 @@ function frame(ts: number): void {
 
 /* What the S2 commands do. The module that owns a kind registers it (commands.ts), and this file owns these three. */
 setTickSource(tick);
+setFirstKinds(PAUSED_KINDS);
 setStepper(() => simulate(SIM_DT, 0));
 registerHandler('speed', (c) => {
   setSpeed(c.payload.speed);

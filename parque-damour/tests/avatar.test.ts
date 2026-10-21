@@ -1,5 +1,5 @@
 // tests/avatar.test.ts
-// Locks 07 S7.6 steps 1-5, 8, 9 and S7.7 item 2 (08 2.5 avatar rows) for the three avatars of S7, a_pigeon, a_pomeranian and a_florist:
+// Locks 07 S7.6 steps 1-5, 8, 9 and S7.7 item 2 (08 2.5 avatar rows) for the three avatars of S7, a_pigeon, a_pomeranian and a_florist (the cascades are in avatar-pigeon, avatar-pomeranian and avatar-florist .test.ts since the split at the 600-line rule):
 // entering sets MODE and PLAYER to a live actor and spawns one only when absent; a locked avatar and S10's three are refused; a tool in
 // avatar mode is reason.not_in_avatar; each cascade (02 10.4, 10.5, 10.7) returns its status key and refusals, and a refusal changes nothing
 // (the hash is the same: a rejected command is not logged, so a replay skips it); a stale hit falls through to the tile steps; the
@@ -7,63 +7,21 @@
 // petals' c_petals cast, the snatch's); leaving returns the actor to the AI (the florist's leaveAt is finite again); the avatar is never a
 // Pair member; a snapshot in avatar mode restores to the same hash.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { newPark, simulate, SIM_DT, tick } from '../src/core/loop.ts';
-import { AVATAR_SIDE, applyNow, log, type Hit } from '../src/core/commands.ts';
-import { clearListeners, on, type GameEvent } from '../src/core/events.ts';
+import { PAUSED_KINDS, SIM_DT, newPark, setSpeed, simulate, tick } from '../src/core/loop.ts';
+import { AVATAR_SIDE, applyNow, applyPending, enqueue, log, pendingCount, replay, type Hit } from '../src/core/commands.ts';
 import { T } from '../src/core/clock.ts';
-import { I, KIND, Kind, OCC, PETALS, props } from '../src/world/grid.ts';
 import { getAvatar, getMode, getPlayer, setMode, PLAYER_HOLD, type AvatarId } from '../src/play/mode.ts';
 import { AVATARS, avatarTap, avatarById } from '../src/play/avatar.ts';
-import { effects, cooldownLeft } from '../src/play/abilities.ts';
-import { points, setProgress } from '../src/play/progression.ts';
+import { setProgress } from '../src/play/progression.ts';
 import { canUndo } from '../src/play/undo.ts';
-import { creatureById, creatures, dropCrumbs, resetCreatures, spawnDog, thePomeranian, type Creature } from '../src/entities/creatures.ts';
-import { byId, NEVER, removeVisitor, visitors, type Visitor } from '../src/entities/visitor.ts';
-import { land } from '../src/entities/embarrass.ts';
-import { pairOf, pairs } from '../src/entities/romance.ts';
+import { creatureById, creatures, resetCreatures, thePomeranian, type Creature } from '../src/entities/creatures.ts';
+import { NEVER, removeVisitor, visitors } from '../src/entities/visitor.ts';
 import { pompon } from '../src/entities/pomeranian.ts';
 import { restore, snapshot, stateHash } from '../src/save/store.ts';
-import { adult, child, pairAt, run, stay, unlockAll, world, SEC } from './abilities-world.ts';
+import { adult, child, run, stay, SEC } from './abilities-world.ts';
+import { cmdTap, enter, events, floristActor, lawn, leave, pigeonActor, rejected, setupAvatarWorld, tapPerson, tapTile } from './avatar-world.ts';
 
-const enter = (id: AvatarId) => applyNow({ side: AVATAR_SIDE[id], kind: 'avatar.enter', payload: { avatar: id } });
-const leave = () => applyNow({ side: AVATAR_SIDE[getAvatar() ?? 'a_pigeon'], kind: 'avatar.leave', payload: {} });
-const tileHit = (x: number, y: number): Hit => ({ kind: 'tile', id: 0, tile: { x, y } });
-/** A tap on a person: the tile under them and the hit the UI would have resolved. */
-const onPerson = (v: Visitor): [{ x: number; y: number }, Hit] => {
-  const t = { x: Math.round(v.x), y: Math.round(v.y) };
-  return [t, { kind: 'visitor', id: v.id, tile: t }];
-};
-const tapPerson = (v: Visitor) => avatarTap(...onPerson(v));
-const tapTile = (x: number, y: number) => avatarTap({ x, y }, tileHit(x, y));
-const cmdTap = (x: number, y: number, hit?: Hit) =>
-  applyNow({ side: AVATAR_SIDE[getAvatar() ?? 'a_pigeon'], kind: 'avatar.tap', payload: { tile: { x, y }, hit: hit ?? tileHit(x, y) } });
-const bedTile = (): { x: number; y: number } => {
-  for (let i = 0; i < KIND.length; i++) if (KIND[i] === Kind.bed) return { x: i % 48, y: Math.floor(i / 48) };
-  throw new Error('no bed in the starter park');
-};
-const gravel = (): { x: number; y: number } => {
-  for (let i = 0; i < KIND.length; i++) if (KIND[i] === Kind.gravel && OCC[i] === 0) return { x: i % 48, y: Math.floor(i / 48) };
-  throw new Error('no gravel');
-};
-const lawn = (): { x: number; y: number } => {
-  for (let i = 24 * 48 + 30; i < KIND.length; i++) if (KIND[i] === Kind.lawn && OCC[i] === 0) return { x: i % 48, y: Math.floor(i / 48) };
-  throw new Error('no lawn');
-};
-const mp = (): number => points().mp;
-const pigeonActor = (): Creature => creatureById(getPlayer()) as Creature;
-const floristActor = (): Visitor => byId(getPlayer()) as Visitor;
-let rejected: string[] = [];
-let events: GameEvent[] = [];
-
-beforeEach(() => {
-  clearListeners();
-  world();
-  unlockAll();
-  rejected = [];
-  events = [];
-  on('rejected', (e) => rejected.push(String(e.params?.reason)));
-  for (const k of ['avatarStatus', 'mode', 'bouquet', 'cast', 'embarrassed', 'snatch'] as const) on(k, (e) => events.push(e));
-});
+beforeEach(setupAvatarWorld);
 
 describe('the six avatars of register 3.8 (07 S7.6 step 2; 02 10.2)', () => {
   it('AVATARS holds the six ids with their side, tier, speed and three hint keys; only the three of S7 are playable', () => {
@@ -257,295 +215,6 @@ describe('the cascade\'s order and the stale hit (02 10.3; 03 5.2 item 4)', () =
   });
 });
 
-describe('a_pigeon (02 10.4)', () => {
-  it('a tap on an adult returns avatar.status.swooping and the poop lands with +1 MP when the victim is paired', () => {
-    const { p, a, b } = pairAt(20, 20, 1);
-    b.x = 26; // 6 tiles apart: no backfire is possible (4)
-    stay(a, b);
-    enter('a_pigeon');
-    const mp0 = mp();
-    expect(tapPerson(a)).toBe('avatar.status.swooping');
-    expect(pigeonActor().st).toBe('swoop');
-    run(5 * SEC);
-    const emb = events.filter((e) => e.kind === 'embarrassed');
-    expect(emb).toHaveLength(1);
-    expect(emb[0]?.params).toMatchObject({ kind: 'poop', source: 'mischief', score: 1 });
-    expect(mp()).toBe(mp0 + 1);
-    expect(a.embToday).toBe(1);
-    expect(p.affinity).toBeLessThan(0.4); // the cost of 02 6.4 came off
-    // the player's pigeon stays where it landed: poop, then startled, then wait
-    expect(['poop', 'startled', 'wait']).toContain(pigeonActor().st);
-    run(3 * SEC);
-    expect(pigeonActor().st).toBe('wait');
-    expect(pigeonActor().z).toBeLessThan(0.1);
-  });
-  it('a lone adult costs nothing but still gets the poop; the points are the paired victim\'s only (02 7.2)', () => {
-    const a = adult(20, 20);
-    stay(a);
-    enter('a_pigeon');
-    const mp0 = mp();
-    expect(tapPerson(a)).toBe('avatar.status.swooping');
-    run(5 * SEC);
-    expect(a.embToday).toBe(1);
-    expect(mp()).toBe(mp0);
-  });
-  it('the 25 s cooldown of m_pigeon is shared: ruffled until it ends, and the cooldown is the ability\'s', () => {
-    const a = adult(20, 20), b = adult(22, 20);
-    stay(a, b);
-    enter('a_pigeon');
-    const t0 = tick() + 1;
-    expect(tapPerson(a)).toBe('avatar.status.swooping');
-    expect(cooldownLeft('mischief', 'm_pigeon', t0)).toBeCloseTo(25, 6);
-    run(6 * SEC);
-    expect(pigeonActor().st).toBe('wait');
-    const h = stateHash();
-    expect(tapPerson(b)).toBe('avatar.status.ruffled');
-    expect(stateHash()).toBe(h); // nothing was ordered
-    run(20 * SEC);
-    expect(tapPerson(b)).toBe('avatar.status.swooping');
-  });
-  it('refusals: a child, three embarrassments today, a dog within 2 tiles; each changes nothing', () => {
-    const c = child(20, 20), a = adult(24, 20), b = adult(14, 14);
-    enter('a_pigeon');
-    const p = pigeonActor();
-    Object.assign(p, { x: 20, y: 24, z: 0, st: 'wait', t: 0 }); // t 0: waiting, with no startle's peace left (creatures-threats.ts inStartleGrace)
-    let h = stateHash();
-    expect(tapPerson(c)).toBe('reason.not_children');
-    expect(stateHash()).toBe(h);
-    a.embToday = 3;
-    h = stateHash();
-    expect(tapPerson(a)).toBe('reason.enough_today');
-    expect(stateHash()).toBe(h);
-    const owner = adult(20, 25);
-    expect(spawnDog(owner.id)).not.toBeNull();
-    h = stateHash();
-    expect(tapPerson(b)).toBe('reason.startled'); // the walker\'s dog is a tile from the pigeon
-    expect(tapTile(10, 10)).toBe('reason.startled');
-    expect(stateHash()).toBe(h);
-  });
-  it('crumbs: peck; a lamp or bench: perch; a water tile: drink 3 s at its edge; any tile: fly', () => {
-    enter('a_pigeon');
-    const p = pigeonActor();
-    Object.assign(p, { x: 20, y: 20, z: 0, st: 'wait', perchPropId: 0 });
-    const crumbs = props.find((q) => q.kind === 'crumbs');
-    expect(crumbs).toBeUndefined();
-    const lamp = props.find((q) => q.kind === 'lamp');
-    expect(lamp).toBeDefined();
-    if (!lamp) return;
-    expect(avatarTap({ x: lamp.x, y: lamp.y }, { kind: 'prop', id: lamp.id, tile: { x: lamp.x, y: lamp.y } })).toBe('avatar.status.perching');
-    run(6 * SEC);
-    expect(p.st).toBe('perch');
-    expect(p.perchPropId).toBe(lamp.id);
-    run(40 * SEC);
-    expect(p.st).toBe('perch'); // until the next tap, not for 8-20 s
-    expect(tapTile(33, 12)).toBe('avatar.status.drinking'); // the pond
-    expect(p.st).toBe('flyDrink');
-    for (let k = 0; k < 600 && p.st === 'flyDrink'; k++) run(1);
-    expect(p.st).toBe('drink');
-    run(2 * SEC);
-    expect(p.st).toBe('drink');
-    run(2 * SEC);
-    expect(p.st).toBe('wait');
-    expect(tapTile(20, 30)).toBe('avatar.status.flying');
-    run(6 * SEC);
-    expect(p.st).toBe('wait');
-    expect(Math.hypot(p.x - 20, p.y - 30)).toBeLessThan(0.6);
-    // crumbs dropped for it are pecked once, for 4 s
-    const owner = adult(26, 20);
-    stay(owner);
-    dropCrumbs(24, 22, owner.id);
-    const cr = props.find((q) => q.kind === 'crumbs');
-    expect(cr).toBeDefined();
-    if (!cr) return;
-    cr.data.stock = 2;
-    expect(avatarTap({ x: 24, y: 22 }, { kind: 'prop', id: cr.id, tile: { x: 24, y: 22 } })).toBe('avatar.status.pecking');
-    run(3 * SEC);
-    expect(p.st).toBe('peck');
-    run(3 * SEC);
-    expect(p.st).toBe('wait'); // one peck, not the whole handful
-    expect(cr.data.stock).toBe(1);
-  });
-});
-
-describe('a_pomeranian (02 10.5)', () => {
-  it('a hatless, bagless adult is reason.no_item; a walker\'s dog within 3 is reason.big_dog; three today reason.enough_today', () => {
-    const a = adult(20, 20), b = adult(30, 30);
-    enter('a_pomeranian');
-    const h = stateHash();
-    expect(tapPerson(a)).toBe('reason.no_item');
-    Object.assign(a.items, { hat: true });
-    Object.assign(b.items, { purse: true });
-    const owner = adult(31, 30);
-    expect(spawnDog(owner.id)).not.toBeNull();
-    expect(tapPerson(b)).toBe('reason.big_dog');
-    a.embToday = 3;
-    expect(tapPerson(a)).toBe('reason.enough_today');
-    expect(stateHash()).not.toBe(h); // (the items, the dog and the count were set up above, the refusals added nothing to it)
-    const h2 = stateHash();
-    expect(tapPerson(a)).toBe('reason.enough_today');
-    expect(stateHash()).toBe(h2);
-  });
-  it('a snatch: snatching, the same run as m_pomeranian, +1 MP on a paired victim, the item comes back at the gate; panting for 60 s', () => {
-    const { a, b } = pairAt(24, 24, 1);
-    b.x = 30;
-    stay(a, b);
-    a.items = { hat: true, purse: false, baguette: false, iceCream: false };
-    enter('a_pomeranian');
-    const c = pompon() as Creature;
-    run(8 * SEC);
-    expect(c.st).toBe('wait');
-    const mp0 = mp();
-    const t0 = tick() + 1;
-    expect(tapPerson(a)).toBe('avatar.status.snatching');
-    expect(cooldownLeft('mischief', 'm_pomeranian', t0)).toBeCloseTo(60, 6);
-    expect(c.st).toBe('snatch');
-    expect(tapPerson(b)).toBe('reason.busy'); // a hold state
-    run(25 * SEC);
-    expect(events.some((e) => e.kind === 'snatch' && e.params?.item === 'hat')).toBe(true);
-    expect(mp()).toBe(mp0 + 1);
-    for (let k = 0; k < 60 && c.st !== 'wait'; k++) run(SEC);
-    expect(a.items.hat).toBe(true); // dropped at the gate and the victim has it back
-    expect(c.driven).toBe(true);
-    expect(c.outside).toBe(false); // he stays in the park: shakeOff 1 s, then wait
-    expect(c.st).toBe('wait');
-    Object.assign(b.items, { hat: true });
-    expect(tapPerson(b)).toBe('avatar.status.panting'); // within the 60 s of the m_pomeranian cooldown
-  });
-  it('pigeons: chase; a child: play, the child chases; water: paddle then shakeOff; the lawn: dig; any tile: walk', () => {
-    enter('a_pomeranian');
-    const c = pompon() as Creature;
-    Object.assign(c, { x: 20, y: 20, st: 'wait', outside: false });
-    const pg = creatures.find((o) => o.kind === 'pigeon') as Creature;
-    Object.assign(pg, { x: 24, y: 20, st: 'peck', t: 9, z: 0 });
-    expect(avatarTap({ x: 24, y: 20 }, { kind: 'creature', id: pg.id, tile: { x: 24, y: 20 } })).toBe('avatar.status.chasing');
-    expect(c.st).toBe('chase');
-    run(4 * SEC);
-    expect(c.st).toBe('wait');
-    expect(pg.st).toBe('scatter'); // he came within 3 (creatures.ts threats)
-    const k = child(18, 20);
-    Object.assign(c, { x: 20, y: 20 });
-    expect(tapPerson(k)).toBe('avatar.status.playing');
-    expect(c.st).toBe('play');
-    expect(k.st).toBe('play');
-    expect(k.job.creatureId).toBe(c.id);
-    run(9 * SEC);
-    expect(c.st).toBe('wait');
-    expect(tapTile(33, 12)).toBe('avatar.status.paddling');
-    run(25 * SEC);
-    expect(['paddle', 'shakeOff', 'wait']).toContain(c.st);
-    run(8 * SEC);
-    expect(c.st).toBe('wait');
-    const l = lawn();
-    expect(tapTile(l.x, l.y)).toBe('avatar.status.digging');
-    for (let k = 0; k < 90 && c.st !== 'dig'; k++) run(SEC);
-    expect(c.st).toBe('dig');
-    run(4 * SEC);
-    expect(c.st).toBe('wait');
-    expect(Math.hypot(c.x - l.x, c.y - l.y)).toBeLessThan(0.5);
-    const g = gravel();
-    expect(tapTile(g.x, g.y)).toBe('avatar.status.walking'); // a path tile: run there
-    expect(c.st).toBe('walk');
-  });
-});
-
-describe('a_florist (02 10.7)', () => {
-  it('refusals: an empty basket is reason.basket_empty, an unpaired person reason.not_courting, a child reason.not_children; each changes nothing', () => {
-    const { a, b } = pairAt(20, 20, 1);
-    b.x = 26;
-    const lone = adult(30, 30), c = child(34, 30);
-    enter('a_florist');
-    const v = floristActor();
-    Object.assign(v, { x: 22, y: 26, st: 'idle', t: 0, path: null });
-    let h = stateHash();
-    expect(tapPerson(lone)).toBe('reason.not_courting');
-    expect(tapPerson(c)).toBe('reason.not_children');
-    expect(stateHash()).toBe(h);
-    v.basket = 0;
-    h = stateHash();
-    expect(tapPerson(a)).toBe('reason.basket_empty');
-    expect(stateHash()).toBe(h);
-    v.basket = 3;
-    a.st = 'wipe'; // a member in a reaction: c_bouquet's own check says busy
-    expect(tapPerson(b)).toBe('reason.busy');
-  });
-  it('a bouquet: bouquet, a walk to them (hold), basket -1, affinity +0.05, lastCupidAt, the 60 s cooldown of c_bouquet', () => {
-    const { p, a, b } = pairAt(20, 20, 2);
-    stay(a, b);
-    enter('a_florist');
-    const v = floristActor();
-    Object.assign(v, { x: 20, y: 26, st: 'idle', t: 0, path: null });
-    const aff0 = p.affinity;
-    expect(p.lastCupidAt).toBe(-1);
-    const t0 = tick() + 1;
-    expect(tapPerson(a)).toBe('avatar.status.bouquet');
-    expect(v.st).toBe('hand');
-    expect(tapTile(10, 10)).toBe('reason.busy'); // the hold
-    run(10 * SEC);
-    expect(events.filter((e) => e.kind === 'bouquet')).toHaveLength(1);
-    expect(v.basket).toBe(2);
-    expect(p.affinity).toBeGreaterThan(aff0 + 0.045); // +0.05, and the little the minutes of charm conversion add
-    expect(p.affinity).toBeLessThan(aff0 + 0.07);
-    expect(p.lastCupidAt).toBeGreaterThanOrEqual(0);
-    expect(cooldownLeft('cupid', 'c_bouquet', t0 + 10 * SEC)).toBeGreaterThan(40);
-    expect(v.st).not.toBe('hand');
-    expect(tapPerson(b)).toBe('reason.cooldown');
-  });
-  it('a flowerbed: pick 4 s and the basket is 3; a bench: sit until the next tap; the lawn: petals as c_petals, 30 s', () => {
-    enter('a_florist');
-    const v = floristActor();
-    Object.assign(v, { x: 22, y: 26, st: 'idle', t: 0, path: null, basket: 0 });
-    const bed = bedTile();
-    expect(tapTile(bed.x, bed.y)).toBe('avatar.status.picking');
-    expect(v.st).toBe('goPick');
-    run(40 * SEC);
-    expect(v.basket).toBe(3);
-    expect(v.st).not.toBe('pick');
-    // the bench
-    const bench = props.find((q) => q.kind === 'bench');
-    expect(bench).toBeDefined();
-    if (bench) {
-      expect(avatarTap({ x: bench.x, y: bench.y }, { kind: 'prop', id: bench.id, tile: { x: bench.x, y: bench.y } })).toBe('avatar.status.resting');
-      run(60 * SEC);
-      expect(v.st).toBe('sit'); // not 90 s, not when rested: until she is told otherwise
-    }
-    // the lawn
-    const l = lawn();
-    expect(tapTile(l.x, l.y)).toBe('avatar.status.petals');
-    expect(v.st).toBe('goScatter');
-    expect(effects).toHaveLength(0);
-    for (let k = 0; k < 90 && effects.length === 0; k++) run(SEC);
-    expect(effects.filter((e) => e.ability === 'c_petals')).toHaveLength(1); // cast at the moment she scatters
-    expect(v.st).toBe('scatter');
-    expect(PETALS[I(l.x, l.y)] as number).toBeGreaterThan(0.2);
-    expect(events.some((e) => e.kind === 'cast' && e.params?.id === 'c_petals')).toBe(true);
-    expect(tapTile(l.x + 1, l.y)).toBe('reason.busy'); // the 2 s of scatter are a hold
-    run(3 * SEC);
-    expect(tapTile(l.x + 1, l.y)).toBe('reason.cooldown'); // c_petals' 30 s, shared
-  });
-  it('a tile she cannot scatter on (a bench, the water) is a walk; the hold of scatter and pick answers busy', () => {
-    enter('a_florist');
-    const v = floristActor();
-    Object.assign(v, { x: 22, y: 26, st: 'idle', t: 0, path: null });
-    expect(tapTile(33, 12)).toBe('avatar.status.walking');
-    expect(v.st).toBe('wander');
-    v.st = 'scatter';
-    expect(tapTile(33, 12)).toBe('reason.busy');
-    v.st = 'pick';
-    expect(tapTile(33, 12)).toBe('reason.busy');
-  });
-  it('she can be a victim: a poop lands, the pigeon\'s victim reacts under avatarDecide; never a Pair member', () => {
-    enter('a_florist');
-    const v = floristActor();
-    Object.assign(v, { x: 22, y: 26, st: 'idle', t: 0, path: null });
-    const mp0 = mp();
-    expect(land('poop', v.id, 'mischief').ok).toBe(true);
-    run(2 * SEC);
-    expect(v.st).toBe('wipe'); // the possessed actor reacted: the decide cadence ran avatarDecide, which took rung 1
-    expect(pairOf(v)).toBeUndefined();
-    expect(pairs.some((q) => q.a === v.id || q.b === v.id)).toBe(false);
-    expect(mp()).toBe(mp0); // no pair: no point, and none against herself
-  });
-});
 
 describe('a snapshot in avatar mode (the mode block, 03 3.10; 08 2.6)', () => {
   it('restores to the same hash with the florist and the pigeon possessed; a save whose actor is gone restores in creator mode', () => {
@@ -596,5 +265,85 @@ describe('a snapshot in avatar mode (the mode block, 03 3.10; 08 2.6)', () => {
     expect(play()).toBe(play());
     expect(simulate).toBeDefined();
     expect(SIM_DT).toBeGreaterThan(0);
+  });
+});
+
+describe('the avatar commands on a paused park (03 4.6, 5.2; owner 2026-10-22)', () => {
+  const json = (): ReturnType<typeof snapshot> => JSON.parse(JSON.stringify(snapshot())) as ReturnType<typeof snapshot>;
+  /** One paused frame (the paused kinds apply), then the unpause and the first step. */
+  const pausedThenStep = (): void => {
+    applyPending(tick() + 1, PAUSED_KINDS);
+    setSpeed(1);
+    simulate(SIM_DT, 1);
+  };
+
+  it('Be someone and Creator apply in the paused frame: the mode, the actor and the toast event at once, at the same tick, the log in order', () => {
+    setSpeed(0);
+    const t0 = tick();
+    enqueue({ side: 'mischief', kind: 'avatar.enter', payload: { avatar: 'a_pigeon' } });
+    applyPending(t0 + 1, PAUSED_KINDS);
+    expect([getMode(), getAvatar(), tick(), pendingCount()]).toEqual(['avatar', 'a_pigeon', t0, 0]);
+    expect(pigeonActor().driven).toBe(true);
+    expect(events.filter((e) => e.kind === 'mode').map((e) => e.params?.mode)).toEqual(['avatar']);
+    enqueue({ side: 'mischief', kind: 'avatar.leave', payload: {} });
+    applyPending(t0 + 1, PAUSED_KINDS);
+    expect([getMode(), getPlayer(), tick()]).toEqual(['creator', 0, t0]);
+    expect(events.filter((e) => e.kind === 'mode').map((e) => e.params?.toast ?? e.params?.mode)).toEqual(['avatar', 'avatar.goes_on']);
+    expect(log().map((c) => c.kind)).toEqual(['avatar.enter', 'avatar.leave']);
+    expect(rejected).toEqual([]);
+  });
+  it('the rules still hold while paused: a locked avatar is reason.locked, a second enter reason.wrong_mode, a wrong-side leave reason.wrong_side', () => {
+    setSpeed(0);
+    setProgress({ cp: 0, mp: 0 });
+    enqueue({ side: 'mischief', kind: 'avatar.enter', payload: { avatar: 'a_pomeranian' } });
+    applyPending(tick() + 1, PAUSED_KINDS);
+    expect(getMode()).toBe('creator');
+    enqueue({ side: 'mischief', kind: 'avatar.enter', payload: { avatar: 'a_pigeon' } });
+    enqueue({ side: 'mischief', kind: 'avatar.enter', payload: { avatar: 'a_pigeon' } });
+    applyPending(tick() + 1, PAUSED_KINDS);
+    expect(getMode()).toBe('avatar');
+    enqueue({ side: 'cupid', kind: 'avatar.leave', payload: {} });
+    applyPending(tick() + 1, PAUSED_KINDS);
+    expect(getMode()).toBe('avatar');
+    expect(rejected).toEqual(['reason.locked', 'reason.wrong_mode', 'reason.wrong_side']);
+    expect(log().map((c) => c.kind)).toEqual(['avatar.enter']);
+  });
+  it('an avatar.tap and a tool wait for the first step: the tap lands after the paused enter, the tool is refused as not_in_avatar', () => {
+    setSpeed(0);
+    enqueue({ side: 'park', kind: 'tool', payload: { tool: 'lamp', at: { x: 5, y: 5 } } });
+    enqueue({ side: 'mischief', kind: 'avatar.enter', payload: { avatar: 'a_pigeon' } });
+    const to = lawn();
+    enqueue({ side: 'mischief', kind: 'avatar.tap', payload: { tile: to, hit: { kind: 'tile', id: 0, tile: to } } });
+    applyPending(tick() + 1, PAUSED_KINDS);
+    expect(pendingCount()).toBe(2); // the tool and the tap
+    expect(pigeonActor().st).not.toBe('fly');
+    setSpeed(1);
+    simulate(SIM_DT, 1);
+    expect(pendingCount()).toBe(0);
+    expect(rejected).toEqual(['reason.not_in_avatar']);
+    expect(log().map((c) => c.kind)).toEqual(['avatar.enter', 'avatar.tap']);
+  });
+  it('they sort ahead of a visitor.call queued before them, so the replay draws the same numbers (florist in, then out)', () => {
+    for (const [side, kind, payload] of [
+      ['cupid', 'avatar.enter', { avatar: 'a_florist' }],
+      ['cupid', 'avatar.leave', {}],
+    ] as const) {
+      setSpeed(0);
+      const snap = json(), n = log().length;
+      enqueue({ side: 'park', kind: 'visitor.call', payload: { gate: null } }); // park sorts before cupid, and was queued first
+      enqueue({ side, kind, payload } as Parameters<typeof enqueue>[0]);
+      pausedThenStep();
+      expect(log().slice(n).map((c) => c.kind)).toEqual([kind, 'visitor.call']);
+      const h = stateHash(), cmds = log().slice(n).map((c) => ({ ...c }));
+      const t1 = tick();
+      restore(snap);
+      setSpeed(1);
+      replay(cmds, t1);
+      expect(stateHash(), kind).toBe(h);
+      // restore() dropped the avatar session the live run built; play the live order again to carry on from it
+      setSpeed(0);
+      enqueue({ side, kind, payload } as Parameters<typeof enqueue>[0]);
+      applyPending(tick() + 1, PAUSED_KINDS);
+    }
   });
 });

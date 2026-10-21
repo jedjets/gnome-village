@@ -11,6 +11,8 @@ import { W } from '../src/core/weather.ts';
 import { WEAR } from '../src/world/grid.ts';
 import { parkSeed } from '../src/world/gen.ts';
 import { restore, snapshot, stateHash } from '../src/save/store.ts';
+import { getMode, getPlayer } from '../src/play/mode.ts';
+import { creatureById } from '../src/entities/creatures.ts';
 
 beforeEach(() => {
   clearListeners();
@@ -138,8 +140,44 @@ function frame(): void {
 }
 
 describe('core/loop the paused frame (03 4.6)', () => {
-  it('the kinds a paused frame applies are speed and park.new (owner 2026-10-13)', () => {
-    expect([...PAUSED_KINDS].sort()).toEqual(['park.new', 'speed']);
+  it('the kinds a paused frame applies are speed, park.new, avatar.enter and avatar.leave (owner 2026-10-13 and 2026-10-22)', () => {
+    expect([...PAUSED_KINDS].sort()).toEqual(['avatar.enter', 'avatar.leave', 'park.new', 'speed']);
+  });
+
+  it('Be someone and Creator apply in the paused frame at once; an avatar.tap waits for the first step and is refused behind Creator; a replay agrees', () => {
+    const rejected: string[] = [];
+    on('rejected', (e) => rejected.push(`${String(e.params?.kind)}:${String(e.params?.reason)}`));
+    setSpeed(0);
+    const snap = JSON.parse(JSON.stringify(snapshot())) as ReturnType<typeof snapshot>;
+    const to = { x: 30, y: 30 };
+    try {
+      stubRaf();
+      frame();
+      enqueue({ side: 'mischief', kind: 'avatar.enter', payload: { avatar: 'a_pigeon' } });
+      enqueue({ side: 'mischief', kind: 'avatar.tap', payload: { tile: to, hit: { kind: 'tile', id: 0, tile: to } } });
+      frame();
+      expect(getMode()).toBe('avatar'); // the enter applied in the paused frame
+      expect(creatureById(getPlayer())?.driven).toBe(true);
+      expect([tick(), T.speed, pendingCount()]).toEqual([0, 0, 1]); // still paused at tick 0; the tap waits
+      enqueue({ side: 'mischief', kind: 'avatar.leave', payload: {} });
+      frame();
+      expect(getMode()).toBe('creator'); // Creator answered at once too
+      expect(getPlayer()).toBe(0);
+      expect([tick(), pendingCount()]).toEqual([0, 1]); // the tap is still queued: it belongs to the first step
+      enqueue({ side: 'park', kind: 'speed', payload: { speed: 1 } });
+      frame();
+      frame();
+      expect(tick()).toBe(1);
+      expect(rejected).toEqual(['avatar.tap:reason.wrong_mode']); // behind Creator the tap has no avatar to move
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    const h = stateHash();
+    const cmds = log().map((c) => ({ ...c }));
+    expect(cmds.map((c) => c.kind)).toEqual(['avatar.enter', 'avatar.leave', 'speed']); // the order they applied in
+    restore(snap);
+    replay(cmds, 1);
+    expect(stateHash()).toBe(h);
   });
 
   it('while paused only speed and park.new apply; the rest wait for the first step, so the live order equals the replay order', () => {
