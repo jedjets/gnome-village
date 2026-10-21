@@ -2,7 +2,8 @@
 // a_pomeranian (Mischief T1), 02 10.5: the actor (Pompon), and the tap cascade steps 3a to 5 with their refusals. Split out of avatar.ts
 // (AGENTS rule 9; 03 2.6 row avatar-pomeranian.ts). NEW. Pompon is the Creature `thePomeranian()` with `driven` set (entities/pomeranian.ts runs
 // his states): this file checks everything first and mutates last, like avatar-pigeon.ts (a refusal is not logged, so it must change nothing).
-// He enters through the gate he waits outside (the nearest gate to him) and walks onto its first tile. 3a an adult, not staff, carrying an item
+// He enters through the gate he waits outside (the nearest gate to him) and walks onto its first tile; one the AI is walking home is taken
+// where he stands. 3a an adult, not staff, carrying an item
 // (`reason.no_item` when none; `reason.big_dog` with a walker's dog within 3 tiles of him or of the person; `reason.enough_today` at 3 a day):
 // `snatch` as m_pomeranian (the same run, snatch through embarrass.land, carry to the nearest gate with the victim chasing 8 s, drop; he stays,
 // `shakeOff` 1 s), the 60 s cooldown of m_pomeranian (`panting` while it runs), the same points; 3b a pigeon, or crumbs with pigeons at
@@ -22,15 +23,28 @@ import { PLAY_T, POM_RUN_MAX } from '../entities/pomeranian.ts';
 import { cooldownLeft, startCooldown } from './abilities.ts';
 import { openTileNear, waterEdge, isWaterTile, type Picked, type StatusKey } from './avatar-pick.ts';
 
-/** Pompon, brought in: he must be outside (not on an errand of m_pomeranian) and walks onto the first tile of the gate he waits at. */
+/** The states of an errand of m_pomeranian (pomeranian.ts): while one runs he is busy; any other state in the park is the AI walking him home. */
+const ERRAND: ReadonlySet<string> = new Set(['run', 'snatch', 'carry', 'home']);
+
+/**
+ * Pompon, brought in. Outside (waiting at a gate, whatever is left of his wait) he walks onto the first tile of the gate nearest him; in the
+ * park, because the player let go a moment ago and the AI is taking him home, he is taken over where he stands and waits for the next tap.
+ * Only an errand of m_pomeranian (`run`, `snatch`, `carry`, `home`) is `reason.busy` (03 5.3), so that he can be taken again at once, like the
+ * pigeon and the florist.
+ */
 export function pomEnter(): number | ReasonKey {
   const c = thePomeranian();
-  if (!c.outside) return 'reason.busy';
-  const g = nearestGate(c.x, c.y);
-  c.outside = false;
+  if (!c.outside && (c.driven || ERRAND.has(c.st))) return 'reason.busy';
+  if (c.outside) {
+    const g = nearestGate(c.x, c.y);
+    c.outside = false;
+    c.st = 'walk';
+    c.dest = { x: g.tiles[0].x, y: g.tiles[0].y };
+  } else {
+    c.st = 'wait';
+    delete c.dest;
+  }
   c.driven = true;
-  c.st = 'walk';
-  c.dest = { x: g.tiles[0].x, y: g.tiles[0].y };
   c.tx = c.x;
   c.ty = c.y;
   c.t = 0;

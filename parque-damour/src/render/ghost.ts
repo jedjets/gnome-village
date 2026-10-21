@@ -205,9 +205,10 @@ const FPEN = { ctx: null as unknown as CanvasRenderingContext2D, spec: style(), 
 /**
  * Floors of the glow's pool radius, the twinkles' orbit and the twinkles' size, in px: they act only at far zoom (below about 1.2), see drawRing.
  * Raised in S7 (owner 2026-10-21, "the featured pair's glow strengthened at Fit": 14, 6.5 and 1.8 before): at Fit a figure is 6.6 px tall and the
- * pool now measures 18 px, the orbit 10, a twinkle 2.1. Each stays under the figure-scaled value at 1.3 (27.2, 14.3, 2.15 px), so 1.3 and 2.4 draw as before.
+ * pool now measures 18 px, the orbit 10, a twinkle 2. Each stays under the figure-scaled value at 1.3 even for an elder (0.95 h: 25.8, 13.6 and
+ * 2.04 px; an adult's are 27.2, 14.3 and 2.15), so 1.3 and 2.4 draw as before; the twinkle floor crosses an adult's value at about 1.2.
  */
-export const RING_MIN = 18, RING_ORBIT_MIN = 10, RING_STAR_MIN = 2.1;
+export const RING_MIN = 18, RING_ORBIT_MIN = 10, RING_STAR_MIN = 2;
 /**
  * The glow's pool of radius R px at the feet: `rose` from 0.85 at the middle to 0, flattened to 0.42, and three `lamp` twinkles turning round
  * it. R is 0.95 h, the orbit 0.5 h and a twinkle 0.075 h, each with a floor, so that at Fit, where a figure is 8 px tall, the pair is still a

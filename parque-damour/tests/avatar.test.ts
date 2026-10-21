@@ -308,7 +308,7 @@ describe('a_pigeon (02 10.4)', () => {
     const c = child(20, 20), a = adult(24, 20), b = adult(14, 14);
     enter('a_pigeon');
     const p = pigeonActor();
-    Object.assign(p, { x: 20, y: 24, z: 0, st: 'wait' });
+    Object.assign(p, { x: 20, y: 24, z: 0, st: 'wait', t: 0 }); // t 0: waiting, with no startle's peace left (creatures-threats.ts inStartleGrace)
     let h = stateHash();
     expect(tapPerson(c)).toBe('reason.not_children');
     expect(stateHash()).toBe(h);

@@ -323,12 +323,30 @@ describe('03 7.9 phase 6 and 04 7.6 (S6): the featured pair\'s rose glow, a hair
     expect(RING_ORBIT_MIN).toBeGreaterThan(5);
     expect(radius(0.3)).toBe(RING_MIN);
     expect(radius(1.3)).toBeGreaterThan(RING_MIN * 1.5);
-    // S7 (owner 2026-10-21, the glow strengthened at Fit): the floors are 18, 10 and 2.1 px, and 1.3 and 2.4 draw as they did (0.95 h of a 22 EH figure)
-    expect([RING_MIN, RING_ORBIT_MIN, RING_STAR_MIN]).toEqual([18, 10, 2.1]);
+    // S7 (owner 2026-10-21, the glow strengthened at Fit): the floors are 18, 10 and 2 px, and 1.3 and 2.4 draw as they did (0.95 h of a 22 EH figure)
+    expect([RING_MIN, RING_ORBIT_MIN, RING_STAR_MIN]).toEqual([18, 10, 2]);
     expect(radius(1.3)).toBeCloseTo(0.95 * 22 * 1.3, 6);
     expect(radius(2.4)).toBeCloseTo(0.95 * 22 * 2.4, 6);
     expect(0.5 * 22 * 1.3).toBeGreaterThan(RING_ORBIT_MIN); // the orbit and the twinkle floors lie under their 1.3 values too
     expect(0.075 * 22 * 1.3).toBeGreaterThan(RING_STAR_MIN);
+  });
+  it('an elder pair (0.95 h) at 1.3 and 2.4 is not touched by any floor either: pool, orbit and twinkle are the figure-scaled values (S7 review)', () => {
+    const { a, b } = pairAt(20, 20, 1);
+    a.ageWord = 'elder';
+    b.ageWord = 'elder';
+    for (const z of [1.3, 2.4]) {
+      cam.z = z;
+      centreOn(20, 20);
+      const rings = featuredDrawables(0);
+      expect(rings.length).toBe(2);
+      for (const d of rings) {
+        const h = (d as unknown as { h: number }).h;
+        expect(h).toBeCloseTo(0.95 * 22 * z, 6);
+        expect(h * 0.95, 'pool').toBeGreaterThan(RING_MIN);
+        expect(h * 0.5, 'orbit').toBeGreaterThan(RING_ORBIT_MIN);
+        expect(h * 0.075, 'twinkle').toBeGreaterThan(RING_STAR_MIN);
+      }
+    }
   });
   it('Pompon is drawn once he is in the park, and not while he waits outside; a pigeon on its dive is drawn 1.45 times its size', () => {
     const v = adult(20, 20);

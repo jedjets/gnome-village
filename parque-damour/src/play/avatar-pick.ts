@@ -3,12 +3,12 @@
 // avatar.ts at the 600-line rule, AGENTS rule 9; 03 2.6 row avatar-pick.ts). The hit the UI resolved at tap time is re-validated here (03 5.2
 // item 4): the id must still exist and the tapped tile be within the cascade radius, 1.2 tiles of a person or creature, the 0.75-tile box of a
 // prop (GV playerTap 5658); otherwise the cascade falls through to its tile steps. Also the small tile searches the tile steps need, none of
-// which draws: the nearest open tile, and the standing tile at the edge of a water tile.
+// which draws: the nearest open tile, and the standing tile at the edge of a water tile (the shore nearest a tap in a pond, however far).
 // Ported from GV 5654-5662 (playerTap: the 0.75 `near` box and the nearest thing to the tap). ADAPT: one resolved hit instead of a scan of
 // the trees, rocks and bushes; the people radius is the sim's 1.2 tiles for the UI's 34 px.
 import type { Hit, ReasonKey } from '../core/commands.ts';
 import type { XY } from '../core/math.ts';
-import { BLOCK, I, WATER, inB, propById, rebuildBlock, type Prop } from '../world/grid.ts';
+import { BLOCK, I, N, WATER, inB, propById, rebuildBlock, type Prop } from '../world/grid.ts';
 import { creatureById, type Creature } from '../entities/creatures.ts';
 import { byId, type Visitor } from '../entities/visitor.ts';
 
@@ -68,12 +68,15 @@ export function openTileNear(x: number, y: number, r = 3): XY | null {
   return best;
 }
 
-/** The open tile with water beside it (4 neighbours) nearest the water tile (x, y) within 4: where a bird or a dog stands to drink or paddle. */
+/**
+ * The open tile with water beside it (4 neighbours) nearest the water tile (x, y), anywhere on the map: where a bird or a dog stands to drink
+ * or paddle. A tap in the middle of a big pond still has a shore (the pigeon flies to it; it must never be sent to land on the water: S7 review).
+ */
 export function waterEdge(x: number, y: number): XY | null {
   rebuildBlock();
   let best: XY | null = null, bd = Infinity;
-  for (let dy = -4; dy <= 4; dy++)
-    for (let dx = -4; dx <= 4; dx++) {
+  for (let dy = -N; dy <= N; dy++)
+    for (let dx = -N; dx <= N; dx++) {
       const tx = x + dx, ty = y + dy, d = dx * dx + dy * dy;
       if (d >= bd || !openAt(tx, ty)) continue;
       if (isWaterTile(tx + 1, ty) || isWaterTile(tx - 1, ty) || isWaterTile(tx, ty + 1) || isWaterTile(tx, ty - 1)) {

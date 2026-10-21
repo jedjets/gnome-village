@@ -19,7 +19,7 @@
 // S7 (07 S7.5, 02 10.4): the possessed pigeon (a_pigeon) is the same record with `driven` set while it is the player's (absent otherwise, so
 // a park without avatars hashes as before). play/avatar-pigeon.ts gives its orders by setting st, tx, ty and the target fields; this file runs
 // them with the states it has (fly, swoop, peck, perch) and these: `wait` (an order done: nextPigeon stays put), `poop` (0.5 s) then `startled`
-// (1 s; 2 s when a threat comes near, instead of the scatter) and `drink` (3 s, after `flyDrink`). No MODE or PLAYER is read here (03 4.4).
+// (1 s; 2 s then 3 s of peace when a threat comes near, instead of the scatter) and `drink` (3 s, after `flyDrink`). No MODE or PLAYER read (03 4.4).
 // Dropped from the range: rabbits, deer, foxes, folds, hutches, riders, taming, raids, the fox's barking at night, swimming, sweeps.
 import type { XY } from '../core/math.ts';
 import { T } from '../core/clock.ts';
@@ -29,7 +29,7 @@ import { nextCreatureId, type CreatureId, type PropId, type VisitorId } from '..
 import { BLOCK, I, KIND, Kind, inB, addProp, propById, props, rebuildBlock, removeProp, type Prop } from '../world/grid.ts';
 import { gateById } from '../world/park.ts';
 import { byId, nowTick, visitors } from './visitor.ts';
-import { R_STARTLE, gatherThreats, threatTo } from './creatures-threats.ts';
+import { R_STARTLE, STARTLE_GRACE, gatherThreats, inStartleGrace, threatTo } from './creatures-threats.ts';
 
 export type CreatureKind = 'pigeon' | 'dog' | 'pomeranian';
 /** 03 3.5. */
@@ -338,8 +338,7 @@ function crumbsFor(c: Creature): Prop | null {
 function nextPigeon(c: Creature): void {
   c.perchPropId = 0;
   if (c.driven) {
-    c.st = 'wait'; // the player decides (S7)
-    c.targetId = 0;
+    Object.assign(c, { t: c.st === 'startled' ? STARTLE_GRACE : 0, st: 'wait', targetId: 0 }); // the player decides (S7); a startled bird gets 3 s of peace
     return;
   }
   const cr = crumbsFor(c);
@@ -418,7 +417,7 @@ function stepPigeon(c: Creature, dt: number): void {
     c.cdUntil = 0;
   }
   if (onGround(c)) {
-    const th = threatTo(c, c.driven ? R_STARTLE : Infinity); // the player's pigeon minds only what is within 2 tiles (02 10.4)
+    const th = inStartleGrace(c) ? null : threatTo(c, c.driven ? R_STARTLE : Infinity); // the player's pigeon minds only what is within 2 tiles (02 10.4)
     if (th) {
       if (c.driven) {
         c.st = 'startled'; // the player's pigeon flutters in place: its order is lost, not thrown 3 tiles away (02 10.4)
@@ -450,7 +449,8 @@ function stepPigeon(c: Creature, dt: number): void {
       }
       return;
     case 'wait':
-      if (!c.driven) nextPigeon(c); // the player let go: the AI decides
+      if (c.driven) c.t = Math.max(0, c.t - dt); // the grace after a startle runs down
+      else nextPigeon(c); // the player let go: the AI decides
       return;
     case 'poop':
     case 'startled':

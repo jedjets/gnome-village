@@ -12,6 +12,10 @@ export const R_SCATTER_POM = 3;
 export const R_SCATTER_CHILD = 1;
 /** The possessed pigeon is startled (not scattered) only by a trigger within this many tiles (02 10.4 refusals: "a dog within 2 tiles"). */
 export const R_STARTLE = 2;
+/** After a startle the possessed pigeon is left alone this many seconds, waiting, so the player can order it away from a dog that stays (S7 review). */
+export const STARTLE_GRACE = 3;
+/** True while the player's pigeon is in that grace: a driven pigeon in `wait` whose timer `t` (unused by `wait` otherwise) still runs. */
+export const inStartleGrace = (c: Creature): boolean => c.driven === true && c.st === 'wait' && c.t > 0;
 
 type Threat = { x: number; y: number; r2: number };
 const pool: Threat[] = []; // reused every step: no garbage per step (03 15.2)
