@@ -1,0 +1,368 @@
+/* src/styles/shell.css
+   The paper HUD shell: stage, chips, rail, card, sheets, toast, feed, intro, photo mode, confirm, safe areas, reduced motion.
+   Ported from GV CSS 24-230. PORT; ids are Parque's (03 10.1), body.avatar replaces body.gnome, every colour is a token,
+   no text under 11 px (04 5.2 type scale).
+   S3: the Park strip's pills (icon above the label, the --moss swatch border, 04 5.4 items 2 and 8; the fills of icon set 3), row 2
+   as one context bar (#depth, #sizewrap, Place / Cancel; GV #gbar 184-195), Undo, and the New confirm (the centred paper card,
+   scratch/s3-options.html confirm 1; both picked by the owner on 2026-10-13, register section 4).
+   S4 part C: the card's bars in their tokens (Mood and Full --moss, Rested --sky, any of them --ember below its low mark; 04 5.5 item 1),
+   the census summary's two parts with a dot between (the dot is punctuation, not a string: 03 P7).
+   S6 (04 5.2 item 6, 5.4 items 2-4, 5.6): the Cupid and Mischief pills (a flat swatch in --berry or --ember, a locked one at opacity .45
+   with the tier badge for its swatch), row 2's cooldown chip with its ring, the Points chip's flash, and the Progress sheet's ladders
+   and unlock table.
+   S7 (07 S7.6 step 7; 04 5.4 item 6, 5.5 item 3, 5.6): the avatar mode's three hint chips in row 1 (in place of the switch and the
+   strip), the avatar strip with its three bars, the picker's 2 x 3 cards with their side stripe and portrait. TODO(S11): audit. */
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--body-bg);
+  font-family:var(--ui);color:var(--ink);overscroll-behavior:none;touch-action:none}
+#stage{position:fixed;inset:0;display:block}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
+
+/* ---------- floating chips (GV 35-74) ---------- */
+.hud{position:fixed;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top,0px) + 8px) 10px 0;
+  display:flex;gap:6px;align-items:flex-start;justify-content:space-between;pointer-events:none;z-index:5;flex-wrap:wrap}
+.chip{pointer-events:auto;background:var(--glass);border:1px solid var(--glass-line);border-radius:999px;
+  padding:4px 9px;font:inherit;font-size:12px;font-weight:500;line-height:1.3;letter-spacing:.005em;color:var(--ink);
+  backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);box-shadow:var(--shadow);white-space:nowrap;
+  font-variant-numeric:tabular-nums;display:flex;gap:8px;align-items:center;cursor:pointer;text-align:left}
+.chip b{font-weight:700}
+.chip .sep{width:1px;height:11px;background:var(--glass-line);flex:0 0 1px}
+.chip:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+#hudR{flex-direction:column;align-items:flex-end;display:flex;gap:6px;margin-left:auto}
+#hudVisitorsWrap{cursor:default;gap:0}
+#hudVisitors{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;display:inline-flex;align-items:center;gap:8px;border-radius:999px}
+#hudVisitors:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+#hudRomance{max-width:min(62vw,300px);overflow:hidden}
+#hudRomance span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--display);font-size:12px}
+#tCP{color:var(--berry)}
+#tMP{color:var(--ember)}
+#tCP,#tMP{transition:color .15s}
+#tCP.flash,#tMP.flash{color:var(--ink)} /* the number that gained flashes to --ink for 0.3 s (04 5.2 item 6) */
+.dotm{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:-3px;background:var(--sky)}
+#bAdd{margin-left:2px;width:18px;height:18px;border-radius:50%;border:1px solid var(--glass-line);background:var(--ink);color:var(--on-ink);
+  font:inherit;font-size:13px;font-weight:700;line-height:1;padding:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+#bAdd:disabled{opacity:.35}
+
+/* ---------- bottom rail (GV 76-122) ---------- */
+#rail{position:fixed;left:0;right:0;bottom:0;z-index:6;
+  padding:8px 8px calc(env(safe-area-inset-bottom,0px) + 8px);
+  display:flex;flex-direction:column;gap:7px;pointer-events:none}
+#row1{display:flex;gap:6px;align-items:center;min-width:0;pointer-events:none}
+#groups{flex:0 0 auto;pointer-events:auto}
+#tools{flex:1 1 auto;min-width:0;min-height:8px;display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;padding:2px 2px 3px;
+  scrollbar-width:none;pointer-events:auto;scroll-snap-type:x proximity}
+#tools::-webkit-scrollbar{display:none}
+.tool{flex:0 0 auto;scroll-snap-align:center;background:var(--glass);border:1px solid var(--glass-line);
+  border-radius:14px;padding:7px 11px 6px;display:flex;flex-direction:column;align-items:center;gap:3px;
+  font:inherit;font-size:11px;line-height:1.3;font-weight:600;color:var(--ink-soft);letter-spacing:.02em;
+  backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);box-shadow:var(--shadow);cursor:pointer;
+  transition:transform .13s ease,background .13s ease,color .13s ease}
+.tool .sw{width:17px;height:17px;border-radius:6px;border:1.5px solid var(--swatch-line);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.tool .sw svg{width:15px;height:15px;display:block}
+.tool.park .sw{border-color:var(--moss)}
+/* the icons' small fills (set 3, owner 2026-10-13): the direction A accents of tokens.css, the lines stay currentColor */
+.tool .sw svg .f-rose{fill:var(--rose)} .tool .sw svg .f-lawn{fill:var(--lawn)} .tool .sw svg .f-gravel{fill:var(--gravel)}
+.tool .sw svg .f-water{fill:var(--water)} .tool .sw svg .f-awning{fill:var(--awning)}
+.tool .lb{white-space:nowrap}
+.tool .tier{font-size:11px;font-weight:700;color:var(--ink-soft);min-height:17px;display:flex;align-items:center}
+.tool.locked{opacity:.45}
+/* the ability pills (04 5.4 item 2): the swatch is a plain colour chip in the side's accent, its border the same; pressed, the border goes pale */
+.tool.cupid .sw{background:var(--berry);border-color:var(--berry)}
+.tool.mischief .sw{background:var(--ember);border-color:var(--ember)}
+.tool.cupid[aria-pressed="true"] .sw,.tool.mischief[aria-pressed="true"] .sw{border-color:var(--on-ink-line)}
+#tools.more{-webkit-mask-image:linear-gradient(90deg,black 84%,transparent);mask-image:linear-gradient(90deg,black 84%,transparent)}
+#tools.more.before{-webkit-mask-image:linear-gradient(90deg,transparent,black 10%,black 84%,transparent);mask-image:linear-gradient(90deg,transparent,black 10%,black 84%,transparent)}
+#tools.before:not(.more){-webkit-mask-image:linear-gradient(90deg,transparent,black 10%);mask-image:linear-gradient(90deg,transparent,black 10%)}
+.tool[aria-pressed="true"]{background:var(--ink);color:var(--on-ink);border-color:var(--ink);transform:translateY(-2px)}
+.tool[aria-pressed="true"] .sw{border-color:var(--on-ink-line)}
+.tool:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+#row2{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;pointer-events:none;min-height:44px}
+#row2 > *{pointer-events:auto}
+#row2 .ctx{display:flex;align-items:center;gap:6px;min-height:44px;max-width:100%;min-width:0;background:var(--glass);
+  border:1px solid var(--glass-line);border-radius:999px;padding:3px 3px 3px 14px;box-shadow:var(--shadow);
+  backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}
+#depth{font-family:var(--display);font-style:italic;font-size:12px;line-height:1.3;color:var(--ink);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;min-width:0;padding-right:4px}
+#depth.no{background:var(--ember);border-radius:14px;padding:3px 10px;margin-left:-9px;
+  white-space:normal;text-overflow:clip;text-wrap:balance} /* a refused reason wraps, never cut (02 8.2: row 2 shows it) */
+#row2 .ctx .gb{min-height:36px;padding:6px 14px;flex:0 0 auto} /* Place and Cancel keep their width; the line wraps instead */
+#bPlace:not(:disabled){background:var(--ink);color:var(--on-ink)}
+#bCancel{background:var(--well-2);border:1px solid var(--glass-line)}
+#bUndo{min-height:44px;padding:6px 16px}
+#row2 .gb:disabled{opacity:1;color:var(--stone)} /* a disabled Place or Undo keeps its glass and reads in --stone (04 5.2 item 2) */
+#row3{display:flex;gap:6px;align-items:center;justify-content:space-between;pointer-events:none;flex-wrap:wrap}
+#row3 > *{pointer-events:auto}
+/* row 3's labels never break inside a button; a group wraps its buttons only on a phone narrower than its width (a pill of one line,
+   a rounded block of two) */
+#row3 .grp{max-width:100%;flex-wrap:wrap;justify-content:center;border-radius:22px}
+#row3 .gb{white-space:nowrap}
+.grp{display:flex;gap:4px;background:var(--glass);border:1px solid var(--glass-line);border-radius:999px;
+  padding:4px;backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);box-shadow:var(--shadow)}
+.gb{border:0;background:transparent;border-radius:999px;padding:5px 8px;font:inherit;font-size:12px;line-height:1.3;
+  font-weight:600;color:var(--ink-soft);cursor:pointer;min-width:30px}
+.gb.glass{background:var(--glass);border:1px solid var(--glass-line);box-shadow:var(--shadow);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px)}
+.gb:disabled{opacity:.35;cursor:default}
+#bRotL,#bRotR{padding:5px 6px;min-width:36px;font-size:11px}
+/* 04 5.4 item 7 (owner 2026-10-17): every rail button's tap target is at least 36 x 36 px. The switch's and row 3's buttons keep their
+   26 px look: a 5 px transparent border above and below (the hit area; the fill is clipped to the padding box) and a -5 px margin, so
+   the groups keep their height; the focus ring stays round the fill */
+#rail .grp > .gb{min-width:36px;min-height:36px;border:5px solid transparent;border-left:0;border-right:0;margin:-5px 0;background-clip:padding-box}
+#rail .grp > .gb:focus-visible{outline-offset:-4px}
+.gb[aria-pressed="true"],.gb[aria-expanded="true"]{background:var(--ink);color:var(--on-ink)} /* expanded: Options while its sheet is open */
+.gb:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+#sizewrap{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;color:var(--ink-soft);padding:0 12px 0 4px;
+  border-left:1px solid var(--glass-line);min-height:30px}
+#size,#spdR{-webkit-appearance:none;appearance:none;width:96px;height:3px;border-radius:2px;
+  background:var(--paper-2);outline:none}
+#spdR{width:92px;margin:0 2px}
+#size::-webkit-slider-thumb,#spdR::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+  background:var(--ink);border:2px solid var(--on-ink);box-shadow:var(--thumb-shadow)}
+#size::-moz-range-thumb,#spdR::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--ink);border:2px solid var(--on-ink)}
+#spdLbl{font-size:12px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;min-width:30px;text-align:right;padding-right:4px}
+#spd{align-items:center}
+/* row 2's cooldown chip (04 5.4 item 4): the ring empties over the cooldown, then the seconds left in tabular numerals (or Ready), then left/max */
+#cdChip{gap:6px;padding:3px 12px 3px 6px;min-height:30px;cursor:default}
+#cdChip svg{width:22px;height:22px;flex:0 0 22px;display:block}
+#cdChip .trk{stroke:var(--paper-2)}
+#cdChip.cupid .arc{stroke:var(--berry)}
+#cdChip.mischief .arc{stroke:var(--ember)}
+#cdChip .nm{font-weight:600}
+#cdChip.idle svg{display:none}
+#cdChip.idle .nm{font-weight:500;color:var(--ink-soft)}
+#cdChip.idle{padding-left:12px}
+#cdChip .cd{min-width:2.3em;font-variant-numeric:tabular-nums}
+#cdChip .ch{color:var(--ink-soft);font-variant-numeric:tabular-nums}
+/* a phone narrower than 340 px (owner 2026-10-17): the speed dial and the actions' padding tighten so row 3 is two lines, the speed and
+   the camera, then the actions, and the rail stays under 40 % of a 320 x 568 screen; the label's right padding goes too, so the longer
+   Spanish "En pausa" (9 px wider than "Paused") still leaves the speed and the camera on one line (305 > 304 px without it) */
+@media (max-width:340px){
+  #spdR{width:64px}
+  #spdLbl{padding-right:0}
+  #row3 .grp > .gb{padding-left:6px;padding-right:6px}
+  #row3{gap:6px 4px}
+}
+
+/* ---------- the card (GV 125-138; strip variant 173-178) ---------- */
+#card{position:fixed;z-index:7;left:50%;transform:translateX(-50%) translateY(8px);
+  bottom:calc(env(safe-area-inset-bottom,0px) + 108px);background:var(--glass);
+  border:1px solid var(--glass-line);border-radius:14px;padding:7px 12px 8px;box-shadow:var(--shadow);
+  backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);min-width:186px;max-width:min(300px,88vw);
+  opacity:0;pointer-events:none;transition:opacity .18s,transform .18s}
+#card.on{opacity:1;transform:translateX(-50%);pointer-events:auto}
+#card h3{margin:0 0 1px;font-family:var(--display);font-size:16px;font-weight:700;letter-spacing:.005em;line-height:1.3}
+#card .sub{font-size:11px;color:var(--ink-soft);margin-bottom:4px}
+#card .rel{font-size:11px;color:var(--ink-soft);margin:-2px 0 4px;line-height:1.3}
+.bar{display:grid;grid-template-columns:46px 1fr;gap:6px;align-items:center;margin-top:3px;font-size:11px;
+  color:var(--ink-soft);letter-spacing:.03em;text-transform:uppercase;font-weight:600}
+.bar i{display:block;height:4px;border-radius:3px;background:var(--paper-2);overflow:hidden;font-style:normal}
+.bar i>u{display:block;height:100%;border-radius:3px;text-decoration:none;background:var(--moss);width:0}
+.bar[data-need="rest"] i>u{background:var(--sky)}
+.bar[data-need="heart"] i>u{background:var(--berry)}
+.bar.low i>u{background:var(--ember)}
+#card .doing{margin-top:5px;font-size:12px;font-style:italic;font-family:var(--display);color:var(--ink)}
+#cPin{position:absolute;right:8px;top:6px;border:0;background:none;font:inherit;font-size:16px;color:var(--berry);cursor:pointer;padding:2px 6px}
+body.avatar #card{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:8px;padding:6px 11px 7px;width:min(300px,88vw);min-width:0}
+body.avatar #card h3{font-size:14px;margin:0}
+body.avatar #card .sub{margin:0;flex:1 1 auto;white-space:nowrap;font-size:11px}
+body.avatar #card .rel{flex-basis:100%;margin:0 0 2px}
+/* the strip's three bars (owner 2026-10-22; GV 173-178 had them side by side at 8.5 px): Mood, Rested and Full, or the flower seller's Blooms */
+body.avatar #card .bars{display:flex;flex-basis:100%;gap:8px;margin-top:4px}
+body.avatar #card .bar{flex:1 1 0;min-width:0;grid-template-columns:auto 1fr;gap:4px;margin-top:0;font-size:11px;letter-spacing:0;text-transform:none}
+body.avatar #card .bar span{white-space:nowrap}
+body.avatar #card .doing{flex-basis:100%;margin-top:3px;font-size:11px}
+
+/* ---------- sheets (GV 48-72, 196-225); `div.sheet`, never `.sheet`: body.sheet (03 10.2) must not match a sheet rule (it hid the page) ---------- */
+div.sheet{position:fixed;z-index:8;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 108px);width:min(94vw,420px);
+  background:var(--glass);border:1px solid var(--glass-line);border-radius:16px;padding:10px 12px 12px;box-shadow:var(--shadow);
+  backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px);display:none;max-height:min(52vh,var(--sheet-cap,52vh));overflow-y:auto}
+/* --sheet-cap: set by dom.ts layoutOverlays, the room between the HUD chips (+ 8 px) and the rail (+ 8 px); owner 2026-10-17 */
+div.sheet.on{display:block}
+div.sheet h4{margin:0 0 6px;font-size:14px;font-weight:600;line-height:1.3}
+div.sheet .x{position:absolute;right:8px;top:6px;border:0;background:none;font:inherit;font-size:18px;padding:2px 6px;color:var(--ink);cursor:pointer}
+div.sheet .sum{font-size:11px;color:var(--ink-soft);margin-bottom:6px;line-height:1.3}
+#censusSum span + span::before{content:" \00B7  "}
+div.sheet .row{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:baseline;width:100%;text-align:left;font:inherit;padding:5px 8px;
+  border-radius:10px;border:1px solid var(--glass-line);background:var(--well);color:var(--ink);cursor:pointer;margin-top:4px}
+div.sheet .row b{font-size:13px;font-weight:700}
+div.sheet .row small{font-size:11px;color:var(--ink-soft);line-height:1.3}
+div.sheet .row small.r{grid-column:1/3}
+div.sheet .row.sel{background:var(--ink);color:var(--on-ink)}
+div.sheet .row.sel small{color:var(--on-ink-soft)}
+div.sheet .row.ev{display:block}
+div.sheet .row.ev span{display:block;font-size:12px;line-height:1.32}
+#evlog{max-height:min(34vh,var(--sheet-cap,34vh))}
+/* the Options sheet (04 5.6; register section 4 "Park pace and Options", owner 2026-10-14): one row per setting in the census row's
+   well, the name left, the control right (row 1's segmented switch, .grp of .gb), a one-line hint under both; dev rows only under body.dev */
+#optionsList .opt{display:grid;grid-template-columns:1fr auto;gap:0 10px;align-items:center;margin-top:4px;padding:3px 3px 3px 10px;
+  border-radius:10px;border:1px solid var(--glass-line);background:var(--well);color:var(--ink)}
+#optionsList .opt > b{font-size:13px;font-weight:700;line-height:1.3}
+#optionsList .opt > small{grid-column:1/3;font-size:11px;line-height:1.3;color:var(--ink-soft);padding:1px 0 3px}
+#optionsList .grp{padding:2px;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+#optionsList .gb{min-height:36px;min-width:60px;padding:5px 12px}
+#optionsList .val{min-height:42px;display:flex;align-items:center;padding:0 12px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+#optionsList .row{min-height:44px;align-items:center;padding-left:10px}
+body:not(.dev) #optionsList .dev{display:none}
+/* the Avatar picker (04 5.6; 02 12.4): six cards in a 2 x 3 grid, a 3 px side stripe on the left (--berry Cupid, --ember Mischief), a 40 x 40
+   portrait, the name, "Cupid · T3" and, for a locked one, the lock glyph and "Locked · Cupid T1", for an S10 one "Coming soon"; the locked
+   and the coming ones are dimmed like a locked pill and answer a tap with a toast */
+#pickerList{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#pickerList .pk{display:flex;align-items:center;gap:8px;min-width:0;min-height:56px;padding:6px 8px 6px 7px;border-radius:10px;
+  border:1px solid var(--glass-line);border-left:3px solid var(--ember);background:var(--well);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+#pickerList .pk[data-side="cupid"]{border-left-color:var(--berry)}
+#pickerList .pk .pt{position:relative;flex:0 0 40px;width:40px;height:40px}
+#pickerList .pk canvas{position:static;width:100%;height:100%;border-radius:8px;background:var(--paper-2)} /* the page-wide canvas rule fills the screen */
+#pickerList .pk .tx{display:flex;flex-direction:column;min-width:0}
+#pickerList .pk b{font-size:13px;font-weight:700;line-height:1.25}
+#pickerList .pk small{font-size:11px;line-height:1.3;color:var(--ink-soft)}
+#pickerList .pk small.st{font-style:italic}
+#pickerList .pk svg{position:absolute;right:-4px;bottom:-4px;width:15px;height:15px;padding:2px;box-sizing:border-box;border-radius:50%;display:block;background:var(--paper);
+  color:var(--ink-soft);box-shadow:0 0 0 1px var(--glass-line)} /* a locked card's padlock: a badge on the portrait's corner, never on a word */
+#pickerList .pk.locked,#pickerList .pk.soon{opacity:.45}
+#pickerList .pk:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+/* a narrow phone (320 px, either language): the portrait shrinks to 32 px, the card's padding and gap tighten and a name that still does not fit
+   breaks inside the card, so the words get the room and nothing pokes out of a card */
+@media (max-width:340px){
+  #pickerList .pk{gap:6px;padding-left:5px;padding-right:5px}
+  #pickerList .pk .pt{flex-basis:32px;width:32px;height:32px}
+  #pickerList .pk b{font-size:12px;overflow-wrap:anywhere}
+}
+/* a short phone (320 x 568 in either language): the summary line goes and the cards tighten, so the six show in the room between the chips and the rail */
+@media (max-height:620px){
+  #pickerSum{display:none}
+  #picker{padding:8px 10px 8px}
+  #picker h4{margin-bottom:2px;font-size:13px;line-height:1.15}
+  #pickerList{gap:4px}
+  #pickerList .pk{min-height:44px;padding-top:1px;padding-bottom:1px}
+  #pickerList .pk b,#pickerList .pk small{line-height:1.12}
+}
+/* under 340 px the feed's line sits below the chip stack (see #feed, about 26 px with its margin): the picker's room is the cap less that line, so it
+   stays between the feed and the rail like the other sheets and scrolls inside where the six cards do not fit (owner 2026-10-22: it covered half the pill) */
+@media (max-width:339px){#picker{max-height:min(52vh,calc(var(--sheet-cap,52vh) - 26px))}}
+/* S5, the romance core (02 12.2-12.4; 04 5.5 item 2, 5.6): the Romance chip's pulse on a stage change; the pair card (two name buttons
+   with the --berry heart between, the stage chip, the Heart bar with the 1 px --ink gate tick, two doing lines, Pin as a .gb); the
+   Romances rows ("A & B", Pin, the stage chip, the affinity bar, "n today"). Token colours only (04 4.5). */
+@keyframes romPulse{0%{transform:scale(1)}40%{transform:scale(1.06)}100%{transform:scale(1)}}
+#hudRomance.pulse{animation:romPulse .6s ease-out}
+#card h3 .nm{border:0;background:none;padding:0;margin:0;font:inherit;color:inherit;cursor:pointer}
+#card h3 .hrt{font-style:normal;color:var(--berry);margin:0 5px;font-size:13px}
+#card .sub.chipline{display:inline-block;border-radius:999px;background:var(--well);border:1px solid var(--glass-line);padding:0 7px;color:var(--ink)}
+#card .rel.link{cursor:pointer;text-decoration:underline;text-decoration-color:var(--glass-line)}
+.bar i{position:relative}
+.bar i>b.tick{position:absolute;top:0;bottom:0;width:1px;background:var(--ink)}
+#card.pair{min-width:220px}
+#card.pair h3{padding-right:66px}
+#card.pair .doing + .doing{margin-top:1px}
+#cPin.gb{position:absolute;right:7px;top:6px;font-size:11px;font-weight:700;padding:3px 9px;color:var(--ink);border:1px solid var(--glass-line);background:var(--well)}
+#cPin.gb[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
+#romancesList .row.rom{grid-template-columns:1fr auto;align-items:center}
+#romancesList .row.rom > b{font-family:var(--display);font-size:13px}
+#romancesList .row.rom .pin{font-size:11px;font-weight:700;padding:3px 10px;min-height:30px;border:1px solid var(--glass-line)}
+#romancesList .row.rom .stg{justify-self:start;border-radius:999px;background:var(--paper-2);padding:0 7px;color:var(--ink)}
+#romancesList .row.rom .abar{display:block;width:120px;height:4px;border-radius:3px;background:var(--paper-2);overflow:hidden;font-style:normal;align-self:center}
+#romancesList .row.rom .abar>u{display:block;height:100%;border-radius:3px;background:var(--berry);text-decoration:none}
+#snd .row{display:flex;flex-wrap:wrap;gap:5px;background:none;border:0;padding:0;cursor:default}
+#snd button{font:inherit;font-size:12px;padding:5px 9px;border-radius:999px;border:1px solid var(--glass-line);background:var(--well-2);color:var(--ink)}
+body.sheet #card{opacity:0!important;pointer-events:none!important}
+/* S6, the Progress sheet (02 12.4; 04 5.6): a ladder per side (name and points, the bar in the side's accent with a tick at each tier, the
+   numbers under them, the next unlock), then the unlock table, a row per tier with the ones not yet reached in --stone */
+#progressList .ladder{margin-top:4px;padding:5px 10px 6px;border-radius:10px;border:1px solid var(--glass-line);background:var(--well)}
+#progressList .lh{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+#progressList .lh b{font-size:13px;font-weight:700}
+#progressList .lh span{font-size:11px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+#progressList .lbar{position:relative;margin:8px 0 0}
+#progressList .lbar i{display:block;height:6px;border-radius:3px;background:var(--paper-2);overflow:hidden;font-style:normal}
+#progressList .lbar u{display:block;height:100%;border-radius:3px;text-decoration:none}
+#progressList .ladder.cupid .lbar u{background:var(--berry)}
+#progressList .ladder.mischief .lbar u{background:var(--ember)}
+#progressList .lbar .tk{position:absolute;top:-3px;width:1px;height:12px;background:var(--ink);opacity:.5}
+#progressList .ltk{position:relative;height:15px;margin-top:2px;font-size:11px;line-height:15px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+#progressList .ltk span{position:absolute;top:0;transform:translateX(-50%)}
+#progressList .ltk span.end{transform:translateX(-100%)}
+#progressList .nx{display:block;font-size:11px;line-height:1.3;color:var(--ink-soft)}
+#progressList .ut{margin:9px 0 0;font-size:12px;font-weight:600;line-height:1.3;color:var(--ink-soft);letter-spacing:.03em}
+#progressList .utab{margin-top:4px;padding-left:7px;border-left:3px solid var(--berry)}
+#progressList .utab.mischief{border-left-color:var(--ember)}
+#progressList .uh{display:block;font-size:11px;line-height:1.3;color:var(--ink-soft)}
+#progressList .urow{display:grid;grid-template-columns:24px 1fr auto;gap:8px;align-items:baseline;margin-top:3px;padding:2px 8px;border-radius:8px;
+  border:1px solid var(--glass-line);background:var(--well);color:var(--ink)}
+#progressList .urow b{font-size:13px;font-weight:700}
+#progressList .urow .its{font-size:12px;line-height:1.3}
+#progressList .urow .its span + span::before{content:" \00B7  "}
+#progressList .urow .its .av{font-family:var(--display);font-style:italic}
+#progressList .urow small{font-size:11px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+#progressList .urow.locked,#progressList .urow.locked small{color:var(--stone)}
+
+/* ---------- toast, feed, perf (GV 157-163) ---------- */
+/* z-index 9: over a sheet (8), so a locked card's "Unlocks at Cupid T1" and the intro show above the picker; the confirm (25) and the intro screen (20) stay above */
+#hint{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 150px);
+  z-index:9;background:var(--toast);color:var(--on-ink);font-size:12px;font-weight:500;padding:7px 14px;
+  border-radius:16px;opacity:0;transition:opacity .3s;pointer-events:none;max-width:88vw;text-align:center;line-height:1.35}
+#hint.on{opacity:1}
+#feed{position:fixed;left:10px;top:calc(env(safe-area-inset-top,0px) + 86px);z-index:5;max-width:min(66vw,300px);
+  pointer-events:none;opacity:0;transition:opacity .4s;font-size:11px;line-height:1.3;color:var(--ink-soft)}
+#feed.on{opacity:1}
+#feed .ev{background:var(--glass);border:1px solid var(--glass-line);border-radius:999px;padding:3px 9px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:var(--shadow);transition:opacity 1s;pointer-events:auto;cursor:pointer}
+#feed:not(.on) .ev{pointer-events:none}
+/* under 340 px the line moves below the chip stack: at 320 x 568 in Spanish it ran under the Romance and Points chips (S6, owner 2026-10-20) */
+@media (max-width:339px){#feed{top:calc(env(safe-area-inset-top,0px) + 140px);max-width:calc(100vw - 20px)}}
+#perf{position:fixed;left:12px;top:calc(env(safe-area-inset-top,0px) + 58px);z-index:6;pointer-events:none;
+  font:600 11px/1.35 ui-monospace,Menlo,Consolas,monospace;color:var(--ink);background:var(--well-2);
+  border:1px solid var(--glass-line);border-radius:10px;padding:5px 8px;white-space:pre;letter-spacing:.01em}
+
+/* ---------- photo mode (GV 164-168) ---------- */
+body.photo .hud,body.photo #rail,body.photo #card,body.photo #hint,body.photo #feed,body.photo .sheet{opacity:0!important;pointer-events:none!important}
+#photoX{position:fixed;right:10px;top:calc(env(safe-area-inset-top,0px) + 10px);z-index:30;width:34px;height:34px;border-radius:50%;
+  border:1px solid var(--glass-line);background:var(--glass);color:var(--ink);font:inherit;font-size:18px;line-height:1;cursor:pointer;
+  display:none;box-shadow:var(--shadow)}
+body.photo #photoX{display:block}
+
+/* ---------- avatar mode (GV 169, 183; 03 10.2) ---------- */
+body.avatar #groups,body.avatar #tools,body.avatar #row2 .ctx,body.avatar #sizewrap,body.avatar #bPlace,body.avatar #bCancel,body.avatar #bUndo,body.avatar #cdChip{display:none!important}
+body.avatar #row2{min-height:0} /* its children are all hidden: the row keeps no height (the 44 px floor is for the ability groups' chip) */
+/* row 1 in the avatar mode (04 5.4 item 6): the switch and the strip go, the avatar's three hints stand in glass chips, wrapping onto a second
+   line where they do not fit; a dot in the side's accent leads each one (--berry Cupid, --ember Mischief). They only tell: no buttons. */
+#hints{display:none;flex:1 1 auto;min-width:0;flex-wrap:wrap;justify-content:center;gap:6px;pointer-events:none;--hint-accent:var(--ember)}
+#hints[data-side="cupid"]{--hint-accent:var(--berry)}
+body.avatar #hints{display:flex}
+#hints .hc{pointer-events:auto;display:flex;align-items:center;gap:6px;max-width:100%;padding:4px 11px 4px 9px;border-radius:14px;
+  background:var(--glass);border:1px solid var(--glass-line);box-shadow:var(--shadow);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);
+  font-size:11px;font-weight:600;line-height:1.3;color:var(--ink)}
+#hints .hc::before{content:"";flex:0 0 7px;width:7px;height:7px;border-radius:50%;background:var(--hint-accent)}
+
+/* ---------- intro (GV 140-156) ---------- */
+#intro{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+  padding:calc(env(safe-area-inset-top,0px) + 22px) 22px calc(env(safe-area-inset-bottom,0px) + 22px);
+  background:radial-gradient(120% 80% at 50% 12%,var(--intro-0) 0%,var(--intro-1) 55%,var(--intro-2) 100%);
+  transition:opacity .5s ease}
+#intro.gone{opacity:0;pointer-events:none}
+#introbox{max-width:340px;text-align:center}
+#introbox .mark{margin:0 auto 14px;display:block}
+#introbox h1{font-family:var(--display);font-size:34px;line-height:1.05;font-weight:700;margin:0 0 10px;
+  letter-spacing:-.015em;text-wrap:balance}
+#introbox p{margin:0 0 8px;font-size:14px;line-height:1.55;color:var(--ink-soft);text-wrap:pretty}
+#begin,#bContinue{display:block;margin:10px auto 0;border:0;border-radius:999px;background:var(--ink);color:var(--on-ink);font:inherit;
+  font-size:15px;font-weight:700;letter-spacing:.02em;padding:12px 30px;cursor:pointer;line-height:1.3;
+  box-shadow:var(--shadow-lift)}
+#iP{margin-bottom:18px}
+#begin:focus-visible,#bContinue:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+#lang{margin-top:14px;display:flex;gap:4px;justify-content:center}
+#lang button{border:1px solid var(--glass-line);background:transparent;border-radius:999px;padding:4px 11px;
+  font:inherit;font-size:11px;font-weight:600;color:var(--ink-soft);cursor:pointer}
+#lang button[aria-pressed="true"]{background:var(--ink);color:var(--on-ink);border-color:var(--ink)}
+
+/* ---------- confirm (03 10.1; 02 12.5 item 4): a paper card over the dimmed page, above the intro (it also asks on Begin) ---------- */
+#confirm{position:fixed;inset:0;z-index:25;display:flex;align-items:center;justify-content:center;background:var(--glass-line);
+  padding:calc(env(safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 16px)}
+#confirm .card{width:min(84vw,300px);background:var(--paper);border:1px solid var(--glass-line);border-radius:16px;
+  padding:18px 18px 14px;box-shadow:var(--shadow-lift);text-align:center}
+#confirm p{margin:0;font-family:var(--display);font-size:16px;font-weight:600;line-height:1.35;color:var(--ink);text-wrap:balance}
+#confirm .b{display:flex;gap:8px;justify-content:center;margin-top:14px}
+#confirm button{min-width:96px;min-height:40px;border-radius:999px;font:inherit;font-size:14px;font-weight:700;line-height:1.3;
+  padding:8px 18px;cursor:pointer}
+#confirm .yes{background:var(--ink);color:var(--on-ink);border:1px solid var(--ink)}
+#confirm .no{background:var(--well-2);color:var(--ink);border:1px solid var(--glass-line)}
+#confirm button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+@media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important;animation-duration:.01ms!important}}

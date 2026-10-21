@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#DCE6EC">
+<title>Music Gate</title>
+<link rel="icon" href="data:,">
+<!-- pre-paint: the shell's body colour before the stylesheet arrives, as index.html (GV 6, 8, 26; 04 5.7 item 4: #DCE6EC until the Style Gate) -->
+<style>html,body{margin:0;padding:0;background:#DCE6EC;color-scheme:light}[hidden]{display:none!important}</style>
+<link rel="stylesheet" href="./src/styles/tokens.css">
+<style>
+/* The Music Gate board (05 6.4): tokens only; the .grp / .gb / Begin-button recipes of 04 1.10 and shell.css. */
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--body-bg);font-family:var(--ui);color:var(--ink);font-size:13px}
+body{padding:0 16px calc(env(safe-area-inset-bottom,0px) + 28px)}
+#banner{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:var(--glass);
+  backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);cursor:pointer;touch-action:manipulation}
+#banner span{background:var(--ink);color:var(--on-ink);border-radius:999px;padding:14px 30px;font-size:15px;font-weight:700;
+  letter-spacing:.02em;box-shadow:var(--shadow-lift)}
+header{position:sticky;top:0;z-index:10;display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  padding:calc(env(safe-area-inset-top,0px) + 10px) 0 10px;background:var(--body-bg)}
+h1{font-family:var(--display);font-size:22px;line-height:1.1;margin:0 auto 0 0;font-weight:700}
+.grp{display:flex;gap:4px;background:var(--glass);border:1px solid var(--glass-line);border-radius:999px;padding:4px;
+  backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);box-shadow:var(--shadow)}
+.gb{border:0;background:transparent;border-radius:999px;padding:6px 11px;font:inherit;font-size:12px;line-height:1.3;
+  font-weight:600;color:var(--ink-soft);cursor:pointer;min-width:34px}
+.gb.glass{background:var(--glass);border:1px solid var(--glass-line);box-shadow:var(--shadow)}
+.gb[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
+.gb:focus-visible,.choose:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+#panels{display:grid;gap:16px;grid-template-columns:minmax(0,1fr);max-width:400px;margin:0 auto}
+.panel{background:var(--glass);border:1px solid var(--glass-line);border-radius:16px;box-shadow:var(--shadow);padding:14px;min-width:0}
+.panel h2{font-family:var(--display);font-size:17px;margin:0 0 6px;font-weight:700}
+.panel .cap{font-size:12px;line-height:1.45;color:var(--ink-soft);margin:0 0 10px;text-wrap:pretty}
+.panel .btns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.knob{display:grid;grid-template-columns:78px minmax(0,1fr) 48px;gap:8px;align-items:center;font-size:12px;margin:5px 0;min-width:0}
+.knob code{font-family:var(--ui);font-weight:600;color:var(--ink-soft);font-size:12px}
+.knob input{width:100%;min-width:0;margin:0;accent-color:var(--ink)}
+.knob output{text-align:right;font-variant-numeric:tabular-nums;font-size:12px}
+pre{background:var(--well);border-radius:10px;padding:8px 10px;font-size:11px;line-height:1.4;overflow:auto;margin:10px 0;color:var(--ink)}
+.choose{display:block;margin:10px auto 0;border:0;border-radius:999px;background:var(--ink);color:var(--on-ink);font:inherit;
+  font-size:15px;font-weight:700;letter-spacing:.02em;padding:12px 30px;cursor:pointer;line-height:1.3;box-shadow:var(--shadow-lift)}
+.choose[aria-pressed="true"]{box-shadow:var(--shadow-lift),0 0 0 3px var(--berry)}
+#cuebed{max-width:400px;margin:18px auto 0;background:var(--glass);border:1px solid var(--glass-line);border-radius:16px;
+  box-shadow:var(--shadow);padding:12px 14px}
+#cuebed h2{font-family:var(--display);font-size:15px;margin:0 0 8px;font-weight:700}
+#cuebedRow{display:flex;gap:6px;flex-wrap:wrap}
+#hint{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 24px);z-index:8;
+  background:var(--toast);color:var(--on-ink);font-size:12px;font-weight:500;padding:7px 14px;border-radius:16px;opacity:0;
+  transition:opacity .3s;pointer-events:none;max-width:88vw;text-align:center;line-height:1.35}
+#hint.on{opacity:1}
+@media (max-width:899px){.panel:not(.sel){display:none}}
+@media (min-width:900px){
+  #switch{display:none}
+  #panels{grid-template-columns:repeat(3,400px);max-width:none;justify-content:center}
+  #cuebed{max-width:1232px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="banner" role="button" tabindex="0"></div>
+<header>
+  <h1 id="title">Music Gate</h1>
+  <div class="grp" id="switch" role="group"></div>
+  <button class="gb glass" id="stopAll" type="button">Stop all</button>
+</header>
+<main id="panels"></main>
+<section id="cuebed"><h2 id="cuebedTitle">Cue bed</h2><div id="cuebedRow"></div></section>
+<div id="hint" aria-live="polite"></div>
+<script type="module" src="./src/debug/music-board.ts"></script>
+</body>
+</html>

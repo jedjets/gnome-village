@@ -1,0 +1,298 @@
+// src/core/commands.ts
+// The Command union {tick, side, kind, payload}, enqueue, applyPending, applyCommand with rejection reasons, the log, replay (03 section 5).
+// NEW (GV applies from the UI directly, review section 4). Every player action is a Command; this file is the only place one is applied.
+// S2 applies `speed`, `park.new` and `debug.weather` (registered by core/loop.ts); every other kind is rejected `reason.not_here` until the
+// slice that owns it registers a handler with registerHandler (avatar.* S7). S6: play/abilities.ts registers `ability` (cast: the unlock,
+// the cooldown, the charges, the target and the ability's own rules are checked there, in the sim, and nothing is spent before they pass). S4: entities/visitor.ts registers `visitor.call`
+// (callVisitor: the gate given or one by weight; reason.park_full at 30 people, 02 12.2), park side only, allowed in avatar mode (03 5.3). S3: play/tools.ts registers `tool`
+// (applyTool) and play/undo.ts registers `undo` (an empty stack is `reason.nothing_to_undo`); both pass the side and mode rules below first
+// (park side only, `reason.not_in_avatar` in avatar mode, 03 5.3). A new park clears the undo stack through onResetCommands (03 5.6 item 5),
+// and a restore clears it through onRestoreCommands (the undo history is not saved, so a load clears it: register 3.11, owner 2026-10-13).
+// Layering (03 2.1): this file is core, so it cannot import the conductor or the tools. The tick it stamps (setTickSource), the step
+// `replay` drives (setStepper) and the handlers are handed in by the layers above. It reads play/mode.ts, a leaf with no imports, for
+// the mode rules of 03 5.3: the second named exception of 03 2.1 (L0 row).
+// Park pace (owner 2026-10-14, register section 4 "Park pace and Options"): `park.pace` { pace: 'calm' | 'lively' } is a park-side kind
+// allowed in both modes, logged and replayed like `speed`; entities/visitor.ts registers it (the arrivals gap). It is not a paused kind
+// (loop.PAUSED_KINDS): a change made while paused applies at the first step after the unpause, like a tool, so the live order stays the
+// replay order. enqueueAfterNew carries a command queued right after a New into the park the New starts (a park.new drops what is queued
+// behind it, 03 4.6): the shell's profile pace for a new park (save/store.ts). The carried command is part of the New: it applies with
+// it, at the new park's tick 0 and logged there, before anything else in that park, so a New confirmed while paused and saved before the
+// unpause keeps it (no pending command is saved), and a replay of the new park's log applies a tick-0 command first, at step 1: the same
+// order and state.
+import type { XY } from './math.ts';
+import type { GateId, PairId, Side, VisitorId } from './ids.ts';
+import { emit } from './events.ts';
+import type { WeatherKind } from './weather.ts';
+import { getAvatar, getMode, type AvatarId } from '../play/mode.ts';
+
+export const LOG_CAP = 600; // 03 3.11
+
+export const ABILITY_IDS = [
+  'c_petals', 'c_bouquet', 'c_musician', 'c_sunbeam', 'c_umbrella', 'c_lamplight', 'c_picnic', 'c_rowboat', 'c_fireworks',
+  'm_pigeon', 'm_sprinkler', 'm_peel', 'm_pomeranian', 'm_wasp', 'm_raincloud', 'm_rival', 'm_mime', 'm_fog', 'm_flock',
+] as const;
+export type AbilityId = (typeof ABILITY_IDS)[number];
+
+/** The side each avatar plays for (register 3.8). */
+export const AVATAR_SIDE: Readonly<Record<AvatarId, 'cupid' | 'mischief'>> = {
+  a_pigeon: 'mischief',
+  a_pomeranian: 'mischief',
+  a_mime: 'mischief',
+  a_florist: 'cupid',
+  a_busker: 'cupid',
+  a_matchmaker: 'cupid',
+};
+
+/** What a tap resolved to when the UI picked it (the same shape as render/project.ts Hit; core cannot import render). */
+export type Hit = { kind: 'visitor' | 'creature' | 'prop' | 'tile' | 'none'; id: number; tile: XY | null };
+export type Target = { kind: 'tile'; x: number; y: number } | { kind: 'visitor'; id: VisitorId } | { kind: 'pair'; id: PairId } | { kind: 'park' };
+
+/** The park's pace (register section 4, Park pace and Options): the arrivals gap of 02 4.2 item 2. A park without one is calm. */
+export type Pace = 'calm' | 'lively';
+export function isPace(v: unknown): v is Pace {
+  return v === 'calm' || v === 'lively';
+}
+
+export type ToolPayload =
+  | { tool: 'path' | 'lawn' | 'pond'; at: XY; size: 1 | 2 | 3; stroke: number } // one command per painted centre; stroke groups them for undo
+  | { tool: 'bed' | 'tree' | 'bench' | 'lamp' | 'remove'; at: XY }
+  | { tool: 'picnic' | 'fountain' | 'kiosk' | 'bandstand'; at: XY } // at = north-west tile
+  | { tool: 'bridge'; at: XY } // a water tile; the sim finds the crossing
+  | { tool: 'hedge' | 'canal'; tiles: XY[] }; // the finished run, at most 14 tiles
+
+export type Command = { tick: number; seq: number } & (
+  | { side: 'park'; kind: 'tool'; payload: ToolPayload }
+  | { side: 'park'; kind: 'undo'; payload: Record<string, never> }
+  | { side: 'cupid' | 'mischief'; kind: 'ability'; payload: { id: AbilityId; target: Target } }
+  | { side: 'cupid' | 'mischief'; kind: 'avatar.enter'; payload: { avatar: AvatarId } }
+  | { side: 'cupid' | 'mischief'; kind: 'avatar.leave'; payload: Record<string, never> }
+  | { side: 'cupid' | 'mischief'; kind: 'avatar.tap'; payload: { tile: XY; hit: Hit } }
+  | { side: 'park'; kind: 'speed'; payload: { speed: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 } }
+  | { side: 'park'; kind: 'park.new'; payload: { seed: number } }
+  | { side: 'park'; kind: 'visitor.call'; payload: { gate: GateId | null } }
+  | { side: 'park'; kind: 'park.pace'; payload: { pace: Pace } }
+  | { side: 'park'; kind: 'debug.weather'; payload: { kind: WeatherKind } } // DEV builds and tests only
+);
+export type CommandKind = Command['kind'];
+
+type DistOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+/** A command as the UI builds it; enqueue stamps the tick and the sequence number. */
+export type CommandInput = DistOmit<Command, 'tick' | 'seq'>;
+
+export type ReasonKey = `reason.${string}`;
+export type Result = { ok: true } | { ok: false; reason: ReasonKey };
+export const OK: Result = { ok: true };
+export function fail(reason: ReasonKey): Result {
+  return { ok: false, reason };
+}
+
+const SIDE_ORDER: Readonly<Record<Side, number>> = { park: 0, cupid: 1, mischief: 2 };
+
+let pending: Command[] = [];
+let afterNew: CommandInput[] = []; // enqueueAfterNew: queued for the park a pending park.new starts
+let logList: Command[] = [];
+let seqCounter = 0;
+let generation = 0; // bumped by clearPending, so applyPending notices a new park in the middle of a batch
+let firstKinds: ReadonlySet<CommandKind> = new Set<CommandKind>();
+let tickSource: () => number = () => 0;
+let stepper: (() => void) | null = null;
+const handlers = new Map<CommandKind, (c: never) => Result>();
+const resetHooks: Array<() => void> = [];
+const restoreHooks: Array<() => void> = [];
+
+/** The loop hands in the current tick: enqueue stamps tickSource() + 1 (03 5.2 item 1). */
+export function setTickSource(fn: () => number): void {
+  tickSource = fn;
+}
+/**
+ * The loop hands in the kinds a paused frame applies (loop.PAUSED_KINDS). Within one tick they sort ahead of every other kind, so the order
+ * a paused frame then a first step give is the order of (tick, kind class, side for the others, seq) that a replay of the log applies in one step: an
+ * `avatar.enter` queued after a `visitor.call` while paused still goes first in both, and the two draw the same numbers (03 4.6, 5.2).
+ */
+export function setFirstKinds(kinds: ReadonlySet<CommandKind>): void {
+  firstKinds = kinds;
+}
+/** The loop hands in one fixed step, which `replay` calls until the tick is reached. */
+export function setStepper(fn: () => void): void {
+  stepper = fn;
+}
+/** The module that owns a command kind registers how to apply it. A later registration replaces an earlier one. */
+export function registerHandler<K extends CommandKind>(kind: K, fn: (c: Extract<Command, { kind: K }>) => Result): void {
+  handlers.set(kind, fn as (c: never) => Result);
+}
+
+/** Stamp and queue a command for the next step. The UI calls this and nothing else (P2). */
+export function enqueue(c: CommandInput): Command {
+  const cmd = { ...c, tick: tickSource() + 1, seq: ++seqCounter } as Command;
+  pending.push(cmd);
+  return cmd;
+}
+
+/**
+ * Queue `c` for the park the player sees next: with a `park.new` pending (New confirmed, not applied yet), `c` waits beside it, since a
+ * park.new drops what is queued behind it (03 4.6), and applies as part of the New, right after the reset: at the new park's tick 0,
+ * logged there with a fresh seq, in the paused frame of 03 4.6 as in a running step, so a save made before the first step holds it. With
+ * none pending, this is enqueue. The shell's call right after a New or a new park of its own (save/store.ts enqueueProfilePace).
+ */
+export function enqueueAfterNew(c: CommandInput): void {
+  if (pending.some((p) => p.kind === 'park.new')) afterNew.push(c);
+  else enqueue(c);
+}
+
+/** Apply a command at the current tick at once and log it (the harness `apply`). */
+export function applyNow(c: CommandInput): Result {
+  return applyCommand({ ...c, tick: tickSource(), seq: ++seqCounter } as Command);
+}
+
+const rankOf = (c: Command): number => (firstKinds.has(c.kind) ? 0 : 1);
+/** The side key of the sort: none for the paused kinds, which apply by seq alone (see applyPending). */
+const sideKeyOf = (c: Command): number => (firstKinds.has(c.kind) ? 0 : SIDE_ORDER[c.side]);
+
+/**
+ * Apply every pending command with tick <= `tick`, ordered by (tick, paused kinds first, side park < cupid < mischief, seq) (03 5.2 item 2);
+ * the paused kinds have no side key, they go by seq alone. With `only`, apply just the commands of those kinds and leave the rest queued: a
+ * paused frame applies `speed`, `park.new`, `avatar.enter` and `avatar.leave` (03 4.6; owner 2026-10-13 and 2026-10-22), so the dial can
+ * unpause, a confirmed New starts the fresh park at once and Be someone and Creator answer at once, while every other command waits for
+ * the first step. Each paused frame takes every pending command of those kinds, so the frames apply them in seq order across frames; a
+ * side key among them would let a later Cupid command replay before an earlier Mischief one, and the live order would differ from the
+ * replay order (a `park.new` starts a new log, so it is never replayed).
+ */
+export function applyPending(tick: number, only?: ReadonlySet<CommandKind>): void {
+  if (pending.length === 0) return;
+  pending.sort((a, b) => a.tick - b.tick || rankOf(a) - rankOf(b) || sideKeyOf(a) - sideKeyOf(b) || a.seq - b.seq);
+  const batch: Command[] = [];
+  const keep: Command[] = [];
+  for (const c of pending) (c.tick <= tick && (only === undefined || only.has(c.kind)) ? batch : keep).push(c);
+  if (batch.length === 0) return;
+  pending = keep;
+  const g = generation;
+  for (const c of batch) {
+    if (g !== generation) break; // a park.new in this batch dropped the rest: they belonged to the old park
+    applyCommand(c);
+  }
+}
+
+/** The side and mode rules of 03 5.3; null when the command may go on to its handler. */
+function validate(c: Command): ReasonKey | null {
+  const side: Side = c.side;
+  switch (c.kind) {
+    case 'tool':
+    case 'undo':
+      if (side !== 'park') return 'reason.wrong_side';
+      return getMode() === 'avatar' ? 'reason.not_in_avatar' : null;
+    case 'ability': {
+      if (typeof c.payload.id !== 'string') return 'reason.not_here';
+      const own = c.payload.id.startsWith('c_') ? 'cupid' : 'mischief';
+      if (side !== own) return 'reason.wrong_side';
+      return getMode() === 'avatar' ? 'reason.not_in_avatar' : null;
+    }
+    case 'avatar.enter':
+      if (side !== AVATAR_SIDE[c.payload.avatar]) return 'reason.wrong_side';
+      return getMode() === 'avatar' ? 'reason.wrong_mode' : null;
+    case 'avatar.leave':
+    case 'avatar.tap': {
+      const av = getAvatar();
+      if (getMode() !== 'avatar' || av === null) return 'reason.wrong_mode';
+      return side === AVATAR_SIDE[av] ? null : 'reason.wrong_side';
+    }
+    case 'speed':
+    case 'park.new':
+    case 'visitor.call':
+    case 'park.pace':
+      return side === 'park' ? null : 'reason.wrong_side';
+    case 'debug.weather':
+      if (side !== 'park') return 'reason.wrong_side';
+      return import.meta.env.DEV ? null : 'reason.not_here';
+  }
+}
+
+function reject(c: Command, reason: ReasonKey): Result {
+  emit({ kind: 'rejected', tick: c.tick, params: { reason, side: c.side, kind: c.kind } });
+  return fail(reason);
+}
+
+/**
+ * The only writer (03 5.2 item 3): validate, then hand to the kind's handler; on success log (the last 600) and emit `applied`, on failure
+ * emit `rejected` and change nothing. It never toasts and never reads the camera or the DOM. `park.new` starts a new log, so it is not
+ * logged itself.
+ */
+export function applyCommand(c: Command): Result {
+  const why = validate(c);
+  if (why) return reject(c, why);
+  const h = handlers.get(c.kind);
+  if (!h) return reject(c, 'reason.not_here');
+  const carried = c.kind === 'park.new' ? afterNew : null; // taken before the reset, which empties afterNew with the queue
+  if (carried) afterNew = [];
+  const res = h(c as never);
+  if (!res.ok) return reject(c, res.reason);
+  if (c.kind !== 'park.new') {
+    logList.push(c);
+    if (logList.length > LOG_CAP) logList.splice(0, logList.length - LOG_CAP);
+  }
+  emit({ kind: 'applied', tick: c.tick, params: { kind: c.kind, side: c.side } });
+  if (carried) for (const x of carried) applyNow(x); // part of the New, after the reset: the new park's tick 0 (enqueueAfterNew)
+  return OK;
+}
+
+/** The applied commands, oldest first, at most 600. */
+export function log(): readonly Command[] {
+  return logList;
+}
+
+/**
+ * A restore (save/store.ts restore, after the layers, ids and props are in place): the saved log comes back, the sequence counter stays
+ * above every number in it, and the hooks of onRestoreCommands run.
+ */
+export function setLog(cmds: readonly Command[]): void {
+  logList = cmds.map((c) => ({ ...c }) as Command);
+  for (const c of logList) if (c.seq > seqCounter) seqCounter = c.seq;
+  for (const fn of restoreHooks) fn();
+}
+
+/**
+ * Run `fn` whenever setLog brings a saved log back (a restore). play/undo.ts empties its stack here, because the undo history is not saved
+ * and a load clears it (register 3.11; owner 2026-10-13), and play/tools.ts re-derives its tree cycle from the restored props. Like
+ * onResetCommands, this keeps this core module from importing play/ (03 2.1).
+ */
+export function onRestoreCommands(fn: () => void): void {
+  restoreHooks.push(fn);
+}
+
+/** Drop everything queued (enqueueAfterNew's waiting commands too): a new park or a restore makes the queued commands meaningless. */
+export function clearPending(): void {
+  pending = [];
+  afterNew = [];
+  generation++;
+}
+
+/**
+ * Run `fn` whenever resetCommands runs (a new park: core/loop.ts newPark, the `park.new` command included). play/undo.ts clears its stack
+ * here (03 5.6 item 5), so this core module never imports play/ (03 2.1).
+ */
+export function onResetCommands(fn: () => void): void {
+  resetHooks.push(fn);
+}
+
+/** A new park: nothing queued, an empty log, the sequence from 1, and the hooks of onResetCommands (the undo stack empties). */
+export function resetCommands(): void {
+  clearPending();
+  logList = [];
+  seqCounter = 0;
+  for (const fn of resetHooks) fn();
+}
+
+export function pendingCount(): number {
+  return pending.length;
+}
+
+/**
+ * Re-enqueue `cmds` at their original ticks (and sequence numbers), then run steps until the tick reaches `upToTick`.
+ * With an `upToTick` the clock has already passed, it only queues them (a real-time loop then applies them at those ticks).
+ */
+export function replay(cmds: readonly Command[], upToTick: number): void {
+  for (const c of cmds) {
+    pending.push({ ...c } as Command);
+    if (c.seq > seqCounter) seqCounter = c.seq;
+  }
+  if (stepper) while (tickSource() < upToTick) stepper();
+}
