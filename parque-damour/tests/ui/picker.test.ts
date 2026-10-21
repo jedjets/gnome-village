@@ -441,7 +441,7 @@ describe('S7 UI fixes: a refusal after the mode ended, a command waiting on a pa
       T.speed = 1;
     }
   });
-  it('Creator on a paused park answers at once too: "Pigeon goes on alone", the strips back; and the key avatar.paused is gone from both tables', () => {
+  it('Creator on a paused park answers at once too: "Pigeon goes on alone", the strips back, nothing about the pause', () => {
     enter('a_pigeon');
     $('hint').textContent = '';
     T.speed = 0;
@@ -456,8 +456,34 @@ describe('S7 UI fixes: a refusal after the mode ended, a command waiting on a pa
     } finally {
       T.speed = 1;
     }
-    expect('avatar.paused' in en).toBe(false);
-    expect('avatar.paused' in es).toBe(false);
+  });
+  it('a tap as the avatar on a paused park toasts that it waits for the run (avatar.paused, EN and ES, 03 4.6); on a running park, or in Creator, nothing', () => {
+    enter('a_pigeon');
+    const tap = { kind: 'tile', id: 0, tile: { x: 5, y: 5 } } as const;
+    T.speed = 0;
+    try {
+      $('hint').textContent = '';
+      noteAvatarTap(tap);
+      expect(hint()).toBe('Park paused: this happens when it runs again');
+      expect(hint()).toBe(en['avatar.paused']);
+      setLang('es');
+      noteAvatarTap(tap);
+      expect(hint()).toBe(es['avatar.paused']);
+      setLang('en');
+    } finally {
+      T.speed = 1;
+    }
+    $('hint').textContent = '';
+    noteAvatarTap(tap);
+    expect(hint()).toBe('');
+    setMode('creator');
+    T.speed = 0;
+    try {
+      noteAvatarTap(tap);
+      expect(hint()).toBe('');
+    } finally {
+      T.speed = 1;
+    }
   });
   it('shell.css: the toast (z 9) sits over the sheets (z 8), the intro (20) and the confirm (25) over both', () => {
     const css = readFileSync(join(ROOT, 'src', 'styles', 'shell.css'), 'utf8');

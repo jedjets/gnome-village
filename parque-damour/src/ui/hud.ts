@@ -24,7 +24,8 @@
 // `avatar.goes_on`. The `avatarStatus` event of a tap is toasted "Pigeon: swooping" (`avatar.says`), `walking` and `flying` silent (GV 11276-11277;
 // 02 10.1 item 6); a refused `avatar.tap` is "Pigeon: busy" (`avatar.busy`, the hold check) or "Pigeon: <the reason>" (what GV's `msg` was), with the
 // florist's cooldown seconds and a victim's name filled in from what the shell last tapped (noteAvatarTap, which main.ts calls). An avatar
-// command refused as `reason.wrong_mode` (the mode already as asked, e.g. a tap queued behind Creator while paused) toasts nothing.
+// command refused as `reason.wrong_mode` (the mode already as asked, e.g. a tap queued behind Creator while paused) toasts nothing. An avatar tap
+// on a paused park waits for the first step (03 4.6), so noteAvatarTap toasts `avatar.paused` for it; Be someone and Creator apply at once and do not.
 import { T, SEASON_KEYS } from '../core/clock.ts';
 import { enqueue } from '../core/commands.ts';
 import { watch, type GameEvent } from '../core/events.ts';
@@ -117,6 +118,9 @@ function romanceChip(): void {
 let lastHit: Hit | null = null;
 export function noteAvatarTap(hit: Hit | null): void {
   lastHit = hit;
+  // Be someone and Creator answer at once on a paused park, but an `avatar.tap` waits for the first step after the unpause (03 4.6): say
+  // so, or the first tap looks dead.
+  if (T.speed === 0 && getMode() === 'avatar') toast('avatar.paused');
 }
 
 /**

@@ -804,6 +804,7 @@ The clock chip's day is `t('hud.day', { n, season: '@hud.season.<season>' })`: t
 | `avatar.side_tier` | {side} · T{tier} | {side} · T{tier} |
 | `avatar.says` | {name}: {what} | {name}: {what} |
 | `avatar.busy` | {name}: busy | {name}: ocupado |
+| `avatar.paused` | Park paused: this happens when it runs again | Parque en pausa: pasará cuando siga corriendo |
 | `avatar.goes_on` | {name} goes on alone | {name} sigue por su cuenta |
 | `avatar.you` | {name} · you | {name} · tú |
 | `avatar.waiting` | waiting for your tap | esperando tu toque |

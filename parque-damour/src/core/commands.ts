@@ -106,7 +106,7 @@ export function setTickSource(fn: () => number): void {
 }
 /**
  * The loop hands in the kinds a paused frame applies (loop.PAUSED_KINDS). Within one tick they sort ahead of every other kind, so the order
- * a paused frame then a first step give is the order of (tick, kind class, side, seq) that a replay of the log applies in one step: an
+ * a paused frame then a first step give is the order of (tick, kind class, side for the others, seq) that a replay of the log applies in one step: an
  * `avatar.enter` queued after a `visitor.call` while paused still goes first in both, and the two draw the same numbers (03 4.6, 5.2).
  */
 export function setFirstKinds(kinds: ReadonlySet<CommandKind>): void {
@@ -145,17 +145,21 @@ export function applyNow(c: CommandInput): Result {
 }
 
 const rankOf = (c: Command): number => (firstKinds.has(c.kind) ? 0 : 1);
+/** The side key of the sort: none for the paused kinds, which apply by seq alone (see applyPending). */
+const sideKeyOf = (c: Command): number => (firstKinds.has(c.kind) ? 0 : SIDE_ORDER[c.side]);
 
 /**
- * Apply every pending command with tick <= `tick`, ordered by (tick, paused kinds first, side park < cupid < mischief, seq) (03 5.2 item 2).
- * With `only`, apply just the commands of those kinds and leave the rest queued: a paused frame applies `speed`, `park.new`, `avatar.enter`
- * and `avatar.leave` (03 4.6; owner 2026-10-13 and 2026-10-22), so the dial can unpause, a confirmed New starts the fresh park at once and
- * Be someone and Creator answer at once, while every other command waits for the first step and the live order always equals the replay
- * order (a `park.new` starts a new log, so it is never replayed).
+ * Apply every pending command with tick <= `tick`, ordered by (tick, paused kinds first, side park < cupid < mischief, seq) (03 5.2 item 2);
+ * the paused kinds have no side key, they go by seq alone. With `only`, apply just the commands of those kinds and leave the rest queued: a
+ * paused frame applies `speed`, `park.new`, `avatar.enter` and `avatar.leave` (03 4.6; owner 2026-10-13 and 2026-10-22), so the dial can
+ * unpause, a confirmed New starts the fresh park at once and Be someone and Creator answer at once, while every other command waits for
+ * the first step. Each paused frame takes every pending command of those kinds, so the frames apply them in seq order across frames; a
+ * side key among them would let a later Cupid command replay before an earlier Mischief one, and the live order would differ from the
+ * replay order (a `park.new` starts a new log, so it is never replayed).
  */
 export function applyPending(tick: number, only?: ReadonlySet<CommandKind>): void {
   if (pending.length === 0) return;
-  pending.sort((a, b) => a.tick - b.tick || rankOf(a) - rankOf(b) || SIDE_ORDER[a.side] - SIDE_ORDER[b.side] || a.seq - b.seq);
+  pending.sort((a, b) => a.tick - b.tick || rankOf(a) - rankOf(b) || sideKeyOf(a) - sideKeyOf(b) || a.seq - b.seq);
   const batch: Command[] = [];
   const keep: Command[] = [];
   for (const c of pending) (c.tick <= tick && (only === undefined || only.has(c.kind)) ? batch : keep).push(c);

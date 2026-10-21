@@ -346,4 +346,28 @@ describe('the avatar commands on a paused park (03 4.6, 5.2; owner 2026-10-22)',
       applyPending(tick() + 1, PAUSED_KINDS);
     }
   });
+  it('paused frames apply in seq order, so a Pompon enter and leave then a florist enter in three frames replay to the same hash (03 4.6, 5.2)', () => {
+    setSpeed(0);
+    const snap = json(), n = log().length;
+    for (const [side, kind, payload] of [
+      ['mischief', 'avatar.enter', { avatar: 'a_pomeranian' }], // mischief sorts after cupid by side, so a side sort in the replay would put the florist first
+      ['mischief', 'avatar.leave', {}],
+      ['cupid', 'avatar.enter', { avatar: 'a_florist' }],
+      ['park', 'speed', { speed: 1 }],
+    ] as const) {
+      enqueue({ side, kind, payload } as Parameters<typeof enqueue>[0]);
+      applyPending(tick() + 1, PAUSED_KINDS); // one paused frame each: the player taps Pompon, Creator, Violette one after the other
+    }
+    for (let i = 0; i < 120; i++) simulate(SIM_DT, 1);
+    expect(rejected).toEqual([]);
+    expect(log().slice(n).map((c) => `${c.kind}:${c.side}`)).toEqual(['avatar.enter:mischief', 'avatar.leave:mischief', 'avatar.enter:cupid', 'speed:park']);
+    const h = stateHash(), cmds = log().slice(n).map((c) => ({ ...c }));
+    const t1 = tick();
+    restore(snap);
+    setSpeed(0);
+    replay(cmds, t1);
+    expect(rejected).toEqual([]);
+    expect([getMode(), getAvatar()]).toEqual(['avatar', 'a_florist']);
+    expect(stateHash()).toBe(h);
+  });
 });

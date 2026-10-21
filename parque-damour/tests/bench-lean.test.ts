@@ -1,9 +1,10 @@
 // tests/bench-lean.test.ts
 // Locks the far-zoom floor of the Bench 2 lean (S7 follow-up 1, owner 2026-10-22 "the bench lean strengthened at Fit"; 04 9.2 row Bench;
-// render/figure-moves.ts benchLeanAt and benchMove, people.ts): at Fit a figure is 6.6 px tall, so her 0.2 rad lean moved her head 0.6 px and a
-// pair on a bench read as two upright figures. Her head now keeps BENCH_LEAN_PX (0.8) of lean toward him at any height; he, who sits up, leans
-// BENCH_LEAN_HIM_PX (0.3) toward her at Fit, fading to nothing by 16 px of height (zoom 0.73). From 10 px of height up (zoom 0.45) her move is
-// the one moveOf made, the very same object, so 1.3 and 2.4 draw as before (tests/ pixel check: shots/s7-bench-13 and -24 equal their pre-floor images).
+// render/figure-moves.ts benchLeanAt and benchMove, people.ts): at Fit a figure is 6.6 px tall, so her 0.2 rad lean moves her head 0.56 px, and
+// a pair on a bench read as two upright figures (people.ts dropped every pose under 12 px). Her head keeps BENCH_LEAN_PX (0.6) of lean toward
+// him at any height; he, who sits up, keeps his own 0.02 rad (a first try of 0.8 and 0.3 put the two heads, 1.7 px apart at Fit, on top of each
+// other: the S7 review). From 7.1 px of height up (zoom 0.32) her move is the one moveOf made, the very same object, so 1.3 and 2.4 draw as
+// before (shots/s7-bench-13 and -24 equal their pre-floor images).
 import { describe, it, expect, beforeEach } from 'vitest';
 import { newPark } from '../src/core/loop.ts';
 import { HUFF_T, resetRomance, tryForm } from '../src/entities/romance.ts';
@@ -11,7 +12,7 @@ import { resetVisitors, spawnVisitor, type Visitor } from '../src/entities/visit
 import { cam } from '../src/render/camera.ts';
 import { FH } from '../src/render/figure-rig.ts';
 import { skel } from '../src/render/figure-pose.ts';
-import { BENCH_LEAN_HIM_PX, BENCH_LEAN_PX, benchLeanAt, benchMove, moveOf, type Move } from '../src/render/figure-moves.ts';
+import { BENCH_LEAN_PX, benchLeanAt, benchMove, moveOf, type Move } from '../src/render/figure-moves.ts';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -48,19 +49,23 @@ describe('moveOf says which way each leans and who she is (the floor needs both)
   });
 });
 
-describe('her lean: the head keeps BENCH_LEAN_PX of shift at every height, and the move is untouched from 10 px of height up', () => {
-  it('Fit (0.3, 6.6 px): the head moves 0.8 px toward him; 0.4 to 0.8: still 0.8 until her own lean takes over; the natural 0.2 rad gives 0.6 px at Fit', () => {
+describe('her lean: the head keeps BENCH_LEAN_PX of shift at every height, and the move is untouched from 7.1 px of height up', () => {
+  it('Fit (0.3, 6.6 px): the head moves 0.6 px toward him (0.21 rad, a hair over her own 0.2); an elder (0.95 h) too; the two heads keep a gap', () => {
     const [her] = pair();
-    expect(shift(her, hAt(0.3))).toBeLessThan(0.7); // what it was: two upright figures
-    for (const z of [0.3, 0.4, 0.5, 0.6, 0.7, 0.8]) {
+    expect(shift(her, hAt(0.3))).toBeLessThan(0.6); // her own 0.2 rad gives 0.56 px at Fit
+    for (const z of [0.3, 0.31, 0.32, 0.4, 0.5, 0.6, 0.7, 0.8]) {
       const m = benchMove(her, hAt(z));
       expect(shift(m, hAt(z)), `zoom ${z}`).toBeGreaterThanOrEqual(BENCH_LEAN_PX - 0.03);
       expect(Math.sign(m.pose.lean ?? 0), `zoom ${z}`).toBe(her.k);
     }
-    expect(Math.abs(benchLeanAt(her, hAt(0.3)))).toBeGreaterThan(0.25);
-    expect(Math.abs(benchLeanAt(her, hAt(0.3)))).toBeLessThan(0.35); // about 16 degrees, not the 35 of the first try (the two heads on top of each other)
+    const fit = Math.abs(benchLeanAt(her, hAt(0.3)));
+    expect(fit).toBeGreaterThan(0.2);
+    expect(fit).toBeLessThan(0.25); // 12 degrees: the first try of 0.8 and 0.3 (16 and 5) put the two heads on top of each other
+    expect(shift(benchMove(her, 0.95 * hAt(0.3)), 0.95 * hAt(0.3))).toBeGreaterThanOrEqual(BENCH_LEAN_PX - 0.03);
+    // the seats are 1.7 px apart on the screen at Fit: with the shift of her head alone (his has none) 1.1 px of gap is left, not 0.6
+    expect(1.7 - shift(benchMove(her, hAt(0.3)), hAt(0.3))).toBeGreaterThan(1);
   });
-  it('1.3 and 2.4 (and 0.6, 0.9, 1.0, 1.8, 3.4): benchMove returns the very move moveOf made, so the drawing is the one of before', () => {
+  it('1.3 and 2.4 (and 0.9, 1.0, 1.8, 3.4): benchMove returns the very move moveOf made, so the drawing is the one of before', () => {
     const [her, him] = pair();
     for (const z of [0.9, 1.0, 1.3, 1.8, 2.4, 3.4]) {
       expect(benchMove(her, hAt(z)), `her ${z}`).toBe(her);
@@ -78,23 +83,20 @@ describe('her lean: the head keeps BENCH_LEAN_PX of shift at every height, and t
       prev = l;
     }
     expect(prev).toBeCloseTo(0.2, 9);
+    expect(benchMove(her, 7.2)).toBe(her); // her own lean from 7.1 px of height
   });
 });
 
-describe('his lean: a small lean toward her at Fit that is gone by 16 px of height', () => {
-  it('Fit: 0.3 px toward her; 11 px: less; 16 px up: his own 0.02 rad, the same move; never away from her at Fit', () => {
+describe('his lean: none of the floor, he sits up (0.02 rad) at every height, so the pair never draws its two heads together', () => {
+  it('Fit and up: the same move as moveOf made, the lean 0.02 toward her; he leans the other way from her', () => {
     const [her, him] = pair();
-    const fit = benchMove(him, hAt(0.3));
-    expect(shift(fit, hAt(0.3))).toBeGreaterThanOrEqual(BENCH_LEAN_HIM_PX - 0.02);
-    expect(Math.sign(fit.pose.lean ?? 0)).toBe(him.k);
+    for (const z of [0.3, 0.4, 0.5, 0.73, 1.3, 2.4]) {
+      expect(benchMove(him, hAt(z)), `zoom ${z}`).toBe(him);
+      expect(benchLeanAt(him, hAt(z)), `zoom ${z}`).toBeCloseTo(him.pose.lean ?? 0, 9);
+    }
     expect(him.k).toBe(-her.k); // each toward the other
-    expect(Math.abs(benchLeanAt(him, 12))).toBeLessThan(Math.abs(benchLeanAt(him, hAt(0.3))));
-    expect(benchMove(him, 16)).toBe(him);
-    expect(benchMove(him, 11)).not.toBe(him); // on the ramp
-    expect(Math.abs(benchLeanAt(him, 11))).toBeGreaterThan(0.025); // more than his own 0.02 and the floor's hair
-    expect(Math.abs(benchLeanAt(him, 11))).toBeLessThan(Math.abs(benchLeanAt(him, 10)));
-    expect(benchMove(him, 14)).toBe(him); // the ramp's tail is under the hair: his own lean
-    expect(shift(benchMove(him, hAt(0.3)), hAt(0.3))).toBeLessThan(shift(benchMove(her, hAt(0.3)), hAt(0.3))); // she still leans further than he
+    expect(shift(benchMove(him, hAt(0.3)), hAt(0.3))).toBeLessThan(0.1);
+    expect(shift(benchMove(him, hAt(0.3)), hAt(0.3))).toBeLessThan(shift(benchMove(her, hAt(0.3)), hAt(0.3))); // she leans further than he
   });
 });
 

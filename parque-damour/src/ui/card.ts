@@ -176,10 +176,15 @@ function bar(need: 'mood' | 'rest' | 'full' | 'heart', value: number, low: boole
   return b;
 }
 
-/** The third bar's label: "Full" for a person and a creature, "Blooms" for the flower seller's basket (strip only); the key stays on the span for a language change. */
+/**
+ * The third bar's label: "Full" for a person and a creature, "Blooms" for the flower seller's basket (strip only); the key stays on the span
+ * for a language change. Only the basket bar carries an aria-label of its own ("Basket: n of 3 blooms"), so "Full" clears it: it never
+ * stays on the bar of a visitor's card, a pair's or a creature's after the strip of Violette.
+ */
 function fullLabel(key: 'card.bar.full' | 'card.bar.blooms'): void {
   const s = document.querySelector<HTMLElement>('#cBars .bar[data-need="full"] > span');
   if (!s) return;
+  if (key === 'card.bar.full') s.parentElement?.removeAttribute('aria-label');
   s.dataset.t = key;
   const text = t(key);
   if (s.textContent !== text) s.textContent = text;
@@ -355,7 +360,7 @@ function stripBars(a: AvatarId, v?: Visitor, c?: Creature): void {
     fullLabel('card.bar.full');
     bar('mood', k.mood, k.mood < LOW_MOOD);
     bar('rest', k.rest, k.rest < LOW_RESTED);
-    bar('full', k.full, k.full < LOW_FULL)?.removeAttribute('aria-label');
+    bar('full', k.full, k.full < LOW_FULL);
     return;
   }
   if (!v) return;

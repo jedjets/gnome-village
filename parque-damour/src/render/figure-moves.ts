@@ -227,25 +227,25 @@ export function moveOf(v: Visitor, face: 1 | -1, tSim: number, ph: number): Move
 /* ---------- the bench lean at far zoom (owner 2026-10-22: "the bench lean strengthened at Fit") ---------- */
 
 /**
- * Floors of the bench lean, in px of the head's sideways shift, which act only at far zoom like the featured glow's (ghost.ts RING_MIN): at Fit a
- * figure is 6.6 px tall, so her 0.2 rad lean moved her head 0.6 px and a pair on a bench read as two upright figures. Her head now keeps at
- * least BENCH_LEAN_PX of lean toward him (16 degrees at Fit); he, who sits up, leans BENCH_LEAN_HIM_PX toward her at Fit and nothing from 16 px
- * of height up (zoom 0.73), so that the zooms of 1.3 and 2.4 draw both of them exactly as before. (Looked at on a pair at Fit: 1.6 and 0.9 px put the
- * two heads on top of each other and the pair read as one figure, 1.0 and 0.4 nearly; 0.8 and 0.3 keep two heads, tilted together.) Her natural shift
- * is 0.0857 h, which crosses BENCH_LEAN_PX at 9.3 px of height (zoom 0.42): the floor meets her own lean without a step. `h` is the figure's height.
+ * The floor of the bench lean, in px of the head's sideways shift, which acts only at far zoom like the featured glow's (ghost.ts RING_MIN):
+ * at Fit a figure is 6.6 px tall, so her own 0.2 rad lean moves her head 0.56 px, and until people.ts kept the bench move under 12 px of height
+ * a pair on a bench read as two upright figures there. Her head keeps at least BENCH_LEAN_PX toward him (0.21 rad, 12 degrees, at Fit); her own
+ * lean takes over from 7.1 px of height (zoom 0.32), where `benchMove` returns the move itself, so 1.3 and 2.4 draw her as before. He sits up
+ * and keeps his 0.02 rad: the two seats are only 1.7 px apart on the screen at Fit, so a lean of 1.1 px between them (0.8 for her and 0.3 for
+ * him, the first try) put the two heads on top of each other and the pair read as one figure; 0.5 and 0.6 for her alone keep them apart
+ * (looked at on four pairs on different sides of their bench at zoom 0.30). `h` is the figure's height.
  */
-export const BENCH_LEAN_PX = 0.8, BENCH_LEAN_HIM_PX = 0.3;
-/** The head's distance from the hips in heights (figure-pose.ts skel with her 0.25 tilt: a lean of a rad moves it 0.427 h sin(a)); the ramp of his floor, in px of height. */
-const BENCH_HEAD = 0.427, HIM_FULL_H = 9, HIM_NONE_H = 16, LEAN_EPS = 0.005;
-/** The lean (rad, signed toward the partner by `m.k`) the bench pose has at drawn height h, floors included. */
+export const BENCH_LEAN_PX = 0.6;
+/** The head's distance from the hips in heights (figure-pose.ts skel with her 0.25 tilt: a lean of a rad moves it 0.427 h sin(a)). */
+const BENCH_HEAD = 0.427, LEAN_EPS = 0.005;
+/** The lean (rad, signed toward the partner by `m.k`) the bench pose has at drawn height h, her floor included; his is his own. */
 export function benchLeanAt(m: Move, h: number): number {
   const base = m.pose.lean ?? 0;
-  const px = m.her ? BENCH_LEAN_PX : BENCH_LEAN_HIM_PX * (1 - seg(h, HIM_FULL_H, HIM_NONE_H));
-  if (px <= 0 || h <= 0) return base;
-  const need = Math.asin(Math.min(0.95, px / (BENCH_HEAD * h)));
+  if (!m.her || h <= 0) return base;
+  const need = Math.asin(Math.min(0.95, BENCH_LEAN_PX / (BENCH_HEAD * h)));
   return need > Math.abs(base) + LEAN_EPS ? m.k * need : base; // the floor's reach is a constant, her own lean's varies a hair: no change under LEAN_EPS
 }
-/** `m` with the bench lean of its height h: `m` itself when the floor changes nothing (1.3, 2.4), else a copy with the leaning pose. */
+/** `m` with the bench lean of its height h: `m` itself when the floor changes nothing (her from 7.1 px of height, him always), else a copy with the leaning pose. */
 export function benchMove(m: Move, h: number): Move {
   if (m.kind !== 'bench') return m;
   const lean = benchLeanAt(m, h);

@@ -163,6 +163,7 @@ describe('the avatar strip shows three bars (04 5.5 item 3)', () => {
     Object.assign(v, { x: 20, y: 30, path: null, st: 'idle', comfort: 0.5, energy: 0.5, hunger: 0.5 });
     select({ kind: 'visitor', id: v.id, tile: { x: 20, y: 30 } });
     expect(label('full')).toBe('Full');
+    expect(bar('full').getAttribute('aria-label')).toBeNull(); // the basket's "Basket: n of 3 blooms" does not stay for a screen reader
     expect(bar('full').getAttribute('data-need')).toBe('full');
     expect(width('full')).toBe('50%');
     expect(en['card.bar.full']).toBe('Full');

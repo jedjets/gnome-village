@@ -520,6 +520,7 @@ export const es: Record<string, string> = {
   'avatar.side_tier': '{side} · T{tier}',
   'avatar.says': '{name}: {what}',
   'avatar.busy': '{name}: ocupado',
+  'avatar.paused': 'Parque en pausa: pasará cuando siga corriendo',
   'avatar.goes_on': '{name} sigue por su cuenta',
   'avatar.you': '{name} · tú',
   'avatar.waiting': 'esperando tu toque',
