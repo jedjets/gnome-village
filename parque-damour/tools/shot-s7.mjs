@@ -5,6 +5,8 @@
 // profile (setProgress, as the det-s6 and s6 shots do). The park stays paused: Be someone and Creator apply in the paused frame (03 4.6, owner
 // 2026-10-22), which `enter` and `leave` check (the park is still paused after them), and the sim is stepped with __PD.simulate, which also
 // applies the tap that waits for the first step (an avatar.tap is not a paused kind).
+//   bench-fit        a pair seated on the inner loop's bench, the camera at zoom 0.3 (Fit), 1.3 and 2.4 (bench-13, bench-24): her lean toward him reads at 0.3 and the
+//                    two nearer zooms draw it as before (S7 follow-up 1, owner 2026-10-22; the floor is figure-moves.ts benchLeanAt)
 //   picker           Mischief T1 and Cupid T0 (the test profile): a_pigeon and a_pomeranian open, a_florist locked (the lock glyph, "Locked · Cupid T1"),
 //                    the three S10 avatars dimmed "Coming soon"; the six cards at 390 x 844 with their portraits and side stripes
 //   pigeon           a tap on the Pigeon card: possessed, the camera followed to zoom 1.5 (entered from 1.0), the strip "Pigeon · you" with "waiting for your
@@ -38,6 +40,9 @@ export const S7_SCENES = [
   { name: '320', vp: [320, 568], keep: true, act: 's7Small' },
   { name: '320-es', keep: true, act: 's7SmallEs' },
   { name: 'avatar-320-es', keep: true, act: 's7SmallAvatarEs' },
+  { name: 'bench-fit', vp: [390, 844], turn: 0, z: 0.3, at: [20.5, 27.2], act: 's7BenchPair' },
+  { name: 'bench-13', turn: 0, z: 1.3, at: [20.5, 27.2] },
+  { name: 'bench-24', turn: 0, z: 2.4, at: [20.5, 27.2] },
 ];
 
 /** `h`: the helpers shot.mjs owns (tapTile, sleep). Returns the scene actions of the set. */
@@ -126,6 +131,14 @@ export function s7Actions(h) {
   };
   /** Pinch-free zoom to `z` on the followed actor: the camera's own zoom, as a pinch sets it; the follow keeps the actor in the clear band. */
   const zoomTo = (page, z) => page.evaluate((z) => (window.__PD.cam.z = z), z);
+  const chooseEn = async (page) => {
+    await closeSheet(page, 'picker');
+    await page.click('#bOptions');
+    await page.waitForFunction(() => document.getElementById('options').classList.contains('on'), { timeout: 5_000 });
+    await page.click('#optionsList [data-k="lang:en"]');
+    await page.waitForFunction(() => document.documentElement.lang === 'en' && document.getElementById('bOptions').textContent === 'Options', { timeout: 5_000 });
+    await closeSheet(page, 'options');
+  };
   const chooseEs = async (page) => {
     await closeSheet(page, 'picker');
     await page.click('#bOptions');
@@ -134,7 +147,40 @@ export function s7Actions(h) {
     await page.waitForFunction(() => document.documentElement.lang === 'es' && document.getElementById('bMode').textContent === 'Ser alguien', { timeout: 5_000 });
     await closeSheet(page, 'options');
   };
+  /** A pair of two new singles at (20, 27) and (21, 27) at Bench (stage 2 with its next stage started), stepped until both sit, then the park paused. */
+  const benchPair = (page) =>
+    page.evaluate(async () => {
+      const pd = window.__PD, V = await import('/src/entities/visitor.ts'), R = await import('/src/entities/romance.ts'), S = await import('/src/entities/romance-stages.ts');
+      const mk = (sex, dx) => {
+        const v = V.spawnVisitor('single', 'g_west', { sex, seeks: sex === 'f' ? 'm' : 'f' });
+        Object.assign(v, { x: 20 + dx, y: 27, path: null, st: 'idle', t: 0, hunger: 0.2, energy: 0.9, comfort: 0.9, leaveAt: 99, decideT: 5 });
+        return v;
+      };
+      const a = mk('f', 0), b = mk('m', 1), p = R.tryForm(a, b, true);
+      Object.assign(p, { stage: 2, affinity: 0.5, doing: 0, formedDay: 0 });
+      for (const v of [a, b]) Object.assign(v, { st: 'idle', job: {}, path: null });
+      S.startStage(p, 3, false);
+      for (let k = 0; k < 600 && !(a.st === 'bench' && b.st === 'bench'); k++) pd.simulate(10);
+      pd.setSpeed(0);
+      return a.st === 'bench' && b.st === 'bench';
+    });
   return {
+    /** The pair at the bench for the three bench scenes (the follow of the Pomeranian is let go, the camera put on the pair; the other two scenes set their own). */
+    async s7BenchPair(page) {
+      await leave(page); // the last scene left the Pomeranian possessed, in Spanish on a 320 px phone (the runner has put the 390 px one back)
+      await chooseEn(page);
+      await hideHint(page, true);
+      if (!(await benchPair(page))) throw new Error('s7 bench: the pair never sat down');
+      await page.evaluate(() => {
+        const cam = window.__PD.cam, z = 0.3, x = 20.5, y = 27.2;
+        cam.follow = 0;
+        cam.z = z;
+        cam.ox = -(x - y) * 13 * z;
+        cam.oy = -(x + y - 47) * 6.5 * z;
+        cam.free = true;
+      });
+      await sleep(600);
+    },
     /** The player's view (body.dev off), Mischief T1, Cupid T0: the picker with its six cards in the states the test profile gives. */
     async s7Picker(page) {
       await page.evaluate(() => {

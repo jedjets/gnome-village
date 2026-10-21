@@ -44,6 +44,7 @@ import { lampOn } from './props.ts';
 import { BREATH_RAD, FH, drawVisitor, figureScale, handOf, poseOf } from './figures.ts';
 import { P2, opts, type Ink, type Opts, type RigLook } from './figure-rig.ts';
 import { breedOf, lookOf, newLook } from './figure-look.ts';
+import { benchMove } from './figure-moves.ts';
 import { drinkFace, pigeonCycle } from './creatures-poses.ts';
 import { DOG_EH, DOG_TROT_HZ, PIGEON_FLAP_HZ, PIGEON_WALK_HZ, SWOOP_SCALE, drawDog, drawDogOf, drawLead, drawPigeonOf, drawPigeonState, drawPompon, drawSwoop, pigeonStateOf, pomRuns } from './creatures.ts';
 import { drawCap, drawNotes, handPetals } from './fx-play.ts';
@@ -204,6 +205,7 @@ function prepare(pd: PersonDrawable, v: Visitor): void {
   lookOf(v, style().palette, figureScale(v), LOOK);
   if (v.spawnedForPlayer && v.archetype === 'cameo') LOOK.carry = v.basket > 0 && !FLORIST_BUSY[v.st] ? 'bouquet' : 'none'; // a_florist: a bouquet from the basket in hand
   poseOf(v, pd.face, tSim(), POSE);
+  if (POSE.move) POSE.move = benchMove(POSE.move, pd.h); // the bench lean keeps a floor at far zoom (figure-moves.ts)
   POSE.seatPx = pd.e * EH * cam.z;
   POSE.slope = pd.slope;
   POSE.warm = pd.warm;
@@ -293,14 +295,14 @@ function figureSprite(v: Visitor, h: number): Sprite {
   const frame = walking ? frameOf(POSE.ph / TAU, nf) : 0;
   if (far) {
     POSE.lookAt = 0;
-    POSE.move = null; // under 12 px no pose shows: the state's own sprite
+    if (POSE.move?.kind !== 'bench') POSE.move = null; // under 12 px no pose shows but the bench's lean (owner 2026-10-22): the state's own sprite
   }
   // a glance holds the arms at the breath's middle, so a still figure keeps four sprites: three breaths and the glance
   const br = far || POSE.lookAt !== 0 ? 0 : Math.round((POSE.breath / BREATH_RAD) * BREATH_STEPS);
   const warm = Math.round(POSE.warm * 100);
   const key = v.lookSeed + '|' + v.archetype + '|' + LOOK.hat + LOOK.carry + LOOK.bag + LOOK.top + LOOK.pairScarf + '|' + POSE.state + POSE.expr + '|' +
     POSE.face + POSE.lookAt + '|' + nf + ':' + frame + '|' + br + '|' + Math.round(POSE.seatPx * 8) + '|' + Math.round(POSE.slope * 16) + '|' +
-    warm + '|' + zq + LK;
+    warm + '|' + zq + LK + (POSE.move?.kind === 'bench' ? '|bn' + Math.round((POSE.move.pose.lean ?? 0) * 100) : '');
   const hq = (h * zq) / cam.z;
   const w = Math.ceil(hq * 1.6) + 6, ay = Math.ceil(hq * 1.3) + 4;
   return spriteFor(key, LIGHT, zq, view.dpr, w, ay + Math.ceil(hq * 0.35) + 3, w / 2, ay, (g, at) => {

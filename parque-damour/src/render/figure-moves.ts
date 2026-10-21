@@ -32,6 +32,8 @@ export type Move = {
   poof: number; // the stumble's dust poof, 0 to 1 through its life, -1 none
   wet: boolean; // the shake: clothes darkened, drops on and off
   shake: number; // the shake's phase value, -0.25 to 0.25 rad
+  k: number; // the bench's lean toward the partner in the figure's own frame, +1 ahead, -1 behind, 0 for anything else
+  her: boolean; // the bench's woman (she leans 0.2 rad toward him), false for the man (he sits up)
 };
 
 /** The reactions' lengths (02 6.4, brain.ts REACTION; tests/rig-moves.test.ts keeps them equal): what `v.t` counts down from. */
@@ -142,7 +144,7 @@ function chasePose(ph: number): Pose {
   };
 }
 
-const SELF: Move = { kind: 'notice', pose: {}, t: 0, hatOff: false, hatHand: false, splat: 0, poof: -1, wet: false, shake: 0 };
+const SELF: Move = { kind: 'notice', pose: {}, t: 0, hatOff: false, hatHand: false, splat: 0, poof: -1, wet: false, shake: 0, k: 0, her: false };
 
 /**
  * The body pose of `v` in a romance stage or a reaction, or null when its state has none (it is drawn by the rig's own state). `face` is
@@ -157,6 +159,8 @@ export function moveOf(v: Visitor, face: 1 | -1, tSim: number, ph: number): Move
   m.wet = false;
   m.shake = 0;
   m.t = 0;
+  m.k = 0;
+  m.her = false;
   const f = v.sex === 'f';
   switch (v.st) {
     case 'notice':
@@ -167,11 +171,10 @@ export function moveOf(v: Visitor, face: 1 | -1, tSim: number, ph: number): Move
     case 'bench': {
       if (v.sitPropId === 0) return null;
       m.kind = 'bench';
+      m.k = partnerSide(v, face);
+      m.her = f;
       if (!f) m.pose = BENCH_HIM;
-      else {
-        const k = partnerSide(v, face);
-        m.pose = { lean: 0.2 * k, tilt: 0.25 * k, expr: 'bench' };
-      }
+      else m.pose = { lean: 0.2 * m.k, tilt: 0.25 * m.k, expr: 'bench' };
       return m;
     }
     case 'huff': {
@@ -219,6 +222,34 @@ export function moveOf(v: Visitor, face: 1 | -1, tSim: number, ph: number): Move
     default:
       return null;
   }
+}
+
+/* ---------- the bench lean at far zoom (owner 2026-10-22: "the bench lean strengthened at Fit") ---------- */
+
+/**
+ * Floors of the bench lean, in px of the head's sideways shift, which act only at far zoom like the featured glow's (ghost.ts RING_MIN): at Fit a
+ * figure is 6.6 px tall, so her 0.2 rad lean moved her head 0.6 px and a pair on a bench read as two upright figures. Her head now keeps at
+ * least BENCH_LEAN_PX of lean toward him (16 degrees at Fit); he, who sits up, leans BENCH_LEAN_HIM_PX toward her at Fit and nothing from 16 px
+ * of height up (zoom 0.73), so that the zooms of 1.3 and 2.4 draw both of them exactly as before. (Looked at on a pair at Fit: 1.6 and 0.9 px put the
+ * two heads on top of each other and the pair read as one figure, 1.0 and 0.4 nearly; 0.8 and 0.3 keep two heads, tilted together.) Her natural shift
+ * is 0.0857 h, which crosses BENCH_LEAN_PX at 9.3 px of height (zoom 0.42): the floor meets her own lean without a step. `h` is the figure's height.
+ */
+export const BENCH_LEAN_PX = 0.8, BENCH_LEAN_HIM_PX = 0.3;
+/** The head's distance from the hips in heights (figure-pose.ts skel with her 0.25 tilt: a lean of a rad moves it 0.427 h sin(a)); the ramp of his floor, in px of height. */
+const BENCH_HEAD = 0.427, HIM_FULL_H = 9, HIM_NONE_H = 16, LEAN_EPS = 0.005;
+/** The lean (rad, signed toward the partner by `m.k`) the bench pose has at drawn height h, floors included. */
+export function benchLeanAt(m: Move, h: number): number {
+  const base = m.pose.lean ?? 0;
+  const px = m.her ? BENCH_LEAN_PX : BENCH_LEAN_HIM_PX * (1 - seg(h, HIM_FULL_H, HIM_NONE_H));
+  if (px <= 0 || h <= 0) return base;
+  const need = Math.asin(Math.min(0.95, px / (BENCH_HEAD * h)));
+  return need > Math.abs(base) + LEAN_EPS ? m.k * need : base; // the floor's reach is a constant, her own lean's varies a hair: no change under LEAN_EPS
+}
+/** `m` with the bench lean of its height h: `m` itself when the floor changes nothing (1.3, 2.4), else a copy with the leaning pose. */
+export function benchMove(m: Move, h: number): Move {
+  if (m.kind !== 'bench') return m;
+  const lean = benchLeanAt(m, h);
+  return lean === (m.pose.lean ?? 0) ? m : { ...m, pose: { ...m.pose, lean } };
 }
 
 /* ---------- what rides on the body ---------- */
