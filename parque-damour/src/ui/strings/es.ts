@@ -560,6 +560,6 @@ export const es: Record<string, string> = {
   // S7 UI (07 S7.6 steps 6-7; 02 10.1, 12.4; 04 5.4 item 6, 5.6): the picker, the avatar's hint chips and the 6 s toast
   'avatar.intro': 'Juegas como {name}. {hint}',
   'sheet.picker.sum': 'Elige a quién ser y toca el parque para dar órdenes.',
-  'sheet.picker.locked': 'Bloqueado · {side} T{tier}',
+  'sheet.picker.locked': 'Bloqueado\u00a0· {side}\u00a0T{tier}', // no-break spaces: the dot stays on the first line and the tier stays with its side (320 px, owner 2026-10-22)
   'aria.avatar_hints': 'Qué puedes hacer',
 };

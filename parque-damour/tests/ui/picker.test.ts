@@ -130,8 +130,8 @@ describe('07 S7.6 step 7, 02 12.4, 04 5.6: "Be someone" opens the Avatar picker 
       expect(card(id).getAttribute('aria-disabled'), id).toBe('true');
       expect(card(id).querySelector('svg'), id).not.toBeNull();
     }
-    expect(card('a_pomeranian').querySelector('small')?.textContent).toBe('Locked · Mischief T1');
-    expect(card('a_florist').querySelector('small')?.textContent).toBe('Locked · Cupid T1');
+    expect(card('a_pomeranian').querySelector('small')?.textContent).toBe('Locked\u00a0· Mischief\u00a0T1');
+    expect(card('a_florist').querySelector('small')?.textContent).toBe('Locked\u00a0· Cupid\u00a0T1');
     for (const id of ['a_mime', 'a_busker', 'a_matchmaker']) {
       expect(card(id).classList.contains('soon'), id).toBe(true);
       expect(card(id).querySelector('small.st')?.textContent, id).toBe('Coming soon');
@@ -167,7 +167,7 @@ describe('07 S7.6 step 7, 02 12.4, 04 5.6: "Be someone" opens the Avatar picker 
     $('bMode').click();
     setLang('es');
     expect(cards().map((c) => c.querySelector('b')?.textContent)).toEqual(['Paloma', 'Pomerania', 'Mimo', 'Florista', 'Músico callejero', 'Casamentera']);
-    expect(card('a_pomeranian').querySelector('small')?.textContent).toBe('Bloqueado · Travesura T1');
+    expect(card('a_pomeranian').querySelector('small')?.textContent).toBe('Bloqueado\u00a0· Travesura\u00a0T1');
     expect(card('a_mime').querySelector('small.st')?.textContent).toBe(es['rail.soon']);
     expect($('pickerSum').textContent).toBe(es['sheet.picker.sum']);
   });
@@ -476,11 +476,22 @@ describe('S7 UI fixes: a refusal after the mode ended, a command waiting on a pa
     expect(pt.querySelector('svg')).not.toBeNull();
     expect(card('a_florist').querySelector('.tx svg')).toBeNull();
     expect(card('a_florist').querySelector(':scope > svg')).toBeNull();
-    expect(card('a_florist').querySelector('small.st')?.textContent).toBe('Locked · Cupid T1');
+    expect(card('a_florist').querySelector('small.st')?.textContent).toBe('Locked\u00a0· Cupid\u00a0T1');
     expect(card('a_pigeon').querySelector('svg')).toBeNull();
     const css = readFileSync(join(ROOT, 'src', 'styles', 'shell.css'), 'utf8');
     expect(css).toMatch(/@media \(max-width:340px\)\{[^@]*#pickerList \.pk \.pt\{[^}]*32px/);
     expect(css).toMatch(/@media \(max-height:620px\)\{[^@]*#pickerList \.pk\{min-height:44px/);
     expect(css).toMatch(/#pickerList \.pk \.pt\{position:relative/); // the badge's anchor
+  });
+  it('320 px (owner 2026-10-22): the picker leaves the feed line its room (the sheet cap less one 26 px line) and the locked words wrap only after the dot, never between a side and its tier', () => {
+    const css = readFileSync(join(ROOT, 'src', 'styles', 'shell.css'), 'utf8');
+    expect(css).toMatch(/@media \(max-width:339px\)\{#picker\{max-height:min\(52vh,calc\(var\(--sheet-cap,52vh\) - 26px\)\)\}\}/);
+    expect(css).toMatch(/@media \(max-width:339px\)\{#feed\{top:calc\(env\(safe-area-inset-top,0px\) \+ 140px\)/); // the line it leaves room for
+    for (const [lang, tbl] of [['en', en], ['es', es]] as const) {
+      const w = tbl['sheet.picker.locked'] ?? '';
+      expect(w, lang).toMatch(/^\S+\u00a0· \{side\}\u00a0T\{tier\}$/); // one ordinary space, after the dot; everything else glued
+      expect(w.split(' ').length, lang).toBe(2);
+    }
+    expect(card('a_florist')).toBeDefined();
   });
 });

@@ -227,10 +227,15 @@ body:not(.dev) #optionsList .dev{display:none}
 /* a short phone (320 x 568 in either language): the summary line goes and the cards tighten, so the six show in the room between the chips and the rail */
 @media (max-height:620px){
   #pickerSum{display:none}
+  #picker{padding:8px 10px 8px}
+  #picker h4{margin-bottom:2px;font-size:13px;line-height:1.15}
   #pickerList{gap:4px}
-  #pickerList .pk{min-height:44px;padding-top:2px;padding-bottom:2px}
-  #pickerList .pk b,#pickerList .pk small{line-height:1.2}
+  #pickerList .pk{min-height:44px;padding-top:1px;padding-bottom:1px}
+  #pickerList .pk b,#pickerList .pk small{line-height:1.12}
 }
+/* under 340 px the feed's line sits below the chip stack (see #feed, about 26 px with its margin): the picker's room is the cap less that line, so it
+   stays between the feed and the rail like the other sheets and scrolls inside where the six cards do not fit (owner 2026-10-22: it covered half the pill) */
+@media (max-width:339px){#picker{max-height:min(52vh,calc(var(--sheet-cap,52vh) - 26px))}}
 /* S5, the romance core (02 12.2-12.4; 04 5.5 item 2, 5.6): the Romance chip's pulse on a stage change; the pair card (two name buttons
    with the --berry heart between, the stage chip, the Heart bar with the 1 px --ink gate tick, two doing lines, Pin as a .gb); the
    Romances rows ("A & B", Pin, the stage chip, the affinity bar, "n today"). Token colours only (04 4.5). */

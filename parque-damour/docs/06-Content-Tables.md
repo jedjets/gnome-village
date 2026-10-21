@@ -960,7 +960,7 @@ The clock chip's day is `t('hud.day', { n, season: '@hud.season.<season>' })`: t
 | `sheet.events.empty` | Nothing has happened yet. | TODO |
 | `sheet.events.when` | Day {n} · {phase} | Day {n} · {phase} |
 | `sheet.picker.title` | Be someone | TODO |
-| `sheet.picker.locked` | Locked · {side} T{tier} | TODO |
+| `sheet.picker.locked` | Locked · {side} T{tier} (no-break spaces after "Locked" and before the tier, so at 320 px it wraps only after the dot and "T1" never stands alone; ES `Bloqueado · {side} T{tier}`; owner 2026-10-22) | TODO |
 | `sheet.options.title` | Options | TODO |
 | `sheet.options.language` | Language | TODO |
 | `sheet.options.lang_en` | EN | EN |

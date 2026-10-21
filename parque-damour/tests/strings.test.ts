@@ -281,14 +281,14 @@ describe('the avatar mode\'s UI strings (07 S7.6 steps 6-7; 02 10.1, 12.3 item 4
     expect(t('avatar.goes_on', { name: '@avatar.a_pomeranian.name' })).toBe('Pomeranian goes on alone');
     expect(t('avatar.you', { name: 'Violette' })).toBe('Violette · you');
     expect(t('avatar.side_tier', { side: '@rail.cupid', tier: 1 })).toBe('Cupid · T1');
-    expect(t('sheet.picker.locked', { side: '@rail.cupid', tier: 1 })).toBe('Locked · Cupid T1');
+    expect(t('sheet.picker.locked', { side: '@rail.cupid', tier: 1 })).toBe('Locked\u00a0· Cupid\u00a0T1');
     expect(en['avatar.waiting']).toBe('waiting for your tap');
     setLang('es');
     expect(t('avatar.intro', { name: '@avatar.a_pigeon.name', hint: '@avatar.a_pigeon.hint1' })).toBe('Juegas como Paloma. Toca a alguien: en picado');
     expect(t('avatar.says', { name: '@avatar.a_pigeon.name', what: '@avatar.status.swooping' })).toBe('Paloma: en picado');
     expect(t('avatar.busy', { name: '@avatar.a_pigeon.name' })).toBe('Paloma: ocupado');
     expect(t('avatar.you', { name: '@avatar.a_pigeon.name' })).toBe('Paloma · tú');
-    expect(t('sheet.picker.locked', { side: '@rail.mischief', tier: 1 })).toBe('Bloqueado · Travesura T1');
+    expect(t('sheet.picker.locked', { side: '@rail.mischief', tier: 1 })).toBe('Bloqueado\u00a0· Travesura\u00a0T1');
     expect(es['avatar.waiting']).toBe('esperando tu toque');
     setLang('en');
   });

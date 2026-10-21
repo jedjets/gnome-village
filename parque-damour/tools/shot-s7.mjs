@@ -2,18 +2,19 @@
 // The 's7' scene set of tools/shot.mjs (07 S7.7 item 3, S7.6 steps 6 and 7; the UI stage of S7). Every step is a real tap or click (puppeteer's
 // mouse at __PD.screenOf of a tile, the rail's mode button, the picker's cards); the harness is read, and sets only what a player earns by
 // playing: the visitors' time of day (the shot runner's `abs`), the crowd (`callCrowd`, the "+" chip) and the points of the picker's test
-// profile (setProgress, as the det-s6 and s6 shots do). The sim is stepped with __PD.simulate while paused, after a real unpause has applied
-// the command (runBriefly: the commands of a paused park wait for the first step, 03 4.6).
+// profile (setProgress, as the det-s6 and s6 shots do). The park stays paused: Be someone and Creator apply in the paused frame (03 4.6, owner
+// 2026-10-22), which `enter` and `leave` check (the park is still paused after them), and the sim is stepped with __PD.simulate, which also
+// applies the tap that waits for the first step (an avatar.tap is not a paused kind).
 //   picker           Mischief T1 and Cupid T0 (the test profile): a_pigeon and a_pomeranian open, a_florist locked (the lock glyph, "Locked · Cupid T1"),
 //                    the three S10 avatars dimmed "Coming soon"; the six cards at 390 x 844 with their portraits and side stripes
 //   pigeon           a tap on the Pigeon card: possessed, the camera followed to zoom 1.5 (entered from 1.0), the strip "Pigeon · you" with "waiting for your
 //                    tap", the three hint chips in row 1, the Park strip and the switch hidden, the mode button "Creator", the 6 s toast "Playing as Pigeon", the ring
-//   pigeon-fly       a real tap on a lawn tile some tiles away: the pigeon in the air, the strip "flying", the ring on the ground below it
+//   pigeon-fly       a real tap on a lawn tile some tiles away, one sim step: the pigeon in the air, the strip "flying", the ring on the ground below it
 //   pomeranian       Creator (the actor goes on alone), then the Pomeranian card: Pompon in from the gate, standing (no dust) at the first tile, his ring, his hints
 //   florist          Cupid T1 earned; the Flower seller card: Violette in from the south-west gate with her basket, the Cupid accent on the chips and the stripe
 //   florist-close    the same, the camera pinched in to 3.4 to see the basket and the apron
-//   florist-pick     a real tap on a flowerbed (the camera pinched out to reach it): she walks there and stoops among the flowers, pinched in to 3.4
-//   florist-petals   a real tap on a lawn tile near her: she throws petals, the flurry drifting from her hand, pinched in to 3.4
+//   florist-pick     a real tap on a flowerbed (the camera pinched out to reach it), one sim step: she walks there and stoops among the flowers, pinched in to 3.4
+//   florist-petals   a real tap on a lawn tile near her, one sim step: she throws petals, the flurry drifting from her hand, pinched in to 3.4
 //   320              a 320 x 568 phone back in the Creator mode, the first-launch profile (no points): the picker between the chips and the rail, the
 //                    six cards whole (the sheet does not scroll, no card cut, no words out of a card, checked)
 //   320-es           the same in Spanish (ES tapped in the Options sheet), where the lines are longer
@@ -32,9 +33,9 @@ export const S7_SCENES = [
   { name: 'avatar-320-es', keep: true, act: 's7SmallAvatarEs' },
 ];
 
-/** `h`: the helpers shot.mjs owns (tapTile, runBriefly, sleep). Returns the scene actions of the set. */
+/** `h`: the helpers shot.mjs owns (tapTile, sleep). Returns the scene actions of the set. */
 export function s7Actions(h) {
-  const { tapTile, runBriefly, sleep } = h;
+  const { tapTile, sleep } = h;
   const hideHint = (page, hide) => page.evaluate((hide) => (document.getElementById('hint').style.visibility = hide ? 'hidden' : ''), hide);
   const sheetOn = (page, id) => page.$eval('#' + id, (el) => el.classList.contains('on'));
   const closeSheet = async (page, id) => {
@@ -66,19 +67,19 @@ export function s7Actions(h) {
       }
       if (bad.length) throw new Error(`s7 ${who}: ${bad.join('; ')}`);
     }, who);
-  /** A real tap on `id`'s card and a real unpause: the actor is possessed, body.avatar is on, the picker has closed. */
+  /** A real tap on `id`'s card, no unpause: the actor is possessed at once, body.avatar is on, the picker has closed, the park is still paused. */
   const enter = async (page, id) => {
     await openPicker(page);
     await page.click(`#pickerList .pk[data-id="${id}"]`);
-    await runBriefly(page, 300);
     await page.waitForFunction((id) => document.body.classList.contains('avatar') && window.__PD.mode().avatar === id, { timeout: 5_000 }, id);
     if (await sheetOn(page, 'picker')) throw new Error('s7 enter: the picker is still open');
+    if (await page.evaluate(() => window.__PD.T.speed !== 0)) throw new Error('s7 enter: the park ran; it must stay paused (03 4.6)');
   };
-  /** The mode button (it reads Creator now) and a real unpause: the actor goes on alone, the strips are back. */
+  /** The mode button (it reads Creator now), no unpause: the actor goes on alone at once, the strips are back, the park is still paused. */
   const leave = async (page) => {
     await page.click('#bMode');
-    await runBriefly(page, 300);
     await page.waitForFunction(() => !document.body.classList.contains('avatar') && window.__PD.mode().mode === 'creator', { timeout: 5_000 });
+    if (await page.evaluate(() => window.__PD.T.speed !== 0)) throw new Error('s7 leave: the park ran; it must stay paused (03 4.6)');
   };
   const text = (page, sel) => page.$eval(sel, (el) => el.textContent);
   /** What the avatar mode must look like on screen, or it throws (the done-when of 07 S7.7 item 3). */
@@ -145,7 +146,7 @@ export function s7Actions(h) {
       const hint = await page.evaluate(() => ({ on: document.getElementById('hint').classList.contains('on'), text: document.getElementById('hint').textContent }));
       if (!hint.on || !hint.text.startsWith('Playing as Pigeon.')) throw new Error(`s7 pigeon: the toast is ${JSON.stringify(hint)}`);
     },
-    /** A real tap on a lawn tile five or six tiles from the pigeon, a real unpause for 0.35 s: it is in the air, the strip says flying. */
+    /** A real tap on a lawn tile five or six tiles from the pigeon, one sim step: it is in the air, the strip says flying. */
     async s7PigeonFly(page) {
       await hideHint(page, true);
       const t = await page.evaluate(async () => {
@@ -168,7 +169,7 @@ export function s7Actions(h) {
       });
       if (!t) throw new Error('s7 pigeon-fly: no lawn tile five or six tiles from the pigeon in view');
       await tapTile(page, t.x, t.y);
-      await runBriefly(page, 30); // the command applies at the first step; the flight is then stepped, not timed
+      await page.evaluate(() => window.__PD.simulate(1)); // the tap waits for the first step (03 4.6): one step applies it, the flight is then stepped, not timed
       await page.evaluate(() => {
         const pd = window.__PD, me = pd.creatures.find((c) => c.id === pd.mode().player);
         for (let i = 0; i < 600 && me.st !== 'fly'; i++) pd.simulate(1);
@@ -215,7 +216,7 @@ export function s7Actions(h) {
       await zoomTo(page, 3.4);
       await sleep(1800);
     },
-    /** A real tap on a flowerbed tile in view (the camera pinched out to 0.3 to reach one), a real unpause, then she is stepped to the bed and stoops. */
+    /** A real tap on a flowerbed tile in view (the camera pinched out to 0.3 to reach one), one sim step, then she is stepped to the bed and stoops. */
     async s7FloristPick(page) {
       await zoomTo(page, 0.3);
       await sleep(1500);
@@ -246,7 +247,7 @@ export function s7Actions(h) {
         throw new Error('s7 florist-pick: no flowerbed tile in view at zoom 0.3 ' + JSON.stringify(dbg));
       }
       await tapTile(page, t.x, t.y);
-      await runBriefly(page, 300);
+      await page.evaluate(() => window.__PD.simulate(1)); // the tap waits for the first step: one step applies it
       const st = await page.evaluate(() => {
         const pd = window.__PD, me = pd.visitors.find((v) => v.id === pd.mode().player);
         for (let i = 0; i < 3000 && me.st !== 'pick'; i++) pd.simulate(10);
@@ -259,7 +260,7 @@ export function s7Actions(h) {
       const doing = await text(page, '#cDo');
       if (doing !== 'picking flowers') throw new Error(`s7 florist-pick: the strip says "${doing}"`);
     },
-    /** A real tap on a lawn tile three or four tiles from her, a real unpause, then she is stepped to the tile and the petals are in the air. */
+    /** A real tap on a lawn tile three or four tiles from her, one sim step, then she is stepped to the tile and the petals are in the air. */
     async s7FloristPetals(page) {
       await page.evaluate(() => window.__PD.simulate(300)); // the pick is over; the basket is full again
       await zoomTo(page, 1.5);
@@ -282,7 +283,7 @@ export function s7Actions(h) {
       });
       if (!t) throw new Error('s7 florist-petals: no free lawn tile three or four tiles from her in view');
       await tapTile(page, t.x, t.y);
-      await runBriefly(page, 300);
+      await page.evaluate(() => window.__PD.simulate(1)); // the tap waits for the first step: one step applies it
       const st = await page.evaluate(() => {
         const pd = window.__PD, me = pd.visitors.find((v) => v.id === pd.mode().player);
         for (let i = 0; i < 3000 && me.st !== 'scatter'; i++) pd.simulate(10);
