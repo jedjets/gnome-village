@@ -1,0 +1,29 @@
+{
+  "name": "Gnome Village, a cozy god game",
+  "short_name": "Gnome Village",
+  "description": "Gnome Village is a cozy god game by Ink & Paper Games, built for phone browsers. Shape a tiny island, start a spring, and watch two gnomes build a village through the seasons.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F1EDF5",
+  "theme_color": "#F1EDF5",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
